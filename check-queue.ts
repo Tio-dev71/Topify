@@ -2,7 +2,7 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 
 const connection = new IORedis(process.env.REDIS_URL as string, { maxRetriesPerRequest: null });
-const publishQueue = new Queue('publish-reel', { connection });
+const publishQueue = new Queue('publish-reel', { connection: connection as any });
 
 async function check() {
   const waiting = await publishQueue.getWaiting();

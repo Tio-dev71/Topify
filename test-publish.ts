@@ -4,7 +4,7 @@ import IORedis from 'ioredis';
 
 const prisma = new PrismaClient();
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379');
-const publishQueue = new Queue('publish-reel', { connection });
+const publishQueue = new Queue('publish-reel', { connection: connection as any });
 
 async function main() {
   const posts = await prisma.post.findMany({
