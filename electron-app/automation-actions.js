@@ -706,27 +706,39 @@ async function taskFbBuffPost(page, config, profileId) {
       }
       const dialog = document.querySelector('div[role="dialog"]');
       const container = dialog || document;
-      const likeSelectors = [
-        '[aria-label="Thích"]', '[aria-label="Like"]',
-        '[aria-label="Bày tỏ cảm xúc"]', '[aria-label="Thích bài viết"]',
-        '[aria-label="Tỏ thái độ thích"]', 'div[data-testid="UFI2ReactionLink"]'
-      ];
-      let likes = Array.from(container.querySelectorAll(likeSelectors.join(', '))).filter(isVisible);
-      if (likes.length === 0) {
-        likes = Array.from(document.querySelectorAll(likeSelectors.join(', '))).filter(isVisible);
+      
+      let allBtns = Array.from(container.querySelectorAll('div[role="button"], span, div[aria-label]'));
+      if (allBtns.length < 5) {
+        allBtns = Array.from(document.querySelectorAll('div[role="button"], span, div[aria-label]'));
       }
       
+      let likes = allBtns.filter(el => {
+        if (!isVisible(el)) return false;
+        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+        let text = (el.innerText || '').toLowerCase().trim();
+        
+        if (text === 'thích' || text === 'like') return true;
+        if (aria === 'thích' || aria === 'like' || aria.includes('bày tỏ cảm xúc') || aria.includes('tỏ thái độ')) return true;
+        
+        return false;
+      });
+
       let isAlreadyLiked = likes.some(el => {
-        let text = (el.innerText || '').toLowerCase();
         let aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        let text = (el.innerText || '').toLowerCase();
         return aria.includes('gỡ') || aria.includes('remove') || text.includes('đã thích');
       });
 
       let validLike = likes.find(el => {
-        let text = (el.innerText || '').toLowerCase();
         let aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        let text = (el.innerText || '').toLowerCase();
         return !aria.includes('gỡ') && !aria.includes('remove') && !text.includes('đã thích');
       });
+      
+      if (validLike && validLike.tagName.toLowerCase() === 'span') {
+         validLike = validLike.closest('div[role="button"]') || validLike;
+      }
+
       return { element: validLike || (likes.length > 0 ? likes[0] : null), isAlreadyLiked };
     });
 
