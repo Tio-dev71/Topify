@@ -17,8 +17,7 @@ import BuffSystem from './pages/BuffSystem';
 import Workspaces from './pages/Workspaces';
 import Layout from './components/layout/Layout';
 import {
-  Calendar,
-  Building2,
+  Calendar
 } from 'lucide-react';
 
 function App() {

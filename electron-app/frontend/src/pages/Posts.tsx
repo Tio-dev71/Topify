@@ -8,7 +8,6 @@ import {
   RotateCcw,
   PlayCircle,
   Clock,
-  MoreVertical,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
@@ -41,16 +40,6 @@ const filterTabs: { label: string; value: StatusFilter }[] = [
   { label: 'Thất bại', value: 'FAILED' },
 ];
 
-// Helper to get status colors
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'PUBLISHED': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
-    case 'FAILED': return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
-    case 'PUBLISHING': return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
-    case 'SCHEDULED': return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
-    default: return 'bg-gray-500/10 text-gray-600 border-gray-500/20';
-  }
-};
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -250,7 +239,6 @@ export default function Posts() {
             <AnimatePresence>
               {filteredPosts.map((post, index) => {
                 const statusConfig = STATUS_CONFIG[post.status as keyof typeof STATUS_CONFIG];
-                const statusColor = getStatusColor(post.status);
                 
                 return (
                   <motion.div 
