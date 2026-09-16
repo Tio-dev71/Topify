@@ -20,6 +20,26 @@ import {
   Globe,
   Activity,
   X,
+  Pencil,
+  FileText,
+  Image as ImageIcon,
+  LayoutTemplate,
+  CheckCircle,
+  Hash,
+  Layers,
+  MessageSquare,
+  Inbox,
+  Contact,
+  Target,
+  Kanban,
+  ListTodo,
+  Megaphone,
+  Zap,
+  Shield,
+  Wallet,
+  Gift,
+  Mic2,
+  Link2,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -29,6 +49,52 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 const navigation: any[] = [
   { key: 'sidebar.dashboard', href: '/dashboard', icon: LayoutDashboard },
 ];
+
+const contentNavigation = [
+  { key: 'sidebar.create_post', href: '/dashboard/content/create', icon: Pencil },
+  { key: 'sidebar.posts', href: '/dashboard/content/posts', icon: FileText },
+  { key: 'sidebar.calendar', href: '/dashboard/content/calendar', icon: Calendar },
+  { key: 'sidebar.media_library', href: '/dashboard/content/media', icon: ImageIcon },
+  { key: 'sidebar.templates', href: '/dashboard/content/templates', icon: LayoutTemplate },
+  { key: 'sidebar.approval', href: '/dashboard/content/approval', icon: CheckCircle },
+  { key: 'sidebar.hashtags', href: '/dashboard/content/hashtags', icon: Hash },
+  { key: 'sidebar.brand_voice', href: '/dashboard/content/brand-voice', icon: Mic2 },
+  { key: 'sidebar.utm_builder', href: '/dashboard/content/utm', icon: Link2 },
+];
+
+const inboxNavigation = [
+  { key: 'sidebar.inbox', href: '/dashboard/inbox', icon: Inbox },
+  { key: 'sidebar.quick_replies', href: '/dashboard/inbox/quick-replies', icon: MessageSquare },
+];
+
+const crmNavigation = [
+  { key: 'sidebar.customers', href: '/dashboard/crm/customers', icon: Contact },
+  { key: 'sidebar.deals', href: '/dashboard/crm/deals', icon: Target },
+  { key: 'sidebar.pipelines', href: '/dashboard/crm/pipelines', icon: Kanban },
+];
+
+const automationNavigation = [
+  { key: 'sidebar.fb_profiles', href: '/dashboard/social/fb-profiles', icon: Users },
+  { key: 'sidebar.proxies', href: '/dashboard/social/proxies', icon: Globe },
+  { key: 'sidebar.automation', href: '/dashboard/social/automation', icon: Activity },
+  { key: 'sidebar.buff_orders', href: '/dashboard/social/buff-orders', icon: Layers },
+  { key: 'sidebar.competitors', href: '/dashboard/social/competitors', icon: Building2 },
+  { key: 'sidebar.keywords', href: '/dashboard/social/keywords', icon: Hash },
+  { key: 'sidebar.alerts', href: '/dashboard/social/alerts', icon: Activity },
+];
+
+const operationsNavigation = [
+  { key: 'sidebar.tasks', href: '/dashboard/tasks', icon: ListTodo },
+  { key: 'sidebar.campaigns', href: '/dashboard/campaigns', icon: Megaphone },
+  { key: 'sidebar.automations_builder', href: '/dashboard/automations', icon: Zap },
+  { key: 'sidebar.audit_log', href: '/dashboard/audit-log', icon: Shield },
+];
+
+const walletNavigation = [
+  { key: 'sidebar.wallet', href: '/dashboard/wallet', icon: Wallet },
+  { key: 'sidebar.referral', href: '/dashboard/referral', icon: Gift },
+];
+
 const adminNavigation: any[] = [];
 
 const superAdminNavigation = [
@@ -152,7 +218,215 @@ export function Sidebar() {
             })}
           </div>
 
+          {/* Content Studio section */}
+          <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                Content Studio
+              </p>
+            )}
+            <div className="space-y-1">
+              {contentNavigation.map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                      transition-all duration-200
+                      ${active
+                        ? 'bg-[var(--color-sidebar-active-bg)] text-[var(--color-sidebar-active)] font-semibold'
+                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                      }
+                      ${collapsed ? 'justify-center px-2' : ''}
+                    `}
+                    title={collapsed ? (t(item.key) as string) : undefined}
+                  >
+                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-sidebar-active)]' : ''}`} />
+                    {!collapsed && <span>{t(item.key)}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
 
+          {/* Automation & Social section */}
+          <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                Automation & Social
+              </p>
+            )}
+            <div className="space-y-1">
+              {automationNavigation.map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                      transition-all duration-200
+                      ${active
+                        ? 'bg-[var(--color-sidebar-active-bg)] text-[var(--color-sidebar-active)] font-semibold'
+                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                      }
+                      ${collapsed ? 'justify-center px-2' : ''}
+                    `}
+                    title={collapsed ? (t(item.key) as string) : undefined}
+                  >
+                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-sidebar-active)]' : ''}`} />
+                    {!collapsed && <span>{t(item.key)}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Inbox section */}
+          <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                Inbox
+              </p>
+            )}
+            <div className="space-y-1">
+              {inboxNavigation.map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                      transition-all duration-200
+                      ${active
+                        ? 'bg-[var(--color-sidebar-active-bg)] text-[var(--color-sidebar-active)] font-semibold'
+                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                      }
+                      ${collapsed ? 'justify-center px-2' : ''}
+                    `}
+                    title={collapsed ? (t(item.key) as string) : undefined}
+                  >
+                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-sidebar-active)]' : ''}`} />
+                    {!collapsed && <span>{t(item.key)}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* CRM section */}
+          <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                CRM
+              </p>
+            )}
+            <div className="space-y-1">
+              {crmNavigation.map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                      transition-all duration-200
+                      ${active
+                        ? 'bg-[var(--color-sidebar-active-bg)] text-[var(--color-sidebar-active)] font-semibold'
+                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                      }
+                      ${collapsed ? 'justify-center px-2' : ''}
+                    `}
+                    title={collapsed ? (t(item.key) as string) : undefined}
+                  >
+                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-sidebar-active)]' : ''}`} />
+                    {!collapsed && <span>{t(item.key)}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Operations section */}
+          <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                Operations
+              </p>
+            )}
+            <div className="space-y-1">
+              {operationsNavigation.map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                      transition-all duration-200
+                      ${active
+                        ? 'bg-[var(--color-sidebar-active-bg)] text-[var(--color-sidebar-active)] font-semibold'
+                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                      }
+                      ${collapsed ? 'justify-center px-2' : ''}
+                    `}
+                    title={collapsed ? (t(item.key) as string) : undefined}
+                  >
+                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-sidebar-active)]' : ''}`} />
+                    {!collapsed && <span>{t(item.key)}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Wallet & Referral section */}
+          <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                Wallet
+              </p>
+            )}
+            <div className="space-y-1">
+              {walletNavigation.map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                      transition-all duration-200
+                      ${active
+                        ? 'bg-[var(--color-sidebar-active-bg)] text-[var(--color-sidebar-active)] font-semibold'
+                        : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'
+                      }
+                      ${collapsed ? 'justify-center px-2' : ''}
+                    `}
+                    title={collapsed ? (t(item.key) as string) : undefined}
+                  >
+                    <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-sidebar-active)]' : ''}`} />
+                    {!collapsed && <span>{t(item.key)}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Super Admin section */}
           {isSuperAdmin && (

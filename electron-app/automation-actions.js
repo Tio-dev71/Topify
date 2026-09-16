@@ -101,7 +101,8 @@ Nội dung bài viết: "${postContent}"`;
 
 async function logHistory(profileId, actionType, link, message) {
   try {
-    await fetch('https://topify.vn/api/automation-logs', {
+    const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
+    await fetch(`${apiUrl}/automation-logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profileId, actionType, link, message })
@@ -669,107 +670,274 @@ async function taskFbBuffPost(page, config, profileId) {
     });
   });
 
-  // Removed humanScroll(page, 1) to prevent Reels/Watch from snapping to the next video
-
-  console.log('Liking post...');
-  const likeHandle = await page.evaluateHandle(() => {
-    function isVisible(el) {
-      const rect = el.getBoundingClientRect();
-      return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
-    }
-    const dialog = document.querySelector('div[role="dialog"]');
-    const container = dialog || document;
-    const likes = Array.from(container.querySelectorAll('div[aria-label="Thích"], div[aria-label="Like"], div[aria-label="Bày tỏ cảm xúc"], div[aria-label="Thích bài viết"]')).filter(isVisible);
-    if (likes.length > 0) return likes[0];
-    return null;
-  });
-
-  const likeEl = likeHandle.asElement();
-  if (likeEl) {
+  // Đóng các popup che khuất màn hình
+  await page.evaluate(() => {
     try {
-      await likeEl.hover();
-      await safeWait(page, 100);
-      await likeEl.click();
+      const closeSelectors = [
+        'div[aria-label="Lúc khác"]', 'div[aria-label="Not Now"]',
+        'div[aria-label="Đóng vòng kết nối"]', 'div[aria-label="Close"]', 'div[aria-label="Đóng"]'
+      ];
+      const closeBtns = Array.from(document.querySelectorAll(closeSelectors.join(', ')));
+      for (const btn of closeBtns) {
+         if (btn.getBoundingClientRect().width > 0) {
+            btn.click();
+         }
+      }
+      
+      const spans = Array.from(document.querySelectorAll('span'));
+      for (const span of spans) {
+        const text = (span.innerText || '').trim();
+        if (text === 'Lúc khác' || text === 'Not Now' || text === 'Đóng') {
+           if (span.getBoundingClientRect().width > 0) span.click();
+        }
+      }
     } catch(e) {}
-  }
-  await likeHandle.dispose();
+  });
+  await safeWait(page, 2000);
 
-  await safeWait(page, 3000);
+  const buffActionType = config.buffActionType || 'LIKE';
 
-  const commentResult = await page.evaluateHandle(() => {
-    function isVisible(el) {
-      const rect = el.getBoundingClientRect();
-      return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
-    }
-    
-    const dialog = document.querySelector('div[role="dialog"]');
-    const container = dialog || document;
-    let allBtns = Array.from(container.querySelectorAll('div[role="button"], a, span'));
-    let commentBtn = allBtns.find(el => {
-      if (!isVisible(el)) return false;
-      let text = (el.innerText || '').toLowerCase();
-      let aria = (el.getAttribute('aria-label') || '').toLowerCase();
-      return aria.includes('bình luận') || aria.includes('comment') || aria.includes('viết bình luận') ||
-             text === 'bình luận' || text === 'comment';
+  if (buffActionType === 'LIKE') {
+    console.log('Liking post...');
+    const likeResult = await page.evaluateHandle(() => {
+      function isVisible(el) {
+        const rect = el.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
+      }
+      const dialog = document.querySelector('div[role="dialog"]');
+      const container = dialog || document;
+      const likeSelectors = [
+        '[aria-label="Thích"]', '[aria-label="Like"]',
+        '[aria-label="Bày tỏ cảm xúc"]', '[aria-label="Thích bài viết"]',
+        '[aria-label="Tỏ thái độ thích"]', 'div[data-testid="UFI2ReactionLink"]'
+      ];
+      let likes = Array.from(container.querySelectorAll(likeSelectors.join(', '))).filter(isVisible);
+      if (likes.length === 0) {
+        likes = Array.from(document.querySelectorAll(likeSelectors.join(', '))).filter(isVisible);
+      }
+      
+      let isAlreadyLiked = likes.some(el => {
+        let text = (el.innerText || '').toLowerCase();
+        let aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        return aria.includes('gỡ') || aria.includes('remove') || text.includes('đã thích');
+      });
+
+      let validLike = likes.find(el => {
+        let text = (el.innerText || '').toLowerCase();
+        let aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        return !aria.includes('gỡ') && !aria.includes('remove') && !text.includes('đã thích');
+      });
+      return { element: validLike || (likes.length > 0 ? likes[0] : null), isAlreadyLiked };
     });
 
-    let text = '';
-    if (commentBtn) {
+    const likeData = await likeResult.jsonValue();
+    const likeElHandle = await likeResult.evaluateHandle(r => r.element);
+    const likeEl = likeElHandle.asElement();
+    
+    let clicked = false;
+    
+    if (likeData && likeData.isAlreadyLiked) {
+       console.log('Post is already liked.');
+       clicked = true;
+       await logHistory(profileId, 'LIKE', config.targetUrl, 'Bài viết đã được thích từ trước');
+    } else if (likeEl) {
       try {
-        let commentContainer = commentBtn.closest('div[role="article"], div[data-pagelet^="FeedUnit"], div[data-pagelet^="GroupFeed"], div[aria-posinset]');
-        if (commentContainer) {
-          const messageBlock = commentContainer.querySelector('div[data-ad-preview="message"]');
-          if (messageBlock) {
-            text = messageBlock.innerText;
-          }
+        await likeEl.hover();
+        await safeWait(page, 100);
+        await likeEl.click({ timeout: 3000 });
+        clicked = true;
+        await logHistory(profileId, 'LIKE', config.targetUrl, 'Đã thích bài viết');
+      } catch(e) {
+        try {
+          await likeEl.evaluate(el => el.click());
+          clicked = true;
+          await logHistory(profileId, 'LIKE', config.targetUrl, 'Đã thích bài viết (fallback)');
+        } catch(e2) {
+          console.error('Failed to click LIKE fallback', e2);
         }
-      } catch(e) {}
-      const target = commentBtn.closest('[role="button"]') || commentBtn;
-      return { element: target, postText: text };
-    }
-    return { element: null, postText: '' };
-  });
-
-  const commentData = await commentResult.jsonValue();
-  const commentElHandle = await commentResult.evaluateHandle(r => r.element);
-  const commentEl = commentElHandle.asElement();
-  
-  let clicked = false;
-  let postText = commentData?.postText || '';
-
-  if (commentEl) {
-    try {
-      await commentEl.hover();
-      await safeWait(page, 100);
-      await commentEl.click();
-      clicked = true;
-    } catch(e) {}
-  }
-  await commentElHandle.dispose();
-  await commentResult.dispose();
-
-  if (clicked) {
-    await safeWait(page, 3000);
-
-    let finalComment = (config.comments && config.comments.length > 0) 
-        ? config.comments[Math.floor(Math.random() * config.comments.length)]
-        : 'Hay quá ạ!';
-        
-    try {
-      if (config.useAiComment && postText && postText.trim().length > 10) {
-        console.log('Generating AI comment for buff post...');
-        const aiText = await generateAIComment(postText, config.aiSettings || {});
-        if (aiText) finalComment = aiText;
       }
-    } catch (e) {
-      console.log('AI Comment failed for buff post, using fallback.', e);
+    }
+    await likeElHandle.dispose();
+    await likeResult.dispose();
+    
+    if (!clicked) {
+      throw new Error('Không tìm thấy nút Thích hoặc không thể tương tác');
+    }
+    
+    await safeWait(page, 3000);
+  } else if (buffActionType === 'COMMENT') {
+    console.log('Commenting on post...');
+    const commentResult = await page.evaluateHandle(() => {
+      function isVisible(el) {
+        const rect = el.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
+      }
+      
+      const dialog = document.querySelector('div[role="dialog"]');
+      const container = dialog || document;
+      let allBtns = Array.from(container.querySelectorAll('div[role="button"], a, span'));
+      if (allBtns.length < 5) allBtns = Array.from(document.querySelectorAll('div[role="button"], a, span'));
+      
+      let commentBtn = allBtns.find(el => {
+        if (!isVisible(el)) return false;
+        let text = (el.innerText || '').toLowerCase().trim();
+        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+        return aria.includes('bình luận') || aria.includes('comment') || aria.includes('viết bình luận') ||
+               text === 'bình luận' || text === 'comment';
+      });
+
+      let text = '';
+      if (commentBtn) {
+        try {
+          let commentContainer = commentBtn.closest('div[role="article"], div[data-pagelet^="FeedUnit"], div[data-pagelet^="GroupFeed"], div[aria-posinset]');
+          if (commentContainer) {
+            const messageBlock = commentContainer.querySelector('div[data-ad-preview="message"]');
+            if (messageBlock) {
+              text = messageBlock.innerText;
+            }
+          }
+        } catch(e) {}
+        const target = commentBtn.closest('[role="button"]') || commentBtn;
+        return { element: target, postText: text };
+      }
+      return { element: null, postText: '' };
+    });
+
+    const commentData = await commentResult.jsonValue();
+    const commentElHandle = await commentResult.evaluateHandle(r => r.element);
+    const commentEl = commentElHandle.asElement();
+    
+    let clicked = false;
+    let postText = commentData?.postText || '';
+
+    if (commentEl) {
+      try {
+        await commentEl.hover();
+        await safeWait(page, 100);
+        await commentEl.click({ timeout: 3000 });
+        clicked = true;
+      } catch(e) {
+        try {
+          await commentEl.evaluate(el => el.click());
+          clicked = true;
+        } catch(e2) {}
+      }
+    }
+    await commentElHandle.dispose();
+    await commentResult.dispose();
+
+    if (!clicked) {
+      throw new Error('Không tìm thấy nút Bình luận hoặc không thể tương tác');
     }
 
-    console.log('Sending comment: ' + finalComment);
-    await humanType(page, finalComment);
-    await safeWait(page, 1000);
-    await page.keyboard.press('Enter');
-    await safeWait(page, 2000);
+    if (clicked) {
+      await safeWait(page, 3000);
+
+      let finalComment = (config.comments && config.comments.length > 0) 
+          ? config.comments[Math.floor(Math.random() * config.comments.length)]
+          : 'Hay quá ạ!';
+          
+      try {
+        if (config.useAiComment && postText && postText.trim().length > 10) {
+          console.log('Generating AI comment for buff post...');
+          const aiText = await generateAIComment(postText, config.aiSettings || {});
+          if (aiText) finalComment = aiText;
+        }
+      } catch (e) {
+        console.log('AI Comment failed for buff post, using fallback.', e);
+      }
+
+      console.log('Sending comment: ' + finalComment);
+      await page.evaluate(() => {
+        const box = document.querySelector('form[action*="/comment/"] textarea, form div[contenteditable="true"], div[aria-label="Viết bình luận"], div[aria-label="Write a comment"], div[aria-label*="bình luận"][role="textbox"], div[aria-label*="comment"][role="textbox"]');
+        if (box) box.focus();
+      });
+      await safeWait(page, 500);
+      await humanType(page, finalComment);
+      await safeWait(page, 1000);
+      await page.keyboard.press('Enter');
+      await safeWait(page, 2000);
+      await logHistory(profileId, 'COMMENT', config.targetUrl, finalComment);
+    }
+  } else if (buffActionType === 'SHARE') {
+    console.log('Sharing post...');
+    const shareHandle = await page.evaluateHandle(() => {
+      function isVisible(el) {
+        const rect = el.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
+      }
+      const dialog = document.querySelector('div[role="dialog"]');
+      const container = dialog || document;
+      let allBtns = Array.from(container.querySelectorAll('div[role="button"], a, span'));
+      if (allBtns.length < 5) allBtns = Array.from(document.querySelectorAll('div[role="button"], a, span'));
+      
+      let shareBtn = allBtns.find(el => {
+        if (!isVisible(el)) return false;
+        let text = (el.innerText || '').toLowerCase().trim();
+        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+        return aria.includes('chia sẻ') || aria.includes('share') || text === 'chia sẻ' || text === 'share';
+      });
+      if (shareBtn) {
+        return shareBtn.closest('[role="button"]') || shareBtn;
+      }
+      return null;
+    });
+
+    const shareEl = shareHandle.asElement();
+    let clickedShare = false;
+    if (shareEl) {
+      try {
+        await shareEl.hover();
+        await safeWait(page, 100);
+        await shareEl.click({ timeout: 3000 });
+        clickedShare = true;
+      } catch(e) {
+        try {
+          await shareEl.evaluate(el => el.click());
+          clickedShare = true;
+        } catch(e2) {}
+      }
+    }
+    await shareHandle.dispose();
+
+    if (!clickedShare) {
+      throw new Error('Không tìm thấy nút Chia sẻ hoặc không thể tương tác');
+    }
+
+    if (clickedShare) {
+      await safeWait(page, 2000);
+      
+      const shareNowHandle = await page.evaluateHandle(() => {
+        let options = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="button"], span'));
+        let shareNow = options.find(el => {
+          let text = (el.innerText || '').toLowerCase();
+          return text.includes('chia sẻ ngay') || text.includes('share now');
+        });
+        if (shareNow) {
+          return shareNow.closest('[role="menuitem"], [role="button"]') || shareNow;
+        }
+        return null;
+      });
+
+      const shareNowEl = shareNowHandle.asElement();
+      if (shareNowEl) {
+        try {
+          await shareNowEl.hover();
+          await safeWait(page, 100);
+          await shareNowEl.click({ timeout: 3000 });
+          await logHistory(profileId, 'SHARE', config.targetUrl, 'Đã chia sẻ bài viết');
+        } catch(e) {
+          try {
+            await shareNowEl.evaluate(el => el.click());
+            await logHistory(profileId, 'SHARE', config.targetUrl, 'Đã chia sẻ bài viết (fallback)');
+          } catch(e2) {}
+        }
+      } else {
+        console.log('Share now button not found, trying fallback');
+      }
+      await shareNowHandle.dispose();
+      await safeWait(page, 3000);
+    }
   }
 }
 

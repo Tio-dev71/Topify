@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import prisma from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,13 +10,13 @@ export async function GET(req: NextRequest) {
     }
 
     const proxies = await prisma.proxy.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
 
-    return NextResponse.json(proxies);
+    return NextResponse.json({ proxies });
   } catch (error) {
-    console.error('Failed to fetch proxies:', error);
-    return NextResponse.json({ error: 'Failed to fetch proxies' }, { status: 500 });
+    console.error('[PROXIES_GET]', error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
 
@@ -27,34 +27,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const data = await req.json();
-    // Support single creation or bulk import
-    if (Array.isArray(data)) {
-      const created = await prisma.proxy.createMany({
-        data: data.map(p => ({
-          protocol: p.protocol || 'http',
-          host: p.host,
-          port: parseInt(p.port),
-          username: p.username || null,
-          password: p.password || null,
-        }))
-      });
-      return NextResponse.json({ count: created.count });
-    } else {
-      const proxy = await prisma.proxy.create({
-        data: {
-          protocol: data.protocol || 'http',
-          host: data.host,
-          port: parseInt(data.port),
-          username: data.username || null,
-          password: data.password || null,
-        }
-      });
-      return NextResponse.json(proxy);
+    const body = await req.json();
+    const { protocol, host, port, username, password } = body;
+
+    if (!host || !port) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
+
+    const proxy = await prisma.proxy.create({
+      data: {
+        protocol: protocol || 'http',
+        host,
+        port: parseInt(port),
+        username: username || null,
+        password: password || null,
+        status: 'ACTIVE'
+      }
+    });
+
+    return NextResponse.json(proxy);
   } catch (error) {
-    console.error('Failed to create proxy:', error);
-    return NextResponse.json({ error: 'Failed to create proxy' }, { status: 500 });
+    console.error('[PROXIES_POST]', error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
 
@@ -69,16 +63,16 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Proxy ID is required' }, { status: 400 });
     }
 
     await prisma.proxy.delete({
-      where: { id },
+      where: { id }
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Failed to delete proxy:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ message: 'Proxy deleted' });
+  } catch (error) {
+    console.error('[PROXIES_DELETE]', error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

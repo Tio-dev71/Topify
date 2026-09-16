@@ -5,6 +5,8 @@ import prisma from '@/lib/db';
 const ALLOWED_KEYS = [
   'META_APP_ID', 'META_APP_SECRET', 
   'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET',
+  'TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET',
+  'ZALO_APP_ID', 'ZALO_APP_SECRET',
   'GEMINI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENAI_API_KEY', 'AI_MODEL'
 ];
 
@@ -38,6 +40,14 @@ export async function GET() {
         if (cred.provider === 'META') {
           settingsMap.META_APP_ID = cred.clientId;
           settingsMap.META_APP_SECRET = cred.clientSecret;
+        }
+        if (cred.provider === 'TIKTOK') {
+          settingsMap.TIKTOK_CLIENT_KEY = cred.clientId;
+          settingsMap.TIKTOK_CLIENT_SECRET = cred.clientSecret;
+        }
+        if (cred.provider === 'ZALO') {
+          settingsMap.ZALO_APP_ID = cred.clientId;
+          settingsMap.ZALO_APP_SECRET = cred.clientSecret;
         }
       }
     }
@@ -114,6 +124,42 @@ export async function POST(req: NextRequest) {
               provider: 'META', 
               clientId: (settings.META_APP_ID || '').trim(), 
               clientSecret: (settings.META_APP_SECRET || '').trim() 
+            },
+          })
+        );
+      }
+
+      if (settings.TIKTOK_CLIENT_KEY !== undefined || settings.TIKTOK_CLIENT_SECRET !== undefined) {
+        operations.push(
+          prisma.userCredential.upsert({
+            where: { userId_provider: { userId: session.user.id, provider: 'TIKTOK' } },
+            update: { 
+              clientId: (settings.TIKTOK_CLIENT_KEY || '').trim(), 
+              clientSecret: (settings.TIKTOK_CLIENT_SECRET || '').trim() 
+            },
+            create: { 
+              userId: session.user.id, 
+              provider: 'TIKTOK', 
+              clientId: (settings.TIKTOK_CLIENT_KEY || '').trim(), 
+              clientSecret: (settings.TIKTOK_CLIENT_SECRET || '').trim() 
+            },
+          })
+        );
+      }
+
+      if (settings.ZALO_APP_ID !== undefined || settings.ZALO_APP_SECRET !== undefined) {
+        operations.push(
+          prisma.userCredential.upsert({
+            where: { userId_provider: { userId: session.user.id, provider: 'ZALO' } },
+            update: { 
+              clientId: (settings.ZALO_APP_ID || '').trim(), 
+              clientSecret: (settings.ZALO_APP_SECRET || '').trim() 
+            },
+            create: { 
+              userId: session.user.id, 
+              provider: 'ZALO', 
+              clientId: (settings.ZALO_APP_ID || '').trim(), 
+              clientSecret: (settings.ZALO_APP_SECRET || '').trim() 
             },
           })
         );

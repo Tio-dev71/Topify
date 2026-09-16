@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import api from '../lib/axios';
+import api, { getApiBaseUrl } from '../lib/axios';
 import { STATUS_CONFIG, PLATFORM_CONFIG } from '../lib/utils';
 
 interface DashboardStats {
@@ -137,19 +137,29 @@ export default function Dashboard() {
                 Kết nối các nền tảng để bắt đầu đăng video tự động
               </p>
               <div className="flex flex-wrap gap-3">
-                <Link
-                  to="/settings"
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const token = localStorage.getItem('topify_token');
+                    const baseUrl = getApiBaseUrl();
+                    window.open(`${baseUrl}/api/social/meta?token=${token}`, '_blank');
+                  }}
                   className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
                 >
                   <Zap className="w-4 h-4" />
                   Connect Meta
-                </Link>
-                <Link
-                  to="/settings"
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const token = localStorage.getItem('topify_token');
+                    const baseUrl = getApiBaseUrl();
+                    window.open(`${baseUrl}/api/social/google?token=${token}`, '_blank');
+                  }}
                   className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
                 >
                   Connect YouTube
-                </Link>
+                </button>
               </div>
             </div>
           </div>

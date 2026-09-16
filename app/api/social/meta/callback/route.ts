@@ -3,19 +3,55 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { encryptToken } from '@/lib/crypto';
 import { getCredentials } from '@/lib/credentials';
+import { cookies } from 'next/headers';
 
 // GET /api/social/meta/callback — Handle Meta OAuth callback
 export async function GET(req: NextRequest) {
-  const baseUrl = process.env.AUTH_URL || new URL(req.url).origin;
+  const baseUrl = new URL(req.url).origin;
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.redirect(new URL('/login', baseUrl));
-    }
+    let session = await auth();
+    let userId = session?.user?.id;
+    let workspaceId = (session?.user as any)?.workspaceId;
+    let isDesktopClient = false;
 
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
+    const rawState = url.searchParams.get('state') || '';
+
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get('oauth_state_meta')?.value;
+
+    const [csrfState, ...restState] = rawState.split('::');
+    const state = restState.join('::');
+
+    if (!storedState || storedState !== csrfState) {
+      console.error('CSRF validation failed for Meta OAuth');
+      return NextResponse.redirect(new URL('/settings?error=csrf_validation_failed', baseUrl));
+    }
+
+    if (state && state.startsWith('meta_')) {
+      const token = state.replace('meta_', '');
+      try {
+        const jwt = require('jsonwebtoken');
+        const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+        if (!secret) throw new Error('Missing AUTH_SECRET');
+        const decoded = jwt.verify(token, secret) as any;
+        if (!userId) {
+          userId = decoded.sub || decoded.id;
+          workspaceId = decoded.workspaceId;
+        }
+        isDesktopClient = true;
+      } catch (err) {
+        console.error('Invalid token in state:', err);
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.redirect(new URL('/login', baseUrl));
+    }
+
+
 
     if (error || !code) {
       return NextResponse.redirect(
@@ -23,10 +59,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const credentials = await getCredentials(session.user.id);
+    const credentials = await getCredentials(userId);
     const clientId = credentials.META_APP_ID!;
     const clientSecret = credentials.META_APP_SECRET!;
-    const redirectUri = process.env.META_REDIRECT_URI || `${process.env.AUTH_URL || 'http://localhost:3000'}/api/social/meta/callback`;
+    const redirectUri = process.env.META_REDIRECT_URI || `${baseUrl}/api/social/meta/callback`;
 
     // Exchange code for token
     const tokenRes = await fetch(
@@ -73,7 +109,7 @@ export async function GET(req: NextRequest) {
     await prisma.socialAccount.upsert({
       where: {
         userId_provider: {
-          userId: session.user.id,
+          userId: userId,
           provider: 'META',
         },
       },
@@ -86,8 +122,8 @@ export async function GET(req: NextRequest) {
         instagramBusinessId,
       },
       create: {
-        userId: session.user.id,
-        workspaceId: (session.user as any).workspaceId,
+        userId: userId,
+        workspaceId: workspaceId,
         provider: 'META',
         accessToken: encryptedAccessToken,
         expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
@@ -96,6 +132,22 @@ export async function GET(req: NextRequest) {
         instagramBusinessId,
       },
     });
+
+    if (isDesktopClient) {
+      return new NextResponse(
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: #10B981;">Kết nối Meta thành công!</h2>
+            <p>Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
+            <script>
+              setTimeout(() => { window.close(); }, 2000);
+            </script>
+          </body>
+        </html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
 
     return NextResponse.redirect(
       new URL('/settings?success=meta', baseUrl)

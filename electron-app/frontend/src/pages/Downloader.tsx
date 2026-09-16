@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Download, Link as LinkIcon, Loader2, Video, Music, AlertCircle, Send, Users } from 'lucide-react';
 
+const API_URL = import.meta.env.DEV ? '/api' : 'https://topify.vn/api';
+
 interface MediaInfo {
   url: string;
   quality?: string;
@@ -42,7 +44,7 @@ export default function DownloaderPage() {
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
-        const res = await fetch('https://topify.vn/api/facebook-accounts');
+        const res = await fetch(`${API_URL}/facebook-accounts`);
         const data = await res.json();
         if (Array.isArray(data)) setAccounts(data);
       } catch (e) {}
@@ -60,7 +62,7 @@ export default function DownloaderPage() {
     setAutoPostSuccess('');
 
     try {
-      const res = await fetch('https://topify.vn/api/downloader', {
+      const res = await fetch(`${API_URL}/downloader`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +97,7 @@ export default function DownloaderPage() {
     setAutoPostSuccess('');
 
     try {
-      const res = await fetch('https://topify.vn/api/autopost', {
+      const res = await fetch(`${API_URL}/autopost`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

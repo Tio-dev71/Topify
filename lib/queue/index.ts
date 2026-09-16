@@ -32,7 +32,7 @@ export const publishQueue = new Queue('publish-reel', {
  */
 export async function enqueuePublish(postId: string) {
   await publishQueue.add('publish', { postId }, {
-    jobId: `publish-${postId}`,
+    jobId: `publish-${postId}-${Date.now()}`,
   });
 }
 
@@ -42,7 +42,32 @@ export async function enqueuePublish(postId: string) {
 export async function schedulePublish(postId: string, scheduledAt: Date) {
   const delay = Math.max(0, scheduledAt.getTime() - Date.now());
   await publishQueue.add('publish', { postId }, {
-    jobId: `publish-${postId}`,
+    jobId: `publish-${postId}-${Date.now()}`,
     delay,
+  });
+}
+
+export const tokenMonitorQueue = new Queue('token-monitor', {
+  connection: connection as any,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 50 },
+  },
+});
+
+/**
+ * Schedule daily token monitor
+ */
+export async function scheduleTokenMonitor() {
+  await tokenMonitorQueue.add('check-tokens', {}, {
+    jobId: 'token-monitor-daily',
+    repeat: {
+      pattern: '0 0 * * *', // Run daily at midnight
+    },
   });
 }

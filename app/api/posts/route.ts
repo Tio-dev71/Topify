@@ -11,7 +11,7 @@ const createPostSchema = z.object({
   hashtags: z.string().nullable().optional(),
   videoAssetId: z.string().min(1),
   platforms: z.array(z.enum(['FACEBOOK_REELS', 'INSTAGRAM_REELS', 'YOUTUBE_SHORTS'])).min(1),
-  publishMode: z.enum(['now', 'schedule']),
+  publishMode: z.enum(['now', 'schedule', 'request_approval']),
   scheduledAt: z.string().nullable().optional(),
 });
 
@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const status = url.searchParams.get('status');
-    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    const startDate = url.searchParams.get('startDate');
+    const endDate = url.searchParams.get('endDate');
 
     const where: any = {
       workspaceId: (session.user as any).workspaceId,
@@ -38,6 +40,13 @@ export async function GET(req: NextRequest) {
 
     if (status) {
       where.status = status;
+    }
+    
+    if (startDate && endDate) {
+      where.OR = [
+        { scheduledAt: { gte: new Date(startDate), lte: new Date(endDate) } },
+        { createdAt: { gte: new Date(startDate), lte: new Date(endDate) }, scheduledAt: null }
+      ];
     }
 
     const posts = await prisma.post.findMany({
@@ -103,7 +112,7 @@ export async function POST(req: NextRequest) {
         videoAssetId,
         createdById: session.user.id,
         workspaceId: (session.user as any).workspaceId,
-        status: publishMode === 'now' ? 'PUBLISHING' : 'SCHEDULED',
+        status: publishMode === 'request_approval' ? 'PENDING_REVIEW' : publishMode === 'now' ? 'PUBLISHING' : 'SCHEDULED',
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         platforms: {
           create: platforms.map((platform) => ({
@@ -117,10 +126,10 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Enqueue job
+    // Enqueue job if not requesting approval
     if (publishMode === 'now') {
       await enqueuePublish(post.id);
-    } else if (scheduledAt) {
+    } else if (publishMode === 'schedule' && scheduledAt) {
       await schedulePublish(post.id, new Date(scheduledAt));
     }
 

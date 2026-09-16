@@ -42,4 +42,46 @@ export class MockPublisher implements Publisher {
       };
     }
   }
+
+  async publishFeed(
+    post: Post,
+    _videoAsset: VideoAsset | null,
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
+  ): Promise<PublishResult> {
+    console.log(`[MOCK] Publishing Feed "${post.title}" to ${this.platformName}...`);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const isSuccess = Math.random() > 0.1;
+
+    if (isSuccess) {
+      const mockId = `mock_feed_${this.platformName.toLowerCase()}_${Date.now()}`;
+      console.log(`[MOCK] ✅ Published Feed to ${this.platformName}: ${mockId}`);
+      return { success: true, externalPostId: mockId };
+    } else {
+      const errorMsg = `[MOCK] Simulated failure for Feed ${this.platformName}`;
+      console.log(`[MOCK] ❌ ${errorMsg}`);
+      return { success: false, errorMessage: errorMsg };
+    }
+  }
+
+  async publishCarousel(
+    post: Post,
+    _videoAssets: VideoAsset[],
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
+  ): Promise<PublishResult> {
+    console.log(`[MOCK] Publishing Carousel "${post.title}" to ${this.platformName}...`);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const isSuccess = Math.random() > 0.1;
+
+    if (isSuccess) {
+      const mockId = `mock_carousel_${this.platformName.toLowerCase()}_${Date.now()}`;
+      console.log(`[MOCK] ✅ Published Carousel to ${this.platformName}: ${mockId}`);
+      return { success: true, externalPostId: mockId };
+    } else {
+      const errorMsg = `[MOCK] Simulated failure for Carousel ${this.platformName}`;
+      console.log(`[MOCK] ❌ ${errorMsg}`);
+      return { success: false, errorMessage: errorMsg };
+    }
+  }
 }

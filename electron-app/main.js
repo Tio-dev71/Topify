@@ -22,11 +22,34 @@ function createWindow() {
   if (isDev) {
     // Chạy Vite dev server ở port 5173
     mainWindow.loadURL('http://localhost:5173');
+    // Mở dev tools nếu cần
     // mainWindow.webContents.openDevTools();
+    
+    // Thêm logic tự động tải lại nếu Vite server chưa sẵn sàng (giúp tránh lỗi màn hình trắng)
+    mainWindow.webContents.on('did-fail-load', (e, errorCode, errorDescription, validatedURL) => {
+      if (validatedURL.includes('localhost:5173')) {
+        console.log('[Electron] Vite server chưa sẵn sàng, đang thử lại...');
+        setTimeout(() => {
+          mainWindow.loadURL('http://localhost:5173');
+        }, 1000);
+      }
+    });
   } else {
     // Trong môi trường Production, load file index.html đã build từ thư mục frontend/dist
     mainWindow.loadFile(path.join(__dirname, 'frontend/dist/index.html'));
   }
+
+  // Quản lý popup OAuth (như Facebook/Google login)
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'allow' };
+  });
+
+  mainWindow.webContents.on('did-create-window', (childWindow) => {
+    childWindow.on('closed', () => {
+      // Khi cửa sổ OAuth đóng, tải lại cửa sổ chính để cập nhật trạng thái
+      mainWindow.webContents.executeJavaScript('window.location.reload()');
+    });
+  });
 
   // Bắt console.log từ browser in ra terminal
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {

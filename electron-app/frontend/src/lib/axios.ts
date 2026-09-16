@@ -1,8 +1,9 @@
 import axios from 'axios';
 
 // Create a custom axios instance
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? '/api' : 'https://topify.vn/api',
+  baseURL: import.meta.env.DEV ? '/api' : `${BASE_URL}/api`,
 });
 
 // Add a request interceptor
@@ -36,5 +37,9 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const getApiBaseUrl = () => {
+  return import.meta.env.DEV ? 'http://localhost:3000' : BASE_URL;
+};
 
 export default api;

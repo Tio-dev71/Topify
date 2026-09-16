@@ -13,6 +13,7 @@ import {
   Download,
   Globe,
   Activity,
+  Heart,
   X,
 } from 'lucide-react';
 
@@ -24,6 +25,7 @@ const navigation = [
   { key: 'Tài khoản FB', href: '/accounts', icon: Users },
   { key: 'Proxies', href: '/proxies', icon: Globe },
   { key: 'Tự động hóa', href: '/automation', icon: Play },
+  { key: 'Buff tương tác', href: '/buff', icon: Heart },
   { key: 'Lịch sử', href: '/history', icon: Activity },
 ];
 

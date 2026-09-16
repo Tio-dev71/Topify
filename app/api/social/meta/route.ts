@@ -1,18 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getCredentials } from '@/lib/credentials';
+import * as jwtPackage from 'jsonwebtoken';
+import { cookies } from 'next/headers';
+import crypto from 'crypto';
 
 // GET /api/social/meta — Initiate Meta OAuth flow
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
+    const url = new URL(req.url);
+    const token = url.searchParams.get('token');
+    
+    let userId;
+    let role;
+    
+    if (token) {
+      try {
+        const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+        if (!secret) throw new Error('Missing AUTH_SECRET');
+        const decoded = jwtPackage.verify(token, secret) as any;
+        userId = decoded.sub || decoded.id;
+        role = decoded.role;
+      } catch (e) {
+        console.error('Invalid token in query', e);
+      }
+    }
+    
+    if (!userId) {
+      const session = await auth();
+      userId = session?.user?.id;
+      role = session?.user?.role;
+    }
+
+    if (!userId || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const credentials = await getCredentials(session.user.id);
+    const credentials = await getCredentials(userId);
     const clientId = credentials.META_APP_ID;
-    const redirectUri = process.env.META_REDIRECT_URI || `${process.env.AUTH_URL || 'http://localhost:3000'}/api/social/meta/callback`;
+    const redirectUri = process.env.META_REDIRECT_URI || `${req.nextUrl.origin}/api/social/meta/callback`;
 
     if (!clientId) {
       return NextResponse.json(
@@ -30,7 +56,19 @@ export async function GET() {
       'instagram_content_publish',
     ].join(',');
 
-    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code&state=meta`;
+    const originalStateParam = token ? `meta_${token}` : 'meta';
+    
+    const csrfState = crypto.randomBytes(16).toString('hex');
+    const cookieStore = await cookies();
+    cookieStore.set('oauth_state_meta', csrfState, {
+      httpOnly: true,
+      secure: req.nextUrl.protocol === 'https:',
+      sameSite: 'lax',
+      maxAge: 60 * 10,
+    });
+
+    const stateParam = `${csrfState}::${originalStateParam}`;
+    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code&state=${stateParam}`;
 
     return NextResponse.redirect(authUrl);
   } catch (error: any) {

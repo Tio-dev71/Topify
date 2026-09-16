@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload,
@@ -58,6 +58,25 @@ export default function CreatePost() {
   const [publishMode, setPublishMode] = useState<PublishMode>('now');
   const [scheduledAt, setScheduledAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await api.get('/social/status');
+        if (res.data && res.data.connections) {
+          const providers: Record<string, boolean> = {};
+          res.data.connections.forEach((conn: any) => {
+            providers[conn.provider] = true;
+          });
+          setConnectedProviders(providers);
+        }
+      } catch (error) {
+        console.error('Failed to fetch social status', error);
+      }
+    };
+    fetchStatus();
+  }, []);
 
   // Handle file upload
   const handleUpload = useCallback(async (files: FileList | File[]) => {
@@ -229,10 +248,14 @@ export default function CreatePost() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-8 pb-10">
         {/* Upload Zone */}
         <div
-          className={`upload-zone ${dragOver ? 'dragover' : ''}`}
+          className={`relative overflow-hidden border-2 border-dashed rounded-3xl p-12 text-center transition-all duration-300 cursor-pointer ${
+            dragOver 
+              ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] scale-[1.02] shadow-xl shadow-[var(--color-primary-soft)]' 
+              : 'border-[var(--color-border)] bg-white hover:border-[var(--color-primary)] hover:bg-gray-50 hover:shadow-lg'
+          }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -248,31 +271,33 @@ export default function CreatePost() {
           />
           
           {uploading ? (
-            <div className="space-y-4">
-              <Loader2 className="w-10 h-10 mx-auto text-[var(--color-primary)] animate-spin" />
+            <div className="space-y-5">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--color-primary-soft)] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-[var(--color-primary)] animate-spin" />
+              </div>
               <div>
-                <p className="text-[15px] font-medium">Đang tải video lên...</p>
-                <p className="text-[13px] text-[var(--color-muted-foreground)] mt-1">
+                <p className="text-[16px] font-semibold text-gray-900">Đang tải video lên...</p>
+                <p className="text-[14px] text-[var(--color-muted-foreground)] mt-1">
                   {uploadProgress}% hoàn thành
                 </p>
               </div>
-              <div className="w-full max-w-[240px] mx-auto h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
+              <div className="w-full max-w-[280px] mx-auto h-2 bg-gray-100 rounded-full overflow-hidden shadow-inner">
                 <div
-                  className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-300"
+                  className="h-full bg-[var(--color-primary)] rounded-full transition-all duration-300 ease-out"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--color-muted)] flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors">
-                <Upload className="w-7 h-7 text-[var(--color-muted-foreground)]" />
+            <div className="space-y-4">
+              <div className="w-20 h-20 mx-auto rounded-3xl bg-gray-50 flex items-center justify-center shadow-sm border border-gray-100 transition-transform group-hover:scale-110 duration-300">
+                <Upload className="w-8 h-8 text-[var(--color-muted-foreground)]" />
               </div>
               <div>
-                <p className="text-[15px] font-medium">
-                  Kéo thả video vào đây hoặc <span className="text-[var(--color-primary)] cursor-pointer">chọn tệp</span>
+                <p className="text-[17px] font-semibold text-gray-900">
+                  Kéo thả video vào đây hoặc <span className="text-[var(--color-primary)] hover:underline">chọn tệp</span>
                 </p>
-                <p className="text-[13px] text-[var(--color-muted-foreground)] mt-1">
+                <p className="text-[14px] text-[var(--color-muted-foreground)] mt-1.5">
                   Hỗ trợ MP4, MOV, WebM (Tối đa 2GB mỗi file)
                 </p>
               </div>
@@ -283,69 +308,73 @@ export default function CreatePost() {
         {/* Video Previews */}
         {videos.length > 0 && (
           <div className="space-y-6 animate-fade-in">
-            <h3 className="text-[16px] font-medium border-b border-[var(--color-border)] pb-2">
-              Chi tiết video ({videos.length})
+            <h3 className="text-[18px] font-semibold text-gray-900 flex items-center gap-2">
+              <Film className="w-5 h-5 text-[var(--color-primary)]" />
+              Chi tiết video <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-[13px]">{videos.length}</span>
             </h3>
             <div className="grid gap-6">
               {videos.map(v => (
-                <div key={v.id} className="card-apple p-5 space-y-4 relative">
+                <div key={v.id} className="card-apple p-6 space-y-5 relative group">
                   <button
                     type="button"
                     onClick={() => removeVideo(v.id)}
-                    className="absolute top-4 right-4 p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                    className="absolute top-4 right-4 p-2.5 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 opacity-0 group-hover:opacity-100 shadow-sm"
                     title="Xoá video"
                   >
                     <X className="w-4 h-4" />
                   </button>
 
-                  <div className="flex items-start gap-4 pr-10">
-                    <div className="w-24 h-24 rounded-lg bg-black flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <div className="flex items-start gap-5 pr-12">
+                    <div className="w-28 h-28 rounded-2xl bg-black flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md ring-1 ring-black/5">
                       <video src={v.storageUrl} className="w-full h-full object-cover" muted />
                     </div>
-                    <div className="flex-1 space-y-3 min-w-0">
+                    <div className="flex-1 space-y-3 min-w-0 pt-1">
                       <div>
                         <input
                           type="text"
                           value={v.title}
                           onChange={(e) => updateVideoField(v.id, 'title', e.target.value)}
-                          className="input-apple py-2 px-3 text-[14px] font-medium w-full"
+                          className="input-apple text-[16px] font-semibold w-full placeholder:font-normal"
                           placeholder="Tiêu đề video"
                           required
                         />
-                        <p className="text-[12px] text-[var(--color-muted-foreground)] mt-1">
-                          {formatFileSize(v.size)} • {(v.mimeType || 'video/mp4').split('/')[1].toUpperCase()}
+                        <p className="text-[13px] text-[var(--color-muted-foreground)] mt-2 flex items-center gap-2">
+                          <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-medium">{(v.mimeType || 'video/mp4').split('/')[1].toUpperCase()}</span>
+                          <span>{formatFileSize(v.size)}</span>
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                      <textarea
-                        value={v.caption}
-                        onChange={(e) => updateVideoField(v.id, 'caption', e.target.value)}
-                        className="input-apple min-h-[80px] resize-y text-[13px] py-2"
-                        placeholder="Nội dung bài viết..."
-                        rows={2}
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="text"
-                        value={v.hashtags}
-                        onChange={(e) => updateVideoField(v.id, 'hashtags', e.target.value)}
-                        className="input-apple text-[13px] py-2"
-                        placeholder="#viral #trending"
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="text"
-                        value={v.firstComment}
-                        onChange={(e) => updateVideoField(v.id, 'firstComment', e.target.value)}
-                        className="input-apple text-[13px] py-2"
-                        placeholder="Tự động bình luận đầu tiên..."
-                      />
+                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <textarea
+                          value={v.caption}
+                          onChange={(e) => updateVideoField(v.id, 'caption', e.target.value)}
+                          className="input-apple min-h-[100px] resize-y text-[14px] leading-relaxed bg-white"
+                          placeholder="Nội dung bài viết (Caption)..."
+                          rows={3}
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={v.hashtags}
+                          onChange={(e) => updateVideoField(v.id, 'hashtags', e.target.value)}
+                          className="input-apple text-[14px] bg-white"
+                          placeholder="#viral #trending"
+                        />
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={v.firstComment}
+                          onChange={(e) => updateVideoField(v.id, 'firstComment', e.target.value)}
+                          className="input-apple text-[14px] bg-white"
+                          placeholder="Bình luận đầu tiên (Tuỳ chọn)"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -356,27 +385,43 @@ export default function CreatePost() {
 
         {/* Global Settings */}
         {videos.length > 0 && (
-          <div className="space-y-6 animate-fade-in border-t border-[var(--color-border)] pt-6">
+          <div className="space-y-8 animate-fade-in card-apple p-8 bg-gray-50/50 mt-8">
             
             {/* Platform Selection */}
             <div>
-              <label className="block text-[14px] font-medium mb-3">
-                Chọn nền tảng
+              <label className="block text-[15px] font-semibold text-gray-900 mb-4">
+                Chọn nền tảng đăng
               </label>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-4">
                 {(Object.entries(PLATFORM_CONFIG) as [Platform, typeof PLATFORM_CONFIG[keyof typeof PLATFORM_CONFIG]][]).map(
                   ([key, config]) => {
                     const selected = platforms.includes(key);
+                    
+                    let requiredProvider = '';
+                    if (key === 'FACEBOOK_REELS' || key === 'INSTAGRAM_REELS') {
+                      requiredProvider = 'META';
+                    } else if (key === 'YOUTUBE_SHORTS') {
+                      requiredProvider = 'YOUTUBE';
+                    }
+                    
+                    // We only disable if we know the provider is required and not connected
+                    const isConnected = requiredProvider ? connectedProviders[requiredProvider] : true;
+
                     return (
                       <button
                         key={key}
                         type="button"
+                        disabled={!isConnected}
                         onClick={() => togglePlatform(key)}
-                        className={`platform-chip px-4 py-2 rounded-xl text-sm flex items-center gap-2 border transition-all ${selected ? 'border-transparent' : 'border-gray-200 hover:border-gray-300 bg-white'}`}
-                        style={selected ? { color: config.color, backgroundColor: `${config.color}14`, borderColor: `${config.color}30` } : {}}
+                        className={`platform-chip px-5 py-3 rounded-2xl text-[14px] font-medium flex items-center gap-2.5 border-2 transition-all duration-200
+                          ${!isConnected ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200 text-gray-400' : 
+                            selected ? 'border-transparent shadow-sm' : 'border-gray-200 hover:border-gray-300 bg-white hover:shadow-sm'}`}
+                        style={selected && isConnected ? { color: config.color, backgroundColor: `${config.color}14`, borderColor: config.color } : {}}
+                        title={!isConnected ? `Vui lòng kết nối ${requiredProvider} trong Cài đặt` : ''}
                       >
                         <Film className="w-4 h-4" />
                         {config.name}
+                        {!isConnected && <span className="text-[11px] ml-1 px-1.5 py-0.5 rounded-md bg-red-100 text-red-600 font-bold tracking-wide">CHƯA KẾT NỐI</span>}
                       </button>
                     );
                   }
@@ -384,10 +429,10 @@ export default function CreatePost() {
               </div>
 
               {showYouTubeWarning && (
-                <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-100 flex items-start gap-2.5">
-                  <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-[13px] text-amber-700">
-                    Đối với YouTube Shorts, hãy sử dụng video dọc dưới 60 giây để có kết quả tốt nhất.
+                <div className="mt-4 p-4 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-start gap-3 shadow-sm">
+                  <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-[14px] text-amber-800 leading-relaxed font-medium">
+                    Đối với YouTube Shorts, video cần có định dạng dọc (9:16) và độ dài dưới 60 giây để có kết quả tốt nhất.
                   </p>
                 </div>
               )}
@@ -395,42 +440,43 @@ export default function CreatePost() {
 
             {/* Publish Mode */}
             <div>
-              <label className="block text-[14px] font-medium mb-3">
+              <label className="block text-[15px] font-semibold text-gray-900 mb-4">
                 Chế độ đăng
               </label>
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 <button
                   type="button"
                   onClick={() => setPublishMode('now')}
-                  className={`flex-1 p-4 rounded-2xl border-2 text-left transition-all ${publishMode === 'now' ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]' : 'border-[var(--color-border)] bg-white hover:border-gray-300'}`}
+                  className={`flex-1 p-5 rounded-2xl border-2 text-left transition-all duration-200 ${publishMode === 'now' ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}
                 >
-                  <Send className={`w-5 h-5 mb-2 ${publishMode === 'now' ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]'}`} />
-                  <p className="text-[14px] font-medium">Đăng ngay</p>
-                  <p className={`text-[12px] mt-0.5 ${publishMode === 'now' ? 'text-[var(--color-primary)] opacity-80' : 'text-[var(--color-muted-foreground)]'}`}>Xuất bản ngay lập tức</p>
+                  <Send className={`w-6 h-6 mb-3 ${publishMode === 'now' ? 'text-[var(--color-primary)]' : 'text-gray-400'}`} />
+                  <p className="text-[15px] font-semibold text-gray-900">Đăng ngay</p>
+                  <p className={`text-[13px] mt-1 ${publishMode === 'now' ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-muted-foreground)]'}`}>Xuất bản lên nền tảng ngay lập tức</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPublishMode('schedule')}
-                  className={`flex-1 p-4 rounded-2xl border-2 text-left transition-all ${publishMode === 'schedule' ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]' : 'border-[var(--color-border)] bg-white hover:border-gray-300'}`}
+                  className={`flex-1 p-5 rounded-2xl border-2 text-left transition-all duration-200 ${publishMode === 'schedule' ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}
                 >
-                  <Calendar className={`w-5 h-5 mb-2 ${publishMode === 'schedule' ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)]'}`} />
-                  <p className="text-[14px] font-medium">Lên lịch</p>
-                  <p className={`text-[12px] mt-0.5 ${publishMode === 'schedule' ? 'text-[var(--color-primary)] opacity-80' : 'text-[var(--color-muted-foreground)]'}`}>Chọn ngày & giờ</p>
+                  <Calendar className={`w-6 h-6 mb-3 ${publishMode === 'schedule' ? 'text-[var(--color-primary)]' : 'text-gray-400'}`} />
+                  <p className="text-[15px] font-semibold text-gray-900">Lên lịch hẹn giờ</p>
+                  <p className={`text-[13px] mt-1 ${publishMode === 'schedule' ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-muted-foreground)]'}`}>Chọn thời gian tự động đăng bài</p>
                 </button>
               </div>
             </div>
 
             {/* Schedule DateTime */}
             {publishMode === 'schedule' && (
-              <div className="animate-fade-in">
-                <label className="block text-[14px] font-medium mb-1.5">
+              <div className="animate-fade-in bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                <label className="block text-[15px] font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[var(--color-primary)]" />
                   Ngày & Giờ lên lịch
                 </label>
                 <input
                   type="datetime-local"
                   value={scheduledAt}
                   onChange={(e) => setScheduledAt(e.target.value)}
-                  className="input-apple w-full py-2 px-3"
+                  className="input-apple w-full py-3 px-4 text-[15px]"
                   min={new Date().toISOString().slice(0, 16)}
                   required
                 />
@@ -438,25 +484,25 @@ export default function CreatePost() {
             )}
 
             {/* Submit */}
-            <div className="pt-2">
+            <div className="pt-6">
               <button
                 type="submit"
                 disabled={submitting || platforms.length === 0}
-                className="btn-primary w-full py-3.5 text-[15px] flex items-center justify-center gap-2"
+                className="btn-primary w-full py-4 text-[16px] font-semibold flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg transition-all"
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                     {publishMode === 'now' ? 'Đang xuất bản...' : 'Đang lên lịch...'}
                   </>
                 ) : publishMode === 'now' ? (
                   <>
-                    <Send className="w-4 h-4" />
+                    <Send className="w-5 h-5" />
                     Đăng ngay {videos.length} Video
                   </>
                 ) : (
                   <>
-                    <Clock className="w-4 h-4" />
+                    <Clock className="w-5 h-5" />
                     Lên lịch {videos.length} Video
                   </>
                 )}

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Play, Activity } from 'lucide-react';
 
+const API_URL = import.meta.env.DEV ? '/api' : 'https://topify.vn/api';
+
 interface FbAccount {
   id: string;
   name: string;
@@ -17,7 +19,7 @@ export default function LiveDashboardPage() {
 
   useEffect(() => {
     // Fetch accounts first to map profileIds to names
-    fetch('https://topify.vn/api/facebook-accounts')
+    fetch(`${API_URL}/facebook-accounts`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -35,7 +37,7 @@ export default function LiveDashboardPage() {
     // Poll for active profiles every 3 seconds
     const fetchActive = async () => {
       try {
-        const res = await fetch('https://topify.vn/api/dashboard/live');
+        const res = await fetch(`${API_URL}/dashboard/live`);
         const data = await res.json();
         if (data.activeProfiles) {
           setActiveProfileIds(data.activeProfiles);

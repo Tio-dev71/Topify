@@ -59,7 +59,8 @@ export class YouTubeShortsPublisher implements Publisher {
 
       const uploadUrl = initRes.headers.get('location');
       if (!uploadUrl) {
-        return { success: false, errorMessage: `Failed to init upload: ${initRes.status} ${initRes.statusText}` };
+        const errorText = await initRes.text();
+        return { success: false, errorMessage: `Failed to init upload: ${initRes.status} ${initRes.statusText}. Details: ${errorText}` };
       }
 
       // Step 2: Upload video binary
@@ -106,5 +107,31 @@ export class YouTubeShortsPublisher implements Publisher {
     } catch (error: any) {
       return { success: false, errorMessage: `YouTube Shorts error: ${error.message}` };
     }
+  }
+
+  async publishFeed(
+    post: Post,
+    videoAsset: VideoAsset | null,
+    socialAccount: SocialAccount,
+    platform: PostPlatform
+  ): Promise<PublishResult> {
+    // YouTube Data API does not publicly support creating Community Posts for all users.
+    // We will mock this or return an error indicating it's unsupported.
+    return {
+      success: false,
+      errorMessage: 'Publishing Feed/Community Posts to YouTube is not supported by the public YouTube Data API.'
+    };
+  }
+
+  async publishCarousel(
+    post: Post,
+    videoAssets: VideoAsset[],
+    socialAccount: SocialAccount,
+    platform: PostPlatform
+  ): Promise<PublishResult> {
+    return {
+      success: false,
+      errorMessage: 'Publishing Carousel posts to YouTube is not supported.'
+    };
   }
 }

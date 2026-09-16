@@ -119,4 +119,150 @@ export class InstagramReelsPublisher implements Publisher {
       return { success: false, errorMessage: `Instagram Reels error: ${error.message}` };
     }
   }
+
+  async publishFeed(
+    post: Post,
+    videoAsset: VideoAsset | null,
+    socialAccount: SocialAccount,
+    platform: PostPlatform
+  ): Promise<PublishResult> {
+    try {
+      if (!socialAccount.instagramBusinessId) {
+        return { success: false, errorMessage: 'No Instagram Business ID configured' };
+      }
+
+      const igId = socialAccount.instagramBusinessId;
+      const token = decryptToken(socialAccount.accessToken);
+      const caption = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
+
+      if (!videoAsset) {
+        return { success: false, errorMessage: 'Instagram Feed requires an image/video asset' };
+      }
+
+      // Step 1: Create media container
+      const containerRes = await fetch(
+        `https://graph.facebook.com/v19.0/${igId}/media`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_url: videoAsset.storageUrl, // Assuming image url
+            caption,
+            access_token: token,
+          }),
+        }
+      );
+
+      const containerData = await containerRes.json();
+      if (!containerData.id) {
+        return { success: false, errorMessage: `Container creation failed: ${JSON.stringify(containerData)}` };
+      }
+
+      const containerId = containerData.id;
+
+      // Step 2: Publish
+      const publishRes = await fetch(
+        `https://graph.facebook.com/v19.0/${igId}/media_publish`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            creation_id: containerId,
+            access_token: token,
+          }),
+        }
+      );
+
+      const publishData = await publishRes.json();
+      if (publishData.id) {
+        return { success: true, externalPostId: publishData.id };
+      }
+
+      return { success: false, errorMessage: `Publish failed: ${JSON.stringify(publishData)}` };
+    } catch (error: any) {
+      return { success: false, errorMessage: `Instagram Feed error: ${error.message}` };
+    }
+  }
+
+  async publishCarousel(
+    post: Post,
+    videoAssets: VideoAsset[],
+    socialAccount: SocialAccount,
+    platform: PostPlatform
+  ): Promise<PublishResult> {
+    try {
+      if (!socialAccount.instagramBusinessId) {
+        return { success: false, errorMessage: 'No Instagram Business ID configured' };
+      }
+
+      const igId = socialAccount.instagramBusinessId;
+      const token = decryptToken(socialAccount.accessToken);
+      const caption = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
+
+      // Create containers for each item
+      const itemContainerIds: string[] = [];
+      for (const asset of videoAssets) {
+        const res = await fetch(
+          `https://graph.facebook.com/v19.0/${igId}/media`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image_url: asset.storageUrl,
+              is_carousel_item: true,
+              access_token: token,
+            }),
+          }
+        );
+        const data = await res.json();
+        if (data.id) itemContainerIds.push(data.id);
+      }
+
+      if (itemContainerIds.length === 0) {
+         return { success: false, errorMessage: 'Failed to create any carousel items' };
+      }
+
+      // Create carousel container
+      const containerRes = await fetch(
+        `https://graph.facebook.com/v19.0/${igId}/media`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            media_type: 'CAROUSEL',
+            children: itemContainerIds,
+            caption,
+            access_token: token,
+          }),
+        }
+      );
+
+      const containerData = await containerRes.json();
+      if (!containerData.id) {
+        return { success: false, errorMessage: `Carousel container creation failed: ${JSON.stringify(containerData)}` };
+      }
+
+      // Publish
+      const publishRes = await fetch(
+        `https://graph.facebook.com/v19.0/${igId}/media_publish`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            creation_id: containerData.id,
+            access_token: token,
+          }),
+        }
+      );
+
+      const publishData = await publishRes.json();
+      if (publishData.id) {
+        return { success: true, externalPostId: publishData.id };
+      }
+
+      return { success: false, errorMessage: `Carousel Publish failed: ${JSON.stringify(publishData)}` };
+    } catch (error: any) {
+      return { success: false, errorMessage: `Instagram Carousel error: ${error.message}` };
+    }
+  }
 }

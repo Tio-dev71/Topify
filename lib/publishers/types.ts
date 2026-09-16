@@ -13,4 +13,18 @@ export interface Publisher {
     socialAccount: SocialAccount,
     platform: PostPlatform
   ): Promise<PublishResult>;
+
+  publishFeed(
+    post: Post,
+    videoAsset: VideoAsset | null,
+    socialAccount: SocialAccount,
+    platform: PostPlatform
+  ): Promise<PublishResult>;
+
+  publishCarousel(
+    post: Post,
+    videoAssets: VideoAsset[], // Assuming Carousel can have multiple assets
+    socialAccount: SocialAccount,
+    platform: PostPlatform
+  ): Promise<PublishResult>;
 }

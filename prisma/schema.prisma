@@ -9,25 +9,20 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ──────────────────────────────────────────────
-// NextAuth Models
-// ──────────────────────────────────────────────
-
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -48,31 +43,49 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ──────────────────────────────────────────────
-// Application Models
-// ──────────────────────────────────────────────
-
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  isActive  Boolean  @default(true)
-  plan      SubscriptionPlan @default(FREE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users          User[]
-  allowedEmails  AllowedEmail[]
-  socialAccounts SocialAccount[]
-  videoAssets    VideoAsset[]
-  posts          Post[]
-  publishLogs    PublishLog[]
+  id               String            @id @default(cuid())
+  name             String
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  plan             SubscriptionPlan  @default(FREE)
+  alertSettings    AlertSetting[]
+  allowedEmails    AllowedEmail[]
+  ChannelGroup     ChannelGroup[]
+  competitorPages  CompetitorPage[]
+  contentPillars   ContentPillar[]
+  contentPlans     ContentPlan[]
+  contentTemplates ContentTemplate[]
   facebookAccounts FacebookAccount[]
-}
-
-enum SubscriptionPlan {
-  FREE
-  PRO
-  ENTERPRISE
+  hashtagLibrary   HashtagLibrary[]
+  keywordTrackers  KeywordTracker[]
+  mediaAssets      MediaAsset[]
+  mentionAlerts    MentionAlert[]
+  posts            Post[]
+  publishLogs      PublishLog[]
+  socialAccounts   SocialAccount[]
+  users            User[]
+  videoAssets      VideoAsset[]
+  // Phase 1
+  brandVoices      BrandVoice[]
+  contentBriefs    ContentBrief[]
+  // Phase 2
+  conversations    Conversation[]
+  quickReplies     QuickReply[]
+  // Phase 4
+  customers        Customer[]
+  pipelines        Pipeline[]
+  deals            Deal[]
+  crmActivities    CrmActivity[]
+  // Phase 8
+  tasks            Task[]
+  // Phase 9
+  campaigns        Campaign[]
+  // Phase 10
+  automationRules  AutomationRule[]
+  // Phase 12
+  auditLogs        AuditLog[]
 }
 
 model PasswordResetToken {
@@ -86,92 +99,93 @@ model PasswordResetToken {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  password      String?
-  licenseKey    String?   @unique
-  role          Role      @default(STAFF)
-  emailVerified DateTime?
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  workspaceId   String?
-  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  accounts       Account[]
-  sessions       Session[]
-  posts          Post[]
-  videoAssets    VideoAsset[]
-  socialAccounts SocialAccount[]
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String?
+  password        String?
+  role            Role             @default(STAFF)
+  emailVerified   DateTime?
+  image           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  workspaceId     String?
+  licenseKey      String?          @unique
+  accounts        Account[]
+  invitedEmails   AllowedEmail[]
+  mediaAssets     MediaAsset[]
+  approvedPosts   Post[]           @relation("PostApprover")
+  posts           Post[]
+  postVersions    PostVersion[]
+  sessions        Session[]
+  socialAccounts  SocialAccount[]
+  workspace       Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userApiKeys     UserApiKey[]
   userCredentials UserCredential[]
-  invitedEmails  AllowedEmail[]
-  userApiKeys    UserApiKey[]
-}
-
-enum Role {
-  SUPER_ADMIN
-  ADMIN
-  STAFF
+  videoAssets     VideoAsset[]
+  // Phase 1
+  contentBriefs     ContentBrief[]
+  // Phase 2
+  assignedConversations Conversation[] @relation("ConversationAssignee")
+  conversationNotes     ConversationNote[]
+  // Phase 4
+  ownedDeals      Deal[]           @relation("DealOwner")
+  crmActivities   CrmActivity[]
+  // Phase 8
+  assignedTasks   Task[]           @relation("TaskAssignee")
+  createdTasks    Task[]           @relation("TaskCreator")
+  taskComments    TaskComment[]
+  // Phase 9
+  ownedCampaigns  Campaign[]       @relation("CampaignOwner")
+  // Phase 13
+  wallet          Wallet?
+  referralsMade   Referral[]       @relation("ReferralReferrer")
+  referredBy      Referral[]       @relation("ReferralReferred")
 }
 
 model AllowedEmail {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  role        Role     @default(STAFF)
-  invitedBy   User?    @relation(fields: [invitedById], references: [id])
+  id          String     @id @default(cuid())
+  email       String     @unique
+  role        Role       @default(STAFF)
   invitedById String?
-  
   workspaceId String?
+  createdAt   DateTime   @default(now())
+  invitedBy   User?      @relation(fields: [invitedById], references: [id])
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  createdAt   DateTime @default(now())
 }
 
 model SocialAccount {
-  id                  String         @id @default(cuid())
+  id                  String              @id @default(cuid())
   userId              String
-  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider            SocialProvider
-  accessToken         String         @db.Text
-  refreshToken        String?        @db.Text
+  accessToken         String
+  refreshToken        String?
   expiresAt           DateTime?
   accountName         String?
   pageId              String?
   instagramBusinessId String?
   youtubeChannelId    String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
   workspaceId         String?
-  workspace           Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  status              SocialAccountStatus @default(CONNECTED)
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace           Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channelGroups       ChannelGroup[]      @relation("ChannelGroupToSocialAccount")
 
   @@unique([userId, provider])
-}
-
-enum SocialProvider {
-  META
-  YOUTUBE
-  GOOGLE_DRIVE
 }
 
 model UserCredential {
-  id           String         @id @default(cuid())
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String             @id @default(cuid())
   userId       String
   provider     CredentialProvider
-  clientId     String         @db.Text
-  clientSecret String         @db.Text
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  clientId     String
+  clientSecret String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, provider])
-}
-
-enum CredentialProvider {
-  META
-  GOOGLE
 }
 
 model VideoAsset {
@@ -183,153 +197,240 @@ model VideoAsset {
   mimeType          String
   size              Int
   duration          Int?
-  createdBy         User        @relation(fields: [createdById], references: [id])
   createdById       String
   createdAt         DateTime    @default(now())
-
   workspaceId       String?
+  posts             Post[]
+  createdBy         User        @relation(fields: [createdById], references: [id])
   workspace         Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  posts Post[]
 
   @@index([createdById])
   @@index([workspaceId])
 }
 
-enum VideoSource {
-  LOCAL_UPLOAD
-  GOOGLE_DRIVE
-}
-
 model Post {
-  id           String     @id @default(cuid())
+  id           String         @id @default(cuid())
   title        String
-  caption      String?    @db.Text
-  firstComment String?    @db.Text
+  caption      String?
+  firstComment String?
   hashtags     String?
-  videoAsset   VideoAsset @relation(fields: [videoAssetId], references: [id])
-  videoAssetId String
-  createdBy    User       @relation(fields: [createdById], references: [id])
+  videoAssetId String?
   createdById  String
-  status       PostStatus @default(DRAFT)
+  status       PostStatus     @default(DRAFT)
   scheduledAt  DateTime?
   publishedAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   workspaceId  String?
-  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  platforms PostPlatform[]
-  logs      PublishLog[]
+  approvedAt   DateTime?
+  approvedById String?
+  postType     PostType       @default(REEL)
+  approvedBy   User?          @relation("PostApprover", fields: [approvedById], references: [id])
+  createdBy    User           @relation(fields: [createdById], references: [id])
+  videoAsset   VideoAsset?    @relation(fields: [videoAssetId], references: [id])
+  workspace    Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  media        PostMedia[]
+  platforms    PostPlatform[]
+  versions     PostVersion[]
+  logs         PublishLog[]
 
   @@index([createdById])
   @@index([workspaceId])
   @@index([status])
   @@index([scheduledAt])
-}
-
-enum PostStatus {
-  DRAFT
-  SCHEDULED
-  PUBLISHING
-  PUBLISHED
-  FAILED
-  PARTIAL_FAILED
+  @@index([postType])
 }
 
 model PostPlatform {
-  id             String         @id @default(cuid())
-  post           Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId         String
-  platform       Platform
-  status         PlatformStatus @default(PENDING)
-  externalPostId String?
-  errorMessage   String?        @db.Text
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id                 String         @id @default(cuid())
+  postId             String
+  platform           Platform
+  status             PlatformStatus @default(PENDING)
+  externalPostId     String?
+  errorMessage       String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  customCaption      String?
+  customFirstComment String?
+  customTitle        String?
+  post               Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, platform])
   @@index([postId])
   @@index([status])
 }
 
-enum Platform {
-  FACEBOOK_REELS
-  INSTAGRAM_REELS
-  YOUTUBE_SHORTS
-}
-
-enum PlatformStatus {
-  PENDING
-  PUBLISHING
-  PUBLISHED
-  FAILED
-}
-
 model PublishLog {
-  id        String   @id @default(cuid())
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId    String
-  platform  Platform
-  level     LogLevel
-  message   String   @db.Text
-  metadata  Json?
-  createdAt DateTime @default(now())
-
+  id          String     @id @default(cuid())
+  postId      String
+  platform    Platform
+  level       LogLevel
+  message     String
+  metadata    Json?
+  createdAt   DateTime   @default(now())
   workspaceId String?
+  post        Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([postId])
   @@index([workspaceId])
 }
 
-enum LogLevel {
-  INFO
-  ERROR
-}
+model ChannelGroup {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  workspaceId String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accounts    SocialAccount[] @relation("ChannelGroupToSocialAccount")
 
-// ──────────────────────────────────────────────
-// System Settings
-// ──────────────────────────────────────────────
+  @@index([workspaceId])
+}
 
 model SystemSetting {
   id        String   @id @default(cuid())
   key       String   @unique
-  value     String   @db.Text
+  value     String
   updatedAt DateTime @updatedAt
 
   @@index([key])
 }
 
-// ──────────────────────────────────────────────
-// Multi-Account Automation Models
-// ──────────────────────────────────────────────
+model MediaAsset {
+  id          String      @id @default(cuid())
+  fileName    String
+  storageUrl  String
+  mimeType    String
+  size        Int
+  width       Int?
+  height      Int?
+  duration    Int?
+  mediaType   MediaType
+  tags        String?
+  alt         String?
+  source      VideoSource @default(LOCAL_UPLOAD)
+  createdById String
+  workspaceId String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  createdBy   User        @relation(fields: [createdById], references: [id])
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  postMedia   PostMedia[]
+
+  @@index([createdById])
+  @@index([workspaceId])
+  @@index([mediaType])
+}
+
+model PostMedia {
+  id           String     @id @default(cuid())
+  postId       String
+  mediaAssetId String
+  sortOrder    Int        @default(0)
+  caption      String?
+  createdAt    DateTime   @default(now())
+  mediaAsset   MediaAsset @relation(fields: [mediaAssetId], references: [id])
+  post         Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([mediaAssetId])
+}
+
+model PostVersion {
+  id         String   @id @default(cuid())
+  postId     String
+  title      String
+  caption    String?
+  hashtags   String?
+  editedById String
+  snapshot   Json?
+  createdAt  DateTime @default(now())
+  editedBy   User     @relation(fields: [editedById], references: [id])
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model ContentTemplate {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  postType    PostType   @default(FEED)
+  caption     String?
+  hashtags    String?
+  cta         String?
+  platform    Platform?
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model ContentPillar {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  color       String?
+  workspaceId String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plans       ContentPlan[]
+
+  @@index([workspaceId])
+}
+
+model ContentPlan {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  pillarId    String?
+  workspaceId String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  pillar      ContentPillar? @relation(fields: [pillarId], references: [id])
+  workspace   Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([pillarId])
+}
+
+model HashtagLibrary {
+  id          String     @id @default(cuid())
+  name        String
+  hashtags    String
+  category    String?
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
 
 model FacebookAccount {
-  id              String      @id @default(cuid())
-  name            String
-  uid             String?
-  password        String?
-  twoFactorCode   String?
-  cookie          String?     @db.Text
-  profileId       String      @unique // The folder name inside ~/.autopost/profiles/
-  proxy           String?
-  status          FbAccountStatus @default(LIVE)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  workspaceId     String?
-  workspace       Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id            String          @id @default(cuid())
+  name          String
+  uid           String?
+  password      String?
+  twoFactorCode String?
+  cookie        String?
+  profileId     String          @unique
+  proxy         String?
+  status        FbAccountStatus @default(LIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  workspaceId   String?
+  workspace     Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([status])
-}
-
-enum FbAccountStatus {
-  LIVE
-  CHECKPOINT
-  DEAD
 }
 
 model Proxy {
@@ -345,14 +446,644 @@ model Proxy {
 }
 
 model AutomationTask {
+  id         String     @id @default(cuid())
+  name       String
+  type       String
+  config     Json?
+  profileIds Json?
+  status     TaskStatus @default(IDLE)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model AutomationLog {
   id          String   @id @default(cuid())
-  name        String
-  type        String
-  config      Json?
-  profileIds  Json?    // Array of FB account profile IDs
-  status      TaskStatus @default(IDLE)
+  profileId   String
+  accountName String?
+  actionType  String
+  link        String?
+  message     String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([actionType])
+}
+
+model UserApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  keyName   String
+  encrypted String
+  iv        String
+  authTag   String
+  hint      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, keyName])
+  @@index([userId])
+}
+
+model BuffOrder {
+  id           String      @id @default(cuid())
+  url          String
+  actionType   String
+  targetCount  Int         @default(0)
+  currentCount Int         @default(0)
+  status       OrderStatus @default(PENDING)
+  config       Json?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([status])
+}
+
+model CompetitorPage {
+  id          String           @id @default(cuid())
+  url         String           @unique
+  name        String?
+  avatar      String?
+  workspaceId String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  workspace   Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posts       CompetitorPost[]
+
+  @@index([workspaceId])
+}
+
+model CompetitorPost {
+  id            String         @id @default(cuid())
+  pageId        String
+  externalId    String?
+  content       String?
+  mediaUrl      String?
+  likesCount    Int            @default(0)
+  commentsCount Int            @default(0)
+  sharesCount   Int            @default(0)
+  postedAt      DateTime?
+  scrapedAt     DateTime       @default(now())
+  page          CompetitorPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+}
+
+model KeywordTracker {
+  id          String     @id @default(cuid())
+  keyword     String
+  volume      Int        @default(0)
+  trend       String?
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([keyword])
+}
+
+model AlertSetting {
+  id          String     @id @default(cuid())
+  name        String
+  keywords    String
+  frequency   String
+  notifyEmail Boolean    @default(true)
+  notifyInApp Boolean    @default(true)
+  isActive    Boolean    @default(true)
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model MentionAlert {
+  id          String     @id @default(cuid())
+  title       String
+  message     String?
+  sourceUrl   String?
+  keyword     String?
+  isRead      Boolean    @default(false)
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([isRead])
+}
+
+// ============================================
+// Phase 1: Content Enhancements
+// ============================================
+
+model BrandVoice {
+  id             String     @id @default(cuid())
+  name           String
+  tone           String?    // e.g. "professional", "casual", "playful"
+  personality    String?    // brand personality description
+  bannedWords    String?    // comma-separated banned words
+  preferredCTA   String?    // preferred call-to-action phrases
+  sampleContent  String?    // example content in this voice
+  guidelines     String?    // detailed writing guidelines
+  isDefault      Boolean    @default(false)
+  workspaceId    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  workspace      Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model ContentBrief {
+  id          String            @id @default(cuid())
+  title       String
+  objective   String?           // what the content should achieve
+  audience    String?           // target audience
+  keyMessage  String?           // main message
+  cta         String?           // call to action
+  deadline    DateTime?
+  notes       String?
+  status      ContentBriefStatus @default(DRAFT)
+  postId      String?           // link to created post
+  workspaceId String?
+  createdById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  createdBy   User              @relation(fields: [createdById], references: [id])
+  workspace   Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([createdById])
+  @@index([status])
+}
+
+// ============================================
+// Phase 2: Inbox & Conversation Management
+// ============================================
+
+model Conversation {
+  id              String             @id @default(cuid())
+  externalId      String?            // ID from the social platform
+  platform        Platform
+  contactName     String?
+  contactAvatar   String?
+  contactId       String?            // link to Customer
+  status          ConversationStatus @default(NEW)
+  assignedToId    String?
+  labels          String?            // comma-separated labels
+  lastMessageAt   DateTime?
+  slaDeadline     DateTime?
+  isSpam          Boolean            @default(false)
+  workspaceId     String?
+  socialAccountId String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  assignedTo      User?              @relation("ConversationAssignee", fields: [assignedToId], references: [id])
+  workspace       Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  notes           ConversationNote[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  direction      MessageDirection
+  content        String?
+  mediaUrl       String?
+  senderName     String?
+  externalId     String?      // ID from social platform
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([isRead])
+}
+
+model ConversationNote {
+  id             String       @id @default(cuid())
+  conversationId String
+  content        String
+  createdById    String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdBy      User         @relation(fields: [createdById], references: [id])
+
+  @@index([conversationId])
+}
+
+model QuickReply {
+  id          String     @id @default(cuid())
+  title       String
+  content     String
+  shortcut    String?    // e.g. "/thanks"
+  category    String?
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// ============================================
+// Phase 4: CRM
+// ============================================
+
+model Customer {
+  id          String     @id @default(cuid())
+  name        String?
+  email       String?
+  phone       String?
+  avatar      String?
+  tags        String?    // comma-separated tags
+  source      String?    // e.g. "facebook", "instagram", "manual"
+  notes       String?
+  customData  Json?      // custom fields
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deals       Deal[]
+  activities  CrmActivity[]
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+model Pipeline {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  isDefault   Boolean    @default(false)
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stages      PipelineStage[]
+  deals       Deal[]
+
+  @@index([workspaceId])
+}
+
+model PipelineStage {
+  id         String   @id @default(cuid())
+  name       String
+  sortOrder  Int      @default(0)
+  color      String?
+  pipelineId String
+  createdAt  DateTime @default(now())
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals      Deal[]
+
+  @@index([pipelineId])
+}
+
+model Deal {
+  id          String         @id @default(cuid())
+  title       String
+  value       Float          @default(0)
+  probability Int            @default(0)   // 0-100%
+  customerId  String?
+  pipelineId  String
+  stageId     String
+  ownerId     String?
+  expectedClose DateTime?
+  closedAt    DateTime?
+  status      DealStatus     @default(OPEN)
+  workspaceId String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  customer    Customer?      @relation(fields: [customerId], references: [id])
+  pipeline    Pipeline       @relation(fields: [pipelineId], references: [id])
+  stage       PipelineStage  @relation(fields: [stageId], references: [id])
+  owner       User?          @relation("DealOwner", fields: [ownerId], references: [id])
+  workspace   Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([stageId])
+  @@index([status])
+}
+
+model CrmActivity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  title       String
+  description String?
+  customerId  String?
+  dueDate     DateTime?
+  isDone      Boolean      @default(false)
+  createdById String
+  workspaceId String?
+  createdAt   DateTime     @default(now())
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([dueDate])
+}
+
+// ============================================
+// Phase 8: Task Management
+// ============================================
+
+model Task {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  priority    TaskPriority @default(MEDIUM)
+  status      TaskWorkStatus @default(TODO)
+  dueDate     DateTime?
+  assigneeId  String?
+  createdById String
+  parentId    String?      // for subtasks
+  isRecurring Boolean      @default(false)
+  recurRule   String?      // cron expression
+  workspaceId String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
+  parent      Task?        @relation("TaskHierarchy", fields: [parentId], references: [id])
+  children    Task[]       @relation("TaskHierarchy")
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  comments    TaskComment[]
+
+  @@index([workspaceId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([parentId])
+}
+
+model TaskComment {
+  id          String   @id @default(cuid())
+  taskId      String
+  content     String
+  createdById String
+  createdAt   DateTime @default(now())
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  @@index([taskId])
+}
+
+// ============================================
+// Phase 9: Campaign Management
+// ============================================
+
+model Campaign {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  objective   String?
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float          @default(0)
+  spent       Float          @default(0)
+  status      CampaignStatus @default(DRAFT)
+  ownerId     String?
+  workspaceId String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  owner       User?          @relation("CampaignOwner", fields: [ownerId], references: [id])
+  workspace   Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+// ============================================
+// Phase 10: Automation Builder
+// ============================================
+
+model AutomationRule {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  trigger     Json       // { type: "keyword", config: {...} }
+  conditions  Json?      // [{ field: "tag", op: "eq", value: "VIP" }]
+  actions     Json       // [{ type: "send_message", config: {...} }]
+  isActive    Boolean    @default(true)
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  logs        AutomationRuleLog[]
+
+  @@index([workspaceId])
+  @@index([isActive])
+}
+
+model AutomationRuleLog {
+  id         String         @id @default(cuid())
+  ruleId     String
+  status     String         // "success", "error", "skipped"
+  input      Json?
+  output     Json?
+  error      String?
+  createdAt  DateTime       @default(now())
+  rule       AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([createdAt])
+}
+
+// ============================================
+// Phase 12: Governance
+// ============================================
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  action      String     // e.g. "post.create", "account.connect", "team.invite"
+  entityType  String?    // e.g. "Post", "SocialAccount"
+  entityId    String?
+  userId      String?
+  metadata    Json?
+  ipAddress   String?
+  workspaceId String?
+  createdAt   DateTime   @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// Phase 13: Wallet & Referral
+// ============================================
+
+model Wallet {
+  id           String        @id @default(cuid())
+  userId       String        @unique
+  balance      Float         @default(0)
+  pending      Float         @default(0)
+  withdrawn    Float         @default(0)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+  withdrawals  Withdrawal[]
+
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  walletId    String
+  type        String   // "earning", "commission", "withdrawal", "refund"
+  amount      Float
+  description String?
+  referenceId String?  // link to earning task, withdrawal, etc
+  createdAt   DateTime @default(now())
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Withdrawal {
+  id            String           @id @default(cuid())
+  walletId      String
+  amount        Float
+  paymentMethod String?
+  accountInfo   String?
+  status        WithdrawalStatus @default(PENDING)
+  processedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  wallet        Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([status])
+}
+
+model Referral {
+  id           String   @id @default(cuid())
+  referrerId   String   // user who referred
+  referredId   String?  // user who signed up
+  code         String   @unique
+  clicks       Int      @default(0)
+  registrations Int     @default(0)
+  conversions  Int      @default(0)
+  commission   Float    @default(0)
+  status       String   @default("active") // active, paid, suspended
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  referrer     User     @relation("ReferralReferrer", fields: [referrerId], references: [id])
+  referred     User?    @relation("ReferralReferred", fields: [referredId], references: [id])
+
+  @@index([referrerId])
+  @@index([code])
+}
+
+// ============================================
+// Enums
+// ============================================
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+}
+
+enum SocialProvider {
+  META
+  YOUTUBE
+  GOOGLE_DRIVE
+  TIKTOK
+  ZALO
+}
+
+enum SocialAccountStatus {
+  CONNECTED
+  DISCONNECTED
+  EXPIRED
+}
+
+enum CredentialProvider {
+  META
+  GOOGLE
+  TIKTOK
+  ZALO
+}
+
+enum VideoSource {
+  LOCAL_UPLOAD
+  GOOGLE_DRIVE
+}
+
+enum PostType {
+  FEED
+  CAROUSEL
+  REEL
+  STORY
+  ARTICLE
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  PARTIAL_FAILED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum Platform {
+  FACEBOOK_REELS
+  INSTAGRAM_REELS
+  YOUTUBE_SHORTS
+  TIKTOK_VIDEO
+  ZALO_POST
+  FACEBOOK_POST
+  INSTAGRAM_CAROUSEL
+  INSTAGRAM_STORY
+  ZALO_ARTICLE
+}
+
+enum PlatformStatus {
+  PENDING
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum LogLevel {
+  INFO
+  ERROR
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum FbAccountStatus {
+  LIVE
+  CHECKPOINT
+  DEAD
 }
 
 enum TaskStatus {
@@ -362,35 +1093,72 @@ enum TaskStatus {
   FAILED
 }
 
-model AutomationLog {
-  id          String   @id @default(cuid())
-  profileId   String
-  accountName String?
-  actionType  String   // 'COMMENT', 'POST_REEL', 'ADD_FRIEND', 'INVITE_GROUP'
-  link        String?  @db.Text
-  message     String?  @db.Text
-  createdAt   DateTime @default(now())
-
-  @@index([profileId])
-  @@index([actionType])
+enum OrderStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
 }
 
-// ──────────────────────────────────────────────
-// Per-User Encrypted API Keys
-// ──────────────────────────────────────────────
+enum ContentBriefStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
 
-model UserApiKey {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  keyName   String   // e.g. "GEMINI", "DEEPSEEK", "OPENAI"
-  encrypted String   @db.Text  // AES-256-GCM encrypted value
-  iv        String   // Initialization vector (hex)
-  authTag   String   // GCM auth tag (hex)
-  hint      String?  // Last 4 chars for display only
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum ConversationStatus {
+  NEW
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
 
-  @@unique([userId, keyName])
-  @@index([userId])
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum ActivityType {
+  CALL
+  MEETING
+  MESSAGE
+  TASK
+  NOTE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskWorkStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
 }

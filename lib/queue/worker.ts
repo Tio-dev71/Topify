@@ -71,6 +71,8 @@ async function processPublishJob(job: Job<{ postId: string }>) {
       FACEBOOK_REELS: 'META',
       INSTAGRAM_REELS: 'META',
       YOUTUBE_SHORTS: 'YOUTUBE',
+      TIKTOK_VIDEO: 'TIKTOK',
+      ZALO_VIDEO: 'ZALO',
     };
     
     const socialAccount = await prisma.socialAccount.findFirst({
@@ -103,7 +105,34 @@ async function processPublishJob(job: Job<{ postId: string }>) {
     // Publish
     try {
       const publisher = getPublisher(postPlatform.platform);
-      const result = await publisher.publishReel(post, post.videoAsset, socialAccount, postPlatform);
+      
+      const postForPlatform = {
+        ...post,
+        title: postPlatform.customTitle || post.title,
+        caption: postPlatform.customCaption || post.caption,
+        firstComment: postPlatform.customFirstComment || post.firstComment,
+      };
+
+      let result: any;
+      if (post.postType === 'FEED' || post.postType === 'ARTICLE') {
+        result = await publisher.publishFeed(postForPlatform as any, post.videoAsset, socialAccount, postPlatform);
+      } else if (post.postType === 'CAROUSEL') {
+        const assets = post.videoAsset ? [post.videoAsset] : [];
+        result = await publisher.publishCarousel(postForPlatform as any, assets, socialAccount, postPlatform);
+      } else {
+        if (!post.videoAsset) {
+          throw new Error('Reel post requires a video asset');
+        }
+        result = await publisher.publishReel(postForPlatform as any, post.videoAsset, socialAccount, postPlatform);
+      }
+
+      // Handle token expiration/auth errors
+      if (!result.success && (result.errorMessage?.toLowerCase().includes('token') || result.errorMessage?.toLowerCase().includes('auth'))) {
+        await prisma.socialAccount.update({
+          where: { id: socialAccount.id },
+          data: { status: 'DISCONNECTED' }
+        });
+      }
 
       if (result.success) {
         await prisma.postPlatform.update({
@@ -183,20 +212,131 @@ async function processPublishJob(job: Job<{ postId: string }>) {
   console.log(`📋 Post ${postId} final status: ${finalStatus}`);
 }
 
+async function processTokenMonitorJob(job: Job) {
+  console.log(`🔍 Checking token expirations...`);
+  // Find accounts expiring in less than 7 days, or already expired
+  const sevenDaysFromNow = new Date();
+  sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+  const expiringAccounts = await prisma.socialAccount.findMany({
+    where: {
+      status: 'CONNECTED',
+      expiresAt: {
+        lte: sevenDaysFromNow,
+      }
+    }
+  });
+
+  for (const acc of expiringAccounts) {
+    console.log(`⚠️ Account ${acc.id} (${acc.provider}) is expiring soon.`);
+    if (acc.expiresAt && acc.expiresAt < new Date()) {
+      await prisma.socialAccount.update({
+        where: { id: acc.id },
+        data: { status: 'EXPIRED' }
+      });
+      console.log(`❌ Account ${acc.id} marked as EXPIRED.`);
+    } else {
+      console.log(`🔄 Call API to refresh token for ${acc.id}...`);
+      try {
+        let newAccessToken = acc.accessToken;
+        let newExpiresAt = acc.expiresAt;
+
+        if (acc.provider === 'META') {
+          // Meta long-lived token refresh
+          const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+          const clientSecret = process.env.FACEBOOK_APP_SECRET;
+          if (clientId && clientSecret) {
+            const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${acc.accessToken}`);
+            const data = await res.json();
+            if (data.access_token) {
+              newAccessToken = data.access_token;
+              newExpiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
+            }
+          }
+        } else if (acc.provider === 'TIKTOK') {
+          // TikTok token refresh
+          const clientKey = process.env.TIKTOK_CLIENT_KEY;
+          const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
+          if (clientKey && clientSecret && acc.refreshToken) {
+            const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_key: clientKey,
+                client_secret: clientSecret,
+                grant_type: 'refresh_token',
+                refresh_token: acc.refreshToken,
+              })
+            });
+            const data = await res.json();
+            if (data.access_token) {
+              newAccessToken = data.access_token;
+              newExpiresAt = new Date(Date.now() + data.expires_in * 1000);
+            }
+          }
+        } else if (acc.provider === 'ZALO') {
+           // Zalo token refresh
+           const appId = process.env.ZALO_APP_ID;
+           const secretKey = process.env.ZALO_APP_SECRET;
+           if (appId && secretKey && acc.refreshToken) {
+             const res = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
+               method: 'POST',
+               headers: {
+                 'Content-Type': 'application/x-www-form-urlencoded',
+                 'secret_key': secretKey
+               },
+               body: new URLSearchParams({
+                 app_id: appId,
+                 grant_type: 'refresh_token',
+                 refresh_token: acc.refreshToken
+               })
+             });
+             const data = await res.json();
+             if (data.access_token) {
+               newAccessToken = data.access_token;
+               newExpiresAt = new Date(Date.now() + parseInt(data.expires_in) * 1000);
+             }
+           }
+        }
+        
+        await prisma.socialAccount.update({
+          where: { id: acc.id },
+          data: {
+             accessToken: newAccessToken,
+             expiresAt: newExpiresAt
+          }
+        });
+        console.log(`✅ Token for ${acc.id} refreshed successfully.`);
+      } catch (err: any) {
+        console.error(`❌ Failed to refresh token for ${acc.id}:`, err.message);
+      }
+    }
+  }
+}
+
 export function startWorker() {
-  const worker = new Worker('publish-reel', processPublishJob, {
+  const publishWorker = new Worker('publish-reel', processPublishJob, {
     connection: connection as any,
     concurrency: 2,
   });
 
-  worker.on('completed', (job) => {
-    console.log(`✅ Job ${job.id} completed`);
+  publishWorker.on('completed', (job) => {
+    console.log(`✅ Publish Job ${job.id} completed`);
   });
 
-  worker.on('failed', (job, err) => {
-    console.error(`❌ Job ${job?.id} failed:`, err.message);
+  publishWorker.on('failed', (job, err) => {
+    console.error(`❌ Publish Job ${job?.id} failed:`, err.message);
   });
 
-  console.log('🔄 Publish worker started');
-  return worker;
+  const tokenWorker = new Worker('token-monitor', processTokenMonitorJob, {
+    connection: connection as any,
+    concurrency: 1,
+  });
+
+  tokenWorker.on('completed', (job) => {
+    console.log(`✅ Token Monitor Job ${job.id} completed`);
+  });
+
+  console.log('🔄 BullMQ workers started (publish-reel, token-monitor)');
+  return { publishWorker, tokenWorker };
 }

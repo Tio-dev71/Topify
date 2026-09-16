@@ -12,7 +12,8 @@ async function stopTask(taskId) {
 
 async function logHistory(profileId, actionType, link, message) {
   try {
-    await fetch('https://topify.vn/api/automation-logs', {
+    const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
+    await fetch(`${apiUrl}/automation-logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profileId, actionType, link, message })
@@ -119,8 +120,21 @@ async function runAutomationStub(profileId, actionType, config) {
     await logHistory(profileId, actionType, '', `Lỗi: ${error.message}`);
     return { success: false, profileId, error: error.message };
   } finally {
-    // Không đóng trình duyệt tự động để giữ cho Live Dashboard tiếp tục hiển thị
-    console.log(`[Automation] Xong task cho ${profileId}, giữ trình duyệt mở...`);
+    console.log(`[Automation] Xong task cho ${profileId}, tiến hành đóng trình duyệt...`);
+    if (browser) {
+      try {
+        if (typeof page !== 'undefined' && page) {
+          await page.close().catch(() => {});
+        }
+        await Promise.race([
+          browser.close(),
+          new Promise(resolve => setTimeout(resolve, 5000))
+        ]);
+        activeBrowsers.delete(profileId);
+      } catch (e) {
+        console.error(`[Automation] Lỗi khi đóng trình duyệt ${profileId}:`, e);
+      }
+    }
   }
 }
 
@@ -130,17 +144,35 @@ async function startAutomationTask(taskData) {
   
   stopFlags.delete(taskId);
   
-  // Run in parallel to process multiple accounts at the same time
-  const promises = profileIds.map(async (profileId) => {
+  const results = [];
+  const concurrency = 3; // Giới hạn số trình duyệt mở cùng lúc để tránh treo máy
+  
+  for (let i = 0; i < profileIds.length; i += concurrency) {
     if (stopFlags.has(taskId)) {
-      console.log(`[Automation] Task ${taskId} was stopped. Bỏ qua profile ${profileId}`);
-      return { success: false, profileId, error: 'Task stopped by user' };
+      console.log(`[Automation] Task ${taskId} was stopped.`);
+      break;
     }
-    const profileConfig = { ...config, checkStop: () => stopFlags.has(taskId) };
-    return await runAutomationStub(profileId, actionType, profileConfig);
-  });
+    
+    const chunk = profileIds.slice(i, i + concurrency);
+    console.log(`[Automation] Running batch ${Math.floor(i / concurrency) + 1} (${chunk.length} profiles)`);
+    
+    const promises = chunk.map(async (profileId) => {
+      if (stopFlags.has(taskId)) {
+        return { success: false, profileId, error: 'Task stopped by user' };
+      }
+      const profileConfig = { ...config, checkStop: () => stopFlags.has(taskId) };
+      return await runAutomationStub(profileId, actionType, profileConfig);
+    });
 
-  const results = await Promise.all(promises);
+    const chunkResults = await Promise.all(promises);
+    results.push(...chunkResults);
+    
+    // Đợi một chút giữa các batch để giảm tải CPU
+    if (i + concurrency < profileIds.length) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+  }
+
   stopFlags.delete(taskId);
   return { success: true, results };
 }

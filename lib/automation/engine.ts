@@ -741,6 +741,146 @@ CRITICAL INSTRUCTION: Return ONLY the raw comment text. Do NOT wrap it in quotes
     }
   }
 
+  static async taskFbScrapeFanpage(page: Page, config: TaskConfig, profileId: string) {
+    if (!config.targetUrl) throw new Error('Target URL is required for scraping fanpage');
+    console.log(`[AutomationEngine] Scraping fanpage: ${config.targetUrl}`);
+    await page.goto(config.targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await this.safeWait(page, 5000, profileId);
+
+    // Scroll a bit to load posts
+    await this.humanScroll(page, profileId, 5);
+    await this.safeWait(page, 2000, profileId);
+
+    // Close any login/signup popup if it appears (though usually we are logged in)
+    try {
+      await page.evaluate(() => {
+        const closeBtn = document.querySelector('div[aria-label="Đóng"], div[aria-label="Close"]') as HTMLElement;
+        if (closeBtn) closeBtn.click();
+      });
+    } catch(e) {}
+
+    const posts = await page.evaluate(() => {
+      const results: any[] = [];
+      // Select posts containers
+      const postContainers = Array.from(document.querySelectorAll('div[data-pagelet^="ProfileTimeline"], div[role="article"]'));
+      
+      for (const container of postContainers) {
+        // Skip if not a real post
+        if (!container.querySelector('div[data-ad-preview="message"]') && !container.querySelector('div[dir="auto"]')) {
+           continue;
+        }
+
+        try {
+          // Extract content
+          const textEls = Array.from(container.querySelectorAll('div[data-ad-preview="message"], div[dir="auto"]'));
+          let content = textEls.map(el => (el as HTMLElement).innerText).join('\n').trim();
+
+          // Try to find post link/ID
+          const links = Array.from(container.querySelectorAll('a'));
+          const postLinkEl = links.find(a => a.href.includes('/posts/') || a.href.includes('/videos/') || a.href.includes('/photos/') || a.href.includes('fbid='));
+          const externalId = postLinkEl ? postLinkEl.href : null;
+
+          // Avoid duplicates in the same run
+          if (externalId && results.some(r => r.externalId === externalId)) continue;
+
+          // Extract media if any (first image or video)
+          const img = container.querySelector('img[referrerpolicy="origin-when-cross-origin"]');
+          const mediaUrl = img ? (img as HTMLImageElement).src : null;
+
+          // Extract interaction counts
+          // Facebook uses spans with specific structures, or we can look for aria-labels
+          let likesCount = 0;
+          let commentsCount = 0;
+          let sharesCount = 0;
+
+          // Likes (Bày tỏ cảm xúc)
+          const likeEl = container.querySelector('span.x1e558r4'); // FB often uses this class for interaction counts, but it changes.
+          // A safer way is to find aria-label="Thích" or "Bày tỏ cảm xúc" but the count itself is in a sibling.
+          // Just parsing text is more robust: find spans containing numbers followed by "bình luận", "lượt chia sẻ".
+          const allTextSpans = Array.from(container.querySelectorAll('span'));
+          
+          for (const span of allTextSpans) {
+             const text = span.innerText || '';
+             if (text.includes('bình luận')) {
+                 const match = text.match(/([\d,\.]+)/);
+                 if (match) commentsCount = parseInt(match[1].replace(/,/g, ''));
+             } else if (text.includes('lượt chia sẻ') || text.includes('chia sẻ')) {
+                 const match = text.match(/([\d,\.]+)/);
+                 if (match) sharesCount = parseInt(match[1].replace(/,/g, ''));
+             } else if (/^\d+$/.test(text) || /^[\d,\.]+K$/.test(text)) {
+                 // Might be likes
+                 const parent = span.parentElement;
+                 if (parent && parent.innerHTML.includes('Bày tỏ cảm xúc')) {
+                    let numStr = text.replace(/,/g, '');
+                    if (numStr.endsWith('K')) likesCount = parseFloat(numStr) * 1000;
+                    else likesCount = parseInt(numStr);
+                 }
+             }
+          }
+
+          if (content || externalId) {
+            results.push({
+               content: content.substring(0, 1000),
+               externalId,
+               mediaUrl,
+               likesCount: isNaN(likesCount) ? 0 : likesCount,
+               commentsCount: isNaN(commentsCount) ? 0 : commentsCount,
+               sharesCount: isNaN(sharesCount) ? 0 : sharesCount
+            });
+          }
+        } catch (e) {
+          // ignore parsing error for single post
+        }
+      }
+      return results;
+    });
+
+    console.log(`[AutomationEngine] Scraped ${posts.length} posts from ${config.targetUrl}`);
+    
+    if (posts.length > 0) {
+       // We need to pass the extracted data back out, or just save it directly to DB from here.
+       // It's better to save to DB directly since we have prisma access.
+       const pageRecord = await prisma.competitorPage.findUnique({ where: { url: config.targetUrl } });
+       if (pageRecord) {
+           for (const p of posts) {
+               if (!p.externalId) continue; // skip if no link
+               
+               // Upsert post to avoid duplicates
+               const existing = await prisma.competitorPost.findFirst({
+                   where: { pageId: pageRecord.id, externalId: p.externalId }
+               });
+
+               if (existing) {
+                   await prisma.competitorPost.update({
+                       where: { id: existing.id },
+                       data: {
+                           likesCount: p.likesCount,
+                           commentsCount: p.commentsCount,
+                           sharesCount: p.sharesCount,
+                           scrapedAt: new Date()
+                       }
+                   });
+               } else {
+                   await prisma.competitorPost.create({
+                       data: {
+                           pageId: pageRecord.id,
+                           externalId: p.externalId,
+                           content: p.content,
+                           mediaUrl: p.mediaUrl,
+                           likesCount: p.likesCount,
+                           commentsCount: p.commentsCount,
+                           sharesCount: p.sharesCount,
+                           postedAt: new Date() // Fallback
+                       }
+                   });
+               }
+           }
+       } else {
+           console.log(`[AutomationEngine] CompetitorPage not found for ${config.targetUrl}`);
+       }
+    }
+  }
+
   static async runTask(profileId: string, config: TaskConfig) {
     browserManager.clearStopFlag(profileId);
     
@@ -805,6 +945,9 @@ CRITICAL INSTRUCTION: Return ONLY the raw comment text. Do NOT wrap it in quotes
           break;
         case 'fb_invite_to_group':
           await this.taskFbInviteToGroup(page, config, profileId);
+          break;
+        case 'fb_scrape_fanpage':
+          await this.taskFbScrapeFanpage(page, config, profileId);
           break;
         default:
           throw new Error(`Unknown task type: ${config.type}`);

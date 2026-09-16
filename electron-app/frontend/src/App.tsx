@@ -13,6 +13,8 @@ import Settings from './pages/Settings';
 import Team from './pages/Team';
 import Posts from './pages/Posts';
 import CreatePost from './pages/CreatePost';
+import BuffSystem from './pages/BuffSystem';
+import Workspaces from './pages/Workspaces';
 import Layout from './components/layout/Layout';
 import {
   Calendar,
@@ -40,12 +42,11 @@ function App() {
           <Route path="/downloader" element={<Downloader />} />
           <Route path="/proxies" element={<Proxies />} />
           <Route path="/automation" element={<Automation />} />
+          <Route path="/buff" element={<BuffSystem />} />
           <Route path="/history" element={<History />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/super-admin" element={
-            <PlaceholderPage title="Workspaces" description="Quản lý hệ thống đang được phát triển." icon={<Building2 className="w-8 h-8 text-gray-400" />} />
-          } />
+          <Route path="/super-admin" element={<Workspaces />} />
 
           {/* Catch-all: redirect unknown paths to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -2,10 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import axios from 'axios';
-
-// Dùng đường dẫn tương đối để đi qua Vite Proxy
-const API_URL = 'https://topify.vn/api';
+import api from '../lib/axios';
 
 export default function Login() {
   const [licenseKey, setLicenseKey] = useState('');
@@ -20,7 +17,7 @@ export default function Login() {
 
     try {
       // Gọi API lên Next.js Server để lấy JWT Token
-      const response = await axios.post(`${API_URL}/auth/license-login`, {
+      const response = await api.post('/auth/license-login', {
         licenseKey: licenseKey.trim()
       });
 

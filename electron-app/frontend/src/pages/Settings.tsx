@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, Key, Cpu } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Key, Cpu, Zap, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
-import api from '../lib/axios';
+import api, { getApiBaseUrl } from '../lib/axios';
 
 export default function Settings() {
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -19,7 +19,7 @@ export default function Settings() {
 
       // Load per-user API keys
       try {
-        const keysRes = await api.get('/api/user/api-keys');
+        const keysRes = await api.get('/user/api-keys');
         if (Array.isArray(keysRes.data)) {
           keysRes.data.forEach((key: any) => {
              currentSettings[`${key.keyName}_HINT`] = key.hint;
@@ -61,7 +61,7 @@ export default function Settings() {
       // 2. Save individual per-user API keys if they were entered
       const saveKey = async (keyName: string) => {
         if (settings[keyName] && settings[keyName].trim() !== '') {
-          await api.post('/api/user/api-keys', {
+          await api.post('/user/api-keys', {
             keyName,
             keyValue: settings[keyName]
           });
@@ -252,6 +252,104 @@ export default function Settings() {
                 onChange={(e) => handleChange('META_APP_SECRET', e.target.value)}
                 className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">TikTok Client Key</label>
+              <input
+                type="text"
+                value={settings.TIKTOK_CLIENT_KEY || ''}
+                onChange={(e) => handleChange('TIKTOK_CLIENT_KEY', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">TikTok Client Secret</label>
+              <input
+                type="password"
+                value={settings.TIKTOK_CLIENT_SECRET || ''}
+                onChange={(e) => handleChange('TIKTOK_CLIENT_SECRET', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Zalo App ID</label>
+              <input
+                type="text"
+                value={settings.ZALO_APP_ID || ''}
+                onChange={(e) => handleChange('ZALO_APP_ID', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Zalo App Secret</label>
+              <input
+                type="password"
+                value={settings.ZALO_APP_SECRET || ''}
+                onChange={(e) => handleChange('ZALO_APP_SECRET', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Social Connections */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="text-[15px] font-semibold text-gray-900 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-blue-600" />
+              Kết nối Tài khoản
+            </h2>
+          </div>
+          <div className="p-6">
+            <p className="text-[14px] text-gray-500 mb-4">
+              Kết nối các nền tảng mạng xã hội để đăng video trực tiếp từ ứng dụng.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  const token = localStorage.getItem('topify_token');
+                  const baseUrl = getApiBaseUrl();
+                  window.open(`${baseUrl}/api/social/meta?token=${token}`, '_blank');
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+              >
+                <Zap className="w-4 h-4" />
+                Kết nối Meta (Facebook/Instagram)
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  const token = localStorage.getItem('topify_token');
+                  const baseUrl = getApiBaseUrl();
+                  window.open(`${baseUrl}/api/social/google?token=${token}`, '_blank');
+                }}
+                className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+              >
+                Kết nối YouTube
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  const token = localStorage.getItem('topify_token');
+                  const baseUrl = getApiBaseUrl();
+                  window.open(`${baseUrl}/api/social/tiktok?token=${token}`, '_blank');
+                }}
+                className="bg-black text-white hover:bg-gray-800 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+              >
+                Kết nối TikTok
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  const token = localStorage.getItem('topify_token');
+                  const baseUrl = getApiBaseUrl();
+                  window.open(`${baseUrl}/api/social/zalo?token=${token}`, '_blank');
+                }}
+                className="bg-[#0068ff] text-white hover:bg-blue-600 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+              >
+                Kết nối Zalo
+              </button>
             </div>
           </div>
         </div>
