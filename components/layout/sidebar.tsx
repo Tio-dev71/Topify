@@ -51,8 +51,6 @@ const navigation: any[] = [
 ];
 
 const contentNavigation = [
-  { key: 'sidebar.create_post', href: '/dashboard/content/create', icon: Pencil },
-  { key: 'sidebar.posts', href: '/dashboard/content/posts', icon: FileText },
   { key: 'sidebar.calendar', href: '/dashboard/content/calendar', icon: Calendar },
   { key: 'sidebar.media_library', href: '/dashboard/content/media', icon: ImageIcon },
   { key: 'sidebar.templates', href: '/dashboard/content/templates', icon: LayoutTemplate },
@@ -74,10 +72,6 @@ const crmNavigation = [
 ];
 
 const automationNavigation = [
-  { key: 'sidebar.fb_profiles', href: '/dashboard/social/fb-profiles', icon: Users },
-  { key: 'sidebar.proxies', href: '/dashboard/social/proxies', icon: Globe },
-  { key: 'sidebar.automation', href: '/dashboard/social/automation', icon: Activity },
-  { key: 'sidebar.buff_orders', href: '/dashboard/social/buff-orders', icon: Layers },
   { key: 'sidebar.competitors', href: '/dashboard/social/competitors', icon: Building2 },
   { key: 'sidebar.keywords', href: '/dashboard/social/keywords', icon: Hash },
   { key: 'sidebar.alerts', href: '/dashboard/social/alerts', icon: Activity },
