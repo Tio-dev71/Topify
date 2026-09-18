@@ -4,6 +4,8 @@ import prisma from '@/lib/db';
 import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const createPostSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   caption: z.string().nullable().optional(),
@@ -126,11 +128,17 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Enqueue job if not requesting approval
-    if (publishMode === 'now') {
-      await enqueuePublish(post.id);
-    } else if (publishMode === 'schedule' && scheduledAt) {
-      await schedulePublish(post.id, new Date(scheduledAt));
+    try {
+      // Enqueue job if not requesting approval
+      if (publishMode === 'now') {
+        await enqueuePublish(post.id);
+      } else if (publishMode === 'schedule' && scheduledAt) {
+        await schedulePublish(post.id, new Date(scheduledAt));
+      }
+    } catch (queueError: any) {
+      // If queueing fails, rollback post creation to avoid getting stuck in PUBLISHING
+      await prisma.post.delete({ where: { id: post.id } });
+      throw new Error(`Failed to enqueue publish job: ${queueError.message}`);
     }
 
     return NextResponse.json(post, { status: 201 });
