@@ -104,6 +104,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Video asset not found in your workspace' }, { status: 404 });
     }
 
+    if (platforms.includes('YOUTUBE_SHORTS') && videoAsset.duration && videoAsset.duration > 60) {
+      return NextResponse.json(
+        { error: 'Video cho YouTube Shorts phải có thời lượng tối đa 60 giây.' },
+        { status: 400 }
+      );
+    }
+
     // Create post with platforms
     const post = await prisma.post.create({
       data: {

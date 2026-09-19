@@ -475,7 +475,7 @@ export default function CreatePostPage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="sticky top-12 bg-black dark:bg-[#121212] border-8 border-gray-900 rounded-[3rem] p-3 shadow-2xl overflow-hidden aspect-[9/19] flex flex-col relative mx-auto max-w-[320px] ring-1 ring-white/10"
+              className="sticky top-12 bg-black dark:bg-[#121212] border-8 border-gray-900 rounded-[3rem] p-3 shadow-2xl overflow-hidden aspect-[9/19] flex flex-col relative mx-auto max-w-[320px] max-h-[70vh] lg:max-h-[700px] ring-1 ring-white/10"
             >
               {/* Phone Notch */}
               <div className="absolute top-0 inset-x-0 h-7 flex justify-center z-50">

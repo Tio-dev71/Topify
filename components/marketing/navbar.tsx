@@ -36,7 +36,7 @@ function NavbarContent() {
           {/* Logo */}
           <div className="flex items-center flex-shrink-0">
             <Link href="/" className="flex items-center gap-2">
-              <Image src="/Topify-logo.png" alt="Topify Logo" width={200} height={56} className="h-12 w-auto object-contain" priority />
+              <Image src="/Topify-logo.png" alt="Topify Logo" width={200} height={56} className="h-12 w-auto object-contain" priority unoptimized />
             </Link>
           </div>
 

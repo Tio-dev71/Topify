@@ -158,6 +158,7 @@ export function Sidebar() {
               height={56} 
               className={`h-10 w-auto object-contain object-left ${collapsed ? 'max-w-none' : ''}`} 
               priority
+              unoptimized
             />
           </Link>
           

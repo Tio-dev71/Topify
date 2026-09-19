@@ -30,11 +30,8 @@ export async function GET(req: NextRequest) {
     headers.set('Content-Type', contentType);
     headers.set('Content-Disposition', `attachment; filename="${filename}"`);
     
-    // Some video CDNs require this to stream properly through Next.js
-    const contentLength = response.headers.get('content-length');
-    if (contentLength) {
-      headers.set('Content-Length', contentLength);
-    }
+    // Let Next.js handle chunked transfer encoding automatically
+    // Removed manual Content-Length mapping to fix premature close errors
 
     return new NextResponse(response.body, {
       status: 200,

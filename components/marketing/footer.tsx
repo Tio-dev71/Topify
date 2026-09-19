@@ -13,7 +13,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-8 mb-12">
           <div className="col-span-1 md:col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-6">
-              <Image src="/Topify-logo.png" alt="Topify Logo" width={200} height={56} className="h-12 w-auto object-contain" />
+              <Image src="/Topify-logo.png" alt="Topify Logo" width={200} height={56} className="h-12 w-auto object-contain" unoptimized />
             </Link>
             <p className="text-gray-600 text-sm leading-relaxed max-w-xs">
               {t('footer.desc')}
@@ -33,20 +33,20 @@ export default function Footer() {
           <div>
             <h4 className="text-gray-900 font-semibold mb-6">{t('footer.resources')}</h4>
             <ul className="space-y-4 text-sm text-gray-600">
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.blog')}</Link></li>
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.help')}</Link></li>
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.community')}</Link></li>
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.webinar')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.blog')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.help')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.community')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.webinar')}</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="text-gray-900 font-semibold mb-6">{t('footer.company')}</h4>
             <ul className="space-y-4 text-sm text-gray-600">
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.about')}</Link></li>
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.careers')}</Link></li>
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.security')}</Link></li>
-              <li><Link href="#" className="hover:text-blue-600 transition-colors">{t('footer.terms')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.about')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.careers')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.security')}</Link></li>
+              <li><Link href="/" className="hover:text-blue-600 transition-colors">{t('footer.terms')}</Link></li>
             </ul>
           </div>
         </div>
