@@ -33,11 +33,7 @@ export default function Settings() {
       setSettings(currentSettings);
     } catch (e: any) {
       console.error(e);
-      if (e.response?.status === 403) {
-        toast.error('Bạn không có quyền truy cập trang Cài đặt (Yêu cầu Admin)');
-      } else {
-        toast.error('Không thể tải cài đặt');
-      }
+      toast.error('Không thể tải cài đặt');
     } finally {
       setLoading(false);
     }

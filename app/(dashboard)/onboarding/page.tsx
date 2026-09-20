@@ -33,8 +33,7 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Failed to create workspace');
       }
 
-      router.refresh();
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -14,8 +14,8 @@ const ALLOWED_KEYS = [
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user?.id || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     let settingsMap: Record<string, string> = {};
@@ -62,8 +62,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
