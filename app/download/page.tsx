@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { Download, Monitor, Apple, ArrowLeft, ExternalLink, ShieldCheck } from 'lucide-react';
+import electronPkg from '../../electron-app/package.json';
 
 export const metadata: Metadata = {
   title: 'Tải Desktop App - Topify',
@@ -47,7 +48,7 @@ export default function DownloadPage() {
               Hỗ trợ Windows 10, 11 (64-bit). Tự động cập nhật phiên bản mới nhất.
             </p>
             <a
-              href="https://topify.vn/downloads/Topify-Automation-1.2.3-win.exe"
+              href={`https://topify.vn/downloads/Topify-Automation-${electronPkg.version}-win.exe`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full bg-[#0078d7] hover:bg-[#0063b1] text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm shadow-blue-500/20"
@@ -67,7 +68,7 @@ export default function DownloadPage() {
               Hỗ trợ macOS 10.15 trở lên (Intel & Apple Silicon M1/M2/M3).
             </p>
             <a
-              href="https://topify.vn/downloads/Topify-Automation-1.2.3-mac.dmg"
+              href={`https://topify.vn/downloads/Topify-Automation-${electronPkg.version}-mac.dmg`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full bg-gray-900 hover:bg-black text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm shadow-gray-900/20"
