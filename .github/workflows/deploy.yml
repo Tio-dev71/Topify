@@ -27,8 +27,6 @@ jobs:
       run: npm run lint
       continue-on-error: true
 
-    - name: Build App
-      run: npm run build
 
     - name: Deploy to Vercel
       if: success()
