@@ -1,4 +1,4 @@
-name: Deploy Next.js App
+name: Deploy to VPS
 
 on:
   push:
@@ -7,32 +7,21 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  deploy:
+    name: Deploy Next.js to VPS
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-
-    - name: Install Dependencies
-      run: npm ci --legacy-peer-deps
-
-    - name: Run Linter
-      run: npm run lint
-      continue-on-error: true
-
-
-    - name: Deploy to Vercel
-      if: success()
-      uses: amondnet/vercel-action@v20
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-        vercel-args: '--prod'
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            cd /var/www/topify
+            git pull origin main
+            rm -rf .next
+            npm install --legacy-peer-deps
+            npm run build
+            pm2 restart Topify
