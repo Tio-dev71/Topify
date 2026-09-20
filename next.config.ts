@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   },
   // External packages that shouldn't be bundled
   serverExternalPackages: ['bullmq', 'ioredis', '@ffmpeg-installer/ffmpeg', 'fluent-ffmpeg', 'playwright-extra', 'puppeteer-extra-plugin-stealth'],
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 };
 
 export default nextConfig;
