@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { GET, POST, PATCH } from '@/app/api/automation-tasks/route';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';

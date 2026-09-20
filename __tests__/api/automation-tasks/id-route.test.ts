@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { DELETE, PUT } from '@/app/api/automation-tasks/[id]/route';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
