@@ -6,7 +6,7 @@ export class TikTokPublisher implements Publisher {
     post: Post,
     videoAsset: VideoAsset,
     socialAccount: SocialAccount,
-    platform: PostPlatform
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       // Mocking TikTok API call for Video (Reel equivalent)
@@ -21,20 +21,20 @@ export class TikTokPublisher implements Publisher {
         success: true,
         externalPostId: `tiktok_mock_video_${Date.now()}`
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[TikTokPublisher] Video upload failed:', error);
       return {
         success: false,
-        errorMessage: error.message || 'Unknown TikTok upload error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown TikTok upload error'
       };
     }
   }
 
   async publishFeed(
     post: Post,
-    videoAsset: VideoAsset | null,
-    socialAccount: SocialAccount,
-    platform: PostPlatform
+    _videoAsset: VideoAsset | null,
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       // Mocking TikTok Photo Mode (Feed equivalent)
@@ -46,19 +46,19 @@ export class TikTokPublisher implements Publisher {
         success: true,
         externalPostId: `tiktok_mock_photo_${Date.now()}`
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        errorMessage: error.message || 'Unknown TikTok photo mode upload error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown TikTok photo mode upload error'
       };
     }
   }
 
   async publishCarousel(
     post: Post,
-    videoAssets: VideoAsset[],
-    socialAccount: SocialAccount,
-    platform: PostPlatform
+    _videoAssets: VideoAsset[],
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       console.log(`[TikTokPublisher] Uploading photo carousel to TikTok for post ${post.id}`);
@@ -69,10 +69,10 @@ export class TikTokPublisher implements Publisher {
         success: true,
         externalPostId: `tiktok_mock_carousel_${Date.now()}`
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        errorMessage: error.message || 'Unknown TikTok carousel upload error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown TikTok carousel upload error'
       };
     }
   }

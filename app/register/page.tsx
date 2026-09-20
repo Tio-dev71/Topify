@@ -102,6 +102,16 @@ function RegisterForm() {
         toast.error(t('auth.register.error_auto_login'));
         router.push('/login');
       } else {
+        // Sync user with Prisma database and setup workspace
+        try {
+          await fetch('/api/auth/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workspaceName: `${fullName}'s Business` })
+          });
+        } catch (syncError) {
+          console.error('Failed to sync user with database:', syncError);
+        }
         window.location.href = '/dashboard';
       }
 

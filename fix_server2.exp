@@ -1,0 +1,14 @@
+#!/usr/bin/expect -f
+set timeout 120
+spawn ssh root@157.66.100.35 "cd /var/www/topify && git reset --hard HEAD && git pull origin main && rm -rf .next && npm run build && pm2 restart Topify"
+expect {
+    "yes/no" {
+        send "yes\r"
+        exp_continue
+    }
+    "password:" {
+        send "Topmediacto!!!\r"
+        exp_continue
+    }
+    eof
+}

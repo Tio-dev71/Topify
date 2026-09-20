@@ -15,7 +15,7 @@ const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379'
 });
 
 export const publishQueue = new Queue('publish-reel', {
-  connection: connection as any,
+  connection: connection as never,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -48,7 +48,7 @@ export async function schedulePublish(postId: string, scheduledAt: Date) {
 }
 
 export const tokenMonitorQueue = new Queue('token-monitor', {
-  connection: connection as any,
+  connection: connection as never,
   defaultJobOptions: {
     attempts: 3,
     backoff: {

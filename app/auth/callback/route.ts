@@ -18,22 +18,55 @@ export async function GET(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
         if (user && user.email) {
           try {
-            // Sync to Prisma User table
-            await prisma.user.upsert({
-              where: { email: user.email },
-              update: {
-                name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
-                image: user.user_metadata?.avatar_url || '',
-                emailVerified: new Date(),
-              },
-              create: {
-                email: user.email,
-                name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
-                image: user.user_metadata?.avatar_url || '',
-                emailVerified: new Date(),
-                role: 'STAFF',
+            // Check if user already exists
+            const existingUser = await prisma.user.findUnique({
+              where: { email: user.email }
+            });
+
+            if (existingUser) {
+              // Update existing user
+              await prisma.user.update({
+                where: { email: user.email },
+                data: {
+                  name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
+                  image: user.user_metadata?.avatar_url || '',
+                  emailVerified: new Date(),
+                }
+              });
+            } else {
+              // Check if invited
+              const invite = await prisma.allowedEmail.findUnique({
+                where: { email: user.email }
+              });
+
+              if (invite && invite.workspaceId) {
+                // Invited staff
+                await prisma.user.create({
+                  data: {
+                    email: user.email,
+                    name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
+                    image: user.user_metadata?.avatar_url || '',
+                    emailVerified: new Date(),
+                    role: invite.role,
+                    workspaceId: invite.workspaceId,
+                  }
+                });
+              } else {
+                // New user registration - no workspace yet
+                const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0];
+
+                await prisma.user.create({
+                  data: {
+                    email: user.email,
+                    name,
+                    image: user.user_metadata?.avatar_url || '',
+                    emailVerified: new Date(),
+                    role: 'STAFF',
+                    workspaceId: null,
+                  }
+                });
               }
-            })
+            }
           } catch (dbError) {
             console.error("Prisma upsert error in auth callback:", dbError);
             return NextResponse.redirect(`${origin}/login?error=database_sync_failed`);

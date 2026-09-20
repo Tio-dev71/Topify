@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Providers } from './providers';
+import OnboardingPage from './onboarding/page';
 
 export default async function DashboardLayout({
   children,
@@ -12,6 +13,16 @@ export default async function DashboardLayout({
 
   if (!session?.user) {
     redirect('/login');
+  }
+
+  const isSuperAdmin = session.user.role === 'SUPER_ADMIN';
+
+  if (!session.user.workspaceId && !isSuperAdmin) {
+    return (
+      <Providers>
+        <OnboardingPage />
+      </Providers>
+    );
   }
 
   return (

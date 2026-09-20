@@ -103,7 +103,7 @@ export function Sidebar() {
         <div className={`flex items-center h-16 px-4 border-b border-[var(--color-border)] ${collapsed ? 'justify-center' : 'justify-between'}`}>
           <Link to="/dashboard" className={`flex items-center min-w-0 overflow-hidden transition-all ${collapsed ? 'justify-center w-10' : 'w-[160px]'}`}>
             <img 
-              src="/Topify-logo.png" 
+              src="./Topify-logo.png" 
               alt="Topify Logo" 
               className={`h-10 w-auto object-contain object-left ${collapsed ? 'max-w-none' : ''}`} 
             />

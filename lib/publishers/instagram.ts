@@ -1,8 +1,6 @@
 import type { Publisher, PublishResult } from './types';
 import type { Post, VideoAsset, SocialAccount, PostPlatform } from '@prisma/client';
-import { getStorage } from '@/lib/storage';
 import { decryptToken } from '@/lib/crypto';
-import fs from 'fs';
 
 /**
  * Instagram Reels publisher using Meta Graph API.
@@ -115,8 +113,8 @@ export class InstagramReelsPublisher implements Publisher {
       }
 
       return { success: false, errorMessage: `Publish failed: ${JSON.stringify(publishData)}` };
-    } catch (error: any) {
-      return { success: false, errorMessage: `Instagram Reels error: ${error.message}` };
+    } catch (error: unknown) {
+      return { success: false, errorMessage: `Instagram Reels error: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
@@ -124,7 +122,7 @@ export class InstagramReelsPublisher implements Publisher {
     post: Post,
     videoAsset: VideoAsset | null,
     socialAccount: SocialAccount,
-    platform: PostPlatform
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       if (!socialAccount.instagramBusinessId) {
@@ -179,8 +177,8 @@ export class InstagramReelsPublisher implements Publisher {
       }
 
       return { success: false, errorMessage: `Publish failed: ${JSON.stringify(publishData)}` };
-    } catch (error: any) {
-      return { success: false, errorMessage: `Instagram Feed error: ${error.message}` };
+    } catch (error: unknown) {
+      return { success: false, errorMessage: `Instagram Feed error: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
@@ -188,7 +186,7 @@ export class InstagramReelsPublisher implements Publisher {
     post: Post,
     videoAssets: VideoAsset[],
     socialAccount: SocialAccount,
-    platform: PostPlatform
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       if (!socialAccount.instagramBusinessId) {
@@ -261,8 +259,8 @@ export class InstagramReelsPublisher implements Publisher {
       }
 
       return { success: false, errorMessage: `Carousel Publish failed: ${JSON.stringify(publishData)}` };
-    } catch (error: any) {
-      return { success: false, errorMessage: `Instagram Carousel error: ${error.message}` };
+    } catch (error: unknown) {
+      return { success: false, errorMessage: `Instagram Carousel error: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 }

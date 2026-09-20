@@ -104,16 +104,16 @@ export class YouTubeShortsPublisher implements Publisher {
       }
 
       return { success: false, errorMessage: `Upload failed: ${JSON.stringify(uploadData)}` };
-    } catch (error: any) {
-      return { success: false, errorMessage: `YouTube Shorts error: ${error.message}` };
+    } catch (error: unknown) {
+      return { success: false, errorMessage: `YouTube Shorts error: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
   async publishFeed(
-    post: Post,
-    videoAsset: VideoAsset | null,
-    socialAccount: SocialAccount,
-    platform: PostPlatform
+    _post: Post,
+    _videoAsset: VideoAsset | null,
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     // YouTube Data API does not publicly support creating Community Posts for all users.
     // We will mock this or return an error indicating it's unsupported.
@@ -124,10 +124,10 @@ export class YouTubeShortsPublisher implements Publisher {
   }
 
   async publishCarousel(
-    post: Post,
-    videoAssets: VideoAsset[],
-    socialAccount: SocialAccount,
-    platform: PostPlatform
+    _post: Post,
+    _videoAssets: VideoAsset[],
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     return {
       success: false,

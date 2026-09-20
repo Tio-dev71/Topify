@@ -11,7 +11,7 @@ async function authenticate(req: NextRequest) {
   // 1. Try NextAuth (Web)
   const session = await auth();
   if (session?.user?.id) {
-    return session.user.id;
+    return session.user;
   }
 
   // 2. Try JWT token (Desktop)
@@ -19,8 +19,14 @@ async function authenticate(req: NextRequest) {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { sub: string };
-      if (decoded.sub) return decoded.sub;
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded.sub || decoded.id) {
+        return {
+          id: decoded.sub || decoded.id,
+          role: decoded.role,
+          workspaceId: decoded.workspaceId,
+        };
+      }
     } catch (e) {
       // Invalid token
     }
@@ -31,13 +37,13 @@ async function authenticate(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await authenticate(req);
-    if (!userId) {
+    const user = await authenticate(req);
+    if (!user || !user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const apiKeys = await prisma.userApiKey.findMany({
-      where: { userId },
+      where: user.workspaceId ? { workspaceId: user.workspaceId } : { userId: user.id },
       select: {
         id: true,
         keyName: true,
@@ -55,8 +61,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await authenticate(req);
-    if (!userId) {
+    const user = await authenticate(req);
+    if (!user || !user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -70,28 +76,59 @@ export async function POST(req: NextRequest) {
     const { encrypted, iv, authTag } = encryptApiKey(keyValue);
     const hint = makeKeyHint(keyValue);
 
-    const apiKey = await prisma.userApiKey.upsert({
-      where: {
-        userId_keyName: {
-          userId,
-          keyName,
+    let apiKey;
+
+    if (user.workspaceId) {
+      // Upsert by workspaceId and keyName
+      const existingKey = await prisma.userApiKey.findFirst({
+        where: {
+          workspaceId: user.workspaceId,
+          keyName
         }
-      },
-      update: {
-        encrypted,
-        iv,
-        authTag,
-        hint
-      },
-      create: {
-        userId,
-        keyName,
-        encrypted,
-        iv,
-        authTag,
-        hint
+      });
+
+      if (existingKey) {
+        apiKey = await prisma.userApiKey.update({
+          where: { id: existingKey.id },
+          update: { encrypted, iv, authTag, hint }
+        });
+      } else {
+        apiKey = await prisma.userApiKey.create({
+          data: {
+            userId: user.id,
+            workspaceId: user.workspaceId,
+            keyName,
+            encrypted,
+            iv,
+            authTag,
+            hint
+          }
+        });
       }
-    });
+    } else {
+      apiKey = await prisma.userApiKey.upsert({
+        where: {
+          userId_keyName: {
+            userId: user.id,
+            keyName,
+          }
+        },
+        update: {
+          encrypted,
+          iv,
+          authTag,
+          hint
+        },
+        create: {
+          userId: user.id,
+          keyName,
+          encrypted,
+          iv,
+          authTag,
+          hint
+        }
+      });
+    }
 
     return NextResponse.json({ 
       success: true,
@@ -109,8 +146,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await authenticate(req);
-    if (!userId) {
+    const user = await authenticate(req);
+    if (!user || !user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -121,14 +158,28 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Key Name is required' }, { status: 400 });
     }
 
-    await prisma.userApiKey.delete({
-      where: {
-        userId_keyName: {
-          userId,
-          keyName,
+    if (user.workspaceId) {
+      const existingKey = await prisma.userApiKey.findFirst({
+        where: {
+          workspaceId: user.workspaceId,
+          keyName
         }
+      });
+      if (existingKey) {
+        await prisma.userApiKey.delete({
+          where: { id: existingKey.id }
+        });
       }
-    });
+    } else {
+      await prisma.userApiKey.delete({
+        where: {
+          userId_keyName: {
+            userId: user.id,
+            keyName,
+          }
+        }
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

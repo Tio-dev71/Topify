@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout -1
+set cmd [lindex $argv 0]
+spawn ssh -o StrictHostKeyChecking=no root@157.66.100.35 $cmd
+expect {
+    "password:" {
+        send "Topmediacto!!!\r"
+        exp_continue
+    }
+    eof
+}

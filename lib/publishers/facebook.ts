@@ -3,7 +3,6 @@ import type { Post, VideoAsset, SocialAccount, PostPlatform } from '@prisma/clie
 import { getStorage } from '@/lib/storage';
 import { decryptToken } from '@/lib/crypto';
 import fs from 'fs';
-import path from 'path';
 
 /**
  * Facebook Reels publisher using Meta Graph API.
@@ -110,8 +109,9 @@ export class FacebookReelsPublisher implements Publisher {
       }
 
       return { success: false, errorMessage: `Publish failed: ${JSON.stringify(publishData)}` };
-    } catch (error: any) {
-      return { success: false, errorMessage: `Facebook Reels error: ${error.message}` };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, errorMessage: `Facebook Reels error: ${msg}` };
     }
   }
 
@@ -119,7 +119,7 @@ export class FacebookReelsPublisher implements Publisher {
     post: Post,
     videoAsset: VideoAsset | null,
     socialAccount: SocialAccount,
-    platform: PostPlatform
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       if (!socialAccount.pageId) {
@@ -168,24 +168,26 @@ export class FacebookReelsPublisher implements Publisher {
         }
         return { success: false, errorMessage: `Feed text publish failed: ${JSON.stringify(data)}` };
       }
-    } catch (error: any) {
-      return { success: false, errorMessage: `Facebook Feed error: ${error.message}` };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, errorMessage: `Facebook Feed error: ${msg}` };
     }
   }
 
   async publishCarousel(
     post: Post,
-    videoAssets: VideoAsset[],
-    socialAccount: SocialAccount,
-    platform: PostPlatform
+    _videoAssets: VideoAsset[],
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       // Mocking Carousel for now as it requires creating unpublished photos first then attaching to feed
       console.log(`[FacebookPublisher] Mocking carousel publish for post ${post.id}`);
       await new Promise(resolve => setTimeout(resolve, 1500));
       return { success: true, externalPostId: `fb_mock_carousel_${Date.now()}` };
-    } catch (error: any) {
-      return { success: false, errorMessage: `Facebook Carousel error: ${error.message}` };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { success: false, errorMessage: `Facebook Carousel error: ${msg}` };
     }
   }
 }

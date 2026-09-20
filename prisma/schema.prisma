@@ -86,6 +86,7 @@ model Workspace {
   automationRules  AutomationRule[]
   // Phase 12
   auditLogs        AuditLog[]
+  UserApiKey       UserApiKey[]
 }
 
 model PasswordResetToken {
@@ -99,47 +100,47 @@ model PasswordResetToken {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  name            String?
-  password        String?
-  role            Role             @default(STAFF)
-  emailVerified   DateTime?
-  image           String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  workspaceId     String?
-  licenseKey      String?          @unique
-  accounts        Account[]
-  invitedEmails   AllowedEmail[]
-  mediaAssets     MediaAsset[]
-  approvedPosts   Post[]           @relation("PostApprover")
-  posts           Post[]
-  postVersions    PostVersion[]
-  sessions        Session[]
-  socialAccounts  SocialAccount[]
-  workspace       Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  userApiKeys     UserApiKey[]
-  userCredentials UserCredential[]
-  videoAssets     VideoAsset[]
+  id                    String             @id @default(cuid())
+  email                 String             @unique
+  name                  String?
+  password              String?
+  role                  Role               @default(STAFF)
+  emailVerified         DateTime?
+  image                 String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  workspaceId           String?
+  licenseKey            String?            @unique
+  accounts              Account[]
+  invitedEmails         AllowedEmail[]
+  mediaAssets           MediaAsset[]
+  approvedPosts         Post[]             @relation("PostApprover")
+  posts                 Post[]
+  postVersions          PostVersion[]
+  sessions              Session[]
+  socialAccounts        SocialAccount[]
+  workspace             Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userApiKeys           UserApiKey[]
+  userCredentials       UserCredential[]
+  videoAssets           VideoAsset[]
   // Phase 1
-  contentBriefs     ContentBrief[]
+  contentBriefs         ContentBrief[]
   // Phase 2
-  assignedConversations Conversation[] @relation("ConversationAssignee")
+  assignedConversations Conversation[]     @relation("ConversationAssignee")
   conversationNotes     ConversationNote[]
   // Phase 4
-  ownedDeals      Deal[]           @relation("DealOwner")
-  crmActivities   CrmActivity[]
+  ownedDeals            Deal[]             @relation("DealOwner")
+  crmActivities         CrmActivity[]
   // Phase 8
-  assignedTasks   Task[]           @relation("TaskAssignee")
-  createdTasks    Task[]           @relation("TaskCreator")
-  taskComments    TaskComment[]
+  assignedTasks         Task[]             @relation("TaskAssignee")
+  createdTasks          Task[]             @relation("TaskCreator")
+  taskComments          TaskComment[]
   // Phase 9
-  ownedCampaigns  Campaign[]       @relation("CampaignOwner")
+  ownedCampaigns        Campaign[]         @relation("CampaignOwner")
   // Phase 13
-  wallet          Wallet?
-  referralsMade   Referral[]       @relation("ReferralReferrer")
-  referredBy      Referral[]       @relation("ReferralReferred")
+  wallet                Wallet?
+  referralsMade         Referral[]         @relation("ReferralReferrer")
+  referredBy            Referral[]         @relation("ReferralReferred")
 }
 
 model AllowedEmail {
@@ -173,6 +174,7 @@ model SocialAccount {
   channelGroups       ChannelGroup[]      @relation("ChannelGroupToSocialAccount")
 
   @@unique([userId, provider])
+  @@unique([workspaceId, provider])
 }
 
 model UserCredential {
@@ -470,19 +472,23 @@ model AutomationLog {
 }
 
 model UserApiKey {
-  id        String   @id @default(cuid())
-  userId    String
-  keyName   String
-  encrypted String
-  iv        String
-  authTag   String
-  hint      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String     @id @default(cuid())
+  userId      String
+  keyName     String
+  encrypted   String
+  iv          String
+  authTag     String
+  hint        String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspaceId String?
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, keyName])
+  @@unique([workspaceId, keyName])
   @@index([userId])
+  @@index([workspaceId])
 }
 
 model BuffOrder {
@@ -580,40 +586,40 @@ model MentionAlert {
 // ============================================
 
 model BrandVoice {
-  id             String     @id @default(cuid())
-  name           String
-  tone           String?    // e.g. "professional", "casual", "playful"
-  personality    String?    // brand personality description
-  bannedWords    String?    // comma-separated banned words
-  preferredCTA   String?    // preferred call-to-action phrases
-  sampleContent  String?    // example content in this voice
-  guidelines     String?    // detailed writing guidelines
-  isDefault      Boolean    @default(false)
-  workspaceId    String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  workspace      Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id            String     @id @default(cuid())
+  name          String
+  tone          String? // e.g. "professional", "casual", "playful"
+  personality   String? // brand personality description
+  bannedWords   String? // comma-separated banned words
+  preferredCTA  String? // preferred call-to-action phrases
+  sampleContent String? // example content in this voice
+  guidelines    String? // detailed writing guidelines
+  isDefault     Boolean    @default(false)
+  workspaceId   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
 }
 
 model ContentBrief {
-  id          String            @id @default(cuid())
+  id          String             @id @default(cuid())
   title       String
-  objective   String?           // what the content should achieve
-  audience    String?           // target audience
-  keyMessage  String?           // main message
-  cta         String?           // call to action
+  objective   String? // what the content should achieve
+  audience    String? // target audience
+  keyMessage  String? // main message
+  cta         String? // call to action
   deadline    DateTime?
   notes       String?
   status      ContentBriefStatus @default(DRAFT)
-  postId      String?           // link to created post
+  postId      String? // link to created post
   workspaceId String?
   createdById String
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  createdBy   User              @relation(fields: [createdById], references: [id])
-  workspace   Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  createdBy   User               @relation(fields: [createdById], references: [id])
+  workspace   Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([createdById])
@@ -626,14 +632,14 @@ model ContentBrief {
 
 model Conversation {
   id              String             @id @default(cuid())
-  externalId      String?            // ID from the social platform
+  externalId      String? // ID from the social platform
   platform        Platform
   contactName     String?
   contactAvatar   String?
-  contactId       String?            // link to Customer
+  contactId       String? // link to Customer
   status          ConversationStatus @default(NEW)
   assignedToId    String?
-  labels          String?            // comma-separated labels
+  labels          String? // comma-separated labels
   lastMessageAt   DateTime?
   slaDeadline     DateTime?
   isSpam          Boolean            @default(false)
@@ -653,16 +659,16 @@ model Conversation {
 }
 
 model Message {
-  id             String       @id @default(cuid())
+  id             String           @id @default(cuid())
   conversationId String
   direction      MessageDirection
   content        String?
   mediaUrl       String?
   senderName     String?
-  externalId     String?      // ID from social platform
-  isRead         Boolean      @default(false)
-  createdAt      DateTime     @default(now())
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  externalId     String? // ID from social platform
+  isRead         Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@index([isRead])
@@ -684,7 +690,7 @@ model QuickReply {
   id          String     @id @default(cuid())
   title       String
   content     String
-  shortcut    String?    // e.g. "/thanks"
+  shortcut    String? // e.g. "/thanks"
   category    String?
   workspaceId String?
   createdAt   DateTime   @default(now())
@@ -699,19 +705,19 @@ model QuickReply {
 // ============================================
 
 model Customer {
-  id          String     @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String?
   email       String?
   phone       String?
   avatar      String?
-  tags        String?    // comma-separated tags
-  source      String?    // e.g. "facebook", "instagram", "manual"
+  tags        String? // comma-separated tags
+  source      String? // e.g. "facebook", "instagram", "manual"
   notes       String?
-  customData  Json?      // custom fields
+  customData  Json? // custom fields
   workspaceId String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  workspace   Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   deals       Deal[]
   activities  CrmActivity[]
 
@@ -720,14 +726,14 @@ model Customer {
 }
 
 model Pipeline {
-  id          String     @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
   description String?
-  isDefault   Boolean    @default(false)
+  isDefault   Boolean         @default(false)
   workspaceId String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   stages      PipelineStage[]
   deals       Deal[]
 
@@ -748,25 +754,25 @@ model PipelineStage {
 }
 
 model Deal {
-  id          String         @id @default(cuid())
-  title       String
-  value       Float          @default(0)
-  probability Int            @default(0)   // 0-100%
-  customerId  String?
-  pipelineId  String
-  stageId     String
-  ownerId     String?
+  id            String        @id @default(cuid())
+  title         String
+  value         Float         @default(0)
+  probability   Int           @default(0) // 0-100%
+  customerId    String?
+  pipelineId    String
+  stageId       String
+  ownerId       String?
   expectedClose DateTime?
-  closedAt    DateTime?
-  status      DealStatus     @default(OPEN)
-  workspaceId String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  customer    Customer?      @relation(fields: [customerId], references: [id])
-  pipeline    Pipeline       @relation(fields: [pipelineId], references: [id])
-  stage       PipelineStage  @relation(fields: [stageId], references: [id])
-  owner       User?          @relation("DealOwner", fields: [ownerId], references: [id])
-  workspace   Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  closedAt      DateTime?
+  status        DealStatus    @default(OPEN)
+  workspaceId   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage         PipelineStage @relation(fields: [stageId], references: [id])
+  owner         User?         @relation("DealOwner", fields: [ownerId], references: [id])
+  workspace     Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([customerId])
@@ -799,25 +805,25 @@ model CrmActivity {
 // ============================================
 
 model Task {
-  id          String       @id @default(cuid())
+  id          String         @id @default(cuid())
   title       String
   description String?
-  priority    TaskPriority @default(MEDIUM)
+  priority    TaskPriority   @default(MEDIUM)
   status      TaskWorkStatus @default(TODO)
   dueDate     DateTime?
   assigneeId  String?
   createdById String
-  parentId    String?      // for subtasks
-  isRecurring Boolean      @default(false)
-  recurRule   String?      // cron expression
+  parentId    String? // for subtasks
+  isRecurring Boolean        @default(false)
+  recurRule   String? // cron expression
   workspaceId String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
-  parent      Task?        @relation("TaskHierarchy", fields: [parentId], references: [id])
-  children    Task[]       @relation("TaskHierarchy")
-  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  assignee    User?          @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy   User           @relation("TaskCreator", fields: [createdById], references: [id])
+  parent      Task?          @relation("TaskHierarchy", fields: [parentId], references: [id])
+  children    Task[]         @relation("TaskHierarchy")
+  workspace   Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   comments    TaskComment[]
 
   @@index([workspaceId])
@@ -868,17 +874,17 @@ model Campaign {
 // ============================================
 
 model AutomationRule {
-  id          String     @id @default(cuid())
+  id          String              @id @default(cuid())
   name        String
   description String?
-  trigger     Json       // { type: "keyword", config: {...} }
-  conditions  Json?      // [{ field: "tag", op: "eq", value: "VIP" }]
-  actions     Json       // [{ type: "send_message", config: {...} }]
-  isActive    Boolean    @default(true)
+  trigger     Json // { type: "keyword", config: {...} }
+  conditions  Json? // [{ field: "tag", op: "eq", value: "VIP" }]
+  actions     Json // [{ type: "send_message", config: {...} }]
+  isActive    Boolean             @default(true)
   workspaceId String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  workspace   Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   logs        AutomationRuleLog[]
 
   @@index([workspaceId])
@@ -886,14 +892,14 @@ model AutomationRule {
 }
 
 model AutomationRuleLog {
-  id         String         @id @default(cuid())
-  ruleId     String
-  status     String         // "success", "error", "skipped"
-  input      Json?
-  output     Json?
-  error      String?
-  createdAt  DateTime       @default(now())
-  rule       AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  id        String         @id @default(cuid())
+  ruleId    String
+  status    String // "success", "error", "skipped"
+  input     Json?
+  output    Json?
+  error     String?
+  createdAt DateTime       @default(now())
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@index([ruleId])
   @@index([createdAt])
@@ -905,8 +911,8 @@ model AutomationRuleLog {
 
 model AuditLog {
   id          String     @id @default(cuid())
-  action      String     // e.g. "post.create", "account.connect", "team.invite"
-  entityType  String?    // e.g. "Post", "SocialAccount"
+  action      String // e.g. "post.create", "account.connect", "team.invite"
+  entityType  String? // e.g. "Post", "SocialAccount"
   entityId    String?
   userId      String?
   metadata    Json?
@@ -926,12 +932,12 @@ model AuditLog {
 // ============================================
 
 model Wallet {
-  id           String        @id @default(cuid())
-  userId       String        @unique
-  balance      Float         @default(0)
-  pending      Float         @default(0)
-  withdrawn    Float         @default(0)
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String              @id @default(cuid())
+  userId       String              @unique
+  balance      Float               @default(0)
+  pending      Float               @default(0)
+  withdrawn    Float               @default(0)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions WalletTransaction[]
   withdrawals  Withdrawal[]
 
@@ -941,10 +947,10 @@ model Wallet {
 model WalletTransaction {
   id          String   @id @default(cuid())
   walletId    String
-  type        String   // "earning", "commission", "withdrawal", "refund"
+  type        String // "earning", "commission", "withdrawal", "refund"
   amount      Float
   description String?
-  referenceId String?  // link to earning task, withdrawal, etc
+  referenceId String? // link to earning task, withdrawal, etc
   createdAt   DateTime @default(now())
   wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
@@ -969,19 +975,19 @@ model Withdrawal {
 }
 
 model Referral {
-  id           String   @id @default(cuid())
-  referrerId   String   // user who referred
-  referredId   String?  // user who signed up
-  code         String   @unique
-  clicks       Int      @default(0)
-  registrations Int     @default(0)
-  conversions  Int      @default(0)
-  commission   Float    @default(0)
-  status       String   @default("active") // active, paid, suspended
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  referrer     User     @relation("ReferralReferrer", fields: [referrerId], references: [id])
-  referred     User?    @relation("ReferralReferred", fields: [referredId], references: [id])
+  id            String   @id @default(cuid())
+  referrerId    String // user who referred
+  referredId    String? // user who signed up
+  code          String   @unique
+  clicks        Int      @default(0)
+  registrations Int      @default(0)
+  conversions   Int      @default(0)
+  commission    Float    @default(0)
+  status        String   @default("active") // active, paid, suspended
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  referrer      User     @relation("ReferralReferrer", fields: [referrerId], references: [id])
+  referred      User?    @relation("ReferralReferred", fields: [referredId], references: [id])
 
   @@index([referrerId])
   @@index([code])

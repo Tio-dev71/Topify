@@ -78,7 +78,7 @@ async function processPublishJob(job: Job<{ postId: string }>) {
     const socialAccount = await prisma.socialAccount.findFirst({
       where: {
         workspaceId: post.workspaceId,
-        provider: providerMap[postPlatform.platform] as any,
+        provider: providerMap[postPlatform.platform] as never,
       },
     });
 
@@ -113,17 +113,17 @@ async function processPublishJob(job: Job<{ postId: string }>) {
         firstComment: postPlatform.customFirstComment || post.firstComment,
       };
 
-      let result: any;
+      let result: PublishResult;
       if (post.postType === 'FEED' || post.postType === 'ARTICLE') {
-        result = await publisher.publishFeed(postForPlatform as any, post.videoAsset, socialAccount, postPlatform);
+        result = await publisher.publishFeed(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
       } else if (post.postType === 'CAROUSEL') {
         const assets = post.videoAsset ? [post.videoAsset] : [];
-        result = await publisher.publishCarousel(postForPlatform as any, assets, socialAccount, postPlatform);
+        result = await publisher.publishCarousel(postForPlatform as Post, assets, socialAccount, postPlatform);
       } else {
         if (!post.videoAsset) {
           throw new Error('Reel post requires a video asset');
         }
-        result = await publisher.publishReel(postForPlatform as any, post.videoAsset, socialAccount, postPlatform);
+        result = await publisher.publishReel(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
       }
 
       // Handle token expiration/auth errors
@@ -170,12 +170,12 @@ async function processPublishJob(job: Job<{ postId: string }>) {
         });
         allSuccess = false;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       await prisma.postPlatform.update({
         where: { id: postPlatform.id },
         data: {
           status: 'FAILED',
-          errorMessage: error.message,
+          errorMessage: error instanceof Error ? error.message : String(error),
         },
       });
       await prisma.publishLog.create({
@@ -183,8 +183,8 @@ async function processPublishJob(job: Job<{ postId: string }>) {
           postId,
           platform: postPlatform.platform,
           level: 'ERROR',
-          message: `Unexpected error: ${error.message}`,
-          metadata: { stack: error.stack },
+          message: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+          metadata: { stack: error instanceof Error ? error.stack : undefined },
         },
       });
       allSuccess = false;
@@ -212,7 +212,7 @@ async function processPublishJob(job: Job<{ postId: string }>) {
   console.log(`📋 Post ${postId} final status: ${finalStatus}`);
 }
 
-async function processTokenMonitorJob(job: Job) {
+async function processTokenMonitorJob(_job: Job) {
   console.log(`🔍 Checking token expirations...`);
   // Find accounts expiring in less than 7 days, or already expired
   const sevenDaysFromNow = new Date();
@@ -307,8 +307,8 @@ async function processTokenMonitorJob(job: Job) {
           }
         });
         console.log(`✅ Token for ${acc.id} refreshed successfully.`);
-      } catch (err: any) {
-        console.error(`❌ Failed to refresh token for ${acc.id}:`, err.message);
+      } catch (err: unknown) {
+        console.error(`❌ Failed to refresh token for ${acc.id}:`, err instanceof Error ? err.message : String(err));
       }
     }
   }
@@ -316,7 +316,7 @@ async function processTokenMonitorJob(job: Job) {
 
 export function startWorker() {
   const publishWorker = new Worker('publish-reel', processPublishJob, {
-    connection: connection as any,
+    connection: connection as never,
     concurrency: 2,
   });
 
@@ -329,7 +329,7 @@ export function startWorker() {
   });
 
   const tokenWorker = new Worker('token-monitor', processTokenMonitorJob, {
-    connection: connection as any,
+    connection: connection as never,
     concurrency: 1,
   });
 

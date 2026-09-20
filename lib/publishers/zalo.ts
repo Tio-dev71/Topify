@@ -6,7 +6,7 @@ export class ZaloPublisher implements Publisher {
     post: Post,
     videoAsset: VideoAsset,
     socialAccount: SocialAccount,
-    platform: PostPlatform
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       console.log(`[ZaloPublisher] Uploading video to Zalo OA for post ${post.id}`);
@@ -20,20 +20,20 @@ export class ZaloPublisher implements Publisher {
         success: true,
         externalPostId: `zalo_mock_video_${Date.now()}`
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[ZaloPublisher] Video upload failed:', error);
       return {
         success: false,
-        errorMessage: error.message || 'Unknown Zalo upload error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown Zalo upload error'
       };
     }
   }
 
   async publishFeed(
     post: Post,
-    videoAsset: VideoAsset | null,
-    socialAccount: SocialAccount,
-    platform: PostPlatform
+    _videoAsset: VideoAsset | null,
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       console.log(`[ZaloPublisher] Publishing article/feed to Zalo OA for post ${post.id}`);
@@ -44,19 +44,19 @@ export class ZaloPublisher implements Publisher {
         success: true,
         externalPostId: `zalo_mock_article_${Date.now()}`
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        errorMessage: error.message || 'Unknown Zalo article upload error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown Zalo article upload error'
       };
     }
   }
 
   async publishCarousel(
     post: Post,
-    videoAssets: VideoAsset[],
-    socialAccount: SocialAccount,
-    platform: PostPlatform
+    _videoAssets: VideoAsset[],
+    _socialAccount: SocialAccount,
+    _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
       // Zalo OA doesn't have a direct equivalent to carousel posts in the same way FB/IG do, 
@@ -69,10 +69,10 @@ export class ZaloPublisher implements Publisher {
         success: true,
         externalPostId: `zalo_mock_carousel_${Date.now()}`
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        errorMessage: error.message || 'Unknown Zalo carousel upload error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown Zalo carousel upload error'
       };
     }
   }
