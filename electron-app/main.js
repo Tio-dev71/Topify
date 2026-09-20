@@ -17,7 +17,7 @@ function createWindow() {
   });
 
   // Tải giao diện Web (Development: Vite Dev Server, Production: File Build)
-  const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  const isDev = process.argv.includes('--dev');
   
   if (isDev) {
     // Chạy Vite dev server ở port 5173
