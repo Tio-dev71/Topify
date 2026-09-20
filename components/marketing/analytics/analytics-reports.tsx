@@ -61,7 +61,7 @@ export default function AnalyticsReports() {
               ))}
             </div>
 
-            <a href="#" className="inline-flex items-center text-[15px] font-bold text-[#5B3DF5] hover:text-blue-700 transition-colors mt-auto group">
+            <a href="/" className="inline-flex items-center text-[15px] font-bold text-[#5B3DF5] hover:text-blue-700 transition-colors mt-auto group">
               {t('analytics.reports.learn_more')}
               <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
             </a>
@@ -123,7 +123,7 @@ export default function AnalyticsReports() {
               ))}
             </div>
 
-            <a href="#" className="inline-flex items-center text-[15px] font-bold text-teal-600 hover:text-teal-700 transition-colors mt-auto group">
+            <a href="/" className="inline-flex items-center text-[15px] font-bold text-teal-600 hover:text-teal-700 transition-colors mt-auto group">
               {t('analytics.reports.learn_more')}
               <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
             </a>
@@ -182,7 +182,7 @@ export default function AnalyticsReports() {
               ))}
             </div>
 
-            <a href="#" className="inline-flex items-center text-[14px] font-bold text-purple-600 hover:text-purple-700 transition-colors mt-auto group">
+            <a href="/" className="inline-flex items-center text-[14px] font-bold text-purple-600 hover:text-purple-700 transition-colors mt-auto group">
               {t('analytics.reports.learn_more')}
               <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
             </a>
@@ -240,7 +240,7 @@ export default function AnalyticsReports() {
               ))}
             </div>
 
-            <a href="#" className="inline-flex items-center text-[14px] font-bold text-pink-600 hover:text-pink-700 transition-colors mt-auto group">
+            <a href="/" className="inline-flex items-center text-[14px] font-bold text-pink-600 hover:text-pink-700 transition-colors mt-auto group">
               {t('analytics.reports.learn_more')}
               <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
             </a>
@@ -292,7 +292,7 @@ export default function AnalyticsReports() {
               ))}
             </div>
 
-            <a href="#" className="inline-flex items-center text-[14px] font-bold text-blue-600 hover:text-blue-700 transition-colors mt-auto group">
+            <a href="/" className="inline-flex items-center text-[14px] font-bold text-blue-600 hover:text-blue-700 transition-colors mt-auto group">
               {t('analytics.reports.learn_more')}
               <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
             </a>

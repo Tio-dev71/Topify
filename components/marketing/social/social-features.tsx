@@ -181,7 +181,7 @@ export default function SocialFeatures() {
             <p className="text-[14px] text-gray-600 mb-6 leading-relaxed">
               {t('social.features.c1.desc')}
             </p>
-            <Link href="#" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
+            <Link href="/" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
               {t('social.features.btn_learn_more')} <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           </div>
@@ -194,7 +194,7 @@ export default function SocialFeatures() {
             <p className="text-[14px] text-gray-600 mb-6 leading-relaxed">
               {t('social.features.c2.desc')}
             </p>
-            <Link href="#" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
+            <Link href="/" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
               {t('social.features.btn_learn_more')} <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           </div>
@@ -207,7 +207,7 @@ export default function SocialFeatures() {
             <p className="text-[14px] text-gray-600 mb-6 leading-relaxed">
               {t('social.features.c3.desc')}
             </p>
-            <Link href="#" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
+            <Link href="/" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
               {t('social.features.btn_learn_more')} <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           </div>
@@ -220,7 +220,7 @@ export default function SocialFeatures() {
             <p className="text-[14px] text-gray-600 mb-6 leading-relaxed">
               {t('social.features.c4.desc')}
             </p>
-            <Link href="#" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
+            <Link href="/" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
               {t('social.features.btn_learn_more')} <ArrowRight className="w-3.5 h-3.5 ml-1" />
             </Link>
           </div>

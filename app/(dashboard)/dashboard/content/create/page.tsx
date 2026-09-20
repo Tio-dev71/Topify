@@ -48,10 +48,17 @@ export default function CreatePostPage() {
   useEffect(() => {
     const fetchVideos = async () => {
       try {
-        const res = await fetch('/api/videos');
+        const res = await fetch('/api/media?type=VIDEO');
         if (res.ok) {
           const data = await res.json();
-          setVideos(data.videos || []);
+          const mappedVideos = (data.assets || []).map((asset: any) => ({
+            id: asset.id,
+            originalFileName: asset.fileName || 'Video',
+            titleFromFileName: asset.fileName || 'Video',
+            storageUrl: asset.storageUrl,
+            createdAt: asset.createdAt,
+          }));
+          setVideos(mappedVideos);
         }
       } catch (err) {
         console.error(err);
@@ -239,7 +246,7 @@ export default function CreatePostPage() {
                   </div>
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">Chọn Video <span className="text-rose-500">*</span></h2>
                 </div>
-                <Link href="/dashboard/upload" target="_blank" className="text-sm text-[#3B82F6] bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 px-4 py-2 rounded-full font-bold flex items-center gap-1.5 transition-colors">
+                <Link href="/dashboard/content/media" className="text-sm text-[#3B82F6] bg-[#3B82F6]/10 hover:bg-[#3B82F6]/20 px-4 py-2 rounded-full font-bold flex items-center gap-1.5 transition-colors">
                   <Upload className="w-4 h-4" /> Tải lên mới
                 </Link>
               </div>
@@ -337,25 +344,25 @@ export default function CreatePostPage() {
             >
               <h2 className="text-xl font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700/50 pb-5">Lịch đăng</h2>
               
-              <div className="flex flex-wrap gap-2 p-1.5 bg-gray-100/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-inner">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 bg-gray-100/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-inner">
                 <button 
                   type="button"
                   onClick={() => setPublishMode('now')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 ${publishMode === 'now' ? 'bg-white dark:bg-gray-800 shadow-md text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                  className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 ${publishMode === 'now' ? 'bg-white dark:bg-gray-800 shadow-md text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                 >
                   Đăng ngay
                 </button>
                 <button 
                   type="button"
                   onClick={() => setPublishMode('schedule')}
-                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all duration-300 ${publishMode === 'schedule' ? 'bg-white dark:bg-gray-800 shadow-md text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                  className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 ${publishMode === 'schedule' ? 'bg-white dark:bg-gray-800 shadow-md text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                 >
                   Lên lịch
                 </button>
                 <button 
                   type="button"
                   onClick={() => setPublishMode('auto_schedule')}
-                  className={`flex-1 min-w-[130px] py-3 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${publishMode === 'auto_schedule' ? 'bg-gradient-to-r from-[#5B3DF5] to-[#3B82F6] text-white shadow-lg shadow-[#5B3DF5]/30' : 'text-gray-500 dark:text-gray-400 hover:text-[#5B3DF5]'}`}
+                  className={`w-full py-3 text-sm font-bold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${publishMode === 'auto_schedule' ? 'bg-gradient-to-r from-[#5B3DF5] to-[#3B82F6] text-white shadow-lg shadow-[#5B3DF5]/30' : 'text-gray-500 dark:text-gray-400 hover:text-[#5B3DF5]'}`}
                 >
                   <Sparkles className="w-4 h-4" /> Thông minh
                 </button>

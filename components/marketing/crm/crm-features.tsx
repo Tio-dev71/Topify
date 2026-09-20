@@ -77,7 +77,7 @@ export default function CrmFeatures() {
               <p className="text-sm text-gray-600 mb-6 leading-relaxed flex-1">
                 {ft.desc}
               </p>
-              <Link href="#" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
+              <Link href="/" className="inline-flex items-center text-[13px] font-bold text-[#5B3DF5] hover:text-[#4F2FE0]">
                 {t('crm.features.btn_learn_more')} <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Link>
             </motion.div>

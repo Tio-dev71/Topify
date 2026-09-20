@@ -81,11 +81,21 @@ export default function MediaLibraryPage() {
         const newAsset = await res.json();
         setAssets(prev => [newAsset, ...prev]);
       } else {
-        const errorData = await res.json();
-        alert(`Lỗi khi tải lên: ${errorData.error || 'Unknown error'}`);
+        if (res.status === 413) {
+          alert('Lỗi khi tải lên: File quá lớn (vượt quá giới hạn của server).');
+          return;
+        }
+        let errorMsg = 'Unknown error';
+        try {
+          const errorData = await res.json();
+          errorMsg = errorData.error || errorMsg;
+        } catch (e) {
+          errorMsg = await res.text();
+        }
+        alert(`Lỗi khi tải lên: ${errorMsg}`);
       }
-    } catch (err) {
-      alert('Lỗi khi tải lên');
+    } catch (err: any) {
+      alert(`Lỗi khi tải lên: ${err.message || 'Lỗi kết nối'}`);
       console.error(err);
     } finally {
       setIsUploading(false);

@@ -122,14 +122,27 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 lg:hidden p-2.5 rounded-xl bg-white border border-[var(--color-border)] shadow-sm dark:bg-[var(--color-card)] dark:border-[var(--color-border)]"
-        aria-label="Open menu"
-      >
-        <Menu className="w-5 h-5 text-[var(--color-foreground)]" />
-      </button>
+      {/* Mobile header */}
+      <div className="fixed top-0 left-0 right-0 h-16 z-30 lg:hidden bg-white/80 dark:bg-[var(--color-background)]/80 backdrop-blur-md border-b border-[var(--color-border)] px-4 flex items-center gap-3">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 -ml-2 rounded-xl hover:bg-[var(--color-muted)] transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5 text-[var(--color-foreground)]" />
+        </button>
+        <Link href="/" className="flex items-center">
+          <Image 
+            src="/Topify-logo.png" 
+            alt="Topify Logo" 
+            width={120} 
+            height={32} 
+            className="h-7 w-auto object-contain" 
+            priority
+            unoptimized
+          />
+        </Link>
+      </div>
 
       {/* Mobile overlay */}
       {mobileOpen && (
