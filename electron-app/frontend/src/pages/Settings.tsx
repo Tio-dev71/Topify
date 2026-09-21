@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, Key, Cpu, Zap, Link2, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Key, Cpu, Zap, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiBaseUrl } from '../lib/axios';
 
