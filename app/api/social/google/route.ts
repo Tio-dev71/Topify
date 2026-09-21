@@ -27,8 +27,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (!userId || (userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN')) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const credentials = await getCredentials(userId);

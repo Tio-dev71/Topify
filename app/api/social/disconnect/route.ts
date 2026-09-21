@@ -6,8 +6,8 @@ import prisma from '@/lib/db';
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const url = new URL(req.url);
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.socialAccount.deleteMany({
       where: {
-        workspaceId: (session.user as any).workspaceId,
+        userId: session.user.id,
         provider: provider as any,
       },
     });
