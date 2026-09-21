@@ -19,18 +19,30 @@ export async function GET(req: NextRequest) {
     const error = url.searchParams.get('error');
     const rawState = url.searchParams.get('state') || '';
 
+    const renderDesktopError = (msg: string) => {
+      return new NextResponse(
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: #EF4444;">${msg}</h2>
+            <p>Vui lòng đóng cửa sổ này và thử lại.</p>
+            <script>
+              setTimeout(() => { window.close(); }, 3000);
+            </script>
+          </body>
+        </html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
+      );
+    };
+
     const cookieStore = await cookies();
     const storedState = cookieStore.get('oauth_state_meta')?.value;
 
     const [csrfState, ...restState] = rawState.split('::');
     const state = restState.join('::');
 
-    if (!storedState || storedState !== csrfState) {
-      console.error('CSRF validation failed for Meta OAuth');
-      return NextResponse.redirect(new URL('/settings?error=csrf_validation_failed', baseUrl));
-    }
-
     if (state && state.startsWith('meta_')) {
+      isDesktopClient = true;
       const token = state.replace('meta_', '');
       try {
         const jwt = require('jsonwebtoken');
@@ -41,19 +53,26 @@ export async function GET(req: NextRequest) {
           userId = decoded.sub || decoded.id;
           workspaceId = decoded.workspaceId;
         }
-        isDesktopClient = true;
       } catch (err) {
         console.error('Invalid token in state:', err);
       }
     }
 
+    if (!storedState || storedState !== csrfState) {
+      console.error('CSRF validation failed for Meta OAuth');
+      if (isDesktopClient) {
+        return renderDesktopError('Lỗi kết nối Meta (CSRF validation failed)');
+      }
+      return NextResponse.redirect(new URL('/settings?error=csrf_validation_failed', baseUrl));
+    }
+
     if (!userId) {
+      if (isDesktopClient) return renderDesktopError('Vui lòng đăng nhập lại trên ứng dụng');
       return NextResponse.redirect(new URL('/login', baseUrl));
     }
 
-
-
     if (error || !code) {
+      if (isDesktopClient) return renderDesktopError('Lỗi xác thực Meta: ' + (error || 'Không có mã xác thực'));
       return NextResponse.redirect(
         new URL('/settings?error=meta_auth_failed', baseUrl)
       );
@@ -154,6 +173,21 @@ export async function GET(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Meta callback error:', error);
+    if (new URL(req.url).searchParams.get('state')?.includes('meta_')) {
+      return new NextResponse(
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: #EF4444;">Lỗi kết nối Meta</h2>
+            <p>Vui lòng đóng cửa sổ này và thử lại.</p>
+            <script>
+              setTimeout(() => { window.close(); }, 3000);
+            </script>
+          </body>
+        </html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
+      );
+    }
     return NextResponse.redirect(
       new URL('/settings?error=meta_callback_error', baseUrl)
     );

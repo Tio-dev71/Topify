@@ -14,24 +14,36 @@ export async function GET(req: NextRequest) {
     const rawState = url.searchParams.get('state') || '';
     const error = url.searchParams.get('error');
 
+    const renderDesktopError = (msg: string) => {
+      return new NextResponse(
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: #EF4444;">${msg}</h2>
+            <p>Vui lòng đóng cửa sổ này và thử lại.</p>
+            <script>
+              setTimeout(() => { window.close(); }, 3000);
+            </script>
+          </body>
+        </html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
+      );
+    };
+
     const cookieStore = await cookies();
     const storedState = cookieStore.get('oauth_state_google')?.value;
 
     const [csrfState, ...restState] = rawState.split('::');
     const state = restState.join('::');
 
-    if (!storedState || storedState !== csrfState) {
-      console.error('CSRF validation failed for Google OAuth');
-      return NextResponse.redirect(new URL('/settings?error=csrf_validation_failed', baseUrl));
-    }
-
     let session = await auth();
     let userId = session?.user?.id;
     let workspaceId = (session?.user as any)?.workspaceId;
     let isDesktopClient = false;
-
     let providerState = state;
+
     if (state.startsWith('youtube_') || state.startsWith('google_drive_')) {
+      isDesktopClient = true;
       const isYoutube = state.startsWith('youtube_');
       const token = state.replace(isYoutube ? 'youtube_' : 'google_drive_', '');
       providerState = isYoutube ? 'youtube' : 'google_drive';
@@ -44,17 +56,24 @@ export async function GET(req: NextRequest) {
           userId = decoded.sub || decoded.id;
           workspaceId = decoded.workspaceId;
         }
-        isDesktopClient = true;
       } catch (err) {
         console.error('Invalid token in google state:', err);
       }
     }
 
+    if (!storedState || storedState !== csrfState) {
+      console.error('CSRF validation failed for Google OAuth');
+      if (isDesktopClient) return renderDesktopError('Lỗi kết nối Google (CSRF validation failed)');
+      return NextResponse.redirect(new URL('/settings?error=csrf_validation_failed', baseUrl));
+    }
+
     if (!userId) {
+      if (isDesktopClient) return renderDesktopError('Vui lòng đăng nhập lại trên ứng dụng');
       return NextResponse.redirect(new URL('/login', baseUrl));
     }
 
     if (error || !code) {
+      if (isDesktopClient) return renderDesktopError('Lỗi xác thực Google: ' + (error || 'Không có mã xác thực'));
       return NextResponse.redirect(
         new URL('/settings?error=google_auth_failed', baseUrl)
       );
@@ -174,6 +193,22 @@ export async function GET(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Google callback error:', error);
+    const stateParam = new URL(req.url).searchParams.get('state') || '';
+    if (stateParam.includes('youtube_') || stateParam.includes('google_drive_')) {
+      return new NextResponse(
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: #EF4444;">Lỗi kết nối Google</h2>
+            <p>Vui lòng đóng cửa sổ này và thử lại.</p>
+            <script>
+              setTimeout(() => { window.close(); }, 3000);
+            </script>
+          </body>
+        </html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
+      );
+    }
     return NextResponse.redirect(
       new URL('/settings?error=google_callback_error', baseUrl)
     );

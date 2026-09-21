@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
 
     response.cookies.set('oauth_state_meta', csrfState, {
       httpOnly: true,
-      secure: req.nextUrl.protocol === 'https:',
+      secure: process.env.NODE_ENV === 'production' || req.nextUrl.protocol === 'https:',
       sameSite: 'lax',
       maxAge: 60 * 10,
     });
