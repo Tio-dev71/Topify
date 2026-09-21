@@ -51,26 +51,26 @@ export async function GET(req: NextRequest) {
 
     const originalStateParam = token ? `zalo_${token}` : 'zalo';
     const csrfState = crypto.randomBytes(16).toString('hex');
-    const cookieStore = await cookies();
-    
-    cookieStore.set('oauth_state_zalo', csrfState, {
-      httpOnly: true,
-      secure: req.nextUrl.protocol === 'https:',
-      sameSite: 'lax',
-      maxAge: 60 * 10,
-    });
-    
-    cookieStore.set('oauth_pkce_zalo', codeVerifier, {
-      httpOnly: true,
-      secure: req.nextUrl.protocol === 'https:',
-      sameSite: 'lax',
-      maxAge: 60 * 10,
-    });
-
     const stateParam = `${csrfState}::${originalStateParam}`;
     const authUrl = `https://oauth.zaloapp.com/v4/oa/permission?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateParam}&code_challenge=${codeChallenge}`;
 
-    return NextResponse.redirect(authUrl);
+    const response = NextResponse.redirect(authUrl);
+    
+    response.cookies.set('oauth_state_zalo', csrfState, {
+      httpOnly: true,
+      secure: req.nextUrl.protocol === 'https:',
+      sameSite: 'lax',
+      maxAge: 60 * 10,
+    });
+    
+    response.cookies.set('oauth_pkce_zalo', codeVerifier, {
+      httpOnly: true,
+      secure: req.nextUrl.protocol === 'https:',
+      sameSite: 'lax',
+      maxAge: 60 * 10,
+    });
+
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

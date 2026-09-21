@@ -59,18 +59,19 @@ export async function GET(req: NextRequest) {
     const originalStateParam = token ? `meta_${token}` : 'meta';
     
     const csrfState = crypto.randomBytes(16).toString('hex');
-    const cookieStore = await cookies();
-    cookieStore.set('oauth_state_meta', csrfState, {
+    const stateParam = `${csrfState}::${originalStateParam}`;
+    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code&state=${stateParam}`;
+
+    const response = NextResponse.redirect(authUrl);
+
+    response.cookies.set('oauth_state_meta', csrfState, {
       httpOnly: true,
       secure: req.nextUrl.protocol === 'https:',
       sameSite: 'lax',
       maxAge: 60 * 10,
     });
 
-    const stateParam = `${csrfState}::${originalStateParam}`;
-    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code&state=${stateParam}`;
-
-    return NextResponse.redirect(authUrl);
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

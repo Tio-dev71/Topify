@@ -11,12 +11,12 @@ api.interceptors.request.use(
   (config) => {
     // Get token from local storage
     const token = localStorage.getItem('topify_token');
-    
+
     // If token is present, set the Authorization header
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
     return config;
   },
   (error) => {

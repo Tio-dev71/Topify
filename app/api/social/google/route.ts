@@ -57,19 +57,20 @@ export async function GET(req: NextRequest) {
     }
 
     const csrfState = crypto.randomBytes(16).toString('hex');
-    const cookieStore = await cookies();
-    cookieStore.set('oauth_state_google', csrfState, {
-      httpOnly: true,
-      secure: req.nextUrl.protocol === 'https:',
-      sameSite: 'lax',
-      maxAge: 60 * 10,
-    });
 
     const finalState = `${csrfState}::${state}`;
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&access_type=offline&prompt=consent&state=${finalState}`;
 
-    return NextResponse.redirect(authUrl);
+    const response = NextResponse.redirect(authUrl);
+    response.cookies.set('oauth_state_google', csrfState, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || req.nextUrl.protocol === 'https:',
+      sameSite: 'lax',
+      maxAge: 60 * 10,
+    });
+
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

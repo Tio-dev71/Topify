@@ -56,18 +56,18 @@ export async function GET(req: NextRequest) {
 
     const originalStateParam = token ? `tiktok_${token}` : 'tiktok';
     const csrfState = crypto.randomBytes(16).toString('hex');
-    const cookieStore = await cookies();
-    cookieStore.set('oauth_state_tiktok', csrfState, {
+    const stateParam = `${csrfState}::${originalStateParam}`;
+    const authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&response_type=code&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateParam}`;
+
+    const response = NextResponse.redirect(authUrl);
+    response.cookies.set('oauth_state_tiktok', csrfState, {
       httpOnly: true,
-      secure: req.nextUrl.protocol === 'https:',
+      secure: process.env.NODE_ENV === 'production' || req.nextUrl.protocol === 'https:',
       sameSite: 'lax',
       maxAge: 60 * 10,
     });
 
-    const stateParam = `${csrfState}::${originalStateParam}`;
-    const authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&response_type=code&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateParam}`;
-
-    return NextResponse.redirect(authUrl);
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
