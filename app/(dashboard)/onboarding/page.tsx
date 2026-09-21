@@ -32,8 +32,8 @@ export default function OnboardingPage() {
         const data = await res.json();
         throw new Error(data.error || 'Failed to create workspace');
       }
-
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
+      router.refresh();
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -27,11 +27,11 @@ const navigation = [
   { key: 'Tự động hóa', href: '/automation', icon: Play },
   { key: 'Buff tương tác', href: '/buff', icon: Heart },
   { key: 'Lịch sử', href: '/history', icon: Activity },
+  { key: 'Cài đặt', href: '/settings', icon: Settings },
 ];
 
 const adminNavigation = [
   { key: 'Nhân sự', href: '/team', icon: Users },
-  { key: 'Cài đặt', href: '/settings', icon: Settings },
 ];
 
 const superAdminNavigation = [

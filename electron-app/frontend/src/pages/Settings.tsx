@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, Key, Cpu, Zap, Link2 } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Key, Cpu, Zap, Link2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiBaseUrl } from '../lib/axios';
 
 export default function Settings() {
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [socialAccounts, setSocialAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -28,6 +29,16 @@ export default function Settings() {
         }
       } catch (keyErr) {
         console.error('Failed to load user api keys', keyErr);
+      }
+
+      // Load social accounts
+      try {
+        const socialRes = await api.get('/workspace/social');
+        if (Array.isArray(socialRes.data)) {
+          setSocialAccounts(socialRes.data);
+        }
+      } catch (socialErr) {
+        console.error('Failed to load social accounts', socialErr);
       }
 
       setSettings(currentSettings);
@@ -347,6 +358,34 @@ export default function Settings() {
                 Kết nối Zalo
               </button>
             </div>
+
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 pt-4 border-t border-gray-100">Tài khoản đã kết nối</h3>
+            {socialAccounts.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                Chưa có tài khoản mạng xã hội nào được kết nối.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {socialAccounts.map((account) => (
+                  <div key={account.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 text-blue-600">
+                        <Link2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-[15px] capitalize text-gray-900">{account.provider.toLowerCase()}</p>
+                        <p className="text-[13px] text-gray-500">
+                          {account.accountName || 'Tài khoản không xác định'} • <span className={account.status === 'active' ? 'text-emerald-600' : 'text-amber-600'}>{account.status}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <button className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-[12px] font-medium transition-colors">
+                      Quản lý
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
