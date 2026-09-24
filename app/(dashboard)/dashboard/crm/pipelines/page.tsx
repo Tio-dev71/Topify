@@ -47,7 +47,7 @@ export default function PipelinesPage() {
       <div className="flex-none p-6 border-b border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--color-foreground)]">Đường ống (Pipelines)</h1>
+            <h1 className="text-2xl font-bold text-[var(--color-foreground)]">Phễu bán hàng (Pipelines)</h1>
             <p className="text-[var(--color-muted-foreground)] mt-1">Cấu hình các quy trình bán hàng và các bước (Stages)</p>
           </div>
           <button className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl font-medium hover:opacity-90 transition-opacity">

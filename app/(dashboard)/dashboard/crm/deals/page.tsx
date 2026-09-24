@@ -99,7 +99,7 @@ export default function DealsPage() {
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-[var(--color-muted-foreground)]">
-              <span>Đường ống:</span>
+              <span>Phễu bán hàng:</span>
               <select className="bg-transparent font-medium text-[var(--color-foreground)] focus:outline-none cursor-pointer">
                 <option>Quy trình Bán hàng chuẩn</option>
                 <option>Quy trình B2B</option>
