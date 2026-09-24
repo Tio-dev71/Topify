@@ -102,8 +102,28 @@ export default function KeywordsPage() {
           <p className="text-sm text-[var(--color-muted-foreground)] mt-1">Theo dõi xu hướng tìm kiếm và độ hot của các từ khóa liên quan</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={fetchKeywords} className="p-2.5 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl hover:bg-[var(--color-muted)] transition-colors">
+          <button 
+            onClick={async () => {
+              setLoading(true);
+              try {
+                const res = await fetch('/api/keywords/sync', { method: 'POST' });
+                if (res.ok) {
+                  toast.success('Đồng bộ dữ liệu thành công');
+                  fetchKeywords();
+                } else {
+                  toast.error('Lỗi khi đồng bộ dữ liệu');
+                  setLoading(false);
+                }
+              } catch (err) {
+                toast.error('Lỗi khi đồng bộ dữ liệu');
+                setLoading(false);
+              }
+            }} 
+            className="flex items-center gap-2 p-2.5 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl hover:bg-[var(--color-muted)] transition-colors"
+            title="Đồng bộ dữ liệu từ khóa"
+          >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="text-sm font-medium hidden sm:inline">Làm mới dữ liệu</span>
           </button>
           <button 
             onClick={() => setShowAddModal(true)}

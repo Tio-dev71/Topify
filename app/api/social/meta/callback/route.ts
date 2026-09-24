@@ -58,12 +58,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (!storedState || storedState !== csrfState) {
+    if (!isDesktopClient && (!storedState || storedState !== csrfState)) {
       console.error('CSRF validation failed for Meta OAuth');
-      if (isDesktopClient) {
-        return renderDesktopError('Lỗi kết nối Meta (CSRF validation failed)');
-      }
-      return NextResponse.redirect(new URL('/settings?error=csrf_validation_failed', baseUrl));
+      return NextResponse.redirect(new URL('/dashboard/settings?error=csrf_validation_failed', baseUrl));
     }
 
     if (!userId) {
@@ -74,7 +71,7 @@ export async function GET(req: NextRequest) {
     if (error || !code) {
       if (isDesktopClient) return renderDesktopError('Lỗi xác thực Meta: ' + (error || 'Không có mã xác thực'));
       return NextResponse.redirect(
-        new URL('/settings?error=meta_auth_failed', baseUrl)
+        new URL('/dashboard/settings?error=meta_auth_failed', baseUrl)
       );
     }
 
@@ -92,7 +89,7 @@ export async function GET(req: NextRequest) {
     if (!tokenData.access_token) {
       console.error('Meta token exchange failed:', tokenData);
       return NextResponse.redirect(
-        new URL('/settings?error=token_exchange_failed', baseUrl)
+        new URL('/dashboard/settings?error=token_exchange_failed', baseUrl)
       );
     }
 
@@ -169,7 +166,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.redirect(
-      new URL('/settings?success=meta', baseUrl)
+      new URL('/dashboard/settings?success=meta', baseUrl)
     );
   } catch (error: any) {
     console.error('Meta callback error:', error);
@@ -189,7 +186,7 @@ export async function GET(req: NextRequest) {
       );
     }
     return NextResponse.redirect(
-      new URL('/settings?error=meta_callback_error', baseUrl)
+      new URL('/dashboard/settings?error=meta_callback_error', baseUrl)
     );
   }
 }

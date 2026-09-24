@@ -15,7 +15,7 @@ import {
   parseISO
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Loader2, Video, FileText, Image as ImageIcon } from 'lucide-react';
-import Link from 'next/link';
+import NoteModal from './NoteModal';
 
 interface PostEvent {
   id: string;
@@ -26,10 +26,21 @@ interface PostEvent {
   platforms: string[];
 }
 
+interface CalendarNote {
+  id: string;
+  date: string;
+  content: string;
+}
+
 export default function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<PostEvent[]>([]);
+  const [notes, setNotes] = useState<CalendarNote[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null);
 
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
@@ -45,16 +56,38 @@ export default function CalendarView() {
       const start = startOfWeek(startOfMonth(currentDate)).toISOString();
       const end = endOfWeek(endOfMonth(currentDate)).toISOString();
       
-      const response = await fetch(`/api/posts/calendar?start=${start}&end=${end}`);
-      if (!response.ok) throw new Error('Failed to fetch calendar data');
+      const [eventsRes, notesRes] = await Promise.all([
+        fetch(`/api/posts/calendar?start=${start}&end=${end}`),
+        fetch(`/api/calendar/notes?start=${start}&end=${end}`)
+      ]);
       
-      const data = await response.json();
-      setEvents(data.events || []);
+      if (eventsRes.ok) {
+        const data = await eventsRes.json();
+        setEvents(data.events || []);
+      }
+      
+      if (notesRes.ok) {
+        const data = await notesRes.json();
+        setNotes(data.notes || []);
+      }
     } catch (error) {
-      console.error('Error fetching events:', error);
+      console.error('Error fetching calendar data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDayDoubleClick = (day: Date) => {
+    setSelectedDate(day);
+    setEditingNote(null);
+    setIsNoteModalOpen(true);
+  };
+
+  const handleNoteClick = (e: React.MouseEvent, note: CalendarNote) => {
+    e.stopPropagation();
+    setSelectedDate(parseISO(note.date));
+    setEditingNote({ id: note.id, content: note.content });
+    setIsNoteModalOpen(true);
   };
 
   const renderHeader = () => {
@@ -86,13 +119,13 @@ export default function CalendarView() {
           </div>
         </div>
         
-        <Link 
-          href="/dashboard/content/create"
+        <button 
+          onClick={() => handleDayDoubleClick(new Date())}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
         >
           <Plus size={16} />
-          <span>New Post</span>
-        </Link>
+          <span>Create Note</span>
+        </button>
       </div>
     );
   };
@@ -128,17 +161,19 @@ export default function CalendarView() {
         formattedDate = format(day, "d");
         const cloneDay = day;
         
-        // Find events for this day
+        // Find events and notes for this day
         const dayEvents = events.filter(e => e.start && isSameDay(parseISO(e.start), cloneDay));
+        const dayNotes = notes.filter(n => n.date && isSameDay(parseISO(n.date), cloneDay));
         
         days.push(
           <div
             className={`
-              min-h-[120px] p-2 border-r border-b border-[var(--color-border)] relative transition-colors group
+              min-h-[120px] p-2 border-r border-b border-[var(--color-border)] relative transition-colors group cursor-pointer
               ${!isSameMonth(day, monthStart) ? "bg-[var(--color-muted)]/20 text-[var(--color-muted-foreground)]" : "bg-[var(--color-background)] text-[var(--color-foreground)]"}
               ${isSameDay(day, new Date()) ? "bg-indigo-50/10" : ""}
             `}
             key={day.toString()}
+            onDoubleClick={() => handleDayDoubleClick(cloneDay)}
           >
             <div className="flex justify-between items-start">
               <span className={`
@@ -147,21 +182,25 @@ export default function CalendarView() {
               `}>
                 {formattedDate}
               </span>
-              
-              <Link 
-                href={`/dashboard/content/create?date=${format(day, 'yyyy-MM-dd')}`}
-                className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-muted-foreground)] hover:text-indigo-600 transition-all rounded-md hover:bg-indigo-50"
-              >
-                <Plus size={16} />
-              </Link>
             </div>
             
-            <div className="mt-2 flex flex-col gap-1 overflow-y-auto max-h-[80px]">
+            <div className="mt-2 flex flex-col gap-1 overflow-y-auto max-h-[80px] pointer-events-auto">
+              {dayNotes.map(note => (
+                <div 
+                  key={note.id}
+                  onClick={(e) => handleNoteClick(e, note)}
+                  className="px-2 py-1.5 text-xs rounded shadow-sm cursor-pointer font-medium bg-yellow-100 text-yellow-800 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/50 break-words"
+                  title={note.content}
+                >
+                  {note.content.length > 50 ? note.content.substring(0, 50) + '...' : note.content}
+                </div>
+              ))}
+              
               {dayEvents.map(event => (
                 <div 
                   key={event.id}
                   className={`
-                    px-2 py-1 text-xs rounded truncate cursor-pointer font-medium
+                    px-2 py-1 text-xs rounded truncate font-medium
                     ${event.status === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : ''}
                     ${event.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : ''}
                     ${event.status === 'DRAFT' ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' : ''}
@@ -202,6 +241,14 @@ export default function CalendarView() {
           {renderCells()}
         </div>
       </div>
+      
+      <NoteModal 
+        isOpen={isNoteModalOpen} 
+        onClose={() => setIsNoteModalOpen(false)} 
+        date={selectedDate} 
+        onSuccess={fetchEvents}
+        existingNote={editingNote}
+      />
     </div>
   );
 }

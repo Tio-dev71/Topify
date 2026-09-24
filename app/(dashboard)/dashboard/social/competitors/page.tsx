@@ -228,7 +228,26 @@ export default function CompetitorsPage() {
                   <h2 className="font-semibold text-[var(--color-foreground)]">Bài viết mới & Viral</h2>
                 </div>
                 <button 
-                  onClick={() => fetchPosts(selectedPage)}
+                  onClick={async () => {
+                    setLoadingPosts(true);
+                    try {
+                      const res = await fetch('/api/competitors/posts/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pageId: selectedPage })
+                      });
+                      if (res.ok) {
+                        toast.success('Quét bài mới thành công');
+                        fetchPosts(selectedPage);
+                      } else {
+                        toast.error('Lỗi khi quét bài mới');
+                        setLoadingPosts(false); // Stop loading if error, otherwise fetchPosts will override
+                      }
+                    } catch (err) {
+                      toast.error('Lỗi khi quét bài mới');
+                      setLoadingPosts(false);
+                    }
+                  }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[var(--color-muted)] hover:bg-[var(--color-border)] rounded-lg transition-colors"
                   disabled={loadingPosts}
                 >

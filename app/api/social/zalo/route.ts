@@ -59,14 +59,14 @@ export async function GET(req: NextRequest) {
     response.cookies.set('oauth_state_zalo', csrfState, {
       httpOnly: true,
       secure: req.nextUrl.protocol === 'https:',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 60 * 10,
     });
     
     response.cookies.set('oauth_pkce_zalo', codeVerifier, {
       httpOnly: true,
       secure: req.nextUrl.protocol === 'https:',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 60 * 10,
     });
 

@@ -70,6 +70,7 @@ model Workspace {
   // Phase 1
   brandVoices      BrandVoice[]
   contentBriefs    ContentBrief[]
+  calendarNotes    CalendarNote[]
   // Phase 2
   conversations    Conversation[]
   quickReplies     QuickReply[]
@@ -125,6 +126,7 @@ model User {
   videoAssets           VideoAsset[]
   // Phase 1
   contentBriefs         ContentBrief[]
+  calendarNotes         CalendarNote[]
   // Phase 2
   assignedConversations Conversation[]     @relation("ConversationAssignee")
   conversationNotes     ConversationNote[]
@@ -991,6 +993,26 @@ model Referral {
 
   @@index([referrerId])
   @@index([code])
+}
+
+// ============================================
+// Phase 14: Calendar
+// ============================================
+
+model CalendarNote {
+  id          String   @id @default(cuid())
+  date        DateTime
+  content     String
+  createdById String
+  workspaceId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User       @relation(fields: [createdById], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([date])
 }
 
 // ============================================

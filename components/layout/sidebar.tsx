@@ -80,7 +80,6 @@ const automationNavigation = [
 const operationsNavigation = [
   { key: 'sidebar.tasks', href: '/dashboard/tasks', icon: ListTodo },
   { key: 'sidebar.campaigns', href: '/dashboard/campaigns', icon: Megaphone },
-  { key: 'sidebar.automations_builder', href: '/dashboard/automations', icon: Zap },
   { key: 'sidebar.audit_log', href: '/dashboard/audit-log', icon: Shield },
 ];
 

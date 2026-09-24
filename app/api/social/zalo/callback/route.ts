@@ -22,13 +22,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Missing_code_or_state', req.url));
     }
 
+    const renderDesktopHtml = (msg: string, isError: boolean) => {
+      const color = isError ? '#EF4444' : '#10B981';
+      return new NextResponse(
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: ${color};">${msg}</h2>
+            <p>Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
+            <script>
+              setTimeout(() => { window.close(); }, 2000);
+            </script>
+          </body>
+        </html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: isError ? 400 : 200 }
+      );
+    };
+
     const cookieStore = await cookies();
     const storedState = cookieStore.get('oauth_state_zalo')?.value;
     const codeVerifier = cookieStore.get('oauth_pkce_zalo')?.value;
 
     const [csrfState, originalStateParam] = state.split('::');
 
-    if (!storedState || storedState !== csrfState) {
+    const isDesktopClient = originalStateParam && originalStateParam.startsWith('zalo_');
+
+    if (!isDesktopClient && (!storedState || storedState !== csrfState)) {
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Invalid_state_parameter', req.url));
     }
 
@@ -59,6 +78,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!userId) {
+      if (isDesktopClient) return renderDesktopHtml('Vui lòng đăng nhập lại trên ứng dụng', true);
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Unauthorized', req.url));
     }
 
@@ -149,10 +169,20 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    if (isDesktopClient) {
+      return renderDesktopHtml('Kết nối Zalo thành công!', false);
+    }
     return NextResponse.redirect(new URL('/dashboard/settings/social?success=zalo_connected', req.url));
 
   } catch (error: any) {
     console.error('Zalo callback exception:', error);
+    const stateParam = new URL(req.url).searchParams.get('state') || '';
+    if (stateParam.includes('zalo_')) {
+       return new NextResponse(
+        `<html><head><meta charset="utf-8" /></head><body style="text-align: center; padding: 50px;"><h2 style="color: #EF4444;">Lỗi kết nối Zalo</h2><script>setTimeout(() => { window.close(); }, 3000);</script></body></html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
+      );
+    }
     return NextResponse.redirect(new URL(`/dashboard/settings/social?error=${encodeURIComponent(error.message)}`, req.url));
   }
 }
