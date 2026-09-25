@@ -102,3 +102,34 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// PATCH /api/super-admin/workspaces - Update workspace plan, active status, name
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Super Admin access required' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { id, name, plan, isActive } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Workspace ID is required' }, { status: 400 });
+    }
+
+    const data: any = {};
+    if (name) data.name = name;
+    if (plan) data.plan = plan;
+    if (isActive !== undefined) data.isActive = Boolean(isActive);
+
+    const workspace = await prisma.workspace.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json({ success: true, workspace });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

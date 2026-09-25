@@ -41,6 +41,7 @@ import {
   Mic2,
   Link2,
   Brain,
+  ShieldCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -90,7 +91,7 @@ const walletNavigation = [
 const adminNavigation: any[] = [];
 
 const superAdminNavigation = [
-  { key: 'sidebar.workspaces', href: '/super-admin', icon: Building2 },
+  { key: 'sidebar.super_admin', href: '/super-admin', icon: ShieldCheck },
 ];
 
 export function Sidebar() {

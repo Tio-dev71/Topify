@@ -37,13 +37,14 @@ export const auth = async (...args: any[]) => {
       // Get role and workspace from Prisma
       const dbUser = await prisma.user.findUnique({
         where: { email: user.email },
-        select: { id: true, role: true, workspaceId: true },
+        select: { id: true, name: true, role: true, workspaceId: true },
       });
 
       if (dbUser) {
         return {
           user: {
             id: dbUser.id,
+            name: dbUser.name,
             role: dbUser.role,
             workspaceId: dbUser.workspaceId,
             email: user.email,
