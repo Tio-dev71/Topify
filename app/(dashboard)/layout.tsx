@@ -27,7 +27,7 @@ export default async function DashboardLayout({
 
   return (
     <Providers>
-      <div className="min-h-screen bg-[var(--color-background)]">
+      <div className="min-h-screen bg-background">
         <Sidebar />
         {/* Main content area */}
         <main className="lg:pl-[260px] transition-all duration-300">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Plus, Filter, MoreHorizontal, UserCheck, Star, Mail, Phone, ExternalLink } from "lucide-react";
+import { Search, Plus, Filter, MoreHorizontal, UserCheck, Mail, Phone } from "lucide-react";
 
 const MOCK_CUSTOMERS = [
   { id: "C001", name: "Nguyễn Văn A", email: "nva@gmail.com", phone: "0901234567", source: "Facebook", status: "VIP", totalSpent: "12,500,000 ₫", lastContact: "2 giờ trước" },
@@ -19,30 +19,33 @@ export default function CustomersPage() {
   );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-end">
+    <div className="p-4 md:p-8 max-w-[1400px] mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-[var(--color-foreground)] mb-2">Khách hàng</h1>
-          <p className="text-[var(--color-muted-foreground)]">Quản lý danh sách khách hàng và thông tin liên hệ</p>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <UserCheck className="w-6 h-6 text-primary" />
+            Khách hàng
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">Quản lý danh sách khách hàng và thông tin liên hệ</p>
         </div>
-        <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md flex items-center font-medium shadow-sm transition-colors">
-          <Plus className="w-4 h-4 mr-2" />
+        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-foreground text-background hover:opacity-90 transition-opacity">
+          <Plus className="w-4 h-4" />
           Thêm khách hàng
         </button>
       </div>
 
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-[var(--color-border)] flex gap-4 bg-[var(--color-muted)]/30">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-4 bg-background items-center">
+          <div className="relative flex-1 w-full max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input 
               placeholder="Tìm kiếm theo tên, số điện thoại..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[var(--color-background)] border border-[var(--color-border)] rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-[var(--color-foreground)] transition-all"
+              className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground transition-shadow"
             />
           </div>
-          <button className="p-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-md hover:bg-[var(--color-muted)] text-[var(--color-foreground)] flex items-center gap-2 px-4 text-sm font-medium transition-colors">
+          <button className="p-2 bg-card border border-border rounded-xl hover:bg-muted text-foreground flex items-center gap-2 px-4 text-sm font-medium transition-colors w-full sm:w-auto justify-center">
             <Filter className="w-4 h-4" />
             Lọc
           </button>
@@ -50,65 +53,78 @@ export default function CustomersPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="text-xs uppercase bg-[var(--color-muted)] text-[var(--color-muted-foreground)] border-b border-[var(--color-border)]">
+            <thead className="bg-muted/50 text-muted-foreground">
               <tr>
-                <th className="px-6 py-4 font-semibold">Tên Khách Hàng</th>
-                <th className="px-6 py-4 font-semibold">Liên Hệ</th>
-                <th className="px-6 py-4 font-semibold">Nguồn</th>
-                <th className="px-6 py-4 font-semibold">Trạng Thái</th>
-                <th className="px-6 py-4 font-semibold">Đã Chi Tiêu</th>
-                <th className="px-6 py-4 font-semibold">Tương Tác Cuối</th>
-                <th className="px-6 py-4 text-right">Thao Tác</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap">Tên Khách Hàng</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap">Liên Hệ</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap">Nguồn</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap">Trạng Thái</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap">Đã Chi Tiêu</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap">Tương Tác Cuối</th>
+                <th className="px-6 py-4 font-semibold text-right whitespace-nowrap">Thao Tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
+            <tbody>
               {filtered.map(customer => (
-                <tr key={customer.id} className="hover:bg-[var(--color-muted)]/50 transition-colors">
+                <tr key={customer.id} className="border-t border-border hover:bg-muted/20 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-800">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shrink-0">
                         {customer.name.charAt(0)}
                       </div>
-                      <div>
-                        <p className="font-semibold text-[var(--color-foreground)]">{customer.name}</p>
-                        <p className="text-xs text-[var(--color-muted-foreground)]">ID: {customer.id}</p>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">{customer.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">ID: {customer.id}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1 text-[var(--color-muted-foreground)]">
-                      <span className="flex items-center gap-2"><Phone className="w-3 h-3 text-[var(--color-muted-foreground)]/70" /> {customer.phone}</span>
-                      <span className="flex items-center gap-2"><Mail className="w-3 h-3 text-[var(--color-muted-foreground)]/70" /> {customer.email}</span>
+                    <div className="flex flex-col gap-1.5 text-muted-foreground">
+                      <span className="flex items-center gap-2 text-xs truncate">
+                        <Phone className="w-3.5 h-3.5 shrink-0" /> {customer.phone}
+                      </span>
+                      <span className="flex items-center gap-2 text-xs truncate">
+                        <Mail className="w-3.5 h-3.5 shrink-0" /> {customer.email}
+                      </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-[var(--color-muted-foreground)]">{customer.source}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      customer.status === 'VIP' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-500 border border-yellow-200 dark:border-yellow-900/50' :
-                      customer.status === 'Khách quen' ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-500 border border-green-200 dark:border-green-900/50' :
-                      'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] border border-[var(--color-border)]'
+                    <span className="text-muted-foreground">{customer.source}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2.5 py-1 rounded-md text-xs font-medium border ${
+                      customer.status === 'VIP' ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' :
+                      customer.status === 'Khách quen' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                      'bg-muted text-muted-foreground border-border'
                     }`}>
                       {customer.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-medium text-[var(--color-foreground)]">{customer.totalSpent}</td>
-                  <td className="px-6 py-4 text-[var(--color-muted-foreground)]">{customer.lastContact}</td>
+                  <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
+                    {customer.totalSpent}
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
+                    {customer.lastContact}
+                  </td>
                   <td className="px-6 py-4 text-right">
-                    <button className="p-2 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] rounded-md hover:bg-[var(--color-muted)] transition-colors">
-                      <MoreHorizontal className="w-5 h-5" />
+                    <button className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors">
+                      <MoreHorizontal className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-center p-12 text-muted-foreground">
+                    Không tìm thấy khách hàng nào.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-          {filtered.length === 0 && (
-            <div className="text-center p-12 text-[var(--color-muted-foreground)]">
-              Không tìm thấy khách hàng nào.
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
+
