@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Trash2, RefreshCw, CheckCircle, Clock, ExternalLink, Activity, Search, AlertCircle, Filter, Settings, Power, TrendingUp, TrendingDown, Hash } from 'lucide-react';
+import { Bell, Trash2, RefreshCw, CheckCircle, Clock, ExternalLink, Activity, Search, AlertCircle, Filter, Settings, Power, TrendingUp, TrendingDown, Hash, MessageSquare, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 type MentionAlert = {
@@ -114,179 +114,191 @@ export default function AlertsPage() {
     );
 
   const unreadCount = alerts.filter(a => !a.isRead).length;
+  const positiveCount = alerts.filter(a => a.sentiment === 'positive').length;
+  const negativeCount = alerts.filter(a => a.sentiment === 'negative').length;
 
   return (
-    <div className="p-6 md:p-10 max-w-[1600px] mx-auto min-h-screen">
+    <div className="p-6 md:p-10 max-w-[1600px] mx-auto min-h-screen font-sans relative">
+      {/* Background ambient glows */}
+      <div className="fixed top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
+      <div className="fixed bottom-1/4 right-1/4 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
+      
       {/* Header Section */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-8">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 mb-10">
         <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="space-y-3"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="space-y-4"
         >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium">
-            <Activity className="w-4 h-4" />
-            Social Listening & Monitoring
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-semibold tracking-wide backdrop-blur-md">
+            <Sparkles className="w-4 h-4" />
+            Social Listening Intelligence
           </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-100 to-indigo-300">
             Cảnh Báo Đề Cập
           </h1>
-          <p className="text-zinc-400 text-lg max-w-2xl">
-            Hệ thống tự động quét và phân tích dữ liệu từ mạng xã hội theo thời gian thực.
+          <p className="text-zinc-400 text-lg md:text-xl max-w-2xl leading-relaxed font-medium">
+            Hệ thống giám sát thương hiệu theo thời gian thực. Theo dõi mọi thảo luận trên đa nền tảng mạng xã hội.
           </p>
         </motion.div>
         
         <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
-          className="flex flex-wrap items-center gap-3 w-full lg:w-auto"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+          className="flex flex-wrap items-center gap-4 w-full xl:w-auto"
         >
-          {/* Auto Scrape Toggle */}
-          <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900/60 border border-zinc-800 rounded-xl">
-            <div className={`p-1.5 rounded-lg ${autoScrape ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
-              <Power className="w-4 h-4" />
+          {/* Auto Scrape Toggle - Redesigned as a glass pill */}
+          <div className="flex items-center gap-4 px-5 py-3.5 bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/60 rounded-2xl shadow-xl shadow-black/20 hover:border-zinc-700/80 transition-all">
+            <div className={`p-2 rounded-xl transition-colors duration-500 ${autoScrape ? 'bg-emerald-500/15 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-zinc-800 text-zinc-500'}`}>
+              <Power className="w-5 h-5" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-white">Tự động cào dữ liệu</span>
-              <span className="text-xs text-zinc-400">{autoScrape ? 'Đang chạy nền (24/7)' : 'Đã tạm dừng'}</span>
+            <div className="flex flex-col pr-2">
+              <span className="text-sm font-bold text-white">Quét tự động</span>
+              <span className={`text-xs font-medium ${autoScrape ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                {autoScrape ? 'Đang hoạt động' : 'Tạm dừng'}
+              </span>
             </div>
             <button 
               onClick={() => {
                 setAutoScrape(!autoScrape);
-                toast.success(autoScrape ? 'Đã dừng cào dữ liệu tự động' : 'Đã bật cào dữ liệu tự động');
+                toast.success(autoScrape ? 'Đã dừng quét tự động' : 'Đã bật quét tự động', {
+                  icon: <Power className={autoScrape ? "text-rose-500" : "text-emerald-500"} />
+                });
               }}
-              className={`ml-2 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoScrape ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-900 focus:ring-indigo-500 ${autoScrape ? 'bg-emerald-500' : 'bg-zinc-700'}`}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoScrape ? 'translate-x-6' : 'translate-x-1'}`} />
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ease-in-out ${autoScrape ? 'translate-x-8' : 'translate-x-1'}`} />
             </button>
           </div>
 
-          <button 
-            onClick={fetchAlerts} 
-            className="group flex items-center justify-center p-3.5 bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 rounded-xl transition-all duration-300"
-          >
-            <RefreshCw className={`w-5 h-5 text-zinc-400 group-hover:text-white ${loading ? 'animate-spin text-white' : ''}`} />
-          </button>
-          <button 
-            onClick={markAllAsRead}
-            disabled={unreadCount === 0}
-            className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20"
-          >
-            <CheckCircle className="w-4 h-4" />
-            <span>Đánh dấu tất cả đã đọc</span>
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={fetchAlerts} 
+              className="group relative flex items-center justify-center w-14 h-14 bg-zinc-900/40 backdrop-blur-xl hover:bg-indigo-500/10 border border-zinc-800/60 hover:border-indigo-500/50 rounded-2xl transition-all duration-300 shadow-xl shadow-black/20"
+              title="Làm mới"
+            >
+              <RefreshCw className={`w-5 h-5 text-zinc-400 group-hover:text-indigo-400 transition-colors ${loading ? 'animate-spin text-indigo-400' : ''}`} />
+            </button>
+            <button 
+              onClick={markAllAsRead}
+              disabled={unreadCount === 0}
+              className="group relative flex items-center justify-center gap-2 px-6 h-14 rounded-2xl text-sm font-bold bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_30px_rgba(99,102,241,0.5)] overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+              <CheckCircle className="w-5 h-5 relative z-10" />
+              <span className="relative z-10">Đọc tất cả</span>
+            </button>
+          </div>
         </motion.div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Glassmorphic Redesign */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+        className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10"
       >
-        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Bell className="w-24 h-24 text-indigo-500" />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
-                <Bell className="w-5 h-5" />
+        {[
+          { 
+            title: "Cảnh báo mới", 
+            value: unreadCount, 
+            subtitle: "chưa xử lý", 
+            icon: Bell, 
+            color: "indigo", 
+            gradient: "from-indigo-500/20 to-blue-500/5",
+            border: "border-indigo-500/20",
+            text: "text-indigo-400"
+          },
+          { 
+            title: "Tích cực", 
+            value: positiveCount, 
+            subtitle: "so với tuần trước", 
+            trend: "+12%",
+            icon: TrendingUp, 
+            color: "emerald", 
+            gradient: "from-emerald-500/20 to-teal-500/5",
+            border: "border-emerald-500/20",
+            text: "text-emerald-400"
+          },
+          { 
+            title: "Tiêu cực", 
+            value: negativeCount, 
+            subtitle: "cần chú ý", 
+            trend: "-5%",
+            icon: TrendingDown, 
+            color: "rose", 
+            gradient: "from-rose-500/20 to-orange-500/5",
+            border: "border-rose-500/20",
+            text: "text-rose-400"
+          }
+        ].map((stat, i) => (
+          <div key={i} className={`relative group overflow-hidden bg-zinc-900/40 backdrop-blur-xl border ${stat.border} rounded-[2rem] p-7 transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-${stat.color}-500/10`}>
+            <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-50`} />
+            <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors duration-500" />
+            
+            <div className="relative z-10 flex flex-col h-full justify-between">
+              <div className="flex items-center justify-between mb-8">
+                <div className={`p-3 rounded-2xl bg-zinc-900/50 backdrop-blur-md border border-zinc-800 shadow-inner ${stat.text}`}>
+                  <stat.icon className="w-6 h-6" />
+                </div>
+                {stat.trend && (
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-900/50 backdrop-blur-md border border-zinc-800 text-sm font-bold ${stat.text}`}>
+                    <stat.icon className="w-4 h-4" /> {stat.trend}
+                  </div>
+                )}
               </div>
-              <h3 className="text-zinc-400 font-medium">Thông báo mới</h3>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-white">{unreadCount}</span>
-              <span className="text-sm text-zinc-500">cảnh báo chưa đọc</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <TrendingUp className="w-24 h-24 text-emerald-500" />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400">
-                <TrendingUp className="w-5 h-5" />
+              <div>
+                <div className="flex items-baseline gap-3 mb-1">
+                  <span className="text-5xl font-black text-white tracking-tight">{stat.value}</span>
+                </div>
+                <h3 className="text-zinc-400 font-medium text-lg">{stat.title} <span className="text-sm opacity-60">({stat.subtitle})</span></h3>
               </div>
-              <h3 className="text-zinc-400 font-medium">Phản hồi tích cực</h3>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-white">
-                {alerts.filter(a => a.sentiment === 'positive').length}
-              </span>
-              <span className="text-sm text-emerald-400 flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +12%
-              </span>
             </div>
           </div>
-        </div>
-
-        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <TrendingDown className="w-24 h-24 text-rose-500" />
-          </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-rose-500/20 rounded-lg text-rose-400">
-                <TrendingDown className="w-5 h-5" />
-              </div>
-              <h3 className="text-zinc-400 font-medium">Phản hồi tiêu cực</h3>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-white">
-                {alerts.filter(a => a.sentiment === 'negative').length}
-              </span>
-              <span className="text-sm text-rose-400 flex items-center gap-1">
-                <TrendingDown className="w-3 h-3" /> -5%
-              </span>
-            </div>
-          </div>
-        </div>
+        ))}
       </motion.div>
 
-      {/* Filters */}
+      {/* Controls Bar - Search & Filters */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut", delay: 0.3 }}
-        className="flex flex-col sm:flex-row gap-4 mb-6"
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+        className="flex flex-col lg:flex-row gap-4 mb-8 sticky top-6 z-40"
       >
         <div className="relative flex-1 group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="w-5 h-5 text-zinc-500 group-focus-within:text-indigo-400 transition-colors" />
+          <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-zinc-500 group-focus-within:text-indigo-400 transition-colors duration-300" />
           </div>
           <input
             type="text"
-            placeholder="Tìm kiếm nội dung, tiêu đề, từ khóa..."
+            placeholder="Tìm kiếm nội dung, từ khóa, nguồn gốc..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-zinc-900/40 border border-zinc-800/80 rounded-xl text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all backdrop-blur-xl"
+            className="w-full pl-12 pr-6 py-4 bg-zinc-900/70 backdrop-blur-2xl border border-zinc-800/80 hover:border-zinc-700 focus:border-indigo-500/50 rounded-2xl text-white placeholder:text-zinc-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-xl shadow-black/20 text-lg font-medium"
           />
         </div>
-        <div className="flex bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-1 backdrop-blur-xl">
+        
+        <div className="flex bg-zinc-900/70 backdrop-blur-2xl border border-zinc-800/80 rounded-2xl p-1.5 shadow-xl shadow-black/20">
           {(['all', 'unread', 'read'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`relative px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`relative px-8 py-3 rounded-xl text-sm font-bold transition-colors duration-300 ${
                 filter === f ? 'text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
               }`}
             >
               {filter === f && (
                 <motion.div
-                  layoutId="filter-bg"
-                  className="absolute inset-0 bg-zinc-800 rounded-lg shadow-sm"
-                  initial={false}
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                  layoutId="filter-active"
+                  className="absolute inset-0 bg-zinc-800/80 border border-zinc-700/50 rounded-xl shadow-sm"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
               )}
-              <span className="relative z-10 capitalize">
+              <span className="relative z-10 flex items-center gap-2">
+                {f === 'all' ? <Activity className="w-4 h-4" /> : f === 'unread' ? <Bell className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
                 {f === 'all' ? 'Tất cả' : f === 'unread' ? 'Chưa đọc' : 'Đã đọc'}
               </span>
             </button>
@@ -298,33 +310,39 @@ export default function AlertsPage() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut", delay: 0.4 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
         className="relative"
       >
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           <AnimatePresence mode="popLayout">
             {loading && alerts.length === 0 ? (
               <motion.div 
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center py-20 px-4 text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl backdrop-blur-sm"
+                className="flex flex-col items-center justify-center py-32 px-4 text-center bg-zinc-900/30 backdrop-blur-xl border border-zinc-800/50 rounded-[2rem]"
               >
-                <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-6"></div>
-                <h3 className="text-xl font-bold text-white mb-2">Đang đồng bộ dữ liệu...</h3>
-                <p className="text-zinc-400">Hệ thống đang quét các mạng xã hội để tìm đề cập mới nhất.</p>
+                <div className="relative w-20 h-20 mb-8">
+                  <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full" />
+                  <div className="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Activity className="w-8 h-8 text-indigo-400 animate-pulse" />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-extrabold text-white mb-3">Đang đồng bộ dữ liệu</h3>
+                <p className="text-zinc-400 text-lg max-w-md">Quét các mạng xã hội để tìm đề cập mới nhất về thương hiệu của bạn...</p>
               </motion.div>
             ) : filteredAlerts.length === 0 ? (
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center py-24 px-4 text-center bg-zinc-900/20 border border-zinc-800/50 rounded-2xl backdrop-blur-sm border-dashed"
+                className="flex flex-col items-center justify-center py-32 px-4 text-center bg-zinc-900/30 backdrop-blur-xl border border-zinc-800/50 rounded-[2rem] border-dashed"
               >
-                <div className="w-20 h-20 bg-zinc-800/50 rounded-full flex items-center justify-center mb-6 shadow-inner">
-                  <AlertCircle className="w-10 h-10 text-zinc-500" />
+                <div className="w-24 h-24 bg-zinc-800/50 rounded-full flex items-center justify-center mb-6 shadow-inner ring-1 ring-zinc-700/50">
+                  <MessageSquare className="w-10 h-10 text-zinc-500" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Không tìm thấy thông báo</h3>
-                <p className="text-zinc-400 max-w-md">
+                <h3 className="text-2xl font-extrabold text-white mb-3">Chưa có thông báo nào</h3>
+                <p className="text-zinc-400 text-lg max-w-md">
                   {searchQuery 
-                    ? `Không có kết quả nào phù hợp với "${searchQuery}"` 
-                    : "Hệ thống đang theo dõi 24/7. Các lượt đề cập đến thương hiệu sẽ xuất hiện ở đây."}
+                    ? `Không tìm thấy kết quả cho "${searchQuery}"` 
+                    : "Hệ thống giám sát đang theo dõi 24/7. Các lượt đề cập sẽ xuất hiện ở đây."}
                 </p>
               </motion.div>
             ) : (
@@ -334,83 +352,93 @@ export default function AlertsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-                  transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
+                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   key={alert.id}
                   onClick={(e) => {
                     if (!alert.isRead) markAsRead(alert.id, e);
                   }}
-                  className={`group relative overflow-hidden p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
-                    alert.isRead 
-                      ? 'bg-zinc-900/20 border-zinc-800/40 hover:bg-zinc-800/40' 
-                      : 'bg-zinc-900/60 border-indigo-500/30 hover:border-indigo-500/50 shadow-lg shadow-indigo-500/5'
+                  className={`group relative overflow-hidden rounded-2xl transition-all duration-300 cursor-pointer 
+                    ${alert.isRead 
+                      ? 'bg-zinc-900/40 backdrop-blur-md border border-zinc-800/60 hover:bg-zinc-800/50' 
+                      : 'bg-zinc-900/80 backdrop-blur-xl border border-indigo-500/40 hover:border-indigo-400/80 shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgba(99,102,241,0.15)]'
                   }`}
                 >
-                  {/* Unread Indicator */}
+                  {/* Unread Glow Effect */}
                   {!alert.isRead && (
-                    <div className="absolute top-1/2 -translate-y-1/2 left-0 w-1 h-12 bg-indigo-500 rounded-r-full" />
+                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-400 to-violet-600 shadow-[0_0_10px_rgba(99,102,241,0.8)]" />
                   )}
 
-                  <div className="flex gap-4 items-start pl-2">
-                    {/* Sentiment / Icon */}
-                    <div className={`shrink-0 p-2.5 rounded-xl ${
-                      alert.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-400' :
-                      alert.sentiment === 'negative' ? 'bg-rose-500/10 text-rose-400' :
-                      'bg-indigo-500/10 text-indigo-400'
+                  <div className="flex flex-col sm:flex-row gap-5 p-5 sm:p-6 items-start">
+                    {/* Sentiment Icon */}
+                    <div className={`shrink-0 p-3.5 rounded-2xl border ${
+                      alert.sentiment === 'positive' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.1)]' :
+                      alert.sentiment === 'negative' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 shadow-[inset_0_0_20px_rgba(244,63,94,0.1)]' :
+                      'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-[inset_0_0_20px_rgba(99,102,241,0.1)]'
                     }`}>
-                      {alert.sentiment === 'positive' ? <TrendingUp className="w-5 h-5" /> :
-                       alert.sentiment === 'negative' ? <TrendingDown className="w-5 h-5" /> :
-                       <Bell className="w-5 h-5" />}
+                      {alert.sentiment === 'positive' ? <TrendingUp className="w-6 h-6" /> :
+                       alert.sentiment === 'negative' ? <TrendingDown className="w-6 h-6" /> :
+                       <Activity className="w-6 h-6" />}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-                        <h3 className={`text-base font-semibold truncate pr-4 ${alert.isRead ? 'text-zinc-400' : 'text-white'}`}>
+                    <div className="flex-1 min-w-0 w-full">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                        <h3 className={`text-lg font-bold truncate pr-4 ${alert.isRead ? 'text-zinc-400' : 'text-white'}`}>
                           {alert.title}
                         </h3>
-                        <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(alert.createdAt).toLocaleString('vi-VN', { 
-                            hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' 
-                          })}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          {!alert.isRead && (
+                            <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+                              Mới
+                            </span>
+                          )}
+                          <span className="text-sm font-medium text-zinc-500 flex items-center gap-1.5">
+                            <Clock className="w-4 h-4" />
+                            {new Date(alert.createdAt).toLocaleString('vi-VN', { 
+                              hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' 
+                            })}
+                          </span>
+                        </div>
                       </div>
                       
-                      <p className={`text-sm leading-relaxed mb-3 line-clamp-2 ${alert.isRead ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                      <p className={`text-base leading-relaxed mb-4 line-clamp-3 ${alert.isRead ? 'text-zinc-500' : 'text-zinc-300'}`}>
                         {alert.message}
                       </p>
                       
-                      <div className="flex items-center gap-3">
-                        {alert.keyword && (
-                          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-800 text-zinc-300 text-xs font-medium">
-                            <Hash className="w-3 h-3 text-zinc-500" />
-                            {alert.keyword}
-                          </div>
-                        )}
-                        
-                        {alert.sourceUrl && (
-                          <a 
-                            href={alert.sourceUrl} 
-                            target="_blank" 
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            Nguồn bài viết
-                          </a>
-                        )}
-                      </div>
-                    </div>
+                      <div className="flex flex-wrap items-center justify-between gap-4 mt-auto">
+                        <div className="flex flex-wrap items-center gap-3">
+                          {alert.keyword && (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/80 border border-zinc-700/50 text-zinc-300 text-xs font-semibold">
+                              <Hash className="w-3.5 h-3.5 text-zinc-500" />
+                              {alert.keyword}
+                            </div>
+                          )}
+                          
+                          {alert.sourceUrl && (
+                            <a 
+                              href={alert.sourceUrl} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              Xem bài viết gốc
+                            </a>
+                          )}
+                        </div>
 
-                    {/* Actions */}
-                    <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={(e) => handleDeleteAlert(alert.id, e)}
-                        className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                        title="Xóa cảnh báo"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        {/* Actions */}
+                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={(e) => handleDeleteAlert(alert.id, e)}
+                            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border border-transparent hover:border-rose-500/20"
+                            title="Xóa cảnh báo"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Xóa
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -422,4 +450,3 @@ export default function AlertsPage() {
     </div>
   );
 }
-
