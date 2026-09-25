@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { getPublisher } from '../publishers';
 import { scheduleTokenMonitor, scheduleKeywordScraper } from './index';
+import { getKeywordInsights, getFacebookPagePosts, getRealTimeNews } from '../rapidapi/client';
 
 const prisma = new PrismaClient();
 
@@ -316,29 +317,137 @@ async function processTokenMonitorJob(_job: Job) {
 }
 
 async function processKeywordScraperJob(_job: Job) {
-  console.log(`🔍 Starting daily keyword scraper...`);
+  console.log(`🔍 [CRON 24H] Bắt đầu chu kỳ tự động cào dữ liệu: Từ khóa, Cảnh báo & Đối thủ...`);
   
-  const keywords = await prisma.keywordTracker.findMany();
-  
-  for (const keyword of keywords) {
-    console.log(`🤖 Scraping data for keyword: ${keyword.keyword}`);
+  // 1. Quét và cập nhật Từ khóa (Keyword Insights)
+  try {
+    const keywords = await prisma.keywordTracker.findMany();
+    console.log(`🤖 Đang xử lý ${keywords.length} từ khóa theo dõi...`);
     
-    // NOTE: Cắm API tool cào dữ liệu vào đây hoặc logic tự động cào (ví dụ Playwright)
-    // Sau khi cào xong, có thể lưu vào db bảng MentionAlert:
-    // 
-    // await prisma.mentionAlert.create({
-    //   data: {
-    //     keywordId: keyword.id,
-    //     workspaceId: keyword.workspaceId,
-    //     content: "...",
-    //     source: "FACEBOOK",
-    //     author: "...",
-    //     sentiment: "NEUTRAL",
-    //   }
-    // });
+    for (const kw of keywords) {
+      try {
+        console.log(`  -> Quét insight từ khóa: "${kw.keyword}"`);
+        const rawData = await getKeywordInsights(kw.keyword);
+        
+        let volume = 0;
+        let trend = 'FLAT';
+        
+        if (Array.isArray(rawData) && rawData.length > 0) {
+          const match = rawData.find(item => item.text?.toLowerCase() === kw.keyword.toLowerCase()) || rawData[0];
+          volume = match.volume || match.search_volume || 0;
+          if (match.trend !== undefined && match.trend !== null) {
+            const t = parseFloat(match.trend);
+            if (t > 0) trend = 'UP';
+            else if (t < 0) trend = 'DOWN';
+          }
+        }
+
+        await prisma.keywordTracker.update({
+          where: { id: kw.id },
+          data: { volume, trend }
+        });
+
+        // 2. Đồng thời quét tin tức cảnh báo (Mention Alerts) theo từ khóa này
+        try {
+          const newsRes = await getRealTimeNews(kw.keyword);
+          const newsList = newsRes?.data || [];
+          for (const item of newsList.slice(0, 5)) { // lấy tối đa 5 tin mới nhất mỗi từ khóa
+            const sourceUrl = item.link || item.url;
+            if (!sourceUrl) continue;
+
+            const existing = await prisma.mentionAlert.findFirst({ where: { sourceUrl } });
+            if (!existing) {
+              await prisma.mentionAlert.create({
+                data: {
+                  title: item.title || 'Tin mới',
+                  message: item.snippet || item.description || '',
+                  sourceUrl,
+                  keyword: kw.keyword,
+                  workspaceId: kw.workspaceId,
+                }
+              });
+            }
+          }
+        } catch (newsErr) {
+          console.error(`  ⚠️ Lỗi quét cảnh báo cho từ khóa ${kw.keyword}:`, newsErr);
+        }
+      } catch (err) {
+        console.error(`  ⚠️ Lỗi khi cào dữ liệu từ khóa ${kw.keyword}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('❌ Lỗi xử lý khối từ khóa:', err);
   }
 
-  console.log(`✅ Finished daily keyword scraper.`);
+  // 3. Quét bài viết mới của các Fanpage Đối thủ
+  try {
+    const competitorPages = await prisma.competitorPage.findMany();
+    console.log(`🤖 Đang quét bài viết mới cho ${competitorPages.length} fanpage đối thủ...`);
+    
+    for (const page of competitorPages) {
+      try {
+        console.log(`  -> Quét Fanpage: ${page.name || page.url}`);
+        const rawPosts = await getFacebookPagePosts(page.url);
+        const posts = rawPosts?.results || rawPosts?.data || rawPosts?.posts || [];
+
+        for (const item of posts.slice(0, 10)) {
+          const externalId = (item.id || item.post_id || '').toString();
+          if (!externalId) continue;
+
+          const content = item.text || item.content || item.description || item.message || null;
+          const mediaUrl = item.video_url || item.image_url || item.media || item.video || item.image || null;
+          const likesCount = parseInt(item.likes || item.reactions || item.reactions_count || '0', 10);
+          const commentsCount = parseInt(item.comments || item.comments_count || '0', 10);
+          const sharesCount = parseInt(item.shares || item.reshare_count || '0', 10);
+
+          let postedAtDate = new Date();
+          let ts = item.created_time || item.time || item.timestamp;
+          if (ts) {
+            if (typeof ts === 'number' || (typeof ts === 'string' && /^\d+$/.test(ts))) {
+              postedAtDate = new Date(parseInt(ts, 10) * 1000);
+            } else {
+              postedAtDate = new Date(ts);
+            }
+          }
+
+          const existingPost = await prisma.competitorPost.findFirst({
+            where: { pageId: page.id, externalId }
+          });
+
+          if (existingPost) {
+            await prisma.competitorPost.update({
+              where: { id: existingPost.id },
+              data: {
+                likesCount: isNaN(likesCount) ? 0 : likesCount,
+                commentsCount: isNaN(commentsCount) ? 0 : commentsCount,
+                sharesCount: isNaN(sharesCount) ? 0 : sharesCount,
+                scrapedAt: new Date(),
+              }
+            });
+          } else {
+            await prisma.competitorPost.create({
+              data: {
+                pageId: page.id,
+                externalId,
+                content,
+                mediaUrl,
+                likesCount: isNaN(likesCount) ? 0 : likesCount,
+                commentsCount: isNaN(commentsCount) ? 0 : commentsCount,
+                sharesCount: isNaN(sharesCount) ? 0 : sharesCount,
+                postedAt: postedAtDate,
+              }
+            });
+          }
+        }
+      } catch (pageErr) {
+        console.error(`  ⚠️ Lỗi khi cào bài viết cho fanpage ${page.url}:`, pageErr);
+      }
+    }
+  } catch (err) {
+    console.error('❌ Lỗi xử lý khối đối thủ:', err);
+  }
+
+  console.log(`✅ [CRON 24H] Hoàn thành chu kỳ tự động cào dữ liệu.`);
 }
 
 export function startWorker() {

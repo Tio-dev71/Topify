@@ -109,3 +109,29 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// DELETE /api/crm/deals?id=...
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    const workspaceId = (session.user as any).workspaceId;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Deal ID is required' }, { status: 400 });
+    }
+
+    await prisma.deal.deleteMany({
+      where: { id, workspaceId },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

@@ -1,58 +1,116 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Search, 
-  Filter, 
   Shield,
   Download,
   AlertTriangle,
   Info,
   CheckCircle,
-  XCircle
+  RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
-const MOCK_AUDIT_LOGS = [
-  { id: 'log-1', action: 'CREATE_CAMPAIGN', resource: 'Campaign 20/10', user: 'Hương Nguyễn', email: 'huong@topify.vn', ip: '113.190.23.45', status: 'success', timestamp: '2024-10-01T08:30:00Z', details: 'Tạo chiến dịch mới với ngân sách 15M' },
-  { id: 'log-2', action: 'UPDATE_DEAL', resource: 'Deal ABC', user: 'Tuấn Trần', email: 'tuan@topify.vn', ip: '14.232.11.90', status: 'success', timestamp: '2024-10-01T09:15:22Z', details: 'Cập nhật trạng thái sang "Đang thương lượng"' },
-  { id: 'log-3', action: 'DELETE_CUSTOMER', resource: 'Customer C009', user: 'Tuấn Trần', email: 'tuan@topify.vn', ip: '14.232.11.90', status: 'failure', timestamp: '2024-10-01T09:45:10Z', details: 'Từ chối quyền truy cập: Không đủ thẩm quyền' },
-  { id: 'log-4', action: 'LOGIN', resource: 'System', user: 'Admin', email: 'admin@topify.vn', ip: '118.69.123.55', status: 'success', timestamp: '2024-10-01T10:00:00Z', details: 'Đăng nhập thành công' },
-  { id: 'log-5', action: 'EXPORT_DATA', resource: 'Customers List', user: 'Hương Nguyễn', email: 'huong@topify.vn', ip: '113.190.23.45', status: 'warning', timestamp: '2024-10-01T14:20:00Z', details: 'Xuất 5,000 dòng dữ liệu khách hàng' },
-];
+type AuditLog = {
+  id: string;
+  action: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  userId?: string | null;
+  ipAddress?: string | null;
+  metadata?: any;
+  createdAt: string;
+};
 
 export default function AuditLogPage() {
-  const [logs] = useState(MOCK_AUDIT_LOGS);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'success': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'failure': return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
-      default: return <Info className="w-4 h-4 text-blue-500" />;
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/audit-log');
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs || []);
+      } else {
+        toast.error('Không thể tải nhật ký hệ thống');
+      }
+    } catch {
+      toast.error('Lỗi khi tải nhật ký');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'success': return 'bg-green-500/10 text-green-500 border-green-500/20';
-      case 'failure': return 'bg-red-500/10 text-red-500 border-red-500/20';
-      case 'warning': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
-      default: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+  const exportCSV = () => {
+    if (logs.length === 0) {
+      return toast.error('Không có dữ liệu để xuất');
     }
+
+    const headers = ['Thời gian', 'Hành động', 'Loại tài nguyên', 'Tài nguyên ID', 'IP Address', 'Ghi chú'];
+    const rows = logs.map(l => [
+      format(new Date(l.createdAt), 'yyyy-MM-dd HH:mm:ss'),
+      l.action,
+      l.entityType || '',
+      l.entityId || '',
+      l.ipAddress || '',
+      typeof l.metadata === 'object' ? JSON.stringify(l.metadata).replace(/"/g, '""') : (l.metadata || '')
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + 
+      [headers.join(','), ...rows.map(r => r.map(cell => `"${cell}"`).join(','))].join('\n');
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `audit_logs_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Đã tải xuống file CSV thành công');
   };
 
-  const filteredLogs = logs.filter(log => 
-    log.action.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.resource.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const getStatusIcon = (action: string) => {
+    if (action.includes('FAIL') || action.includes('ERROR') || action.includes('DENY')) {
+      return <AlertTriangle className="w-4 h-4 text-red-500" />;
+    }
+    if (action.includes('WARN')) {
+      return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+    }
+    return <CheckCircle className="w-4 h-4 text-green-500" />;
+  };
+
+  const getStatusBadge = (action: string) => {
+    if (action.includes('FAIL') || action.includes('ERROR') || action.includes('DENY')) {
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20">Thất bại</span>;
+    }
+    if (action.includes('WARN')) {
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">Cảnh báo</span>;
+    }
+    return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-500 border border-green-500/20">Thành công</span>;
+  };
+
+  const filteredLogs = logs.filter(log => {
+    const term = searchTerm.toLowerCase();
+    const actionMatch = log.action.toLowerCase().includes(term);
+    const entityMatch = (log.entityType || '').toLowerCase().includes(term);
+    const ipMatch = (log.ipAddress || '').toLowerCase().includes(term);
+    const metaMatch = log.metadata ? JSON.stringify(log.metadata).toLowerCase().includes(term) : false;
+    return actionMatch || entityMatch || ipMatch || metaMatch;
+  });
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       {/* Header */}
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-500">
@@ -62,28 +120,36 @@ export default function AuditLogPage() {
           </div>
           <p className="text-[var(--color-muted-foreground)]">Theo dõi toàn bộ thao tác và hoạt động của người dùng trên hệ thống</p>
         </div>
-        <button className="bg-[var(--color-background)] border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] px-4 py-2 rounded-xl flex items-center font-medium transition-colors">
-          <Download className="w-4 h-4 mr-2" />
-          Xuất báo cáo (CSV)
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={fetchLogs}
+            className="p-2 border border-[var(--color-border)] rounded-xl hover:bg-[var(--color-muted)] text-[var(--color-foreground)] transition-colors"
+            title="Làm mới"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button 
+            onClick={exportCSV}
+            className="bg-[var(--color-background)] border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] px-4 py-2 rounded-xl flex items-center font-medium transition-colors text-sm shadow-sm"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Xuất báo cáo (CSV)
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-[#1a1b1e] border border-[var(--color-border)] rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-[#1a1b1e] border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-sm">
         {/* Toolbar */}
         <div className="p-4 border-b border-[var(--color-border)] flex gap-4 bg-[var(--color-muted)]/10">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
             <input 
-              placeholder="Tìm kiếm theo hành động, người dùng, tài nguyên..." 
+              placeholder="Tìm kiếm theo hành động, loại tài nguyên, IP..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-foreground)]"
             />
           </div>
-          <button className="p-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl hover:bg-[var(--color-muted)] text-[var(--color-foreground)] flex items-center gap-2 px-4 text-sm font-medium transition-colors">
-            <Filter className="w-4 h-4" />
-            Lọc theo thời gian & loại
-          </button>
         </div>
 
         {/* Log List */}
@@ -94,50 +160,60 @@ export default function AuditLogPage() {
                 <th className="px-6 py-4 font-semibold">Thời gian</th>
                 <th className="px-6 py-4 font-semibold">Hành động</th>
                 <th className="px-6 py-4 font-semibold">Tài nguyên</th>
-                <th className="px-6 py-4 font-semibold">Người dùng</th>
                 <th className="px-6 py-4 font-semibold">Trạng thái</th>
-                <th className="px-6 py-4 font-semibold">Chi tiết / IP</th>
+                <th className="px-6 py-4 font-semibold">IP / Thiết bị</th>
+                <th className="px-6 py-4 font-semibold">Chi tiết</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {filteredLogs.map(log => (
-                <tr key={log.id} className="hover:bg-[var(--color-muted)]/30 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-[var(--color-muted-foreground)] font-mono text-xs">
-                    {format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss')}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="font-semibold text-[var(--color-foreground)]">{log.action}</span>
-                  </td>
-                  <td className="px-6 py-4 text-[var(--color-foreground)]">
-                    {log.resource}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-[var(--color-foreground)]">{log.user}</span>
-                      <span className="text-xs text-[var(--color-muted-foreground)]">{log.email}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(log.status)} uppercase`}>
-                      {getStatusIcon(log.status)}
-                      {log.status}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-[var(--color-foreground)] line-clamp-1">{log.details}</span>
-                      <span className="text-xs text-[var(--color-muted-foreground)] font-mono mt-0.5">IP: {log.ip}</span>
-                    </div>
+              {loading && logs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-[var(--color-muted-foreground)]">
+                    Đang tải nhật ký hệ thống...
                   </td>
                 </tr>
-              ))}
+              ) : filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-[var(--color-muted-foreground)]">
+                    Không tìm thấy nhật ký nào phù hợp.
+                  </td>
+                </tr>
+              ) : (
+                filteredLogs.map(log => {
+                  const detailStr = log.metadata?.message || 
+                    (typeof log.metadata === 'object' ? JSON.stringify(log.metadata) : (log.metadata || '—'));
+
+                  return (
+                    <tr key={log.id} className="hover:bg-[var(--color-muted)]/30 transition-colors">
+                      <td className="px-6 py-4 text-xs text-[var(--color-muted-foreground)] whitespace-nowrap">
+                        {format(new Date(log.createdAt), 'dd/MM/yyyy HH:mm:ss')}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-mono text-xs font-semibold text-[var(--color-primary)] bg-[var(--color-primary)]/10 px-2 py-0.5 rounded inline-block">
+                          {log.action}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-medium text-[var(--color-foreground)]">
+                        {log.entityType || 'Hệ thống'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(log.action)}
+                          {getStatusBadge(log.action)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-mono text-[var(--color-muted-foreground)]">
+                        {log.ipAddress || '127.0.0.1'}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-[var(--color-foreground)] max-w-xs truncate" title={detailStr}>
+                        {detailStr}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {filteredLogs.length === 0 && (
-            <div className="text-center p-12 text-[var(--color-muted-foreground)]">
-              Không tìm thấy nhật ký nào khớp.
-            </div>
-          )}
         </div>
       </div>
     </div>

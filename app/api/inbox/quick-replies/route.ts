@@ -51,3 +51,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// PUT /api/inbox/quick-replies
+export async function PUT(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, title, content, shortcut, category } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+    }
+
+    const workspaceId = (session.user as any).workspaceId;
+    const quickReply = await prisma.quickReply.updateMany({
+      where: { id, workspaceId },
+      data: {
+        title,
+        content,
+        shortcut,
+        category,
+      },
+    });
+
+    return NextResponse.json({ success: true, quickReply });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// DELETE /api/inbox/quick-replies?id=...
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    const workspaceId = (session.user as any).workspaceId;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+    }
+
+    await prisma.quickReply.deleteMany({
+      where: { id, workspaceId },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

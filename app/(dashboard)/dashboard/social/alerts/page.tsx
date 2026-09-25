@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Trash2, RefreshCw, CheckCircle, Clock, ExternalLink, Activity, Search, AlertCircle, Filter, Settings, Power, TrendingUp, TrendingDown, Hash, MessageSquare, Sparkles } from 'lucide-react';
+import { Bell, Trash2, RefreshCw, CheckCircle, Clock, ExternalLink, Activity, Search, AlertCircle, Filter, Settings, Power, TrendingUp, TrendingDown, Hash, MessageSquare, Sparkles, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 type MentionAlert = {
@@ -22,6 +22,9 @@ export default function AlertsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [autoScrape, setAutoScrape] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [syncKeyword, setSyncKeyword] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     fetchAlerts();
@@ -101,6 +104,38 @@ export default function AlertsPage() {
     }
   };
 
+  const handleSyncAlerts = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!syncKeyword.trim()) {
+      toast.error('Vui lòng nhập từ khóa hoặc tên thương hiệu');
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/alerts/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: syncKeyword.trim() })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message || 'Quét cảnh báo thành công!');
+        setShowAddModal(false);
+        setSyncKeyword('');
+        fetchAlerts();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Lỗi khi quét tin tức');
+      }
+    } catch (err) {
+      toast.error('Lỗi kết nối khi quét cảnh báo');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const filteredAlerts = alerts
     .filter(a => {
       if (filter === 'unread') return !a.isRead;
@@ -173,7 +208,14 @@ export default function AlertsPage() {
             </button>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-5 h-14 rounded-2xl text-sm font-bold bg-[var(--color-foreground)] text-[var(--color-background)] hover:opacity-90 transition-opacity shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Thêm cảnh báo</span>
+            </button>
             <button 
               onClick={fetchAlerts} 
               className="group relative flex items-center justify-center w-14 h-14 bg-white/80 dark:bg-zinc-900/40 backdrop-blur-xl hover:bg-indigo-50 dark:hover:bg-indigo-500/10 border border-zinc-200 dark:border-zinc-800/60 hover:border-indigo-300 dark:hover:border-indigo-500/50 rounded-2xl transition-all duration-300 shadow-xl shadow-zinc-200/50 dark:shadow-black/20"
@@ -450,6 +492,73 @@ export default function AlertsPage() {
           </AnimatePresence>
         </div>
       </motion.div>
+
+      {/* Add Alert Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-md border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Thêm Cảnh Báo Đề Cập</h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">Giám sát các thảo luận thời gian thực</p>
+                </div>
+              </div>
+            </div>
+            
+            <form onSubmit={handleSyncAlerts} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Tên thương hiệu hoặc từ khóa *
+                </label>
+                <input 
+                  type="text" 
+                  value={syncKeyword}
+                  onChange={e => setSyncKeyword(e.target.value)}
+                  placeholder="VD: Topify, VinFast, iPhone 16..."
+                  className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/50 text-zinc-900 dark:text-white transition-all"
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-zinc-500 mt-2 leading-relaxed">
+                  Hệ thống sẽ kết nối Real-Time News API để quét ngay các bài viết, báo chí và thảo luận MXH liên quan tại Việt Nam.
+                </p>
+              </div>
+
+              <div className="pt-4 flex gap-3 justify-end">
+                <button 
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={syncing}
+                  className="px-5 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit"
+                  disabled={syncing}
+                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-bold rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:from-indigo-600 hover:to-violet-700 transition-all disabled:opacity-50 shadow-md shadow-indigo-500/20"
+                >
+                  {syncing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Đang quét...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4" />
+                      <span>Bắt đầu quét ngay</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

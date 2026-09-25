@@ -64,3 +64,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// PATCH /api/campaigns
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, status, name, budget } = body;
+    const workspaceId = (session.user as any).workspaceId;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Campaign ID is required' }, { status: 400 });
+    }
+
+    const data: any = {};
+    if (status) data.status = status;
+    if (name) data.name = name;
+    if (budget !== undefined) data.budget = budget;
+
+    const campaign = await prisma.campaign.updateMany({
+      where: { id, workspaceId },
+      data,
+    });
+
+    return NextResponse.json({ success: true, campaign });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// DELETE /api/campaigns?id=...
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    const workspaceId = (session.user as any).workspaceId;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Campaign ID is required' }, { status: 400 });
+    }
+
+    await prisma.campaign.deleteMany({
+      where: { id, workspaceId },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
