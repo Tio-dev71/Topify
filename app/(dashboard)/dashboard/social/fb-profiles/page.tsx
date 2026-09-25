@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, RefreshCw, CheckCircle2, AlertCircle, XCircle, Globe } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Trash2, RefreshCw, CheckCircle2, AlertCircle, Search, Facebook, XCircle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 type FbAccount = {
@@ -16,6 +17,8 @@ type FbAccount = {
 export default function FbProfilesPage() {
   const [accounts, setAccounts] = useState<FbAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -93,194 +96,297 @@ export default function FbProfilesPage() {
     }
   };
 
+  const filteredAccounts = accounts.filter(a => 
+    a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (a.uid && a.uid.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    a.profileId.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-foreground)] flex items-center gap-2">
-            <Globe className="w-6 h-6 text-[#1877F2]" />
-            Facebook Profiles
-          </h1>
-          <p className="text-sm text-[var(--color-muted-foreground)] mt-1">Quản lý các tài khoản Facebook dùng để chạy tự động hoá</p>
-        </div>
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#1877F2] text-white hover:bg-[#1877F2]/90 transition-colors"
+    <div className="p-6 md:p-10 max-w-[1400px] mx-auto min-h-screen">
+      {/* Header Section */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-10">
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="space-y-3"
         >
-          <Plus className="w-4 h-4" />
-          Thêm Tài Khoản
-        </button>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1877F2]/10 border border-[#1877F2]/20 text-[#1877F2] text-sm font-medium">
+            <Facebook className="w-4 h-4" />
+            Social Profiles
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-sky-500 to-indigo-500">
+            Tài Khoản Facebook
+          </h1>
+          <p className="text-zinc-400 text-lg max-w-2xl">
+            Quản lý các tài khoản mạng xã hội để chạy tự động hóa an toàn và bảo mật.
+          </p>
+        </motion.div>
+        
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
+          className="flex flex-wrap items-center gap-3 w-full lg:w-auto"
+        >
+          <button 
+            onClick={fetchAccounts} 
+            className="group flex items-center justify-center p-3.5 bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 rounded-xl transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+          >
+            <RefreshCw className={`w-5 h-5 text-zinc-400 group-hover:text-white ${loading ? 'animate-spin text-white' : ''}`} />
+          </button>
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-semibold bg-[#1877F2] hover:bg-[#1877F2]/90 text-white transition-all duration-300 hover:shadow-[0_0_20px_rgba(24,119,242,0.4)] group"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Thêm Tài Khoản</span>
+          </button>
+        </motion.div>
       </div>
 
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-[var(--color-muted-foreground)] uppercase bg-[var(--color-muted)]/30 border-b border-[var(--color-border)]">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Tên gợi nhớ</th>
-                <th className="px-6 py-4 font-semibold">UID</th>
-                <th className="px-6 py-4 font-semibold">Profile ID (Local)</th>
-                <th className="px-6 py-4 font-semibold">Trạng thái</th>
-                <th className="px-6 py-4 font-semibold text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-[var(--color-muted-foreground)]">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    Đang tải dữ liệu...
-                  </td>
-                </tr>
-              ) : accounts.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-[var(--color-muted-foreground)]">
-                    <Globe className="w-12 h-12 text-[var(--color-muted)] mx-auto mb-3" />
-                    <p className="text-base font-medium">Chưa có tài khoản nào</p>
-                    <p className="text-sm mt-1">Hãy thêm tài khoản Facebook để bắt đầu tự động hoá</p>
-                  </td>
-                </tr>
-              ) : (
-                accounts.map(acc => (
-                  <tr key={acc.id} className="hover:bg-[var(--color-muted)]/10 transition-colors">
-                    <td className="px-6 py-4 font-medium text-[var(--color-foreground)]">
-                      {acc.name}
-                    </td>
-                    <td className="px-6 py-4 text-[var(--color-muted-foreground)]">
-                      {acc.uid || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 text-[var(--color-muted-foreground)] font-mono text-xs">
-                      {acc.profileId}
-                    </td>
-                    <td className="px-6 py-4">
-                      {acc.status === 'LIVE' ? (
-                        <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium text-xs">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> LIVE
-                        </span>
-                      ) : acc.status === 'CHECKPOINT' ? (
-                        <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400 font-medium text-xs">
-                          <AlertCircle className="w-3.5 h-3.5" /> CHECKPOINT
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-medium text-xs">
-                          <XCircle className="w-3.5 h-3.5" /> DEAD
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={() => handleDelete(acc.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title="Xoá tài khoản"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {/* Filters */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }}
+        className="mb-8"
+      >
+        <div className="relative group max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-zinc-500 group-focus-within:text-sky-400 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Tìm kiếm tài khoản, UID, Profile ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3.5 bg-zinc-900/40 border border-zinc-800/80 rounded-xl text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all backdrop-blur-xl"
+          />
         </div>
-      </div>
+      </motion.div>
 
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-[var(--color-background)] rounded-2xl shadow-xl w-full max-w-lg border border-[var(--color-border)] flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-[var(--color-border)] shrink-0">
-              <h3 className="text-lg font-bold">Thêm tài khoản Facebook</h3>
-            </div>
-            
-            <div className="p-6 overflow-y-auto">
-              <form id="add-fb-form" onSubmit={handleAddAccount} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Tên gợi nhớ *</label>
-                  <input 
-                    type="text" 
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    placeholder="VD: Nick Clone 01"
-                    className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1877F2]/50 transition-shadow"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">UID</label>
-                    <input 
-                      type="text" 
-                      value={formData.uid}
-                      onChange={e => setFormData({...formData, uid: e.target.value})}
-                      placeholder="1000..."
-                      className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1877F2]/50 transition-shadow"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Mật khẩu</label>
-                    <input 
-                      type="password" 
-                      value={formData.password}
-                      onChange={e => setFormData({...formData, password: e.target.value})}
-                      className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1877F2]/50 transition-shadow"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Mã 2FA (Secret Key)</label>
-                  <input 
-                    type="text" 
-                    value={formData.twoFactorCode}
-                    onChange={e => setFormData({...formData, twoFactorCode: e.target.value})}
-                    className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1877F2]/50 transition-shadow"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Cookie</label>
-                  <textarea 
-                    value={formData.cookie}
-                    onChange={e => setFormData({...formData, cookie: e.target.value})}
-                    className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1877F2]/50 transition-shadow h-24 resize-none"
-                    placeholder="c_user=...; xs=...;"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Proxy (Tuỳ chọn)</label>
-                  <input 
-                    type="text" 
-                    value={formData.proxy}
-                    onChange={e => setFormData({...formData, proxy: e.target.value})}
-                    placeholder="http://user:pass@ip:port"
-                    className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#1877F2]/50 transition-shadow"
-                  />
-                  <p className="text-xs text-[var(--color-muted-foreground)] mt-1">Định dạng: protocol://user:pass@ip:port hoặc protocol://ip:port</p>
-                </div>
-              </form>
-            </div>
-            
-            <div className="p-6 border-t border-[var(--color-border)] shrink-0 flex gap-3 justify-end bg-[var(--color-background)]">
-              <button 
-                type="button"
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-[var(--color-muted)] transition-colors"
-              >
-                Hủy
-              </button>
-              <button 
-                type="submit"
-                form="add-fb-form"
-                disabled={submitting}
-                className="px-4 py-2 text-sm font-semibold rounded-xl bg-[#1877F2] text-white hover:bg-[#1877F2]/90 transition-colors disabled:opacity-50"
-              >
-                {submitting ? 'Đang lưu...' : 'Lưu Tài Khoản'}
-              </button>
-            </div>
+      {/* Accounts List */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut", delay: 0.3 }}
+        className="relative"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-sky-500/5 via-blue-500/5 to-transparent blur-3xl -z-10 rounded-3xl" />
+        
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl backdrop-blur-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-zinc-400">
+              <thead className="bg-zinc-800/50 text-zinc-300 font-medium">
+                <tr>
+                  <th className="px-6 py-4 rounded-tl-2xl">Tên Gợi Nhớ</th>
+                  <th className="px-6 py-4">UID</th>
+                  <th className="px-6 py-4">Profile ID (Local)</th>
+                  <th className="px-6 py-4">Trạng Thái</th>
+                  <th className="px-6 py-4 rounded-tr-2xl text-right">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                <AnimatePresence>
+                  {loading && accounts.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <RefreshCw className="w-8 h-8 text-sky-500 animate-spin mb-4" />
+                          <p className="text-zinc-500">Đang tải dữ liệu...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredAccounts.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-16 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-16 h-16 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
+                            <AlertCircle className="w-8 h-8 text-zinc-500" />
+                          </div>
+                          <p className="text-lg font-medium text-white mb-1">Chưa có tài khoản nào</p>
+                          <p className="text-zinc-500">Nhấp vào "Thêm Tài Khoản" để kết nối tài khoản Facebook.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAccounts.map((acc, index) => (
+                      <motion.tr 
+                        key={acc.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="hover:bg-zinc-800/30 transition-colors group"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-sky-500/10 rounded-lg group-hover:bg-sky-500/20 transition-colors">
+                              <Facebook className="w-4 h-4 text-sky-400" />
+                            </div>
+                            <span className="font-medium text-zinc-200">{acc.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-zinc-400">{acc.uid || 'N/A'}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-zinc-500">{acc.profileId}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {acc.status === 'ACTIVE' || acc.status === 'ALIVE' ? (
+                            <span className="flex items-center gap-1.5 text-emerald-400 font-medium text-xs bg-emerald-400/10 px-2.5 py-1 rounded-lg w-fit border border-emerald-400/20">
+                              <ShieldCheck className="w-3.5 h-3.5" /> Đang hoạt động
+                            </span>
+                          ) : acc.status === 'CHECKPOINT' || acc.status === 'ERROR' ? (
+                            <span className="flex items-center gap-1.5 text-rose-400 font-medium text-xs bg-rose-400/10 px-2.5 py-1 rounded-lg w-fit border border-rose-400/20">
+                              <XCircle className="w-3.5 h-3.5" /> Lỗi / Checkpoint
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-zinc-400 font-medium text-xs bg-zinc-800 px-2.5 py-1 rounded-lg w-fit border border-zinc-700">
+                              <AlertCircle className="w-3.5 h-3.5" /> {acc.status}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => handleDelete(acc.id)}
+                              className="p-2 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
+                              title="Xoá tài khoản"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))
+                  )}
+                </AnimatePresence>
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+      </motion.div>
+
+      {/* Add Modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowAddModal(false)}
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-zinc-800 shrink-0 bg-zinc-900/50 backdrop-blur-md">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Facebook className="w-5 h-5 text-[#1877F2]" />
+                  Thêm Tài Khoản Facebook
+                </h3>
+                <p className="text-sm text-zinc-400 mt-1">Cung cấp thông tin để kết nối tài khoản an toàn.</p>
+              </div>
+              
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                <form id="add-account-form" onSubmit={handleAddAccount} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-zinc-300">Tên gợi nhớ <span className="text-rose-500">*</span></label>
+                    <input 
+                      type="text" 
+                      value={formData.name}
+                      onChange={e => setFormData({...formData, name: e.target.value})}
+                      placeholder="VD: Nick chính, Clone 1..."
+                      className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-zinc-300">UID (Tài khoản/Email)</label>
+                      <input 
+                        type="text" 
+                        value={formData.uid}
+                        onChange={e => setFormData({...formData, uid: e.target.value})}
+                        className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-zinc-300">Mật khẩu</label>
+                      <input 
+                        type="password" 
+                        value={formData.password}
+                        onChange={e => setFormData({...formData, password: e.target.value})}
+                        className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-zinc-300">Mã 2FA (Bảo mật 2 lớp)</label>
+                    <input 
+                      type="text" 
+                      value={formData.twoFactorCode}
+                      onChange={e => setFormData({...formData, twoFactorCode: e.target.value})}
+                      placeholder="Mã xác thực từ ứng dụng Authenticator"
+                      className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-zinc-300">Proxy (Tuỳ chọn)</label>
+                    <input 
+                      type="text" 
+                      value={formData.proxy}
+                      onChange={e => setFormData({...formData, proxy: e.target.value})}
+                      placeholder="ip:port:user:pass"
+                      className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-zinc-300">Cookie (Tuỳ chọn - Nếu có sẽ bỏ qua login)</label>
+                    <textarea 
+                      value={formData.cookie}
+                      onChange={e => setFormData({...formData, cookie: e.target.value})}
+                      placeholder="c_user=...; xs=...;"
+                      rows={3}
+                      className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50 transition-all font-mono text-sm resize-none"
+                    />
+                  </div>
+                </form>
+              </div>
+              
+              <div className="p-6 border-t border-zinc-800 shrink-0 flex gap-3 justify-end bg-zinc-900/50 backdrop-blur-md">
+                <button 
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-5 py-2.5 text-sm font-medium rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit"
+                  form="add-account-form"
+                  disabled={submitting}
+                  className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-[#1877F2] text-white hover:bg-[#1877F2]/90 transition-all shadow-[0_0_15px_rgba(24,119,242,0.3)] hover:shadow-[0_0_20px_rgba(24,119,242,0.5)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {submitting && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  {submitting ? 'Đang lưu...' : 'Thêm Tài Khoản'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

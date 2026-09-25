@@ -40,6 +40,7 @@ import {
   Gift,
   Mic2,
   Link2,
+  Brain,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -70,9 +71,13 @@ const crmNavigation = [
 ];
 
 const automationNavigation = [
+  { key: 'sidebar.fb_accounts', href: '/dashboard/social/fb-profiles', icon: Users },
+  { key: 'sidebar.proxies', href: '/dashboard/social/proxies', icon: Globe },
   { key: 'sidebar.competitors', href: '/dashboard/social/competitors', icon: Building2 },
   { key: 'sidebar.keywords', href: '/dashboard/social/keywords', icon: Hash },
   { key: 'sidebar.alerts', href: '/dashboard/social/alerts', icon: Activity },
+  { key: 'sidebar.buff_orders', href: '/dashboard/social/buff-orders', icon: Layers },
+  { key: 'sidebar.automation', href: '/dashboard/social/automation', icon: Zap },
 ];
 
 const operationsNavigation = [
