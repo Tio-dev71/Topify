@@ -73,3 +73,28 @@ export async function scheduleTokenMonitor() {
     },
   });
 }
+
+export const keywordScraperQueue = isBuild ? { add: async () => {} } as any : new Queue('keyword-scraper', {
+  connection: connection as never,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 50 },
+  },
+});
+
+/**
+ * Schedule daily keyword scraper
+ */
+export async function scheduleKeywordScraper() {
+  await keywordScraperQueue.add('scrape-keywords', {}, {
+    jobId: 'keyword-scraper-daily',
+    repeat: {
+      pattern: '0 0 * * *', // Run daily at midnight (24h)
+    },
+  });
+}

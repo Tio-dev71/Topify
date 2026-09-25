@@ -3,6 +3,7 @@ import IORedis from 'ioredis';
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { getPublisher } from '../publishers';
+import { scheduleTokenMonitor, scheduleKeywordScraper } from './index';
 
 const prisma = new PrismaClient();
 
@@ -314,6 +315,32 @@ async function processTokenMonitorJob(_job: Job) {
   }
 }
 
+async function processKeywordScraperJob(_job: Job) {
+  console.log(`🔍 Starting daily keyword scraper...`);
+  
+  const keywords = await prisma.keywordTracker.findMany();
+  
+  for (const keyword of keywords) {
+    console.log(`🤖 Scraping data for keyword: ${keyword.keyword}`);
+    
+    // NOTE: Cắm API tool cào dữ liệu vào đây hoặc logic tự động cào (ví dụ Playwright)
+    // Sau khi cào xong, có thể lưu vào db bảng MentionAlert:
+    // 
+    // await prisma.mentionAlert.create({
+    //   data: {
+    //     keywordId: keyword.id,
+    //     workspaceId: keyword.workspaceId,
+    //     content: "...",
+    //     source: "FACEBOOK",
+    //     author: "...",
+    //     sentiment: "NEUTRAL",
+    //   }
+    // });
+  }
+
+  console.log(`✅ Finished daily keyword scraper.`);
+}
+
 export function startWorker() {
   const publishWorker = new Worker('publish-reel', processPublishJob, {
     connection: connection as never,
@@ -337,6 +364,20 @@ export function startWorker() {
     console.log(`✅ Token Monitor Job ${job.id} completed`);
   });
 
-  console.log('🔄 BullMQ workers started (publish-reel, token-monitor)');
-  return { publishWorker, tokenWorker };
+  const scraperWorker = new Worker('keyword-scraper', processKeywordScraperJob, {
+    connection: connection as never,
+    concurrency: 1,
+  });
+
+  scraperWorker.on('completed', (job) => {
+    console.log(`✅ Keyword Scraper Job ${job.id} completed`);
+  });
+
+  console.log('🔄 BullMQ workers started (publish-reel, token-monitor, keyword-scraper)');
+  
+  // Schedule repeatable jobs
+  scheduleTokenMonitor().catch(console.error);
+  scheduleKeywordScraper().catch(console.error);
+
+  return { publishWorker, tokenWorker, scraperWorker };
 }
