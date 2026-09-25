@@ -31,18 +31,18 @@ export async function POST(req: NextRequest) {
     // Depending on the scraper, the response format might vary.
     // Let's assume an array of post objects for now. We will map them.
     // In reality, this depends heavily on the RapidAPI response structure.
-    const posts = rawData?.data || rawData?.posts || [];
+    const posts = rawData?.results || rawData?.data || rawData?.posts || [];
     let addedCount = 0;
 
     for (const item of posts) {
       // Very basic normalization assuming generic fields
       const externalId = item.id || item.post_id || null;
-      const content = item.text || item.content || item.description || null;
-      const mediaUrl = item.video_url || item.image_url || item.media || null;
-      const likesCount = item.likes || item.reactions || 0;
-      const commentsCount = item.comments || 0;
-      const sharesCount = item.shares || 0;
-      const postedAt = item.created_time || item.time || new Date();
+      const content = item.text || item.content || item.description || item.message || null;
+      const mediaUrl = item.video_url || item.image_url || item.media || item.video || item.image || null;
+      const likesCount = item.likes || item.reactions || item.reactions_count || 0;
+      const commentsCount = item.comments || item.comments_count || 0;
+      const sharesCount = item.shares || item.reshare_count || 0;
+      const postedAt = item.created_time || item.time || item.timestamp || new Date();
 
       if (externalId) {
         // Upsert post to avoid duplicates
@@ -64,14 +64,21 @@ export async function POST(req: NextRequest) {
       const externalId = (item.id || item.post_id || '').toString();
       if (!externalId) continue;
 
-      const content = item.text || item.content || item.description || null;
-      const mediaUrl = item.video_url || item.image_url || item.media || null;
-      const likesCount = parseInt(item.likes || item.reactions || '0', 10);
-      const commentsCount = parseInt(item.comments || '0', 10);
-      const sharesCount = parseInt(item.shares || '0', 10);
+      const content = item.text || item.content || item.description || item.message || null;
+      const mediaUrl = item.video_url || item.image_url || item.media || item.video || item.image || null;
+      const likesCount = parseInt(item.likes || item.reactions || item.reactions_count || '0', 10);
+      const commentsCount = parseInt(item.comments || item.comments_count || '0', 10);
+      const sharesCount = parseInt(item.shares || item.reshare_count || '0', 10);
       let postedAtDate = new Date();
-      if (item.created_time || item.time) {
-        postedAtDate = new Date(item.created_time || item.time);
+      
+      let ts = item.created_time || item.time || item.timestamp;
+      if (ts) {
+        // If timestamp is numeric (unix timestamp), convert it.
+        if (typeof ts === 'number' || (typeof ts === 'string' && /^\d+$/.test(ts))) {
+          postedAtDate = new Date(parseInt(ts, 10) * 1000);
+        } else {
+          postedAtDate = new Date(ts);
+        }
       }
 
       const existingPost = await prisma.competitorPost.findFirst({

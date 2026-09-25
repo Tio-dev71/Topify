@@ -23,16 +23,21 @@ export async function POST(req: NextRequest) {
       try {
         const rawData = await getKeywordInsights(kw.keyword);
         
-        // Basic mapping assuming search volume and trend come in response
-        const volume = rawData?.search_volume || rawData?.volume || 0;
+        let volume = 0;
         let trend = 'FLAT';
         
-        // Compute trend if array of historical volume is provided
-        if (rawData?.trend && Array.isArray(rawData.trend)) {
-          const last = rawData.trend[rawData.trend.length - 1];
-          const prev = rawData.trend[rawData.trend.length - 2];
-          if (last > prev) trend = 'UP';
-          else if (last < prev) trend = 'DOWN';
+        if (Array.isArray(rawData) && rawData.length > 0) {
+          // Find the exact match or take the first one
+          const match = rawData.find(item => item.text?.toLowerCase() === kw.keyword.toLowerCase()) || rawData[0];
+          
+          volume = match.volume || match.search_volume || 0;
+          
+          // Trend is now a number (e.g. 31.6). If trend > 0, it's UP.
+          if (match.trend !== undefined && match.trend !== null) {
+             const t = parseFloat(match.trend);
+             if (t > 0) trend = 'UP';
+             else if (t < 0) trend = 'DOWN';
+          }
         }
 
         await prisma.keywordTracker.update({
