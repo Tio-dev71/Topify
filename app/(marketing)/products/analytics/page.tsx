@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   description: 'Topify Analytics tổng hợp và phân tích dữ liệu từ mọi kênh marketing, bán hàng và vận hành.',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function AnalyticsPage() {
   return (
     <>

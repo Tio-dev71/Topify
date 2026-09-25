@@ -4,6 +4,8 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Providers } from './providers';
 import OnboardingPage from './onboarding/page';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {

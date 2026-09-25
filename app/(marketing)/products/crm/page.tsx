@@ -6,6 +6,8 @@ import CrmWorkflow from '@/components/marketing/crm/crm-workflow';
 import CrmIntegrations from '@/components/marketing/crm/crm-integrations';
 import CrmCta from '@/components/marketing/crm/crm-cta';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Topify CRM - Quản lý hội thoại đa kênh',
   description: 'Chăm sóc khách hàng đa kênh - Tăng chuyển đổi - Giữ chân khách hàng',

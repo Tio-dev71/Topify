@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2000mb',
     },
-    optimizePackageImports: ['lucide-react', 'date-fns', 'framer-motion'],
+    optimizePackageImports: ['lucide-react', 'date-fns'],
   },
   serverExternalPackages: ['bullmq', 'ioredis', '@ffmpeg-installer/ffmpeg', 'fluent-ffmpeg', 'playwright-extra', 'puppeteer-extra-plugin-stealth'],
   typescript: {

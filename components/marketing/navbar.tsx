@@ -13,7 +13,7 @@ function NavbarContent() {
   const [isOpen, setIsOpen] = useReactState(false);
   const { t } = useLanguage();
   
-  const supabase = createClient();
+  const [supabase] = useReactState(() => createClient());
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

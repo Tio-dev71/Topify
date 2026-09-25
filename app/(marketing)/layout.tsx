@@ -1,6 +1,8 @@
 import Navbar from '@/components/marketing/navbar';
 import Footer from '@/components/marketing/footer';
 
+export const dynamic = 'force-dynamic';
+
 export default function MarketingLayout({
   children,
 }: {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, RefreshCw, CheckCircle2, AlertCircle, Search, Facebook, XCircle, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, CheckCircle2, AlertCircle, Search, Users, XCircle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 type FbAccount = {
@@ -113,7 +113,7 @@ export default function FbProfilesPage() {
           className="space-y-3"
         >
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1877F2]/10 border border-[#1877F2]/20 text-[#1877F2] text-sm font-medium">
-            <Facebook className="w-4 h-4" />
+            <Users className="w-4 h-4" />
             Social Profiles
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-sky-500 to-indigo-500">
@@ -224,7 +224,7 @@ export default function FbProfilesPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-sky-500/10 rounded-lg group-hover:bg-sky-500/20 transition-colors">
-                              <Facebook className="w-4 h-4 text-sky-400" />
+                              <Users className="w-4 h-4 text-sky-400" />
                             </div>
                             <span className="font-medium text-zinc-200">{acc.name}</span>
                           </div>
@@ -289,7 +289,7 @@ export default function FbProfilesPage() {
             >
               <div className="p-6 border-b border-zinc-800 shrink-0 bg-zinc-900/50 backdrop-blur-md">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Facebook className="w-5 h-5 text-[#1877F2]" />
+                  <Users className="w-5 h-5 text-[#1877F2]" />
                   Thêm Tài Khoản Facebook
                 </h3>
                 <p className="text-sm text-zinc-400 mt-1">Cung cấp thông tin để kết nối tài khoản an toàn.</p>

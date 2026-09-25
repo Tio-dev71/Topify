@@ -4,12 +4,14 @@ import { createClient } from '@/lib/supabase/server';
 import prisma from '@/lib/db';
 
 export const auth = async (...args: any[]) => {
+  // We MUST call headers() and createClient() outside try/catch 
+  // so Next.js can throw its internal bailout errors during static rendering.
+  const headersList = await headers();
+  const authHeader = headersList.get('authorization');
+  
   // 1. Check for Bearer token from Desktop App API calls
-  try {
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
       const token = authHeader.split(' ')[1];
       const decoded = jwtPackage.verify(token, process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123') as any;
       
@@ -20,14 +22,15 @@ export const auth = async (...args: any[]) => {
           workspaceId: decoded.workspaceId,
         }
       };
+    } catch (e) {
+      // If token is invalid or missing, silently fallback to standard session
     }
-  } catch (e) {
-    // If token is invalid or missing, silently fallback to standard session
   }
 
   // 2. Fallback to Supabase Auth session (Cookies from Web App)
+  const supabase = await createClient();
+  
   try {
-    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user && user.email) {
@@ -49,7 +52,7 @@ export const auth = async (...args: any[]) => {
       }
     }
   } catch (e) {
-    // Ignore Supabase errors
+    // Ignore Supabase/Prisma errors
   }
 
   return null;

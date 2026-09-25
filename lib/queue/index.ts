@@ -9,12 +9,14 @@ if (process.env.REDIS_URL) {
   console.log("REDIS_URL starts with:", process.env.REDIS_URL.substring(0, 10));
 }
 
-const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const isBuild = process.env.NEXT_PHASE === 'phase-production-build' || process.env.npm_lifecycle_event === 'build';
+
+const connection = isBuild ? {} as any : new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
   lazyConnect: true,
 });
 
-export const publishQueue = new Queue('publish-reel', {
+export const publishQueue = isBuild ? { add: async () => {} } as any : new Queue('publish-reel', {
   connection: connection as never,
   defaultJobOptions: {
     attempts: 3,
@@ -47,7 +49,7 @@ export async function schedulePublish(postId: string, scheduledAt: Date) {
   });
 }
 
-export const tokenMonitorQueue = new Queue('token-monitor', {
+export const tokenMonitorQueue = isBuild ? { add: async () => {} } as any : new Queue('token-monitor', {
   connection: connection as never,
   defaultJobOptions: {
     attempts: 3,
