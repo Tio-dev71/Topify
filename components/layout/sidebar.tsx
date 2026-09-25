@@ -55,8 +55,6 @@ const contentNavigation = [
   { key: 'sidebar.media_library', href: '/dashboard/content/media', icon: ImageIcon },
   { key: 'sidebar.templates', href: '/dashboard/content/templates', icon: LayoutTemplate },
   { key: 'sidebar.approval', href: '/dashboard/content/approval', icon: CheckCircle },
-  { key: 'sidebar.hashtags', href: '/dashboard/content/hashtags', icon: Hash },
-  { key: 'sidebar.brand_voice', href: '/dashboard/content/brand-voice', icon: Mic2 },
   { key: 'sidebar.utm_builder', href: '/dashboard/content/utm', icon: Link2 },
 ];
 
