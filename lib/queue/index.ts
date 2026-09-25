@@ -9,7 +9,7 @@ if (process.env.REDIS_URL) {
   console.log("REDIS_URL starts with:", process.env.REDIS_URL.substring(0, 10));
 }
 
-const isBuild = process.env.NEXT_PHASE === 'phase-production-build' || process.env.npm_lifecycle_event === 'build';
+const isBuild = process.env.npm_lifecycle_event === 'build' || process.env.NEXT_PHASE === 'phase-production-build';
 
 const connection = isBuild ? {} as any : new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
