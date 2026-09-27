@@ -24,6 +24,36 @@ export const PLATFORM_CONFIG = {
     color: '#FF0000',
     icon: 'youtube',
   },
+  TIKTOK_VIDEO: {
+    name: 'TikTok Video',
+    color: '#000000',
+    icon: 'tiktok',
+  },
+  FACEBOOK_POST: {
+    name: 'Facebook Post',
+    color: '#1877F2',
+    icon: 'facebook',
+  },
+  INSTAGRAM_CAROUSEL: {
+    name: 'Instagram Carousel',
+    color: '#E4405F',
+    icon: 'instagram',
+  },
+  INSTAGRAM_STORY: {
+    name: 'Instagram Story',
+    color: '#E4405F',
+    icon: 'instagram',
+  },
+  ZALO_POST: {
+    name: 'Zalo Post',
+    color: '#0068FF',
+    icon: 'zalo',
+  },
+  ZALO_ARTICLE: {
+    name: 'Zalo Article',
+    color: '#0068FF',
+    icon: 'zalo',
+  },
 } as const;
 
 /**

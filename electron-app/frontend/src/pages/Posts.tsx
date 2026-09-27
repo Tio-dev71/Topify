@@ -27,9 +27,9 @@ interface PostItem {
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
-  videoAsset: { originalFileName: string; storageUrl: string };
+  videoAsset?: { originalFileName?: string; storageUrl?: string } | null;
   platforms: { platform: string; status: string }[];
-  createdBy: { name: string | null; email: string };
+  createdBy?: { name: string | null; email: string } | null;
 }
 
 const filterTabs: { label: string; value: StatusFilter }[] = [
@@ -80,7 +80,7 @@ export default function Posts() {
 
   // Polling for PUBLISHING status
   useEffect(() => {
-    const hasPublishing = posts.some(p => p.status === 'PUBLISHING' || p.platforms.some(pl => pl.status === 'PUBLISHING'));
+    const hasPublishing = posts.some(p => p.status === 'PUBLISHING' || (p.platforms && p.platforms.some(pl => pl.status === 'PUBLISHING')));
     if (!hasPublishing) return;
     
     const interval = setInterval(() => {
@@ -115,7 +115,7 @@ export default function Posts() {
   }
 
   const filteredPosts = posts.filter((post) =>
-    post.title.toLowerCase().includes(search.toLowerCase())
+    (post.title || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -255,17 +255,27 @@ export default function Posts() {
                     
                     {/* Media Display */}
                     <div className="relative aspect-[4/5] bg-gray-900 rounded-[1.5rem] overflow-hidden mb-5">
-                      <video
-                        src={post.videoAsset.storageUrl}
-                        className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105"
-                        muted
-                        loop
-                        onMouseOver={(e) => (e.target as HTMLVideoElement).play().catch(()=>{})}
-                        onMouseOut={(e) => {
-                          const v = e.target as HTMLVideoElement;
-                          v.pause();
-                        }}
-                      />
+                      {post.videoAsset?.storageUrl ? (
+                        <video
+                          src={post.videoAsset.storageUrl}
+                          className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105"
+                          muted
+                          loop
+                          onMouseOver={(e) => (e.target as HTMLVideoElement).play().catch(()=>{})}
+                          onMouseOut={(e) => {
+                            const v = e.target as HTMLVideoElement;
+                            v.pause();
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-400 p-6 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3">
+                            <Film className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <span className="text-sm font-semibold text-gray-300">Không có file video</span>
+                          <span className="text-xs text-gray-500 mt-1">Nội dung bài viết văn bản</span>
+                        </div>
+                      )}
                       
                       {/* Gradients & Overlays */}
                       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80 pointer-events-none" />
@@ -316,23 +326,25 @@ export default function Posts() {
                     {/* Metadata Section */}
                     <div className="px-3 pb-3 flex-1 flex flex-col">
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {post.platforms.map((p) => {
+                        {(post.platforms || []).map((p, idx) => {
                           const config = PLATFORM_CONFIG[p.platform as keyof typeof PLATFORM_CONFIG];
+                          const platformName = config?.name || p.platform.replace('_', ' ');
+                          const platformColor = config?.color || '#4b5563';
                           return (
                             <div
-                              key={p.platform}
+                              key={p.platform + idx}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wide border shadow-sm"
                               style={{
-                                color: config?.color || '#4b5563',
+                                color: platformColor,
                                 backgroundColor: '#ffffff',
                                 borderColor: 'rgba(0,0,0,0.06)',
                               }}
                             >
                               <div 
                                 className="w-1.5 h-1.5 rounded-full" 
-                                style={{ backgroundColor: config?.color || '#4b5563' }} 
+                                style={{ backgroundColor: platformColor }} 
                               />
-                              {config?.name?.split(' ')[0]}
+                              {platformName.split(' ')[0]}
                             </div>
                           );
                         })}

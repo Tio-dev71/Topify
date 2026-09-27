@@ -27,17 +27,29 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const status = url.searchParams.get('status');
+    const search = url.searchParams.get('search');
+    const workspaceIdParam = url.searchParams.get('workspaceId');
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
 
-    const where: any = {
-      workspaceId: (session.user as any).workspaceId,
-    };
+    const where: any = {};
 
-    // Staff can only see their own posts, unless they are ADMIN or SUPER_ADMIN
-    if (session.user.role === 'STAFF') {
-      where.createdById = session.user.id;
+    if (session.user.role === 'SUPER_ADMIN') {
+      if (workspaceIdParam) {
+        where.workspaceId = workspaceIdParam;
+      } else if ((session.user as any).workspaceId) {
+        where.workspaceId = (session.user as any).workspaceId;
+      }
+    } else {
+      where.workspaceId = (session.user as any).workspaceId;
+      if (session.user.role === 'STAFF') {
+        where.createdById = session.user.id;
+      }
+    }
+
+    if (search) {
+      where.title = { contains: search, mode: 'insensitive' };
     }
 
     if (status) {
@@ -68,7 +80,17 @@ export async function GET(req: NextRequest) {
       take: limit,
     });
 
-    return NextResponse.json({ posts });
+    // Provide safe defaults so older client app builds don't crash on null properties
+    const safePosts = posts.map((p) => ({
+      ...p,
+      videoAsset: p.videoAsset || {
+        originalFileName: p.title || 'Untitled',
+        storageUrl: '',
+      },
+      platforms: p.platforms || [],
+    }));
+
+    return NextResponse.json({ posts: safePosts });
   } catch (error: any) {
     console.error('List posts error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

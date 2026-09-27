@@ -16,6 +16,7 @@ import CreatePost from './pages/CreatePost';
 import BuffSystem from './pages/BuffSystem';
 import Workspaces from './pages/Workspaces';
 import Layout from './components/layout/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import {
   Calendar
 } from 'lucide-react';
@@ -24,11 +25,12 @@ function App() {
   return (
     <HashRouter>
       <Toaster position="top-right" richColors />
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        
-        {/* Protected Routes wrapped in Layout */}
-        <Route element={<Layout />}>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          
+          {/* Protected Routes wrapped in Layout */}
+          <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/accounts" element={<FacebookAccounts />} />
 
@@ -52,6 +54,7 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>
+      </ErrorBoundary>
     </HashRouter>
   );
 }

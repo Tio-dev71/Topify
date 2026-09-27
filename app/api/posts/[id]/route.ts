@@ -42,7 +42,16 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json(post);
+    const safePost = {
+      ...post,
+      videoAsset: post.videoAsset || {
+        originalFileName: post.title || 'Untitled',
+        storageUrl: '',
+      },
+      platforms: post.platforms || [],
+    };
+
+    return NextResponse.json(safePost);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
