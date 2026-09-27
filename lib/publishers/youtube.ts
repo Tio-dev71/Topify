@@ -34,6 +34,35 @@ export class YouTubeShortsPublisher implements Publisher {
 
       const description = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
 
+      // Auto-detect channel if not yet stored
+      if (!socialAccount.youtubeChannelId) {
+        try {
+          const chRes = await fetch(
+            'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const chData = await chRes.json();
+          const channel = chData.items?.[0];
+          if (channel) {
+            await prisma.socialAccount.update({
+              where: { id: socialAccount.id },
+              data: {
+                youtubeChannelId: channel.id,
+                accountName: channel.snippet.title,
+                status: 'CONNECTED',
+              },
+            });
+          } else {
+            return {
+              success: false,
+              errorMessage: 'Tài khoản Google này chưa tạo Kênh YouTube (YouTube Channel). Vui lòng vào https://youtube.com hoặc YouTube Studio để tạo kênh cho tài khoản này trước khi đăng bài.'
+            };
+          }
+        } catch (e) {
+          // ignore auto-detect failure and continue
+        }
+      }
+
       // Step 1: Initialize resumable upload
       const initRes = await fetch(
         'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
@@ -60,6 +89,12 @@ export class YouTubeShortsPublisher implements Publisher {
       const uploadUrl = initRes.headers.get('location');
       if (!uploadUrl) {
         const errorText = await initRes.text();
+        if (errorText.includes('youtubeSignupRequired')) {
+          return {
+            success: false,
+            errorMessage: 'Tài khoản Google này chưa tạo Kênh YouTube (YouTube Channel). Vui lòng vào https://youtube.com hoặc YouTube Studio để tạo kênh cho tài khoản này trước khi đăng bài.'
+          };
+        }
         return { success: false, errorMessage: `Failed to init upload: ${initRes.status} ${initRes.statusText}. Details: ${errorText}` };
       }
 

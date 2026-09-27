@@ -172,6 +172,21 @@ export async function GET(req: NextRequest) {
     });
 
     if (isDesktopClient) {
+      if (provider === 'YOUTUBE' && !youtubeChannelId) {
+        return new NextResponse(
+          `<html>
+            <head><meta charset="utf-8" /></head>
+            <body style="font-family: sans-serif; text-align: center; padding: 40px; line-height: 1.6;">
+              <h2 style="color: #F59E0B;">⚠️ Đã liên kết Google, nhưng chưa có Kênh YouTube</h2>
+              <p>Tài khoản Google của bạn đã liên kết thành công, nhưng <strong>chưa kích hoạt Kênh YouTube</strong>.</p>
+              <p style="color: #6B7280; font-size: 14px;">Để đăng được video lên YouTube, bạn hãy mở tab mới vào <a href="https://studio.youtube.com" target="_blank" style="color: #3B82F6;">studio.youtube.com</a> bấm <strong>"Tạo kênh"</strong> (chỉ mất 5 giây).</p>
+              <button onclick="window.close()" style="margin-top: 15px; padding: 10px 24px; background: #111827; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">Đóng cửa sổ</button>
+            </body>
+          </html>`,
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+
       return new NextResponse(
         `<html>
           <head><meta charset="utf-8" /></head>

@@ -128,8 +128,9 @@ async function processPublishJob(job: Job<{ postId: string }>) {
         result = await publisher.publishReel(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
       }
 
-      // Handle token expiration/auth errors
-      if (!result.success && (result.errorMessage?.toLowerCase().includes('token') || result.errorMessage?.toLowerCase().includes('auth'))) {
+      // Handle token expiration/auth errors (exclude cases where user just hasn't created a channel yet)
+      const isChannelMissing = result.errorMessage?.includes('youtubeSignupRequired') || result.errorMessage?.includes('chưa tạo Kênh YouTube');
+      if (!result.success && !isChannelMissing && (result.errorMessage?.toLowerCase().includes('token') || result.errorMessage?.toLowerCase().includes('expired'))) {
         await prisma.socialAccount.update({
           where: { id: socialAccount.id },
           data: { status: 'DISCONNECTED' }
