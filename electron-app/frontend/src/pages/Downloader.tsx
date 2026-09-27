@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Download, Link as LinkIcon, Loader2, Video, Music, AlertCircle, Send, Users } from 'lucide-react';
+import { Download, Link as LinkIcon, Loader2, Video, Music, AlertCircle, Send, Users, FolderOpen, Check } from 'lucide-react';
+import { toast } from 'sonner';
 
 const API_URL = import.meta.env.DEV ? '/api' : 'https://topify.vn/api';
 
@@ -29,6 +30,11 @@ export default function DownloaderPage() {
   const [result, setResult] = useState<DownloaderResponse | null>(null);
   const [error, setError] = useState('');
 
+  // Download states for Electron / Web
+  const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
+  const [downloadedFiles, setDownloadedFiles] = useState<Record<string, string>>({});
+
   // Auto-post state
   const [selectedVideo, setSelectedVideo] = useState<string>('');
   const [groupUrl, setGroupUrl] = useState('');
@@ -40,6 +46,78 @@ export default function DownloaderPage() {
   // Accounts
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
+
+  // Lắng nghe tiến trình tải từ Electron Main Process
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electron?.onDownloadProgress) {
+      const cleanup = window.electron.onDownloadProgress((data) => {
+        setDownloadProgress((prev) => ({
+          ...prev,
+          [data.url]: data.percent,
+        }));
+      });
+      return cleanup;
+    }
+  }, []);
+
+  const handleDownload = async (media: MediaInfo) => {
+    if (!media.url) return;
+
+    const rawTitle = (result?.title || 'video')
+      .replace(/[/\\?%*:|"<>]/g, '_')
+      .trim()
+      .slice(0, 50);
+    const ext = media.extension || (media.type?.includes('audio') ? 'mp3' : 'mp4');
+    const quality = (media.quality || media.type || 'hd').replace(/\s+/g, '_');
+    const filename = `${rawTitle}-${quality}.${ext}`;
+
+    // Nếu chạy trong Desktop App Electron
+    if (typeof window !== 'undefined' && window.electron?.downloadFile) {
+      setDownloadingUrl(media.url);
+      setDownloadProgress((prev) => ({ ...prev, [media.url]: 0 }));
+
+      try {
+        const res = await window.electron.downloadFile({
+          url: media.url,
+          filename,
+          title: `Lưu video: ${filename}`,
+        });
+
+        if (res.canceled) {
+          return;
+        }
+
+        if (res.success && res.filePath) {
+          setDownloadedFiles((prev) => ({ ...prev, [media.url]: res.filePath! }));
+          toast.success(`Tải xuống thành công!`, {
+            description: `${res.filename}`,
+            duration: 8000,
+            action: {
+              label: 'Mở thư mục',
+              onClick: () => window.electron?.showItemInFolder?.(res.filePath!),
+            },
+          });
+        } else {
+          toast.error(res.error || 'Tải video thất bại');
+        }
+      } catch (err: any) {
+        toast.error(`Lỗi tải video: ${err.message || 'Không thể kết nối'}`);
+      } finally {
+        setDownloadingUrl(null);
+      }
+    } else {
+      // Fallback khi chạy trên trình duyệt Web: dùng link tuyệt đối proxy
+      const downloadUrl = `https://topify.vn/api/proxy-download?url=${encodeURIComponent(media.url)}&filename=${encodeURIComponent(filename)}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Đang bắt đầu tải video: ${filename}`);
+    }
+  };
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -327,14 +405,49 @@ export default function DownloaderPage() {
                           </div>
                           
                           <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                            <a
-                              href={`/api/proxy-download?url=${encodeURIComponent(media.url)}&filename=video-${Date.now()}`}
-                              download
-                              className="btn-secondary flex-1 sm:flex-none py-2 text-[13px]"
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(media)}
+                              disabled={downloadingUrl === media.url}
+                              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-xl text-[13px] font-semibold transition-all ${
+                                downloadedFiles[media.url]
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                  : 'btn-secondary'
+                              }`}
                             >
-                              <Download className="w-3.5 h-3.5" />
-                              Tải về
-                            </a>
+                              {downloadingUrl === media.url ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                  <span>{downloadProgress[media.url] ? `${downloadProgress[media.url]}%` : 'Đang tải...'}</span>
+                                </>
+                              ) : downloadedFiles[media.url] ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Đã tải xong</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Tải về</span>
+                                </>
+                              )}
+                            </button>
+
+                            {downloadedFiles[media.url] && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.electron?.showItemInFolder) {
+                                    window.electron.showItemInFolder(downloadedFiles[media.url]);
+                                  }
+                                }}
+                                className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 text-xs font-medium flex items-center gap-1 transition-all"
+                                title="Mở thư mục chứa video vừa tải"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Mở file</span>
+                              </button>
+                            )}
                             
                             {isVideo && (
                               <button
