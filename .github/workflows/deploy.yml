@@ -24,4 +24,4 @@ jobs:
             rm -rf .next
             npm install --legacy-peer-deps
             npm run build
-            pm2 restart Topify
+            pm2 startOrReload ecosystem.config.js || pm2 restart all

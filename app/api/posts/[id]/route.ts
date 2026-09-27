@@ -82,9 +82,16 @@ export async function PATCH(
 
     // Only allow updating certain fields
     const updateData: any = {};
-    if (body.title) updateData.title = body.title;
+    if (body.title !== undefined) updateData.title = body.title;
     if (body.caption !== undefined) updateData.caption = body.caption;
     if (body.hashtags !== undefined) updateData.hashtags = body.hashtags;
+    if (body.firstComment !== undefined) updateData.firstComment = body.firstComment;
+    if (body.scheduledAt !== undefined) {
+      updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+      if (body.scheduledAt && post.status !== 'PUBLISHED' && post.status !== 'PUBLISHING') {
+        updateData.status = 'SCHEDULED';
+      }
+    }
     if (body.status === 'DRAFT' && post.status === 'SCHEDULED') {
       updateData.status = 'DRAFT';
       updateData.scheduledAt = null;

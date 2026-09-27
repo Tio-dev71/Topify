@@ -15,6 +15,16 @@ module.exports = {
         NODE_ENV: "production",
         ...envConfig
       }
+    },
+    {
+      name: "Topify-Worker",
+      script: "node_modules/tsx/dist/cli.mjs",
+      args: "worker.ts",
+      cwd: __dirname,
+      env: {
+        NODE_ENV: "production",
+        ...envConfig
+      }
     }
   ]
 };

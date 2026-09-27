@@ -63,6 +63,14 @@ export class YouTubeShortsPublisher implements Publisher {
         }
       }
 
+      // Prepare tags from hashtags
+      const tags = post.hashtags
+        ? post.hashtags.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean)
+        : [];
+      if (!tags.some(t => t.toLowerCase() === 'shorts')) {
+        tags.push('Shorts');
+      }
+
       // Step 1: Initialize resumable upload
       const initRes = await fetch(
         'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
@@ -76,6 +84,7 @@ export class YouTubeShortsPublisher implements Publisher {
             snippet: {
               title,
               description,
+              tags,
               categoryId: '22', // People & Blogs
             },
             status: {
@@ -111,28 +120,40 @@ export class YouTubeShortsPublisher implements Publisher {
 
       const uploadData = await uploadRes.json();
       if (uploadData.id) {
-        // Step 3: Post the first comment if provided
+        // Step 3: Post the first comment if provided (retry up to 3 times as YouTube takes a moment to index new videos for comments)
         if (post.firstComment) {
-          try {
-            await fetch('https://www.googleapis.com/youtube/v3/commentThreads?part=snippet', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                snippet: {
-                  videoId: uploadData.id,
-                  topLevelComment: {
-                    snippet: {
-                      textOriginal: post.firstComment,
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              if (attempt > 1) {
+                await new Promise(r => setTimeout(r, 2000));
+              }
+              const commentRes = await fetch('https://www.googleapis.com/youtube/v3/commentThreads?part=snippet', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  snippet: {
+                    videoId: uploadData.id,
+                    topLevelComment: {
+                      snippet: {
+                        textOriginal: post.firstComment,
+                      },
                     },
                   },
-                },
-              }),
-            });
-          } catch (commentError) {
-            console.error('Failed to post YouTube first comment:', commentError);
+                }),
+              });
+              if (commentRes.ok) {
+                console.log(`✅ YouTube first comment posted successfully on attempt ${attempt}`);
+                break;
+              } else {
+                const commentErr = await commentRes.text();
+                console.warn(`YouTube comment attempt ${attempt} warning (${commentRes.status}):`, commentErr);
+              }
+            } catch (commentError) {
+              console.error(`Attempt ${attempt} to post YouTube first comment failed:`, commentError);
+            }
           }
         }
         return { success: true, externalPostId: uploadData.id };

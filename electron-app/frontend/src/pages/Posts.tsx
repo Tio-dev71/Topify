@@ -9,7 +9,13 @@ import {
   PlayCircle,
   Clock,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Hash,
+  MessageSquare,
+  X,
+  ExternalLink,
+  Edit3,
+  AlignLeft,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -23,12 +29,19 @@ interface PostItem {
   id: string;
   title: string;
   caption: string | null;
+  firstComment?: string | null;
+  hashtags?: string | null;
   status: string;
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
   videoAsset?: { originalFileName?: string; storageUrl?: string } | null;
-  platforms: { platform: string; status: string }[];
+  platforms: {
+    platform: string;
+    status: string;
+    externalPostId?: string | null;
+    errorMessage?: string | null;
+  }[];
   createdBy?: { name: string | null; email: string } | null;
 }
 
@@ -39,7 +52,6 @@ const filterTabs: { label: string; value: StatusFilter }[] = [
   { label: 'Đã đăng', value: 'PUBLISHED' },
   { label: 'Thất bại', value: 'FAILED' },
 ];
-
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -56,6 +68,7 @@ export default function Posts() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
+  const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
 
   useEffect(() => {
     fetchPosts();
@@ -96,6 +109,7 @@ export default function Posts() {
       if (res.status === 200) {
         toast.success('Đã xoá bài viết');
         setPosts((prev) => prev.filter((p) => p.id !== id));
+        if (selectedPost?.id === id) setSelectedPost(null);
       }
     } catch {
       toast.error('Lỗi khi xoá bài viết');
@@ -108,6 +122,7 @@ export default function Posts() {
       if (res.status === 200) {
         toast.success('Đang thử lại...');
         fetchPosts(true);
+        if (selectedPost?.id === id) setSelectedPost(null);
       }
     } catch {
       toast.error('Lỗi khi thử lại');
@@ -115,7 +130,8 @@ export default function Posts() {
   }
 
   const filteredPosts = posts.filter((post) =>
-    (post.title || '').toLowerCase().includes(search.toLowerCase())
+    (post.title || '').toLowerCase().includes(search.toLowerCase()) ||
+    (post.hashtags || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -124,9 +140,8 @@ export default function Posts() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-8 pb-12 max-w-[1400px] mx-auto px-4 sm:px-6"
     >
-      {/* Premium Header */}
+      {/* Header */}
       <div className="relative overflow-hidden rounded-[2.5rem] bg-white border border-black/[0.04] p-8 sm:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-        {/* Subtle decorative gradients */}
         <div className="absolute top-0 right-0 -mt-24 -mr-24 w-96 h-96 bg-gradient-to-br from-[#5B3DF5]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
         <div className="absolute bottom-0 left-0 -mb-24 -ml-24 w-64 h-64 bg-gradient-to-tr from-[#3B82F6]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
         
@@ -151,7 +166,7 @@ export default function Posts() {
         </div>
       </div>
 
-      {/* Modern Filter & Search Bar */}
+      {/* Filter & Search Bar */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 p-4 bg-white/60 backdrop-blur-xl rounded-[2rem] border border-black/[0.04] shadow-[0_4px_20px_rgb(0,0,0,0.02)] sticky top-4 z-10">
         <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide w-full xl:w-auto px-2">
           {filterTabs.map((tab) => (
@@ -185,7 +200,7 @@ export default function Posts() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm kiếm nội dung..."
+            placeholder="Tìm kiếm theo tiêu đề hoặc hashtag..."
             className="block w-full pl-12 pr-6 py-4 bg-gray-50/50 border border-black/[0.04] rounded-2xl text-[15px] font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/20 focus:border-[#5B3DF5]/30 focus:bg-white transition-all"
           />
         </div>
@@ -195,7 +210,7 @@ export default function Posts() {
       <div className="pt-2">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="bg-white rounded-[2rem] border border-black/[0.04] p-5 space-y-5 shadow-sm">
                 <div className="w-full aspect-[4/5] bg-gray-100 rounded-3xl animate-pulse" />
                 <div className="space-y-3">
@@ -246,15 +261,13 @@ export default function Posts() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0, transition: { delay: index * 0.05 } }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    whileHover={{ y: -8 }}
+                    whileHover={{ y: -6 }}
                     key={post.id} 
-                    className="group bg-white rounded-[2rem] border border-black/[0.04] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-500 flex flex-col relative"
+                    onClick={() => setSelectedPost(post)}
+                    className="group bg-white rounded-[2rem] border border-black/[0.05] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col relative cursor-pointer"
                   >
-                    {/* Hover Glow Effect */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#5B3DF5]/0 via-transparent to-transparent opacity-0 group-hover:opacity-[0.02] rounded-[2rem] transition-opacity duration-500 pointer-events-none" />
-                    
                     {/* Media Display */}
-                    <div className="relative aspect-[4/5] bg-gray-900 rounded-[1.5rem] overflow-hidden mb-5">
+                    <div className="relative aspect-[4/5] bg-gray-900 rounded-[1.5rem] overflow-hidden mb-4">
                       {post.videoAsset?.storageUrl ? (
                         <video
                           src={post.videoAsset.storageUrl}
@@ -269,63 +282,87 @@ export default function Posts() {
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-400 p-6 text-center">
-                          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3">
-                            <Film className="w-8 h-8 text-gray-400" />
-                          </div>
-                          <span className="text-sm font-semibold text-gray-300">Không có file video</span>
-                          <span className="text-xs text-gray-500 mt-1">Nội dung bài viết văn bản</span>
+                          <Film className="w-8 h-8 text-gray-400 mb-2" />
+                          <span className="text-xs font-semibold text-gray-300">Không có file video</span>
                         </div>
                       )}
                       
-                      {/* Gradients & Overlays */}
                       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80 pointer-events-none" />
                       
                       {/* Top Action Bar */}
-                      <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
-                        <div className={`px-3 py-1.5 rounded-xl border backdrop-blur-md flex items-center gap-1.5 text-xs font-bold tracking-wide shadow-lg ${
+                      <div className="absolute top-3 left-3 right-3 flex justify-between items-start z-10">
+                        <div className={`px-2.5 py-1 rounded-xl border backdrop-blur-md flex items-center gap-1.5 text-xs font-bold shadow-sm ${
                           post.status === 'PUBLISHED' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-100' :
                           post.status === 'FAILED' ? 'bg-rose-500/20 border-rose-500/30 text-rose-100' :
                           post.status === 'PUBLISHING' ? 'bg-blue-500/20 border-blue-500/30 text-blue-100' :
-                          'bg-black/40 border-white/10 text-white'
+                          'bg-purple-500/20 border-purple-500/30 text-purple-100'
                         }`}>
                           {getStatusIcon(post.status)}
                           {statusConfig?.label || post.status}
                         </div>
                         
-                        <div className="flex gap-2">
-                          <Link
-                            to={`/posts/${post.id}`}
-                            className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
+                        <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPost(post)}
+                            className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
+                            title="Xem chi tiết"
                           >
-                            <Eye className="w-4 h-4" />
-                          </Link>
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Play Button Indicator */}
+                      {/* Play Button */}
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                        <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/40 shadow-2xl">
-                          <PlayCircle className="w-8 h-8 text-white ml-1" />
+                        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/40 shadow-2xl">
+                          <PlayCircle className="w-7 h-7 text-white ml-0.5" />
                         </div>
                       </div>
 
                       {/* Bottom Info inside media */}
-                      <div className="absolute bottom-4 left-4 right-4 z-10">
-                        <h3 className="font-bold text-white text-lg leading-tight line-clamp-2 drop-shadow-md">
+                      <div className="absolute bottom-3 left-3 right-3 z-10">
+                        <h3 className="font-bold text-white text-[15px] leading-tight line-clamp-2 drop-shadow-md">
                           {post.title}
                         </h3>
-                        <p className="text-white/70 text-xs font-medium mt-1 drop-shadow-md flex items-center gap-1.5">
-                          <Clock className="w-3 h-3" />
+                        <p className="text-white/80 text-[11px] font-medium mt-1 drop-shadow-md flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-white/70" />
                           {post.scheduledAt
-                            ? format(new Date(post.scheduledAt), 'MMM d, HH:mm')
-                            : format(new Date(post.createdAt), 'MMM d, yyyy')}
+                            ? `Hẹn: ${format(new Date(post.scheduledAt), 'HH:mm dd/MM/yyyy')}`
+                            : format(new Date(post.createdAt), 'dd/MM/yyyy')}
                         </p>
                       </div>
                     </div>
 
                     {/* Metadata Section */}
-                    <div className="px-3 pb-3 flex-1 flex flex-col">
-                      <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="px-2 pb-2 flex-1 flex flex-col space-y-2.5">
+                      {/* Scheduled or Hashtags / Comment badges */}
+                      <div className="space-y-1.5">
+                        {post.scheduledAt && (
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-lg w-fit">
+                            <Clock className="w-3 h-3 text-indigo-600" />
+                            <span>Hẹn giờ: {format(new Date(post.scheduledAt), 'HH:mm dd/MM')}</span>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {post.hashtags && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 truncate max-w-[160px]">
+                              <Hash className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                              <span className="truncate">{post.hashtags}</span>
+                            </span>
+                          )}
+                          {post.firstComment && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100" title={post.firstComment}>
+                              <MessageSquare className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                              <span>Cmt</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Platforms */}
+                      <div className="flex flex-wrap gap-1.5">
                         {(post.platforms || []).map((p, idx) => {
                           const config = PLATFORM_CONFIG[p.platform as keyof typeof PLATFORM_CONFIG];
                           const platformName = config?.name || p.platform.replace('_', ' ');
@@ -333,49 +370,47 @@ export default function Posts() {
                           return (
                             <div
                               key={p.platform + idx}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wide border shadow-sm"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border shadow-2xs"
                               style={{
                                 color: platformColor,
                                 backgroundColor: '#ffffff',
                                 borderColor: 'rgba(0,0,0,0.06)',
                               }}
                             >
-                              <div 
-                                className="w-1.5 h-1.5 rounded-full" 
-                                style={{ backgroundColor: platformColor }} 
-                              />
+                              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: platformColor }} />
                               {platformName.split(' ')[0]}
                             </div>
                           );
                         })}
                       </div>
 
-                      <div className="mt-auto pt-4 border-t border-black/[0.04] flex items-center justify-between">
+                      {/* Footer Actions */}
+                      <div className="mt-auto pt-3 border-t border-black/[0.04] flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center border border-black/5 text-xs font-bold text-gray-500 uppercase">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center border border-black/5 text-[10px] font-bold text-gray-500 uppercase">
                             {post.createdBy?.name?.[0] || post.createdBy?.email?.[0] || '?'}
                           </div>
-                          <span className="text-xs font-semibold text-gray-600 truncate max-w-[100px]">
+                          <span className="text-[11px] font-semibold text-gray-600 truncate max-w-[80px]">
                             {post.createdBy?.name || post.createdBy?.email?.split('@')[0] || 'Unknown'}
                           </span>
                         </div>
 
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-1">
                           {(post.status === 'FAILED' || post.status === 'PARTIAL_FAILED') && (
                             <button
                               onClick={() => retryPost(post.id)}
-                              className="w-8 h-8 rounded-full flex items-center justify-center text-amber-600 hover:bg-amber-50 transition-colors"
-                              title="Thử lại"
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-amber-600 hover:bg-amber-50 transition-colors"
+                              title="Thử lại đăng bài"
                             >
-                              <RotateCcw className="w-4 h-4" />
+                              <RotateCcw className="w-3.5 h-3.5" />
                             </button>
                           )}
                           <button
                             onClick={() => deletePost(post.id)}
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                             title="Xoá bài viết"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -387,7 +422,191 @@ export default function Posts() {
           </motion.div>
         )}
       </div>
+
+      {/* Quick Post Detail Modal */}
+      {selectedPost && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedPost(null)}>
+          <div 
+            className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6 shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-gray-100">
+              <div className="pr-6">
+                <span className={`px-2.5 py-1 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 mb-2 ${
+                  selectedPost.status === 'PUBLISHED' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                  selectedPost.status === 'FAILED' ? 'bg-rose-50 border-rose-200 text-rose-700' :
+                  selectedPost.status === 'PUBLISHING' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                  'bg-purple-50 border-purple-200 text-purple-700'
+                }`}>
+                  {getStatusIcon(selectedPost.status)}
+                  {STATUS_CONFIG[selectedPost.status as keyof typeof STATUS_CONFIG]?.label || selectedPost.status}
+                </span>
+                <h2 className="text-xl font-bold text-gray-900 leading-snug">
+                  {selectedPost.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPost(null)}
+                className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Video Player & Basic Details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Video Player */}
+              <div className="aspect-[9/16] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+                {selectedPost.videoAsset?.storageUrl ? (
+                  <video
+                    src={selectedPost.videoAsset.storageUrl}
+                    controls
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="text-gray-400 text-center p-4">
+                    <Film className="w-8 h-8 mx-auto mb-2" />
+                    <p className="text-xs">Không có file video</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Information list */}
+              <div className="space-y-4">
+                {/* Schedule info */}
+                {selectedPost.scheduledAt && (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5">
+                    <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Lên lịch tự động
+                    </p>
+                    <p className="text-sm font-bold text-indigo-950 mt-1">
+                      {format(new Date(selectedPost.scheduledAt), 'HH:mm - EEEE, dd/MM/yyyy')}
+                    </p>
+                  </div>
+                )}
+
+                {/* Caption */}
+                <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-100">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <AlignLeft className="w-3.5 h-3.5 text-purple-600" />
+                    Nội dung mô tả (Caption)
+                  </p>
+                  <p className="text-xs text-gray-800 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
+                    {selectedPost.caption || <span className="text-gray-400 italic">Không có mô tả</span>}
+                  </p>
+                </div>
+
+                {/* Hashtags */}
+                <div className="bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-100">
+                  <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                    <Hash className="w-3.5 h-3.5 text-emerald-600" />
+                    Hashtags
+                  </p>
+                  {selectedPost.hashtags ? (
+                    <div className="flex flex-wrap gap-1">
+                      {selectedPost.hashtags.split(/[\s,]+/).filter(Boolean).map((t, i) => (
+                        <span key={i} className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-emerald-200 text-emerald-700">
+                          {t.startsWith('#') ? t : `#${t}`}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400 italic">Chưa nhập hashtag</span>
+                  )}
+                </div>
+
+                {/* First comment */}
+                <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-100">
+                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                    <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
+                    Bình luận đầu tiên
+                  </p>
+                  <p className="text-xs font-medium text-gray-900">
+                    {selectedPost.firstComment || <span className="text-gray-400 italic">Không có bình luận đầu</span>}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Platform Status */}
+            <div>
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                Trạng thái trên nền tảng
+              </h4>
+              <div className="space-y-2">
+                {selectedPost.platforms.map((pl, i) => {
+                  const cfg = PLATFORM_CONFIG[pl.platform as keyof typeof PLATFORM_CONFIG];
+                  let linkUrl = '';
+                  if (pl.externalPostId) {
+                    if (pl.platform === 'YOUTUBE_SHORTS') linkUrl = `https://www.youtube.com/shorts/${pl.externalPostId}`;
+                    else if (pl.platform === 'FACEBOOK_REELS') linkUrl = `https://www.facebook.com/reel/${pl.externalPostId}`;
+                  }
+
+                  return (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                      <span className="text-xs font-bold" style={{ color: cfg?.color || '#333' }}>
+                        {cfg?.name || pl.platform}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                          pl.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-700' :
+                          pl.status === 'FAILED' ? 'bg-rose-100 text-rose-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {pl.status === 'PUBLISHED' ? 'Đã đăng' : pl.status === 'FAILED' ? 'Thất bại' : 'Đang xử lý'}
+                        </span>
+                        {linkUrl && (
+                          <a
+                            href={linkUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded bg-white border border-gray-200 text-blue-600"
+                            title="Xem video trên nền tảng"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+              <Link
+                to={`/posts/${selectedPost.id}`}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                Mở trang chỉnh sửa chi tiết đầy đủ &rarr;
+              </Link>
+
+              <div className="flex items-center gap-2">
+                {(selectedPost.status === 'FAILED' || selectedPost.status === 'PARTIAL_FAILED') && (
+                  <button
+                    onClick={() => retryPost(selectedPost.id)}
+                    className="px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs flex items-center gap-1.5 border border-amber-200"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Thử lại ngay
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedPost(null)}
+                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
-

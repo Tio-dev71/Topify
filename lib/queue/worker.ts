@@ -3,7 +3,7 @@ import IORedis from 'ioredis';
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { getPublisher } from '../publishers';
-import { scheduleTokenMonitor, scheduleKeywordScraper } from './index';
+import { scheduleTokenMonitor, scheduleKeywordScraper, enqueuePublish } from './index';
 import { getKeywordInsights, getFacebookPagePosts, getRealTimeNews } from '../rapidapi/client';
 
 const prisma = new PrismaClient();
@@ -451,6 +451,32 @@ async function processKeywordScraperJob(_job: Job) {
   console.log(`✅ [CRON 24H] Hoàn thành chu kỳ tự động cào dữ liệu.`);
 }
 
+async function checkDueScheduledPosts() {
+  try {
+    const duePosts = await prisma.post.findMany({
+      where: {
+        status: 'SCHEDULED',
+        scheduledAt: {
+          lte: new Date(),
+        },
+      },
+      select: { id: true, title: true, scheduledAt: true },
+      take: 20,
+    });
+
+    for (const post of duePosts) {
+      console.log(`⏰ [SCHEDULE-CRON] Đang kích hoạt đăng bài hẹn giờ: ${post.id} ("${post.title}")`);
+      await prisma.post.update({
+        where: { id: post.id },
+        data: { status: 'PUBLISHING' },
+      });
+      await enqueuePublish(post.id);
+    }
+  } catch (err: any) {
+    console.error('❌ Error checking due scheduled posts:', err.message);
+  }
+}
+
 export function startWorker() {
   const publishWorker = new Worker('publish-reel', processPublishJob, {
     connection: connection as never,
@@ -488,6 +514,12 @@ export function startWorker() {
   // Schedule repeatable jobs
   scheduleTokenMonitor().catch(console.error);
   scheduleKeywordScraper().catch(console.error);
+
+  // Check and run due scheduled posts immediately and every 30 seconds
+  checkDueScheduledPosts().catch(console.error);
+  setInterval(() => {
+    checkDueScheduledPosts().catch(console.error);
+  }, 30000);
 
   return { publishWorker, tokenWorker, scraperWorker };
 }

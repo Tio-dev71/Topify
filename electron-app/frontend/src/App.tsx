@@ -5,21 +5,18 @@ import Dashboard from './pages/Dashboard';
 import FacebookAccounts from './pages/FacebookAccounts';
 import Proxies from './pages/Proxies';
 import Automation from './pages/Automation';
-import PlaceholderPage from './pages/PlaceholderPage';
 import History from './pages/History';
 import Downloader from './pages/Downloader';
 import Live from './pages/Live';
 import Settings from './pages/Settings';
 import Team from './pages/Team';
 import Posts from './pages/Posts';
+import PostDetail from './pages/PostDetail';
 import CreatePost from './pages/CreatePost';
 import BuffSystem from './pages/BuffSystem';
 import Workspaces from './pages/Workspaces';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
-import {
-  Calendar
-} from 'lucide-react';
 
 function App() {
   return (
@@ -36,9 +33,7 @@ function App() {
 
           <Route path="/live" element={<Live />} />
           <Route path="/posts" element={<Posts />} />
-          <Route path="/posts/:id" element={
-            <PlaceholderPage title="Chi tiết bài viết" description="Trang chi tiết bài viết đang được phát triển." icon={<Calendar className="w-8 h-8 text-gray-400" />} />
-          } />
+          <Route path="/posts/:id" element={<PostDetail />} />
           <Route path="/create" element={<CreatePost />} />
           <Route path="/downloader" element={<Downloader />} />
           <Route path="/proxies" element={<Proxies />} />
