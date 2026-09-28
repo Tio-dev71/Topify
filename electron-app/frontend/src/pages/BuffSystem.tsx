@@ -25,6 +25,7 @@ export default function BuffSystem() {
   const [useAiComment, setUseAiComment] = useState(false);
   const [globalSettings, setGlobalSettings] = useState<any>({});
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchOrders();
@@ -85,7 +86,8 @@ export default function BuffSystem() {
 
     const config = {
       useAiComment,
-      comments: commentsStr ? commentsStr.split('\n').filter(c => c.trim()) : undefined
+      comments: commentsStr ? commentsStr.split('\n').filter(c => c.trim()) : undefined,
+      selectedAccountIds: selectedAccounts.size > 0 ? Array.from(selectedAccounts) : undefined
     };
 
     try {
@@ -102,6 +104,7 @@ export default function BuffSystem() {
       setCommentsStr('');
       setUseAiComment(false);
       setTargetCount(50);
+      setSelectedAccounts(new Set());
       fetchOrders();
     } catch (e) {
       console.error(e);
@@ -133,19 +136,28 @@ export default function BuffSystem() {
       return;
     }
 
-    const liveAccounts = accounts.filter(a => a.status === 'LIVE' || a.status === 'ACTIVE');
     const remaining = order.targetCount - order.currentCount;
     if (remaining <= 0) {
       toast.success('Đơn đã hoàn thành!');
       return;
     }
+
+    let candidateAccounts = accounts;
+    if (order.config?.selectedAccountIds && Array.isArray(order.config.selectedAccountIds) && order.config.selectedAccountIds.length > 0) {
+      const selectedSet = new Set(order.config.selectedAccountIds);
+      const matched = accounts.filter(a => selectedSet.has(a.id) || selectedSet.has(a.profileId));
+      if (matched.length > 0) candidateAccounts = matched;
+    } else {
+      const liveAccounts = accounts.filter(a => a.status === 'LIVE' || a.status === 'ACTIVE');
+      candidateAccounts = liveAccounts.length > 0 ? liveAccounts : accounts.filter(a => a.status !== 'DEAD');
+    }
     
-    if (liveAccounts.length === 0) {
-      toast.error('Không có tài khoản LIVE nào để chạy buff.');
+    if (candidateAccounts.length === 0) {
+      toast.error('Không có tài khoản khả dụng nào để chạy buff.');
       return;
     }
 
-    const accountsToUse = liveAccounts.slice(0, remaining);
+    const accountsToUse = candidateAccounts.slice(0, remaining);
     const realProfileIds = accountsToUse.map(a => a.profileId || a.id);
 
     try {
@@ -160,6 +172,7 @@ export default function BuffSystem() {
           taskId: order.id,
           actionType: 'fb_buff_post',
           profileIds: realProfileIds,
+          accounts: accountsToUse,
           config: {
             targetUrl: order.url,
             buffActionType: order.actionType,
@@ -405,6 +418,54 @@ export default function BuffSystem() {
                   )}
                 </div>
               )}
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Chọn tài khoản chạy ({selectedAccounts.size === 0 ? `Tất cả (${accounts.length})` : `${selectedAccounts.size}/${accounts.length}`})
+                  </label>
+                  {accounts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedAccounts.size === accounts.length) {
+                          setSelectedAccounts(new Set());
+                        } else {
+                          setSelectedAccounts(new Set(accounts.map(a => a.id)));
+                        }
+                      }}
+                      className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                      {selectedAccounts.size === accounts.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                    </button>
+                  )}
+                </div>
+                <div className="bg-gray-50 border border-gray-100 rounded-xl p-2 max-h-36 overflow-y-auto space-y-1 custom-scrollbar">
+                  {accounts.length === 0 ? (
+                    <div className="p-3 text-xs text-gray-400 text-center">Chưa có tài khoản Facebook nào.</div>
+                  ) : (
+                    accounts.map(acc => (
+                      <label key={acc.id} className="flex items-center gap-2.5 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
+                        <input
+                          type="checkbox"
+                          checked={selectedAccounts.has(acc.id)}
+                          onChange={() => {
+                            const next = new Set(selectedAccounts);
+                            if (next.has(acc.id)) next.delete(acc.id);
+                            else next.add(acc.id);
+                            setSelectedAccounts(next);
+                          }}
+                          className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                        />
+                        <span className="text-xs font-medium text-gray-700 truncate">{acc.name || acc.uid || acc.id}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ml-auto ${acc.status === 'LIVE' || acc.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
+                          {acc.status || 'LIVE'}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">

@@ -3,6 +3,28 @@ import * as jwtPackage from 'jsonwebtoken';
 import { createClient } from '@/lib/supabase/server';
 import prisma from '@/lib/db';
 
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function ensureUserWorkspace(userId: string, defaultName?: string | null): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { workspaceId: true, name: true, email: true }
+  });
+  if (user?.workspaceId) return user.workspaceId;
+
+  const ws = await prisma.workspace.create({
+    data: {
+      name: defaultName || user?.name || user?.email ? `${defaultName || user?.name || user?.email}'s Workspace` : 'Personal Workspace',
+      plan: 'FREE'
+    }
+  });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { workspaceId: ws.id }
+  });
+  return ws.id;
+}
+
 export const auth = async (...args: any[]) => {
   // We MUST call headers() and createClient() outside try/catch 
   // so Next.js can throw its internal bailout errors during static rendering.
@@ -13,13 +35,21 @@ export const auth = async (...args: any[]) => {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
       const token = authHeader.split(' ')[1];
-      const decoded = jwtPackage.verify(token, process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123') as any;
+      const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
+      const userId = decoded.sub || decoded.id;
+      let workspaceId = decoded.workspaceId;
+
+      if (!workspaceId && userId) {
+        workspaceId = await ensureUserWorkspace(userId, decoded.name);
+      }
       
       return {
         user: {
-          id: decoded.sub || decoded.id,
+          id: userId,
           role: decoded.role,
-          workspaceId: decoded.workspaceId,
+          name: decoded.name,
+          email: decoded.email,
+          workspaceId,
         }
       };
     } catch (e) {
@@ -41,12 +71,17 @@ export const auth = async (...args: any[]) => {
       });
 
       if (dbUser) {
+        let workspaceId = dbUser.workspaceId;
+        if (!workspaceId) {
+          workspaceId = await ensureUserWorkspace(dbUser.id, dbUser.name);
+        }
+
         return {
           user: {
             id: dbUser.id,
             name: dbUser.name,
             role: dbUser.role,
-            workspaceId: dbUser.workspaceId,
+            workspaceId,
             email: user.email,
           }
         };

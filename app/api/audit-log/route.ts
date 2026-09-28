@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog, extractClientIp } from '@/lib/audit-log';
 
 // GET /api/audit-log - List audit log entries
 export async function GET(req: NextRequest) {
@@ -17,9 +18,25 @@ export async function GET(req: NextRequest) {
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '50');
     const workspaceId = (session.user as any).workspaceId;
+    const userRole = (session.user as any).role;
 
     const where: any = {};
-    if (workspaceId) where.workspaceId = workspaceId;
+    if (userRole === 'SUPER_ADMIN') {
+      const wsParam = url.searchParams.get('workspaceId');
+      if (wsParam && wsParam !== 'all') {
+        where.workspaceId = wsParam;
+      }
+    } else {
+      if (workspaceId) {
+        where.OR = [
+          { workspaceId },
+          { userId: session.user.id },
+        ];
+      } else {
+        where.userId = session.user.id;
+      }
+    }
+
     if (action) where.action = { contains: action };
     if (userId) where.userId = userId;
     if (entityType) where.entityType = entityType;
@@ -36,13 +53,14 @@ export async function GET(req: NextRequest) {
 
     // Auto-seed starter log entries if empty
     if (total === 0 && workspaceId) {
+      const clientIp = extractClientIp(req);
       const initialLogs = [
         {
           action: 'AUTH.LOGIN',
           entityType: 'User',
           entityId: session.user.id,
           userId: session.user.id,
-          ipAddress: '113.190.23.45',
+          ipAddress: clientIp,
           metadata: { message: 'Đăng nhập vào hệ thống thành công', email: session.user.email },
           workspaceId,
         },
@@ -51,22 +69,22 @@ export async function GET(req: NextRequest) {
           entityType: 'Workspace',
           entityId: workspaceId,
           userId: session.user.id,
-          ipAddress: '113.190.23.45',
-          metadata: { message: 'Truy cập không gian làm việc', role: (session.user as any).role || 'ADMIN' },
+          ipAddress: clientIp,
+          metadata: { message: 'Truy cập không gian làm việc', role: userRole || 'ADMIN' },
           workspaceId,
         },
         {
           action: 'SECURITY.VERIFY_DEVICE',
           entityType: 'Security',
           userId: session.user.id,
-          ipAddress: '113.190.23.45',
+          ipAddress: clientIp,
           metadata: { message: 'Xác thực thiết bị an toàn hợp lệ' },
           workspaceId,
         },
       ];
 
       for (const log of initialLogs) {
-        await prisma.auditLog.create({ data: log });
+        await recordAuditLog(log);
       }
 
       logs = await prisma.auditLog.findMany({
@@ -99,15 +117,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Action is required' }, { status: 400 });
     }
 
-    const log = await prisma.auditLog.create({
-      data: {
-        action,
-        entityType,
-        entityId,
-        userId: session.user.id,
-        metadata: metadata || {},
-        workspaceId,
-      },
+    const log = await recordAuditLog({
+      action,
+      entityType,
+      entityId,
+      userId: session.user.id,
+      metadata: metadata || {},
+      workspaceId,
+      req,
     });
 
     return NextResponse.json(log, { status: 201 });
@@ -115,3 +132,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

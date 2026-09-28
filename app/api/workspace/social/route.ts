@@ -12,14 +12,25 @@ export async function GET(req: NextRequest) {
     }
 
     const accounts = await prisma.socialAccount.findMany({
-      where: user.workspaceId ? { workspaceId: user.workspaceId } : { userId: user.id },
+      where: {
+        OR: [
+          ...(user.workspaceId ? [{ workspaceId: user.workspaceId }] : []),
+          { userId: user.id }
+        ]
+      },
       select: {
         id: true,
         provider: true,
         accountName: true,
+        pageId: true,
+        instagramBusinessId: true,
+        youtubeChannelId: true,
         status: true,
+        expiresAt: true,
         createdAt: true,
+        updatedAt: true,
       },
+      orderBy: { createdAt: 'desc' }
     });
 
     return NextResponse.json(accounts);

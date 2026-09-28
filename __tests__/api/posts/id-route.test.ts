@@ -57,7 +57,15 @@ describe('Posts [id] API Route', () => {
     it('returns 200 with post data', async () => {
       vi.mocked(auth).mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' }, expires: '1' } as any);
       
-      const mockPost = { id: '1', createdById: 'other-user' };
+      const mockPost = { 
+        id: '1', 
+        createdById: 'other-user',
+        platforms: [],
+        videoAsset: {
+          originalFileName: 'Untitled',
+          storageUrl: '',
+        }
+      };
       vi.mocked(prisma.post.findUnique).mockResolvedValue(mockPost as any);
 
       const req = new NextRequest('http://localhost/api/posts/1');

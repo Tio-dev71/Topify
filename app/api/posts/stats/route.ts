@@ -10,9 +10,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userWorkspaceId = (session.user as any).workspaceId;
     const where: any = {};
-    if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') {
-      where.createdById = session.user.id;
+    if (session.user.role !== 'SUPER_ADMIN') {
+      if (userWorkspaceId) {
+        where.workspaceId = userWorkspaceId;
+      }
+      if (session.user.role === 'STAFF') {
+        where.createdById = session.user.id;
+      }
     }
 
     const [scheduled, published, failed, total] = await Promise.all([

@@ -49,6 +49,10 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const storageUrl = await storage.upload(buffer, file.name);
 
+    // Read optional duration from client metadata
+    const rawDuration = formData.get('duration');
+    const duration = rawDuration ? Math.round(parseFloat(String(rawDuration))) : null;
+
     // Generate title from filename
     const title = titleFromFilename(file.name);
 
@@ -61,6 +65,7 @@ export async function POST(req: NextRequest) {
         source: 'LOCAL_UPLOAD',
         mimeType: file.type,
         size: file.size,
+        duration: duration,
         createdById: userId,
         workspaceId: workspaceId,
       },

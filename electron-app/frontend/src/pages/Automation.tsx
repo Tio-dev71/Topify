@@ -17,6 +17,10 @@ interface FbAccount {
   id: string;
   name: string;
   uid: string | null;
+  password?: string | null;
+  twoFactorCode?: string | null;
+  cookie?: string | null;
+  proxy?: string | null;
   status: string;
   profileId?: string;
 }
@@ -114,7 +118,7 @@ export default function Automation() {
         });
         toast.success('Tạo tác vụ thành công');
       }
-      
+
       setShowModal(false);
       setEditTaskId(null);
       setTaskName('');
@@ -196,8 +200,12 @@ export default function Automation() {
       fetchTasks();
 
       // Find the actual profileId (e.g. 'profile_...') for each DB ID
+      const selectedAccountsList = task.profileIds
+        .map(dbId => accounts.find(a => a.id === dbId || a.profileId === dbId))
+        .filter(Boolean);
+
       const realProfileIds = task.profileIds.map(dbId => {
-        const acc = accounts.find(a => a.id === dbId);
+        const acc = accounts.find(a => a.id === dbId || a.profileId === dbId);
         return acc ? acc.profileId || dbId : dbId;
       });
 
@@ -209,6 +217,7 @@ export default function Automation() {
           taskId: task.id,
           actionType: task.type,
           profileIds: realProfileIds,
+          accounts: selectedAccountsList,
           config: {
             ...task.config,
             aiSettings: globalSettings
@@ -251,7 +260,7 @@ export default function Automation() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">Quản lý và chạy các tác vụ tự động trên nhiều tài khoản.</p>
         </div>
-        
+
         <button
           onClick={() => {
             setEditTaskId(null);
@@ -264,9 +273,10 @@ export default function Automation() {
             setSelectedAccounts(new Set());
             setShowModal(true);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors shadow-sm"
+          className="whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors shadow-sm"
         >
-          <Plus className="w-4 h-4" /> Tạo tác vụ mới
+          <Plus className="w-4 h-4 shrink-0" />
+          <span>Tạo tác vụ mới</span>
         </button>
       </div>
 
@@ -331,17 +341,16 @@ export default function Automation() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                        task.status === 'RUNNING' ? 'bg-blue-50 text-blue-600' :
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${task.status === 'RUNNING' ? 'bg-blue-50 text-blue-600' :
                         task.status === 'DONE' ? 'bg-emerald-50 text-emerald-600' :
-                        'bg-gray-100 text-gray-600'
-                      }`}>
+                          'bg-gray-100 text-gray-600'
+                        }`}>
                         {task.status || 'IDLE'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-3">
-                        <button 
+                        <button
                           onClick={() => handleStartTask(task)}
                           disabled={task.status === 'RUNNING'}
                           className="text-sm font-medium text-gray-600 hover:text-purple-600 disabled:opacity-50 transition-colors"
@@ -349,21 +358,21 @@ export default function Automation() {
                           Start
                         </button>
                         {task.status === 'RUNNING' && (
-                          <button 
+                          <button
                             onClick={() => handleStopTask(task)}
                             className="text-sm font-medium text-amber-600 hover:text-amber-700 transition-colors"
                           >
                             Stop
                           </button>
                         )}
-                        <button 
+                        <button
                           onClick={() => handleEditClick(task)}
                           disabled={task.status === 'RUNNING'}
                           className="text-sm font-medium text-blue-500 hover:text-blue-600 disabled:opacity-50 transition-colors"
                         >
                           Edit
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleDeleteTask(task.id)}
                           className="text-sm font-medium text-gray-400 hover:text-red-500 transition-colors"
                         >
@@ -389,7 +398,7 @@ export default function Automation() {
                 ✕
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
@@ -448,10 +457,10 @@ export default function Automation() {
               {(taskType === 'fb_auto_interact' || taskType === 'fb_farm_reels' || taskType === 'fb_buff_post') && (
                 <div className="space-y-4">
                   <label className="flex items-center gap-3 cursor-pointer p-4 border border-purple-100 rounded-xl bg-purple-50 hover:border-purple-200 transition-colors">
-                    <input 
-                      type="checkbox" 
-                      checked={useAiComment} 
-                      onChange={e => setUseAiComment(e.target.checked)} 
+                    <input
+                      type="checkbox"
+                      checked={useAiComment}
+                      onChange={e => setUseAiComment(e.target.checked)}
                       className="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
                     />
                     <div className="flex flex-col">

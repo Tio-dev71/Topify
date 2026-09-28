@@ -191,10 +191,10 @@ export default function CampaignsPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'ACTIVE': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-500 border border-green-500/20">Đang chạy</span>;
-      case 'PAUSED': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">Tạm dừng</span>;
-      case 'DRAFT': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-500/10 text-zinc-500 border border-zinc-500/20">Bản nháp</span>;
-      case 'COMPLETED': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/20">Hoàn thành</span>;
+      case 'ACTIVE': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/10 text-green-500 border border-green-500/20 whitespace-nowrap inline-block">Đang chạy</span>;
+      case 'PAUSED': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 whitespace-nowrap inline-block">Tạm dừng</span>;
+      case 'DRAFT': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-zinc-500/10 text-zinc-500 border border-zinc-500/20 whitespace-nowrap inline-block">Bản nháp</span>;
+      case 'COMPLETED': return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/20 whitespace-nowrap inline-block">Hoàn thành</span>;
       default: return null;
     }
   };
@@ -308,12 +308,12 @@ export default function CampaignsPage() {
           <table className="w-full text-sm text-left">
             <thead className="text-xs uppercase bg-[var(--color-muted)]/50 text-[var(--color-muted-foreground)] border-b border-[var(--color-border)]">
               <tr>
-                <th className="px-6 py-4 font-semibold">Tên chiến dịch</th>
-                <th className="px-6 py-4 font-semibold">Trạng thái (Bấm để đổi)</th>
-                <th className="px-6 py-4 font-semibold">Mục tiêu</th>
-                <th className="px-6 py-4 font-semibold">Ngân sách</th>
-                <th className="px-6 py-4 font-semibold">Thời gian</th>
-                <th className="px-6 py-4 text-right">Thao tác</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap min-w-[240px]">Tên chiến dịch</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[150px]">Trạng thái</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap min-w-[150px] max-w-[200px]">Mục tiêu</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[160px]">Ngân sách</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[180px]">Thời gian</th>
+                <th className="px-6 py-4 text-right whitespace-nowrap w-[80px]">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
@@ -332,28 +332,34 @@ export default function CampaignsPage() {
               ) : (
                 filteredCampaigns.map(campaign => (
                   <tr key={campaign.id} className="hover:bg-[var(--color-muted)]/30 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-[var(--color-foreground)]">{campaign.name}</div>
+                    <td className="px-6 py-4 min-w-[240px] max-w-[320px]">
+                      <div className="font-semibold text-[var(--color-foreground)] truncate" title={campaign.name}>
+                        {campaign.name}
+                      </div>
                       {campaign.description && (
-                        <div className="text-xs text-[var(--color-muted-foreground)] line-clamp-1 mt-0.5">{campaign.description}</div>
+                        <div className="text-xs text-[var(--color-muted-foreground)] truncate mt-0.5" title={campaign.description}>
+                          {campaign.description}
+                        </div>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap w-[150px]">
                       <button 
                         onClick={() => handleToggleStatus(campaign)}
-                        className="hover:opacity-80 transition-opacity"
+                        className="hover:opacity-80 transition-opacity whitespace-nowrap"
                         title="Bấm để chuyển trạng thái"
                       >
                         {getStatusBadge(campaign.status)}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-[var(--color-foreground)] font-medium">
-                      {campaign.objective || 'Mặc định'}
+                    <td className="px-6 py-4 text-[var(--color-foreground)] font-medium min-w-[150px] max-w-[200px] whitespace-nowrap">
+                      <span className="truncate block" title={campaign.objective || 'Mặc định'}>
+                        {campaign.objective || 'Mặc định'}
+                      </span>
                     </td>
-                    <td className="px-6 py-4 font-semibold text-[var(--color-foreground)]">
+                    <td className="px-6 py-4 font-semibold text-[var(--color-foreground)] whitespace-nowrap">
                       {formatCurrency(campaign.budget || 0)}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {campaign.startDate ? (
                         <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)] whitespace-nowrap">
                           <Calendar className="w-3.5 h-3.5" />
@@ -363,10 +369,10 @@ export default function CampaignsPage() {
                           )}
                         </div>
                       ) : (
-                        <span className="text-xs text-[var(--color-muted-foreground)]">Không xác định</span>
+                        <span className="text-xs text-[var(--color-muted-foreground)] whitespace-nowrap">Không xác định</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
                       <button 
                         onClick={() => handleDeleteCampaign(campaign.id)}
                         className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"

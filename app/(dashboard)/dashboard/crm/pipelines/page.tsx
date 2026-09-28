@@ -4,13 +4,10 @@ import { useState, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
-  GripVertical, 
-  Settings2, 
   Trash2, 
-  Edit2,
-  RefreshCw,
-  X,
-  Layers
+  RefreshCw, 
+  X, 
+  Layers 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -56,10 +53,6 @@ export default function PipelinesPage() {
     'Thành công'
   ]);
 
-  useEffect(() => {
-    fetchPipelines();
-  }, []);
-
   const fetchPipelines = async () => {
     setLoading(true);
     try {
@@ -75,25 +68,54 @@ export default function PipelinesPage() {
           setActivePipeline(null);
         }
       } else {
-        toast.error('Không thể tải danh sách phễu bán hàng');
+        toast.error('Không thể tải danh sách quy trình bán hàng');
       }
-    } catch (err) {
-      toast.error('Lỗi kết nối khi tải phễu');
+    } catch (_err) {
+      toast.error('Lỗi kết nối khi tải quy trình bán hàng');
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    let ignore = false;
+    fetch('/api/crm/pipelines')
+      .then(res => {
+        if (!res.ok) throw new Error('Network error');
+        return res.json();
+      })
+      .then(data => {
+        if (!ignore) {
+          const list: Pipeline[] = data.pipelines || [];
+          setPipelines(list);
+          if (list.length > 0) {
+            setActivePipeline(list[0]);
+          }
+          setLoading(false);
+        }
+      })
+      .catch(_err => {
+        if (!ignore) {
+          toast.error('Không thể tải danh sách quy trình bán hàng');
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const handleCreatePipeline = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPipelineName.trim()) {
-      toast.error('Vui lòng nhập tên phễu');
+      toast.error('Vui lòng nhập tên quy trình');
       return;
     }
 
     const validStages = newStages.filter(s => s.trim() !== '');
     if (validStages.length === 0) {
-      toast.error('Vui lòng thêm ít nhất một bước (stage)');
+      toast.error('Vui lòng thêm ít nhất một giai đoạn (stage)');
       return;
     }
 
@@ -113,16 +135,16 @@ export default function PipelinesPage() {
       });
 
       if (res.ok) {
-        toast.success('Tạo đường ống mới thành công');
+        toast.success('Tạo quy trình bán hàng mới thành công');
         setShowAddModal(false);
         setNewPipelineName('');
         setNewStages(['Khách hàng mới', 'Đang liên hệ', 'Thương lượng', 'Đã gửi báo giá', 'Thành công']);
         fetchPipelines();
       } else {
         const err = await res.json();
-        toast.error(err.error || 'Lỗi khi tạo đường ống');
+        toast.error(err.error || 'Lỗi khi tạo quy trình bán hàng');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Lỗi máy chủ');
     } finally {
       setSubmitting(false);
@@ -131,23 +153,23 @@ export default function PipelinesPage() {
 
   const handleDeletePipeline = async (pipeline: Pipeline) => {
     if (pipeline.isDefault) {
-      toast.error('Không thể xóa đường ống mặc định');
+      toast.error('Không thể xóa quy trình mặc định');
       return;
     }
 
-    if (!confirm(`Bạn có chắc chắn muốn xóa phễu "${pipeline.name}"?`)) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa quy trình "${pipeline.name}"?`)) return;
 
     try {
       const res = await fetch(`/api/crm/pipelines?id=${pipeline.id}`, { method: 'DELETE' });
       if (res.ok) {
-        toast.success('Đã xóa phễu bán hàng');
+        toast.success('Đã xóa quy trình bán hàng');
         fetchPipelines();
       } else {
         const err = await res.json();
-        toast.error(err.error || 'Xóa phễu thất bại');
+        toast.error(err.error || 'Xóa quy trình thất bại');
       }
-    } catch (err) {
-      toast.error('Lỗi khi xóa phễu');
+    } catch (_err) {
+      toast.error('Lỗi khi xóa quy trình');
     }
   };
 
@@ -163,9 +185,9 @@ export default function PipelinesPage() {
           <div>
             <h1 className="text-2xl font-bold text-[var(--color-foreground)] flex items-center gap-2">
               <Layers className="w-6 h-6 text-[#5B3DF5]" />
-              Phễu bán hàng (Pipelines)
+              Quy trình bán hàng (Pipelines)
             </h1>
-            <p className="text-[var(--color-muted-foreground)] mt-1">Cấu hình các quy trình bán hàng và các bước (Stages)</p>
+            <p className="text-[var(--color-muted-foreground)] mt-1">Cấu hình các quy trình bán hàng và các giai đoạn chuyển đổi (Stages)</p>
           </div>
           <div className="flex items-center gap-3">
             <button 
@@ -180,7 +202,7 @@ export default function PipelinesPage() {
               className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
             >
               <Plus className="w-4 h-4" />
-              Tạo đường ống mới
+              Tạo quy trình mới
             </button>
           </div>
         </div>
@@ -194,7 +216,7 @@ export default function PipelinesPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-muted-foreground)]" />
               <input 
                 type="text" 
-                placeholder="Tìm đường ống..." 
+                placeholder="Tìm kiếm quy trình..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-sm"
@@ -205,7 +227,7 @@ export default function PipelinesPage() {
             {loading && pipelines.length === 0 ? (
               <div className="py-8 text-center text-sm text-[var(--color-muted-foreground)]">Đang tải...</div>
             ) : filteredPipelines.length === 0 ? (
-              <div className="py-8 text-center text-sm text-[var(--color-muted-foreground)]">Không có đường ống nào</div>
+              <div className="py-8 text-center text-sm text-[var(--color-muted-foreground)]">Chưa có quy trình bán hàng nào</div>
             ) : (
               filteredPipelines.map(pipeline => (
                 <div
@@ -234,7 +256,7 @@ export default function PipelinesPage() {
                             handleDeletePipeline(pipeline);
                           }}
                           className="p-1 rounded-lg text-red-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                          title="Xóa phễu"
+                          title="Xóa quy trình"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -242,7 +264,7 @@ export default function PipelinesPage() {
                     </div>
                   </div>
                   <div className="text-xs text-[var(--color-muted-foreground)] mt-1 flex justify-between">
-                    <span>{pipeline.stages?.length || 0} bước (stages)</span>
+                    <span>{pipeline.stages?.length || 0} giai đoạn</span>
                     {pipeline._count?.deals !== undefined && (
                       <span>{pipeline._count.deals} giao dịch</span>
                     )}
@@ -259,9 +281,9 @@ export default function PipelinesPage() {
             <div className="max-w-3xl mx-auto">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-[var(--color-foreground)]">Cấu hình các bước (Stages)</h2>
+                  <h2 className="text-lg font-semibold text-[var(--color-foreground)]">Cấu hình các giai đoạn (Stages)</h2>
                   <p className="text-sm text-[var(--color-muted-foreground)] mt-1">
-                    Các bước trong quy trình <strong>{activePipeline.name}</strong>
+                    Các giai đoạn trong quy trình <strong>{activePipeline.name}</strong>
                   </p>
                 </div>
               </div>
@@ -289,7 +311,7 @@ export default function PipelinesPage() {
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-[var(--color-muted-foreground)] text-sm">
-              Chọn một đường ống bên trái để xem các bước.
+              Chọn một quy trình bên trái để xem các giai đoạn.
             </div>
           )}
         </div>
@@ -300,7 +322,7 @@ export default function PipelinesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-[var(--color-border)]">
-              <h3 className="text-lg font-semibold text-[var(--color-foreground)]">Tạo đường ống bán hàng mới</h3>
+              <h3 className="text-lg font-semibold text-[var(--color-foreground)]">Tạo quy trình bán hàng mới</h3>
               <button 
                 onClick={() => setShowAddModal(false)}
                 className="text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
@@ -312,12 +334,12 @@ export default function PipelinesPage() {
             <form onSubmit={handleCreatePipeline} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-[var(--color-foreground)] mb-1">
-                  Tên đường ống *
+                  Tên quy trình bán hàng *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Quy trình Bán sỉ B2B, Tuyển dụng..."
+                  placeholder="Ví dụ: Quy trình Bán sỉ B2B, Bán lẻ D2C, Tuyển dụng..."
                   value={newPipelineName}
                   onChange={(e) => setNewPipelineName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
@@ -327,14 +349,14 @@ export default function PipelinesPage() {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-medium text-[var(--color-foreground)]">
-                    Các bước quy trình (Stages)
+                    Các giai đoạn quy trình (Stages)
                   </label>
                   <button
                     type="button"
-                    onClick={() => setNewStages([...newStages, `Bước ${newStages.length + 1}`])}
+                    onClick={() => setNewStages([...newStages, `Giai đoạn ${newStages.length + 1}`])}
                     className="text-xs text-[var(--color-primary)] font-medium hover:underline flex items-center gap-1"
                   >
-                    <Plus className="w-3 h-3" /> Thêm bước
+                    <Plus className="w-3 h-3" /> Thêm giai đoạn
                   </button>
                 </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -378,7 +400,7 @@ export default function PipelinesPage() {
                   disabled={submitting}
                   className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50"
                 >
-                  {submitting ? 'Đang tạo...' : 'Tạo đường ống'}
+                  {submitting ? 'Đang tạo...' : 'Tạo quy trình'}
                 </button>
               </div>
             </form>

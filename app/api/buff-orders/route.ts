@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,6 +45,21 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    await recordAuditLog({
+      action: 'BUFF_ORDER.CREATE',
+      entityType: 'BuffOrder',
+      entityId: order.id,
+      userId: session.user.id,
+      workspaceId: (session.user as any).workspaceId,
+      req,
+      metadata: { 
+        message: `Tạo đơn Buff dịch vụ: ${actionType} (${targetCount})`,
+        url,
+        actionType,
+        targetCount
+      },
+    });
+
     return NextResponse.json(order);
   } catch (error) {
     console.error('[BUFF_ORDERS_POST]', error);
@@ -65,8 +81,25 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
+    const existing = await prisma.buffOrder.findUnique({
+      where: { id },
+      select: { actionType: true, targetCount: true, url: true },
+    });
+
     await prisma.buffOrder.delete({
       where: { id }
+    });
+
+    await recordAuditLog({
+      action: 'BUFF_ORDER.DELETE',
+      entityType: 'BuffOrder',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId: (session.user as any).workspaceId,
+      req,
+      metadata: { 
+        message: `Hủy đơn Buff dịch vụ: ${existing ? `${existing.actionType} (${existing.targetCount})` : id}` 
+      },
     });
 
     return NextResponse.json({ message: 'Order deleted' });

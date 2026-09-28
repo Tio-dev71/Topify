@@ -14,11 +14,11 @@ import {
   Hash,
   MessageSquare,
   Copy,
+  AlertTriangle,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { toast } from 'sonner';
 import api from '../lib/axios';
-import { PLATFORM_CONFIG } from '../lib/utils';
+import { PLATFORM_CONFIG, safeFormatDate } from '../lib/utils';
 
 type Platform = 'FACEBOOK_REELS' | 'INSTAGRAM_REELS' | 'YOUTUBE_SHORTS';
 type PublishMode = 'now' | 'schedule';
@@ -30,12 +30,38 @@ interface UploadedVideo {
   storageUrl: string;
   size: number;
   mimeType: string;
+  duration?: number | null;
+  width?: number | null;
+  height?: number | null;
   // User editable
   title: string;
   caption: string;
   firstComment: string;
   hashtags: string;
 }
+
+const readVideoMetadata = (file: File): Promise<{ duration: number; width: number; height: number }> => {
+  return new Promise((resolve) => {
+    try {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve({
+          duration: Math.round(video.duration || 0),
+          width: video.videoWidth || 0,
+          height: video.videoHeight || 0,
+        });
+      };
+      video.onerror = () => {
+        resolve({ duration: 0, width: 0, height: 0 });
+      };
+      video.src = URL.createObjectURL(file);
+    } catch {
+      resolve({ duration: 0, width: 0, height: 0 });
+    }
+  });
+};
 
 const isAllowedVideoType = (type: string) => {
   return ['video/mp4', 'video/quicktime', 'video/webm'].includes(type);
@@ -109,8 +135,15 @@ export default function CreatePost() {
       const file = validFiles[i];
       setUploadProgress(Math.round(((i) / validFiles.length) * 100));
 
+      const meta = await readVideoMetadata(file);
+
       const formData = new FormData();
       formData.append('video', file);
+      if (meta.duration > 0) {
+        formData.append('duration', meta.duration.toString());
+      }
+      formData.append('width', meta.width.toString());
+      formData.append('height', meta.height.toString());
 
       try {
         const res = await api.post('/upload', formData);
@@ -121,6 +154,9 @@ export default function CreatePost() {
             ...prev,
             {
               ...result,
+              duration: meta.duration || result.duration || 0,
+              width: meta.width || 0,
+              height: meta.height || 0,
               title: result.titleFromFileName || file.name.replace(/\.[^/.]+$/, ''),
               caption: '',
               firstComment: '',
@@ -357,11 +393,11 @@ export default function CreatePost() {
                 <button
                   type="button"
                   onClick={() => copyToAllVideos(videos[0])}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center gap-1.5 transition-colors"
+                  className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 whitespace-nowrap inline-flex items-center gap-1.5 shrink-0 transition-colors"
                   title="Sao chép nội dung video đầu tiên cho các video còn lại"
                 >
-                  <Copy className="w-3.5 h-3.5" />
-                  Áp dụng cho tất cả video
+                  <Copy className="w-3.5 h-3.5 shrink-0" />
+                  <span>Áp dụng cho tất cả video</span>
                 </button>
               )}
             </div>
@@ -391,14 +427,49 @@ export default function CreatePost() {
                       <p className="text-[14px] font-semibold text-gray-900 truncate">
                         Video #{idx + 1}: {v.originalFileName}
                       </p>
-                      <p className="text-[12px] text-gray-500 mt-1 flex items-center gap-2">
+                      <div className="text-[12px] text-gray-500 mt-1 flex flex-wrap items-center gap-2">
                         <span className="bg-gray-100 px-2 py-0.5 rounded-md font-medium text-gray-600">
                           {(v.mimeType || 'video/mp4').split('/')[1].toUpperCase()}
                         </span>
                         <span>{formatFileSize(v.size)}</span>
-                      </p>
+                        {v.duration ? (
+                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-medium">
+                            {v.duration}s
+                          </span>
+                        ) : null}
+                        {v.width && v.height ? (
+                          <span className={`px-2 py-0.5 rounded-md font-medium ${v.width > v.height ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700'}`}>
+                            {v.width}x{v.height} ({v.width > v.height ? 'Ngang 16:9' : 'Dọc 9:16'})
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
+
+                  {/* YouTube Shorts Compatibility Warnings */}
+                  {platforms.includes('YOUTUBE_SHORTS') && v.width && v.height && v.width > v.height && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 animate-fade-in">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-bold text-rose-900">Cảnh báo khung hình: Video đang là Video Ngang ({v.width}x{v.height})</p>
+                        <p className="mt-0.5 text-rose-700 leading-relaxed">
+                          YouTube chỉ phân phối vào tab <strong>Shorts</strong> đối với video dọc (9:16) hoặc vuông (1:1). Nếu bạn đăng video ngang này, YouTube sẽ tự động coi đây là <strong>Video thường (Standard Video)</strong>!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {platforms.includes('YOUTUBE_SHORTS') && v.duration && v.duration > 180 && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 animate-fade-in">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-bold text-rose-900">Cảnh báo thời lượng: Video quá dài ({v.duration}s)</p>
+                        <p className="mt-0.5 text-rose-700 leading-relaxed">
+                          YouTube Shorts chỉ hỗ trợ video tối đa 3 phút (180 giây). Video dài hơn sẽ bị YouTube xuất bản dưới dạng Video thông thường.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Form Inputs Grid */}
                   <div className="space-y-4 pt-2 border-t border-gray-100">
@@ -513,6 +584,8 @@ export default function CreatePost() {
                       requiredProvider = 'META';
                     } else if (key === 'YOUTUBE_SHORTS') {
                       requiredProvider = 'YOUTUBE';
+                    } else if (key === 'TIKTOK_VIDEO') {
+                      requiredProvider = 'TIKTOK';
                     }
                     
                     const isConnected = requiredProvider ? connectedProviders[requiredProvider] : true;
@@ -523,7 +596,7 @@ export default function CreatePost() {
                         type="button"
                         disabled={!isConnected}
                         onClick={() => togglePlatform(key)}
-                        className={`platform-chip px-5 py-3.5 rounded-2xl text-[14px] font-bold flex items-center gap-2.5 border-2 transition-all duration-200
+                        className={`platform-chip px-5 py-3.5 rounded-2xl text-[14px] font-bold whitespace-nowrap inline-flex items-center gap-2.5 shrink-0 border-2 transition-all duration-200
                           ${!isConnected ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400' : 
                             selected ? 'shadow-sm' : 'border-gray-200 hover:border-gray-300 bg-white hover:shadow-sm text-gray-700'}`}
                         style={selected && isConnected ? { color: config.color, backgroundColor: `${config.color}14`, borderColor: config.color } : {}}
@@ -545,9 +618,18 @@ export default function CreatePost() {
               {showYouTubeWarning && (
                 <div className="mt-4 p-4 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-start gap-3 shadow-sm">
                   <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-[14px] text-amber-800 leading-relaxed font-medium">
-                    Đối với <strong>YouTube Shorts</strong>, video nên có khung hình dọc (9:16) và độ dài dưới 60 giây. Hệ thống sẽ tự động bổ sung thẻ tags từ Hashtag của bạn.
-                  </p>
+                  <div className="text-[14px] text-amber-800 leading-relaxed space-y-1">
+                    <p className="font-semibold text-amber-900">Yêu cầu đối với định dạng YouTube Shorts:</p>
+                    <p className="text-xs text-amber-700">
+                      • <strong>Tỷ lệ khung hình:</strong> Bắt buộc là video dọc (9:16) hoặc vuông (1:1). Video ngang (16:9) sẽ bị YouTube đưa vào danh mục Video thường.
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      • <strong>Thời lượng:</strong> Tối đa 60 giây (hoặc tối đa 180 giây cho video dọc/vuông).
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      • <strong>Hashtag:</strong> Hệ thống tự động thêm thẻ <code>#Shorts</code> vào tiêu đề và mô tả để YouTube lập chỉ mục ngay.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -615,7 +697,7 @@ export default function CreatePost() {
                   <div className="flex items-center gap-2.5 text-[14px] text-indigo-950 bg-white p-3.5 rounded-xl border border-indigo-200 font-medium shadow-xs">
                     <Calendar className="w-4 h-4 text-indigo-600 flex-shrink-0" />
                     <span>
-                      Hệ thống sẽ tự động xuất bản vào lúc: <strong className="text-indigo-700 font-bold">{format(new Date(scheduledAt), 'HH:mm - EEEE, dd/MM/yyyy')}</strong>
+                      Hệ thống sẽ tự động xuất bản vào lúc: <strong className="text-indigo-700 font-bold">{safeFormatDate(scheduledAt, 'HH:mm - EEEE, dd/MM/yyyy')}</strong>
                     </span>
                   </div>
                 ) : (
@@ -632,7 +714,7 @@ export default function CreatePost() {
               <button
                 type="submit"
                 disabled={submitting || platforms.length === 0}
-                className="btn-primary w-full py-4 text-[16px] font-bold flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg transition-all rounded-2xl"
+                className="btn-primary w-full py-4 text-[16px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-2.5 shrink-0 shadow-md hover:shadow-lg transition-all rounded-2xl"
               >
                 {submitting ? (
                   <>

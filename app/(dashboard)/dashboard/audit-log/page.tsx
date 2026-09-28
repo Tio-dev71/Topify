@@ -90,12 +90,12 @@ export default function AuditLogPage() {
 
   const getStatusBadge = (action: string) => {
     if (action.includes('FAIL') || action.includes('ERROR') || action.includes('DENY')) {
-      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20">Thất bại</span>;
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20 whitespace-nowrap inline-flex items-center">Thất bại</span>;
     }
     if (action.includes('WARN')) {
-      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">Cảnh báo</span>;
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 whitespace-nowrap inline-flex items-center">Cảnh báo</span>;
     }
-    return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-500 border border-green-500/20">Thành công</span>;
+    return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-500 border border-green-500/20 whitespace-nowrap inline-flex items-center">Thành công</span>;
   };
 
   const filteredLogs = logs.filter(log => {
@@ -157,12 +157,12 @@ export default function AuditLogPage() {
           <table className="w-full text-sm text-left">
             <thead className="text-xs uppercase bg-[var(--color-muted)]/50 text-[var(--color-muted-foreground)] border-b border-[var(--color-border)]">
               <tr>
-                <th className="px-6 py-4 font-semibold">Thời gian</th>
-                <th className="px-6 py-4 font-semibold">Hành động</th>
-                <th className="px-6 py-4 font-semibold">Tài nguyên</th>
-                <th className="px-6 py-4 font-semibold">Trạng thái</th>
-                <th className="px-6 py-4 font-semibold">IP / Thiết bị</th>
-                <th className="px-6 py-4 font-semibold">Chi tiết</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[170px]">Thời gian</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap min-w-[180px] w-[200px]">Hành động</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[150px]">Tài nguyên</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[150px]">Trạng thái</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[140px]">IP / Thiết bị</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap min-w-[200px]">Chi tiết</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
@@ -185,27 +185,29 @@ export default function AuditLogPage() {
 
                   return (
                     <tr key={log.id} className="hover:bg-[var(--color-muted)]/30 transition-colors">
-                      <td className="px-6 py-4 text-xs text-[var(--color-muted-foreground)] whitespace-nowrap">
+                      <td className="px-6 py-4 text-xs text-[var(--color-muted-foreground)] whitespace-nowrap w-[170px]">
                         {format(new Date(log.createdAt), 'dd/MM/yyyy HH:mm:ss')}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="font-mono text-xs font-semibold text-[var(--color-primary)] bg-[var(--color-primary)]/10 px-2 py-0.5 rounded inline-block">
+                      <td className="px-6 py-4 whitespace-nowrap w-[200px]">
+                        <div className="font-mono text-xs font-semibold text-[var(--color-primary)] bg-[var(--color-primary)]/10 px-2 py-0.5 rounded inline-block whitespace-nowrap truncate max-w-[190px]" title={log.action}>
                           {log.action}
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-medium text-[var(--color-foreground)]">
-                        {log.entityType || 'Hệ thống'}
+                      <td className="px-6 py-4 font-medium text-[var(--color-foreground)] whitespace-nowrap w-[150px]">
+                        <div className="truncate max-w-[140px]" title={log.entityType || 'Hệ thống'}>
+                          {log.entityType || 'Hệ thống'}
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                      <td className="px-6 py-4 whitespace-nowrap w-[150px]">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
                           {getStatusIcon(log.action)}
                           {getStatusBadge(log.action)}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-xs font-mono text-[var(--color-muted-foreground)]">
+                      <td className="px-6 py-4 text-xs font-mono text-[var(--color-muted-foreground)] whitespace-nowrap w-[140px]">
                         {log.ipAddress || '127.0.0.1'}
                       </td>
-                      <td className="px-6 py-4 text-xs text-[var(--color-foreground)] max-w-xs truncate" title={detailStr}>
+                      <td className="px-6 py-4 text-xs text-[var(--color-foreground)] max-w-xs xl:max-w-md truncate" title={detailStr}>
                         {detailStr}
                       </td>
                     </tr>

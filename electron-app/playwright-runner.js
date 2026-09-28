@@ -111,26 +111,194 @@ async function generateTOTP(secret) {
   }
 }
 
+function parseCookies(cookieInput, defaultDomain = '.facebook.com') {
+  if (!cookieInput) return [];
+  const cookies = [];
+
+  // Try parsing as JSON first
+  if (typeof cookieInput === 'string' && (cookieInput.trim().startsWith('[') || cookieInput.trim().startsWith('{'))) {
+    try {
+      const parsed = JSON.parse(cookieInput);
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      for (const item of list) {
+        const name = item.name || item.key;
+        const value = item.value;
+        if (name && value !== undefined) {
+          cookies.push({
+            name: String(name).trim(),
+            value: String(value).trim(),
+            domain: item.domain || defaultDomain,
+            path: item.path || '/',
+            httpOnly: !!item.httpOnly,
+            secure: item.secure !== undefined ? !!item.secure : true,
+            sameSite: item.sameSite || 'Lax'
+          });
+        }
+      }
+      if (cookies.length > 0) return cookies;
+    } catch (e) {}
+  }
+
+  // Format: key=value; key2=value2;
+  if (typeof cookieInput === 'string') {
+    const pairs = cookieInput.split(';');
+    for (const pair of pairs) {
+      const trimmed = pair.trim();
+      if (!trimmed) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx > 0) {
+        const name = trimmed.substring(0, eqIdx).trim();
+        const value = trimmed.substring(eqIdx + 1).trim();
+        if (name) {
+          cookies.push({
+            name,
+            value,
+            domain: defaultDomain,
+            path: '/',
+            secure: true,
+            sameSite: 'Lax'
+          });
+        }
+      }
+    }
+  }
+
+  return cookies;
+}
+
 async function runPlaywrightLogin(accountData) {
-  const { id, uid, password, twoFactorCode, profileId, proxy } = accountData;
+function cleanStaleLockFiles(userDataDir) {
+  if (!fs.existsSync(userDataDir)) return;
+  const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+  const lockPath = path.join(userDataDir, 'SingletonLock');
+  
+  let targetPid = null;
+  try {
+    const link = fs.readlinkSync(lockPath);
+    const match = link.match(/-?(\d+)$/);
+    if (match) targetPid = parseInt(match[1], 10);
+  } catch (e) {}
+
+  if (targetPid) {
+    try {
+      process.kill(targetPid, 0); // Check if alive
+      console.log(`[LockCleaner] Dọn dẹp tiến trình Chrome cũ (PID: ${targetPid}) cho ${userDataDir}...`);
+      process.kill(targetPid, 'SIGKILL');
+    } catch (e) {}
+  }
+
+  for (const file of lockFiles) {
+    const p = path.join(userDataDir, file);
+    try {
+      fs.unlinkSync(p);
+    } catch (e) {}
+  }
+}
+
+async function dismissFacebookPopups(page) {
+  try {
+    const dismissSelectors = [
+      'div[role="button"]:has-text("Dismiss")',
+      'div[role="button"]:has-text("Bỏ qua")',
+      'button:has-text("Dismiss")',
+      'button:has-text("Bỏ qua")',
+      'div[aria-label="Lúc khác"]',
+      'div[aria-label="Not Now"]',
+      'div[aria-label="Đóng"]',
+      'div[aria-label="Close"]',
+      'div[role="button"]:has-text("Lúc khác")',
+      'div[role="button"]:has-text("Not now")'
+    ];
+    for (const sel of dismissSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await el.click({ force: true });
+        await page.waitForTimeout(1000);
+      }
+    }
+  } catch (e) {}
+}
+
+async function checkFacebookLoggedIn(browser, page) {
+  try {
+    const cookies = await browser.cookies('https://www.facebook.com');
+    const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
+
+    const isDomLoggedIn = await page.evaluate(() => {
+      const nav = document.querySelector('div[role="navigation"]') ||
+                  document.querySelector('div[role="banner"]') ||
+                  document.querySelector('form[action*="/search/"]') ||
+                  document.querySelector('div[aria-label="Account"]') ||
+                  document.querySelector('div[aria-label="Tài khoản"]') ||
+                  document.querySelector('svg[aria-label="Your profile"]') ||
+                  document.querySelector('[aria-label="Facebook"][role="link"]');
+      const hasLoginForm = document.querySelector('input[name="email"]') ||
+                          document.querySelector('#email') ||
+                          document.querySelector('button[name="login"]');
+      return !!nav && !hasLoginForm;
+    }).catch(() => false);
+
+    const isLoginOrCheckpoint = page.url().includes('/login') || page.url().includes('/checkpoint');
+    return (hasCUser || isDomLoggedIn) && !isLoginOrCheckpoint;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function syncCookiesToApi(browser, accountId) {
+  if (!accountId) return;
+  try {
+    const cookies = await browser.cookies('https://www.facebook.com');
+    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    if (cookieStr) {
+      const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
+      await fetch(`${apiUrl}/facebook-accounts/login`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: accountId,
+          status: 'LIVE',
+          cookie: cookieStr
+        })
+      }).catch(() => {});
+    }
+  } catch (e) {}
+}
+
+async function cleanupExtraTabs(browser, mainPage) {
+  try {
+    if (!browser) return;
+    const allPages = browser.pages();
+    for (const p of allPages) {
+      if (p !== mainPage && !p.isClosed()) {
+        const url = p.url();
+        if (url === 'about:blank' || url === '' || url.startsWith('chrome://') || !url.includes('facebook.com')) {
+          await p.close().catch(() => {});
+        }
+      }
+    }
+    if (mainPage && !mainPage.isClosed()) {
+      await mainPage.bringToFront().catch(() => {});
+    }
+  } catch (e) {}
+}
+
+async function runPlaywrightLogin(accountData) {
+  const { id, uid, password, twoFactorCode, cookie, profileId, proxy } = accountData;
   let browser = activeBrowsers.get(profileId);
 
   try {
     if (browser && browser.proxyConfigStr !== (proxy || '')) {
-      console.log('[Playwright] Proxy configuration changed, restarting browser...');
+      console.log('[Playwright] Cấu hình proxy thay đổi, khởi động lại trình duyệt...');
       await browser.close().catch(() => {});
       activeBrowsers.delete(profileId);
       browser = null;
     }
 
-    if (!browser) {
-      const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', profileId);
-      const lockFile = path.join(userDataDir, 'SingletonLock');
-      
-      if (fs.existsSync(lockFile)) {
-        throw new Error('Trình duyệt của tài khoản này đang được mở. Hãy tắt nó trước!');
-      }
+    const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', profileId);
 
+    const buildLaunchOptions = (proxyString) => {
+      const fp = generateFingerprint();
       const options = {
         headless: false,
         args: [
@@ -140,179 +308,328 @@ async function runPlaywrightLogin(accountData) {
           '--start-maximized',
           '--disable-blink-features=AutomationControlled',
           '--disable-infobars',
-          '--no-sandbox'
+          '--no-sandbox',
+          '--test-type',
+          '--no-default-browser-check',
+          '--no-first-run'
         ],
-        viewport: null
+        viewport: null,
+        userAgent: fp.userAgent,
+        locale: fp.locale,
+        timezoneId: fp.timezoneId
       };
 
-      // Parse and set proxy
-      let anonymizedProxyUrl;
-      if (proxy) {
-        const proxyConfig = parseProxy(proxy);
+      if (proxyString) {
+        const proxyConfig = parseProxy(proxyString);
         if (proxyConfig) {
-          console.log('[Playwright] Using proxy:', proxyConfig.server);
+          options.proxy = { server: proxyConfig.server };
           if (proxyConfig.username && proxyConfig.password) {
-            const proxyUrl = `http://${encodeURIComponent(proxyConfig.username)}:${encodeURIComponent(proxyConfig.password)}@${proxyConfig.server.replace('http://', '').replace('https://', '')}`;
-            anonymizedProxyUrl = await anonymizeProxy(proxyUrl);
-            console.log('[Playwright] Anonymized proxy:', anonymizedProxyUrl);
-            options.proxy = { server: anonymizedProxyUrl };
-          } else {
-            options.proxy = { server: proxyConfig.server };
+            options.proxy.username = proxyConfig.username;
+            options.proxy.password = proxyConfig.password;
           }
-        } else {
-          console.warn('[Playwright] Failed to parse proxy string:', proxy);
         }
       }
 
-      const fp = generateFingerprint();
-      options.userAgent = fp.userAgent;
-      options.locale = fp.locale;
-      options.timezoneId = fp.timezoneId;
+      return options;
+    };
+
+    const launchBrowserInstance = async (opts) => {
+      try {
+        return await chromium.launchPersistentContext(userDataDir, { ...opts, channel: 'chrome' });
+      } catch (err) {
+        console.log('[Playwright] Không tìm thấy Chrome, sử dụng Chromium mặc định...');
+        const fallbackOpts = { ...opts };
+        delete fallbackOpts.channel;
+        return await chromium.launchPersistentContext(userDataDir, fallbackOpts);
+      }
+    };
+
+    if (!browser) {
+      cleanStaleLockFiles(userDataDir);
+
+      let currentProxyToUse = proxy || null;
+      let launchOpts = buildLaunchOptions(currentProxyToUse);
 
       try {
-        options.channel = 'chrome'; // Thử dùng Google Chrome trước
-        browser = await chromium.launchPersistentContext(userDataDir, options);
-      } catch (e) {
-        console.log('[Playwright] Chrome không khả dụng, thử dùng Edge...');
-        options.channel = 'msedge'; // Fallback sang Microsoft Edge
-        browser = await chromium.launchPersistentContext(userDataDir, options);
+        browser = await launchBrowserInstance(launchOpts);
+      } catch (launchErr) {
+        if (currentProxyToUse) {
+          console.warn('[Playwright] Khởi động với proxy lỗi, tự động chuyển sang kết nối trực tiếp:', launchErr.message);
+          cleanStaleLockFiles(userDataDir);
+          currentProxyToUse = null;
+          launchOpts = buildLaunchOptions(null);
+          browser = await launchBrowserInstance(launchOpts);
+        } else {
+          throw launchErr;
+        }
       }
-      
-      browser.proxyConfigStr = proxy || ''; // Save current proxy to detect changes later
-      
+
+      browser.proxyConfigStr = currentProxyToUse || '';
+
       await browser.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       });
 
+      browser.on('page', async (newPage) => {
+        try {
+          await newPage.waitForLoadState('domcontentloaded').catch(() => {});
+          if (newPage.url() === 'about:blank' && browser.pages().length > 1) {
+            await newPage.close().catch(() => {});
+          }
+        } catch (e) {}
+      });
+
       browser.on('close', () => {
         activeBrowsers.delete(profileId);
-        const anonymizedProxy = browser._anonymizedProxyUrl;
-        if (anonymizedProxy) {
-          closeAnonymizedProxy(anonymizedProxy, true).catch(console.error);
-        }
       });
       activeBrowsers.set(profileId, browser);
     }
 
     // Login Flow
     let pages = browser.pages();
-    let page = pages.find(p => p.url().includes('facebook.com'));
-    
-    if (!page) page = pages[pages.length - 1];
-    
-    // Close other tabs
-    for (const p of pages) {
-      if (p !== page) await p.close().catch(() => {});
-    }
+    let page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
 
-    if (!page) {
-      page = await browser.newPage();
-    }
-
+    await cleanupExtraTabs(browser, page);
     await page.bringToFront();
-    await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    // Check if already logged in
-    const isLoggedIn = await page.evaluate(() => {
-      return !!document.querySelector('div[role="navigation"]') || !!document.querySelector('form[action*="/search/"]');
-    });
-
-    if (isLoggedIn) {
-      return { success: true, message: 'Already logged in' };
-    }
-
-    // Fill credentials
-    await page.waitForSelector('input[name="email"], #email', { timeout: 10000 });
-    await page.fill('input[name="email"], #email', uid);
-    await page.fill('input[name="pass"], #pass', password);
-    await page.waitForTimeout(500);
-
-    // Click login button - try multiple selectors
-    console.log('[Playwright] Attempting to click login button...');
-    const loginSelectors = [
-      'button[name="login"]',
-      'button[type="submit"]',
-      'button[data-loginbutton="true"]',
-      '[data-testid="royal_login_button"]',
-      'button:has-text("Đăng nhập")',
-      'button:has-text("Log in")',
-      'button:has-text("Log In")',
-    ];
-
-    let clicked = false;
-    for (const selector of loginSelectors) {
-      try {
-        const btn = page.locator(selector).first();
-        if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
-          console.log('[Playwright] Found login button with selector:', selector);
-          await btn.click({ force: true });
-          clicked = true;
-          break;
-        }
-      } catch (e) {
-        // Try next selector
+    // Nạp Cookie nếu có
+    if (cookie) {
+      const parsedCookies = parseCookies(cookie, '.facebook.com');
+      if (parsedCookies.length > 0) {
+        console.log(`[Playwright] Nạp ${parsedCookies.length} cookie cho UID ${uid}...`);
+        await browser.addCookies(parsedCookies).catch(e => console.warn('[Playwright] addCookies error:', e.message));
       }
     }
 
-    if (!clicked) {
-      // Last resort: press Enter
-      console.log('[Playwright] No login button found, pressing Enter...');
+    // Điều hướng vào Facebook với cơ chế dự phòng khi proxy hỏng
+    try {
+      await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await cleanupExtraTabs(browser, page);
+    } catch (navErr) {
+      const msg = (navErr.message || '').toLowerCase();
+      const isProxyFailure = msg.includes('err_tunnel_connection_failed') ||
+                             msg.includes('err_proxy_connection_failed') ||
+                             msg.includes('err_connection_refused') ||
+                             msg.includes('err_timed_out') ||
+                             msg.includes('timeout');
+
+      if (browser.proxyConfigStr && isProxyFailure) {
+        console.warn(`[Playwright] Proxy ${browser.proxyConfigStr} gặp sự cố (${navErr.message}). Tự động đổi sang kết nối mạng trực tiếp...`);
+        await browser.close().catch(() => {});
+        activeBrowsers.delete(profileId);
+        cleanStaleLockFiles(userDataDir);
+
+        const directOpts = buildLaunchOptions(null);
+        browser = await launchBrowserInstance(directOpts);
+        browser.proxyConfigStr = '';
+        activeBrowsers.set(profileId, browser);
+
+        pages = browser.pages();
+        page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
+        await cleanupExtraTabs(browser, page);
+        await page.bringToFront();
+
+        if (cookie) {
+          const parsedCookies = parseCookies(cookie, '.facebook.com');
+          if (parsedCookies.length > 0) await browser.addCookies(parsedCookies).catch(() => {});
+        }
+
+        await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 35000 });
+        await cleanupExtraTabs(browser, page);
+      } else {
+        throw navErr;
+      }
+    }
+
+    await page.waitForTimeout(2000);
+    await cleanupExtraTabs(browser, page);
+    await dismissFacebookPopups(page);
+
+    // Kiểm tra xem đã đăng nhập chưa
+    if (await checkFacebookLoggedIn(browser, page)) {
+      console.log(`[Playwright] Tài khoản ${uid} đã đăng nhập sẵn thành công.`);
+      let cookieStr = '';
+      try {
+        const cookies = await browser.cookies('https://www.facebook.com');
+        cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+      } catch (e) {}
+      await syncCookiesToApi(browser, id);
+      return { success: true, message: 'Already logged in', cookie: cookieStr };
+    }
+
+    // Xử lý màn hình đăng nhập hoặc màn hình CAA "Lưu tài khoản" (Saved Profile)
+    let emailInput = page.locator('input[name="email"], #email').first();
+    let hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
+
+    if (!hasEmail) {
+      const otherProfileBtn = page.locator(
+        'div[role="button"]:has-text("Use another profile"), ' +
+        'div[role="button"]:has-text("Dùng trang cá nhân khác"), ' +
+        'div[role="button"]:has-text("Đăng nhập bằng tài khoản khác"), ' +
+        'div[aria-label*="another profile"], ' +
+        'div[aria-label*="trang cá nhân khác"]'
+      ).first();
+
+      if (await otherProfileBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+        console.log('[Playwright] Nhấp "Dùng trang cá nhân khác"...');
+        await otherProfileBtn.click();
+        await page.waitForSelector('input[name="email"], #email, input[name="pass"]', { timeout: 7000 }).catch(() => {});
+        hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
+      }
+    }
+
+    if (hasEmail) {
+      console.log(`[Playwright] Điền tài khoản và mật khẩu cho UID ${uid}...`);
+      await emailInput.fill(uid);
+      await page.waitForTimeout(300);
+      const passInput = page.locator('input[name="pass"], #pass').first();
+      await passInput.fill(password);
+    } else {
+      const continueBtn = page.locator(
+        'div[role="button"]:has-text("Continue"), ' +
+        'div[role="button"]:has-text("Tiếp tục"), ' +
+        'div[aria-label*="Continue"], ' +
+        'div[aria-label*="Tiếp tục"]'
+      ).first();
+
+      if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+        console.log('[Playwright] Nhấp "Tiếp tục" cho tài khoản đã lưu...');
+        await continueBtn.click();
+        await page.waitForSelector('input[name="pass"], #pass', { timeout: 7000 }).catch(() => {});
+        const passInput = page.locator('input[name="pass"], #pass').first();
+        await passInput.fill(password);
+      } else {
+        // Fallback: chuyển đến trang login trực tiếp
+        console.log('[Playwright] Chuyển đến facebook.com/login/...');
+        await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(2000);
+        emailInput = page.locator('input[name="email"], #email').first();
+        if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+          await emailInput.fill(uid);
+          await page.waitForTimeout(300);
+          const passInput = page.locator('input[name="pass"], #pass').first();
+          await passInput.fill(password);
+        }
+      }
+    }
+
+    await page.waitForTimeout(500);
+
+    // Bấm nút đăng nhập
+    const submitBtn = page.locator(
+      'button[name="login"], ' +
+      'button[type="submit"], ' +
+      'button[data-loginbutton="true"], ' +
+      '[data-testid="royal_login_button"], ' +
+      '#loginbutton, ' +
+      'button:has-text("Đăng nhập"), ' +
+      'button:has-text("Log in"), ' +
+      'button:has-text("Log In")'
+    ).first();
+
+    if (await submitBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await submitBtn.click({ force: true });
+    } else {
       await page.keyboard.press('Enter');
     }
 
-    // Wait for navigation after login
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
-    // Check for login errors
+    // Kiểm tra sai mật khẩu
     const loginError = await page.evaluate(() => {
-      const text = document.body.innerText.toLowerCase();
+      const text = (document.body ? document.body.innerText : '').toLowerCase();
       return text.includes('không kết nối với tài khoản nào') || 
              text.includes('không chính xác') ||
              text.includes('the password that you') ||
-             text.includes('find your account');
+             text.includes('find your account') ||
+             text.includes('sai mật khẩu') ||
+             text.includes('mật khẩu không đúng');
     });
 
     if (loginError) {
       throw new Error('Sai tài khoản hoặc mật khẩu');
     }
 
-    // Handle 2FA
-    const isTwoFactor = await page.evaluate(() => {
-      return !!document.querySelector('#approvals_code') || 
-             document.body.innerText.includes('Nhập mã') ||
-             document.body.innerText.includes('Enter the code') ||
-             document.body.innerText.includes('two-factor');
-    });
+    // Xử lý 2FA (cả dạng modern /two_step_verification lẫn legacy checkpoint)
+    const pageText = await page.evaluate(() => document.body ? document.body.innerText : '');
+    const isTwoFactor = page.url().includes('two_step_verification') ||
+                        page.url().includes('two_factor') ||
+                        page.url().includes('checkpoint') ||
+                        pageText.includes('two-factor') ||
+                        pageText.includes('6-digit code') ||
+                        pageText.includes('authentication app') ||
+                        pageText.includes('Xác thực hai yếu tố') ||
+                        pageText.includes('Xác thực 2 yếu tố') ||
+                        pageText.includes('Nhập mã');
 
     if (isTwoFactor) {
-      if (!twoFactorCode) throw new Error('Yêu cầu mã 2FA nhưng không có Secret Key');
+      if (!twoFactorCode) {
+        throw new Error('Tài khoản yêu cầu mã 2FA nhưng không có Secret Key');
+      }
 
+      console.log(`[Playwright] Tạo mã 2FA TOTP cho UID ${uid}...`);
       const token = await generateTOTP(twoFactorCode);
-      console.log('[Playwright] Generated 2FA token, entering...');
-      
-      const codeInput = page.locator('#approvals_code');
-      if (await codeInput.count() > 0) {
+      console.log(`[Playwright] Mã 2FA TOTP đã tạo: ${token}`);
+
+      const codeInput = page.locator(
+        'input[type="text"]:visible, ' +
+        'input[inputmode="numeric"]:visible, ' +
+        'input[autocomplete="one-time-code"]:visible, ' +
+        '#approvals_code:visible, ' +
+        'input[name="approvals_code"]:visible'
+      ).first();
+
+      if (await codeInput.isVisible({ timeout: 8000 }).catch(() => false)) {
         await codeInput.fill(token);
         await page.waitForTimeout(500);
-        
-        const submitBtn = page.locator('#checkpointSubmitButton');
-        if (await submitBtn.count() > 0) {
-          await submitBtn.click({ force: true });
+
+        const continue2FA = page.locator(
+          'div[role="button"]:has-text("Continue"):visible, ' +
+          'div[role="button"]:has-text("Tiếp tục"):visible, ' +
+          'button:has-text("Continue"):visible, ' +
+          'button:has-text("Tiếp tục"):visible, ' +
+          '#checkpointSubmitButton:visible'
+        ).first();
+
+        if (await continue2FA.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await continue2FA.click({ force: true });
+        } else {
+          await codeInput.press('Enter');
         }
-        await page.waitForTimeout(3000);
+
+        await page.waitForTimeout(7000);
       }
     }
 
-    // Handle "Save Browser" prompt
+    // Xử lý màn hình "Lưu trình duyệt" (Save Browser) hoặc thông báo tạm
+    await dismissFacebookPopups(page);
     try {
-      const saveBrowserBtn = page.locator('#checkpointSubmitButton, button[value="OK"]');
-      if (await saveBrowserBtn.count() > 0) {
-        await saveBrowserBtn.first().click({ force: true });
-        await page.waitForTimeout(2000);
+      const trustBtn = page.locator(
+        'div[role="button"]:has-text("Continue"):visible, ' +
+        'div[role="button"]:has-text("Tiếp tục"):visible, ' +
+        'button:has-text("Save Browser"):visible, ' +
+        'button:has-text("Lưu trình duyệt"):visible, ' +
+        'button[value="OK"]:visible, ' +
+        '#checkpointSubmitButton:visible'
+      ).first();
+      if (await trustBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await trustBtn.click({ force: true });
+        await page.waitForTimeout(3000);
       }
     } catch (e) {}
 
-    return { success: true, message: 'Login completed' };
+    await dismissFacebookPopups(page);
+
+    // Đồng bộ lại cookie vào DB
+    let cookieStr = '';
+    try {
+      const cookies = await browser.cookies('https://www.facebook.com');
+      cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    } catch (e) {}
+
+    await syncCookiesToApi(browser, id);
+
+    return { success: true, message: 'Login completed', cookie: cookieStr };
 
   } catch (error) {
     console.error('[Playwright Runner Error]', error);
@@ -320,18 +637,31 @@ async function runPlaywrightLogin(accountData) {
   }
 }
 
-module.exports = { runPlaywrightLogin, activeBrowsers, parseProxy, generateFingerprint };
+const latestScreenshots = new Map();
 
-// Bắt đầu vòng lặp chụp màn hình cho Live Dashboard (mỗi 3 giây)
+// Bắt đầu vòng lặp chụp màn hình cho Live Dashboard (mỗi 2.5 giây)
 const screenshotsDir = path.join(__dirname, '..', 'public', 'screenshots');
 if (!fs.existsSync(screenshotsDir)) {
-  fs.mkdirSync(screenshotsDir, { recursive: true });
+  try {
+    fs.mkdirSync(screenshotsDir, { recursive: true });
+  } catch (e) {}
 }
 
 setInterval(async () => {
+  // Clean up stale screenshots if browser is closed
+  for (const profileId of latestScreenshots.keys()) {
+    if (!activeBrowsers.has(profileId)) {
+      latestScreenshots.delete(profileId);
+      try {
+        const p = path.join(screenshotsDir, `${profileId}.jpg`);
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      } catch (e) {}
+    }
+  }
+
   for (const [profileId, browser] of activeBrowsers.entries()) {
     try {
-      // browser is actually a BrowserContext from launchPersistentContext
+      if (!browser) continue;
       const pages = await browser.pages();
       // Ưu tiên tab Facebook, hoặc tab đang active
       let page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed());
@@ -340,14 +670,41 @@ setInterval(async () => {
       }
       
       if (page && !page.isClosed()) {
-        const screenshotPath = path.join(screenshotsDir, `${profileId}.jpg`);
-        await page.screenshot({ path: screenshotPath, type: 'jpeg', quality: 40, timeout: 5000 }).catch(e => {
-          console.error('[Live Dashboard] Failed to take screenshot for', profileId, e.message);
-        });
+        const title = await page.title().catch(() => 'Facebook');
+        const url = page.url();
+        const buffer = await page.screenshot({ type: 'jpeg', quality: 50, timeout: 4000 }).catch(() => null);
+
+        if (buffer) {
+          const base64 = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+          latestScreenshots.set(profileId, {
+            screenshot: base64,
+            url,
+            title,
+            timestamp: Date.now()
+          });
+
+          try {
+            const screenshotPath = path.join(screenshotsDir, `${profileId}.jpg`);
+            fs.writeFileSync(screenshotPath, buffer);
+          } catch (e) {}
+        }
       }
     } catch (e) {
       // Bỏ qua lỗi chụp màn hình để không làm gián đoạn tiến trình
-      console.error('[Live Dashboard] Loop error for', profileId, e.message);
     }
   }
-}, 3000);
+}, 2500);
+
+module.exports = {
+  runPlaywrightLogin,
+  activeBrowsers,
+  parseProxy,
+  generateFingerprint,
+  latestScreenshots,
+  generateTOTP,
+  parseCookies,
+  cleanStaleLockFiles,
+  dismissFacebookPopups,
+  checkFacebookLoggedIn,
+  syncCookiesToApi
+};

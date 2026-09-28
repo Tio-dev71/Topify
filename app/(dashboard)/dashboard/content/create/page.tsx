@@ -333,6 +333,24 @@ export default function CreatePostPage() {
                     />
                   </label>
                 ))}
+
+                {platforms.includes('YOUTUBE_SHORTS') && (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs space-y-1.5 animate-in fade-in duration-300">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                      Quy chuẩn bắt buộc của YouTube Shorts:
+                    </div>
+                    <p className="leading-relaxed text-amber-800/90 dark:text-amber-300/90">
+                      • <strong>Tỷ lệ khung hình:</strong> Bắt buộc là video dọc (9:16) hoặc vuông (1:1). Nếu bạn đăng video ngang (16:9), YouTube sẽ tự động coi đây là <strong>Video tiêu chuẩn</strong>.
+                    </p>
+                    <p className="leading-relaxed text-amber-800/90 dark:text-amber-300/90">
+                      • <strong>Thời lượng:</strong> Tối đa 60 giây (hoặc tối đa 180 giây cho video dọc). Video vượt quá thời lượng sẽ không xuất hiện trong luồng Shorts.
+                    </p>
+                    <p className="leading-relaxed text-amber-800/90 dark:text-amber-300/90">
+                      • <strong>Thẻ nhận diện:</strong> Hệ thống tự động bổ sung thẻ <code>#Shorts</code> vào tiêu đề và mô tả để YouTube lập chỉ mục ngay.
+                    </p>
+                  </div>
+                )}
               </div>
             </motion.div>
 

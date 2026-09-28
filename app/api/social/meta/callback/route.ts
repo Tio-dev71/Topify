@@ -4,30 +4,44 @@ import prisma from '@/lib/db';
 import { encryptToken } from '@/lib/crypto';
 import { getCredentials } from '@/lib/credentials';
 import { cookies } from 'next/headers';
+import * as jwtPackage from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
 // GET /api/social/meta/callback — Handle Meta OAuth callback
 export async function GET(req: NextRequest) {
   const baseUrl = new URL(req.url).origin;
   try {
+    const url = new URL(req.url);
+    const code = url.searchParams.get('code');
+    const error = url.searchParams.get('error');
+    const errorReason = url.searchParams.get('error_reason');
+    const errorDescription = url.searchParams.get('error_description');
+    const rawState = url.searchParams.get('state') || '';
+
     let session = await auth();
     let userId = session?.user?.id;
     let workspaceId = (session?.user as any)?.workspaceId;
     let isDesktopClient = false;
 
-    const url = new URL(req.url);
-    const code = url.searchParams.get('code');
-    const error = url.searchParams.get('error');
-    const rawState = url.searchParams.get('state') || '';
-
-    const renderDesktopError = (msg: string) => {
+    const renderDesktopError = (msg: string, detail?: string) => {
       return new NextResponse(
         `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2 style="color: #EF4444;">${msg}</h2>
-            <p>Vui lòng đóng cửa sổ này và thử lại.</p>
+          <head><meta charset="utf-8" /><title>Lỗi xác thực Meta</title></head>
+          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f9fafb; color: #1f2937;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+              <div style="font-size: 40px; margin-bottom: 12px;">❌</div>
+              <h2 style="color: #EF4444; margin-bottom: 8px;">${msg}</h2>
+              ${detail ? `<p style="color: #6B7280; font-size: 13px; line-height: 1.5; background: #FEF2F2; padding: 12px; border-radius: 8px; margin-bottom: 20px;">${detail}</p>` : ''}
+              <p style="color: #4B5563; font-size: 14px; margin-bottom: 24px;">Vui lòng đóng cửa sổ này và thử lại trên ứng dụng.</p>
+              <button onclick="window.close()" style="background: #4B5563; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500;">Đóng cửa sổ</button>
+            </div>
             <script>
-              setTimeout(() => { window.close(); }, 3000);
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_ERROR', provider: 'META', error: ${JSON.stringify(msg)} }, '*');
+                }
+              } catch(e) {}
             </script>
           </body>
         </html>`,
@@ -45,14 +59,10 @@ export async function GET(req: NextRequest) {
       isDesktopClient = true;
       const token = state.replace('meta_', '');
       try {
-        const jwt = require('jsonwebtoken');
-        const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-        if (!secret) throw new Error('Missing AUTH_SECRET');
-        const decoded = jwt.verify(token, secret) as any;
-        if (!userId) {
-          userId = decoded.sub || decoded.id;
-          workspaceId = decoded.workspaceId;
-        }
+        const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
+        // Prioritize desktop client user credentials over web session cookies
+        userId = decoded.sub || decoded.id;
+        workspaceId = decoded.workspaceId;
       } catch (err) {
         console.error('Invalid token in state:', err);
       }
@@ -64,14 +74,23 @@ export async function GET(req: NextRequest) {
     }
 
     if (!userId) {
-      if (isDesktopClient) return renderDesktopError('Vui lòng đăng nhập lại trên ứng dụng');
+      if (isDesktopClient) return renderDesktopError('Phiên đăng nhập ứng dụng không hợp lệ hoặc đã hết hạn.');
       return NextResponse.redirect(new URL('/login', baseUrl));
     }
 
+    if (!workspaceId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { workspaceId: true }
+      });
+      workspaceId = user?.workspaceId;
+    }
+
     if (error || !code) {
-      if (isDesktopClient) return renderDesktopError('Lỗi xác thực Meta: ' + (error || 'Không có mã xác thực'));
+      const fullError = errorDescription || errorReason || error || 'Người dùng đã hủy hoặc không có mã xác thực';
+      if (isDesktopClient) return renderDesktopError('Lỗi xác thực Meta', fullError);
       return NextResponse.redirect(
-        new URL('/dashboard/settings?error=meta_auth_failed', baseUrl)
+        new URL(`/dashboard/settings?error=${encodeURIComponent(fullError)}`, baseUrl)
       );
     }
 
@@ -88,6 +107,10 @@ export async function GET(req: NextRequest) {
 
     if (!tokenData.access_token) {
       console.error('Meta token exchange failed:', tokenData);
+      const errMsg = tokenData.error?.message || 'Không thể đổi mã truy cập với Meta';
+      if (isDesktopClient) {
+        return renderDesktopError('Đổi mã truy cập Meta thất bại', errMsg);
+      }
       return NextResponse.redirect(
         new URL('/dashboard/settings?error=token_exchange_failed', baseUrl)
       );
@@ -120,6 +143,7 @@ export async function GET(req: NextRequest) {
 
     // Encrypt the tokens before saving
     const encryptedAccessToken = encryptToken(page?.access_token || accessToken);
+    const accountDisplayName = page?.name || 'Meta Account';
 
     // Save to database
     await prisma.socialAccount.upsert({
@@ -133,9 +157,12 @@ export async function GET(req: NextRequest) {
         accessToken: encryptedAccessToken,
         refreshToken: null,
         expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // ~60 days
-        accountName: page?.name || 'Meta Account',
+        accountName: accountDisplayName,
         pageId: page?.id || null,
         instagramBusinessId,
+        status: 'CONNECTED',
+        workspaceId: workspaceId || undefined,
+        updatedAt: new Date(),
       },
       create: {
         userId: userId,
@@ -143,20 +170,31 @@ export async function GET(req: NextRequest) {
         provider: 'META',
         accessToken: encryptedAccessToken,
         expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-        accountName: page?.name || 'Meta Account',
+        accountName: accountDisplayName,
         pageId: page?.id || null,
         instagramBusinessId,
+        status: 'CONNECTED',
       },
     });
 
     if (isDesktopClient) {
       return new NextResponse(
         `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2 style="color: #10B981;">Kết nối Meta thành công!</h2>
-            <p>Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
+          <head><meta charset="utf-8" /><title>Kết nối thành công</title></head>
+          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f9fafb;">
+            <div style="max-width: 480px; margin: 0 auto; background: white; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+              <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+              <h2 style="color: #10B981; margin: 0 0 10px;">Kết nối Meta thành công!</h2>
+              <p style="color: #374151; font-weight: 500;">Tài khoản: <strong>${accountDisplayName}</strong></p>
+              ${page ? `<p style="color: #059669; font-size: 13px;">Fanpage: ${page.name}</p>` : '<p style="color: #D97706; font-size: 13px;">Lưu ý: Chưa tìm thấy Fanpage nào được cấp quyền. Bạn có thể cấp quyền Fanpage trong cài đặt Facebook.</p>'}
+              <p style="color: #6B7280; font-size: 13px; margin-top: 16px;">Cửa sổ sẽ tự động đóng sau 2 giây...</p>
+            </div>
             <script>
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_SUCCESS', provider: 'META' }, '*');
+                }
+              } catch(e) {}
               setTimeout(() => { window.close(); }, 2000);
             </script>
           </body>
@@ -173,11 +211,17 @@ export async function GET(req: NextRequest) {
     if (new URL(req.url).searchParams.get('state')?.includes('meta_')) {
       return new NextResponse(
         `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
+          <head><meta charset="utf-8" /><title>Lỗi kết nối Meta</title></head>
+          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 50px;">
             <h2 style="color: #EF4444;">Lỗi kết nối Meta</h2>
+            <p style="color: #6B7280; font-size: 14px;">${error.message || 'Đã xảy ra sự cố trong quá trình xử lý.'}</p>
             <p>Vui lòng đóng cửa sổ này và thử lại.</p>
             <script>
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_ERROR', provider: 'META', error: ${JSON.stringify(error.message)} }, '*');
+                }
+              } catch(e) {}
               setTimeout(() => { window.close(); }, 3000);
             </script>
           </body>
@@ -190,3 +234,4 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+

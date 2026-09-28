@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 // GET /api/campaigns
 export async function GET(req: NextRequest) {
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { name, description, objective, startDate, endDate, budget } = body;
+    const workspaceId = (session.user as any).workspaceId;
 
     if (!name) {
       return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
@@ -55,7 +57,21 @@ export async function POST(req: NextRequest) {
         endDate: endDate ? new Date(endDate) : null,
         budget: budget || 0,
         ownerId: session.user.id,
-        workspaceId: (session.user as any).workspaceId,
+        workspaceId,
+      },
+    });
+
+    await recordAuditLog({
+      action: 'CAMPAIGN.CREATE',
+      entityType: 'Campaign',
+      entityId: campaign.id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Tạo chiến dịch mới: ${name}`,
+        budget: budget || 0,
+        objective: objective || 'Mặc định'
       },
     });
 
@@ -91,6 +107,22 @@ export async function PATCH(req: NextRequest) {
       data,
     });
 
+    await recordAuditLog({
+      action: status ? 'CAMPAIGN.UPDATE_STATUS' : 'CAMPAIGN.UPDATE',
+      entityType: 'Campaign',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: status 
+          ? `Cập nhật trạng thái chiến dịch: ${status}`
+          : `Cập nhật thông tin chiến dịch: ${name || id}`,
+        status,
+        budget
+      },
+    });
+
     return NextResponse.json({ success: true, campaign });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -113,8 +145,25 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Campaign ID is required' }, { status: 400 });
     }
 
+    const existing = await prisma.campaign.findFirst({
+      where: { id, workspaceId },
+      select: { name: true },
+    });
+
     await prisma.campaign.deleteMany({
       where: { id, workspaceId },
+    });
+
+    await recordAuditLog({
+      action: 'CAMPAIGN.DELETE',
+      entityType: 'Campaign',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Xóa chiến dịch: ${existing?.name || id}` 
+      },
     });
 
     return NextResponse.json({ success: true });

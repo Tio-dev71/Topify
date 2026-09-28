@@ -20,6 +20,25 @@ type Post = {
   videoAsset?: { originalFileName: string; storageUrl: string };
 };
 
+function safeFormatDate(
+  dateValue: string | number | Date | null | undefined,
+  formatStr: string,
+  fallback: string = '--'
+): string {
+  if (!dateValue) return fallback;
+  try {
+    const d = typeof dateValue === 'string' || typeof dateValue === 'number' 
+      ? new Date(dateValue) 
+      : dateValue;
+    if (!(d instanceof Date) || isNaN(d.getTime())) {
+      return fallback;
+    }
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+}
+
 export default function PostsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +68,13 @@ export default function PostsPage() {
 
   // Polling for PUBLISHING status
   useEffect(() => {
-    const hasPublishing = posts.some(p => p.status === 'PUBLISHING' || p.platforms.some(pl => pl.status === 'PUBLISHING'));
+    const hasPublishing = posts.some(p => {
+      if (p.status === 'PUBLISHING') return true;
+      if (Array.isArray(p.platforms)) {
+        return p.platforms.some(pl => typeof pl === 'object' && pl !== null && pl.status === 'PUBLISHING');
+      }
+      return false;
+    });
     if (!hasPublishing) return;
     
     const interval = setInterval(() => {
@@ -57,6 +82,7 @@ export default function PostsPage() {
     }, 3000);
     return () => clearInterval(interval);
   }, [posts, statusFilter, search]);
+
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -247,17 +273,19 @@ export default function PostsPage() {
                       
                       {/* Platforms */}
                       <div className="flex flex-wrap gap-2">
-                        {post.platforms.map((p, i) => {
+                        {(post.platforms || []).map((p, i) => {
+                          const platName = typeof p === 'string' ? p : p?.platform || '';
+                          const platStatus = typeof p === 'string' ? '' : p?.status || '';
                           let dotColor = 'bg-gray-400';
-                          if (p.status === 'PUBLISHED') dotColor = 'bg-emerald-500';
-                          if (p.status === 'FAILED') dotColor = 'bg-rose-500';
-                          if (p.status === 'PUBLISHING') dotColor = 'bg-indigo-500 animate-pulse';
+                          if (platStatus === 'PUBLISHED') dotColor = 'bg-emerald-500';
+                          if (platStatus === 'FAILED') dotColor = 'bg-rose-500';
+                          if (platStatus === 'PUBLISHING') dotColor = 'bg-indigo-500 animate-pulse';
 
                           return (
                             <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white/50 dark:bg-gray-900/50 rounded-lg border border-gray-200/50 dark:border-gray-700/50 shadow-sm backdrop-blur-sm">
                               <div className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
                               <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-                                {p.platform.split('_')[0]}
+                                {platName ? platName.split('_')[0] : 'Khác'}
                               </span>
                             </div>
                           );
@@ -270,7 +298,9 @@ export default function PostsPage() {
                       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 rounded-xl border border-gray-100 dark:border-gray-800">
                         <CalendarDays className="w-4 h-4" />
                         <span className="font-medium">
-                          {post.scheduledAt ? format(new Date(post.scheduledAt), 'dd/MM/yyyy HH:mm') : format(new Date(post.createdAt), 'dd/MM/yyyy HH:mm')}
+                          {post.scheduledAt
+                            ? safeFormatDate(post.scheduledAt, 'dd/MM/yyyy HH:mm')
+                            : safeFormatDate(post.createdAt, 'dd/MM/yyyy HH:mm')}
                         </span>
                       </div>
 

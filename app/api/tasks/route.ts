@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 // GET /api/tasks - List tasks
 export async function GET(req: NextRequest) {
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { title, description, priority, dueDate, assigneeId, parentId } = body;
+    const workspaceId = (session.user as any).workspaceId;
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -69,10 +71,24 @@ export async function POST(req: NextRequest) {
         assigneeId,
         parentId,
         createdById: session.user.id,
-        workspaceId: (session.user as any).workspaceId,
+        workspaceId,
       },
       include: {
         assignee: { select: { name: true, image: true } },
+      },
+    });
+
+    await recordAuditLog({
+      action: 'TASK.CREATE',
+      entityType: 'Task',
+      entityId: task.id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Tạo công việc mới: ${title}`,
+        priority: priority || 'MEDIUM',
+        dueDate
       },
     });
 
@@ -92,6 +108,7 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const { taskId, status, priority, assigneeId } = body;
+    const workspaceId = (session.user as any).workspaceId;
 
     if (!taskId) {
       return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
@@ -107,6 +124,22 @@ export async function PATCH(req: NextRequest) {
       data,
       include: {
         assignee: { select: { name: true, image: true } },
+      },
+    });
+
+    await recordAuditLog({
+      action: status ? 'TASK.UPDATE_STATUS' : 'TASK.UPDATE',
+      entityType: 'Task',
+      entityId: taskId,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: status 
+          ? `Cập nhật trạng thái công việc: ${task.title} -> ${status}`
+          : `Cập nhật công việc: ${task.title}`,
+        status,
+        priority
       },
     });
 
@@ -132,8 +165,25 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
     }
 
+    const existing = await prisma.task.findFirst({
+      where: { id, workspaceId },
+      select: { title: true },
+    });
+
     await prisma.task.deleteMany({
       where: { id, workspaceId },
+    });
+
+    await recordAuditLog({
+      action: 'TASK.DELETE',
+      entityType: 'Task',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Xóa công việc: ${existing?.title || id}` 
+      },
     });
 
     return NextResponse.json({ success: true });

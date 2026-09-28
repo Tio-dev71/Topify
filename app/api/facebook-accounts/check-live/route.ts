@@ -12,8 +12,9 @@ export async function POST(req: NextRequest) {
     const { id } = await req.json();
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
+    const userWorkspaceId = (session.user as any).workspaceId;
     const account = await prisma.facebookAccount.findUnique({ where: { id } });
-    if (!account || !account.uid) {
+    if (!account || !account.uid || (session.user.role !== 'SUPER_ADMIN' && userWorkspaceId && account.workspaceId && account.workspaceId !== userWorkspaceId)) {
       return NextResponse.json({ error: 'Account or UID not found' }, { status: 404 });
     }
 

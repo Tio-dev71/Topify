@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,9 +38,14 @@ export async function GET(
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    // Staff can only view their own posts
-    if ((session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') && post.createdById !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const userWorkspaceId = (session.user as any).workspaceId;
+    if (session.user.role !== 'SUPER_ADMIN') {
+      if (userWorkspaceId && post.workspaceId !== userWorkspaceId) {
+        return NextResponse.json({ error: 'Post not found or access denied' }, { status: 404 });
+      }
+      if (session.user.role === 'STAFF' && post.createdById !== session.user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     const safePost = {
@@ -76,8 +82,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    if ((session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') && post.createdById !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const userWorkspaceId = (session.user as any).workspaceId;
+    if (session.user.role !== 'SUPER_ADMIN') {
+      if (userWorkspaceId && post.workspaceId !== userWorkspaceId) {
+        return NextResponse.json({ error: 'Post not found or access denied' }, { status: 404 });
+      }
+      if (session.user.role === 'STAFF' && post.createdById !== session.user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // Only allow updating certain fields
@@ -100,6 +112,20 @@ export async function PATCH(
     const updated = await prisma.post.update({
       where: { id },
       data: updateData,
+    });
+
+    await recordAuditLog({
+      action: 'POST.UPDATE',
+      entityType: 'Post',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId: post.workspaceId,
+      req,
+      metadata: { 
+        message: `Cập nhật bài viết: ${updated.title}`,
+        status: updated.status,
+        scheduledAt: updated.scheduledAt
+      },
     });
 
     return NextResponse.json(updated);
@@ -126,11 +152,30 @@ export async function DELETE(
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    if ((session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') && post.createdById !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const userWorkspaceId = (session.user as any).workspaceId;
+    if (session.user.role !== 'SUPER_ADMIN') {
+      if (userWorkspaceId && post.workspaceId !== userWorkspaceId) {
+        return NextResponse.json({ error: 'Post not found or access denied' }, { status: 404 });
+      }
+      if (session.user.role === 'STAFF' && post.createdById !== session.user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     await prisma.post.delete({ where: { id } });
+
+    await recordAuditLog({
+      action: 'POST.DELETE',
+      entityType: 'Post',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId: post.workspaceId,
+      req,
+      metadata: { 
+        message: `Xóa bài viết: ${post.title}` 
+      },
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

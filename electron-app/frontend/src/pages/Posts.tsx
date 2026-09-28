@@ -17,11 +17,16 @@ import {
   Edit3,
   AlignLeft,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/axios';
-import { STATUS_CONFIG, PLATFORM_CONFIG } from '../lib/utils';
+import { 
+  STATUS_CONFIG, 
+  PLATFORM_CONFIG, 
+  safeFormatDate, 
+  normalizePlatform, 
+  normalizeHashtags 
+} from '../lib/utils';
 
 type StatusFilter = 'ALL' | 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED';
 
@@ -81,7 +86,12 @@ export default function Posts() {
       if (filter !== 'ALL') params.set('status', filter);
       const res = await api.get(`/posts?${params}`);
       if (res.data) {
-        setPosts(res.data.posts || []);
+        const postList = Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(res.data?.posts)
+            ? res.data.posts
+            : [];
+        setPosts(postList);
       }
     } catch (e) {
       console.error('Failed to fetch posts:', e);
@@ -93,7 +103,16 @@ export default function Posts() {
 
   // Polling for PUBLISHING status
   useEffect(() => {
-    const hasPublishing = posts.some(p => p.status === 'PUBLISHING' || (p.platforms && p.platforms.some(pl => pl.status === 'PUBLISHING')));
+    const hasPublishing = posts.some(p => {
+      if (p.status === 'PUBLISHING') return true;
+      if (Array.isArray(p.platforms)) {
+        return p.platforms.some(pl => {
+          const norm = normalizePlatform(pl);
+          return norm.status === 'PUBLISHING';
+        });
+      }
+      return false;
+    });
     if (!hasPublishing) return;
     
     const interval = setInterval(() => {
@@ -129,10 +148,14 @@ export default function Posts() {
     }
   }
 
-  const filteredPosts = posts.filter((post) =>
-    (post.title || '').toLowerCase().includes(search.toLowerCase()) ||
-    (post.hashtags || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredPosts = posts.filter((post) => {
+    const title = (post.title || '').toLowerCase();
+    const tags = normalizeHashtags(post.hashtags).toLowerCase();
+    const query = (search || '').toLowerCase().trim();
+    if (!query) return true;
+    return title.includes(query) || tags.includes(query);
+  });
+
 
   return (
     <motion.div 
@@ -323,13 +346,13 @@ export default function Posts() {
                       {/* Bottom Info inside media */}
                       <div className="absolute bottom-3 left-3 right-3 z-10">
                         <h3 className="font-bold text-white text-[15px] leading-tight line-clamp-2 drop-shadow-md">
-                          {post.title}
+                          {post.title || 'Chưa đặt tiêu đề'}
                         </h3>
                         <p className="text-white/80 text-[11px] font-medium mt-1 drop-shadow-md flex items-center gap-1.5">
                           <Clock className="w-3 h-3 text-white/70" />
                           {post.scheduledAt
-                            ? `Hẹn: ${format(new Date(post.scheduledAt), 'HH:mm dd/MM/yyyy')}`
-                            : format(new Date(post.createdAt), 'dd/MM/yyyy')}
+                            ? `Hẹn: ${safeFormatDate(post.scheduledAt, 'HH:mm dd/MM/yyyy')}`
+                            : safeFormatDate(post.createdAt, 'dd/MM/yyyy')}
                         </p>
                       </div>
                     </div>
@@ -338,18 +361,18 @@ export default function Posts() {
                     <div className="px-2 pb-2 flex-1 flex flex-col space-y-2.5">
                       {/* Scheduled or Hashtags / Comment badges */}
                       <div className="space-y-1.5">
-                        {post.scheduledAt && (
+                        {post.scheduledAt && safeFormatDate(post.scheduledAt, 'HH:mm dd/MM', '') && (
                           <div className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-lg w-fit">
                             <Clock className="w-3 h-3 text-indigo-600" />
-                            <span>Hẹn giờ: {format(new Date(post.scheduledAt), 'HH:mm dd/MM')}</span>
+                            <span>Hẹn giờ: {safeFormatDate(post.scheduledAt, 'HH:mm dd/MM')}</span>
                           </div>
                         )}
 
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {post.hashtags && (
+                          {Boolean(normalizeHashtags(post.hashtags)) && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 truncate max-w-[160px]">
                               <Hash className="w-3 h-3 text-emerald-600 flex-shrink-0" />
-                              <span className="truncate">{post.hashtags}</span>
+                              <span className="truncate">{normalizeHashtags(post.hashtags)}</span>
                             </span>
                           )}
                           {post.firstComment && (
@@ -363,13 +386,14 @@ export default function Posts() {
 
                       {/* Platforms */}
                       <div className="flex flex-wrap gap-1.5">
-                        {(post.platforms || []).map((p, idx) => {
+                        {(post.platforms || []).map(normalizePlatform).map((p, idx) => {
                           const config = PLATFORM_CONFIG[p.platform as keyof typeof PLATFORM_CONFIG];
-                          const platformName = config?.name || p.platform.replace('_', ' ');
+                          const platformName = config?.name || (p.platform ? p.platform.replace(/_/g, ' ') : 'Nền tảng');
                           const platformColor = config?.color || '#4b5563';
+                          const shortName = platformName.split(' ')[0] || platformName;
                           return (
                             <div
-                              key={p.platform + idx}
+                              key={(p.platform || 'plat') + idx}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border shadow-2xs"
                               style={{
                                 color: platformColor,
@@ -378,7 +402,7 @@ export default function Posts() {
                               }}
                             >
                               <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: platformColor }} />
-                              {platformName.split(' ')[0]}
+                              {shortName}
                             </div>
                           );
                         })}
@@ -458,7 +482,7 @@ export default function Posts() {
             {/* Video Player & Basic Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Video Player */}
-              <div className="aspect-[9/16] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+              <div className="aspect-[9/16] max-h-[460px] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
                 {selectedPost.videoAsset?.storageUrl ? (
                   <video
                     src={selectedPost.videoAsset.storageUrl}
@@ -476,14 +500,14 @@ export default function Posts() {
               {/* Information list */}
               <div className="space-y-4">
                 {/* Schedule info */}
-                {selectedPost.scheduledAt && (
+                {selectedPost.scheduledAt && safeFormatDate(selectedPost.scheduledAt, 'HH:mm - EEEE, dd/MM/yyyy', '') && (
                   <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5">
                     <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5" />
                       Lên lịch tự động
                     </p>
                     <p className="text-sm font-bold text-indigo-950 mt-1">
-                      {format(new Date(selectedPost.scheduledAt), 'HH:mm - EEEE, dd/MM/yyyy')}
+                      {safeFormatDate(selectedPost.scheduledAt, 'HH:mm - EEEE, dd/MM/yyyy')}
                     </p>
                   </div>
                 )}
@@ -505,9 +529,9 @@ export default function Posts() {
                     <Hash className="w-3.5 h-3.5 text-emerald-600" />
                     Hashtags
                   </p>
-                  {selectedPost.hashtags ? (
+                  {normalizeHashtags(selectedPost.hashtags) ? (
                     <div className="flex flex-wrap gap-1">
-                      {selectedPost.hashtags.split(/[\s,]+/).filter(Boolean).map((t, i) => (
+                      {normalizeHashtags(selectedPost.hashtags).split(/[\s,]+/).filter(Boolean).map((t, i) => (
                         <span key={i} className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-emerald-200 text-emerald-700">
                           {t.startsWith('#') ? t : `#${t}`}
                         </span>
@@ -537,7 +561,7 @@ export default function Posts() {
                 Trạng thái trên nền tảng
               </h4>
               <div className="space-y-2">
-                {selectedPost.platforms.map((pl, i) => {
+                {(selectedPost.platforms || []).map(normalizePlatform).map((pl, i) => {
                   const cfg = PLATFORM_CONFIG[pl.platform as keyof typeof PLATFORM_CONFIG];
                   let linkUrl = '';
                   if (pl.externalPostId) {
@@ -548,7 +572,7 @@ export default function Posts() {
                   return (
                     <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
                       <span className="text-xs font-bold" style={{ color: cfg?.color || '#333' }}>
-                        {cfg?.name || pl.platform}
+                        {cfg?.name || (pl.platform ? pl.platform.replace(/_/g, ' ') : 'Nền tảng')}
                       </span>
                       <div className="flex items-center gap-2">
                         <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
@@ -577,28 +601,28 @@ export default function Posts() {
             </div>
 
             {/* Modal Actions */}
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+            <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
               <Link
                 to={`/posts/${selectedPost.id}`}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5"
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap inline-flex items-center gap-1.5 shrink-0"
               >
-                <Edit3 className="w-3.5 h-3.5" />
-                Mở trang chỉnh sửa chi tiết đầy đủ &rarr;
+                <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                <span>Mở trang chỉnh sửa chi tiết đầy đủ &rarr;</span>
               </Link>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {(selectedPost.status === 'FAILED' || selectedPost.status === 'PARTIAL_FAILED') && (
                   <button
                     onClick={() => retryPost(selectedPost.id)}
-                    className="px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs flex items-center gap-1.5 border border-amber-200"
+                    className="px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs whitespace-nowrap inline-flex items-center gap-1.5 shrink-0 border border-amber-200"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Thử lại ngay
+                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                    <span>Thử lại ngay</span>
                   </button>
                 )}
                 <button
                   onClick={() => setSelectedPost(null)}
-                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs"
+                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs whitespace-nowrap inline-flex items-center shrink-0"
                 >
                   Đóng
                 </button>

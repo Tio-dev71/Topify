@@ -1,16 +1,31 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { auth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    const session = await auth();
+    const userWorkspaceId = session?.user ? (session.user as any).workspaceId : null;
+
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const actionType = searchParams.get('actionType');
 
-    const where = actionType ? { actionType } : {};
+    const where: any = actionType ? { actionType } : {};
+    const taskWhere: any = { status: 'RUNNING' };
+
+    if (session?.user && session.user.role !== 'SUPER_ADMIN') {
+      const accounts = await prisma.facebookAccount.findMany({
+        where: { workspaceId: userWorkspaceId || 'none' },
+        select: { profileId: true },
+      });
+      const profileIds = accounts.map(a => a.profileId);
+      where.profileId = { in: profileIds };
+      taskWhere.workspaceId = userWorkspaceId || 'none';
+    }
 
     const [logs, total, runningTasksCount, totalComments, totalPosts] = await Promise.all([
       prisma.automationLog.findMany({
@@ -20,9 +35,9 @@ export async function GET(req: Request) {
         take: limit,
       }),
       prisma.automationLog.count({ where }),
-      prisma.automationTask.count({ where: { status: 'RUNNING' } }),
-      prisma.automationLog.count({ where: { actionType: 'COMMENT' } }),
-      prisma.automationLog.count({ where: { actionType: { in: ['POST_REEL', 'POST_GROUP', 'POST'] } } })
+      prisma.automationTask.count({ where: taskWhere }),
+      prisma.automationLog.count({ where: { ...where, actionType: 'COMMENT' } }),
+      prisma.automationLog.count({ where: { ...where, actionType: { in: ['POST_REEL', 'POST_GROUP', 'POST'] } } })
     ]);
     
     return NextResponse.json({

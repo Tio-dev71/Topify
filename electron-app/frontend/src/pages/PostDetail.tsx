@@ -16,10 +16,15 @@ import {
   AlignLeft,
   Calendar,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { toast } from 'sonner';
 import api from '../lib/axios';
-import { STATUS_CONFIG, PLATFORM_CONFIG } from '../lib/utils';
+import { 
+  STATUS_CONFIG, 
+  PLATFORM_CONFIG, 
+  safeFormatDate, 
+  normalizePlatform, 
+  normalizeHashtags 
+} from '../lib/utils';
 
 interface PostDetailData {
   id: string;
@@ -67,9 +72,18 @@ export default function PostDetail() {
         setPost(p);
         setEditTitle(p.title || '');
         setEditCaption(p.caption || '');
-        setEditHashtags(p.hashtags || '');
+        setEditHashtags(normalizeHashtags(p.hashtags));
         setEditFirstComment(p.firstComment || '');
-        setEditScheduledAt(p.scheduledAt ? new Date(p.scheduledAt).toISOString().slice(0, 16) : '');
+        let scheduledIso = '';
+        if (p.scheduledAt) {
+          try {
+            const d = new Date(p.scheduledAt);
+            if (!isNaN(d.getTime())) {
+              scheduledIso = d.toISOString().slice(0, 16);
+            }
+          } catch {}
+        }
+        setEditScheduledAt(scheduledIso);
       }
     } catch (e: any) {
       toast.error('Không tìm thấy bài viết hoặc không có quyền truy cập');
@@ -78,6 +92,7 @@ export default function PostDetail() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (id) fetchPost();
@@ -170,10 +185,10 @@ export default function PostDetail() {
           {post.status !== 'PUBLISHED' && post.status !== 'PUBLISHING' && (
             <button
               onClick={() => setIsEditing(!isEditing)}
-              className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-sm flex items-center gap-2 transition-colors border border-indigo-200"
+              className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 transition-colors border border-indigo-200"
             >
-              <Edit3 className="w-4 h-4" />
-              {isEditing ? 'Huỷ chỉnh sửa' : 'Chỉnh sửa nội dung'}
+              <Edit3 className="w-4 h-4 shrink-0" />
+              <span>{isEditing ? 'Huỷ chỉnh sửa' : 'Chỉnh sửa nội dung'}</span>
             </button>
           )}
 
@@ -205,12 +220,12 @@ export default function PostDetail() {
                 {statusConfig?.label || post.status}
               </span>
               <span className="text-xs text-gray-400">
-                Tạo lúc: {format(new Date(post.createdAt), 'HH:mm - dd/MM/yyyy')}
+                Tạo lúc: {safeFormatDate(post.createdAt, 'HH:mm - dd/MM/yyyy')}
               </span>
             </div>
             {!isEditing ? (
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
-                {post.title}
+                {post.title || 'Chưa đặt tiêu đề'}
               </h1>
             ) : (
               <div>
@@ -225,24 +240,24 @@ export default function PostDetail() {
             )}
           </div>
 
-          {post.scheduledAt && (
+          {post.scheduledAt && safeFormatDate(post.scheduledAt, 'HH:mm - dd/MM/yyyy', '') && (
             <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 text-right flex-shrink-0">
               <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider flex items-center justify-end gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
                 Thời gian lên lịch
               </p>
               <p className="text-base font-bold text-indigo-950 mt-0.5">
-                {format(new Date(post.scheduledAt), 'HH:mm - dd/MM/yyyy')}
+                {safeFormatDate(post.scheduledAt, 'HH:mm - dd/MM/yyyy')}
               </p>
             </div>
           )}
         </div>
 
         {/* Content Layout: Video on Left, Info on Right */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Video Preview */}
-          <div className="lg:col-span-5">
-            <div className="aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-lg border border-black/10 relative">
+          <div className="lg:col-span-5 w-full max-w-[340px] xl:max-w-[360px] mx-auto self-start">
+            <div className="aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-lg border border-black/10 relative max-h-[580px] flex items-center justify-center">
               {post.videoAsset?.storageUrl ? (
                 <video
                   src={post.videoAsset.storageUrl}
@@ -250,7 +265,7 @@ export default function PostDetail() {
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-8">
                   <Film className="w-12 h-12 mb-3" />
                   <p className="text-sm">Không có file video</p>
                 </div>
@@ -266,7 +281,7 @@ export default function PostDetail() {
                 Nền tảng xuất bản
               </h3>
               <div className="space-y-2.5">
-                {post.platforms.map((pl) => {
+                {(post.platforms || []).map(normalizePlatform).map((pl, idx) => {
                   const cfg = PLATFORM_CONFIG[pl.platform as keyof typeof PLATFORM_CONFIG];
                   const isSuccess = pl.status === 'PUBLISHED';
                   const isFail = pl.status === 'FAILED';
@@ -282,7 +297,7 @@ export default function PostDetail() {
 
                   return (
                     <div
-                      key={pl.id}
+                      key={pl.externalPostId || pl.platform + idx}
                       className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-gray-50/50"
                     >
                       <div className="flex items-center gap-3">
@@ -292,7 +307,7 @@ export default function PostDetail() {
                         />
                         <div>
                           <p className="text-sm font-bold text-gray-900">
-                            {cfg?.name || pl.platform}
+                            {cfg?.name || (pl.platform ? pl.platform.replace(/_/g, ' ') : 'Nền tảng')}
                           </p>
                           {pl.errorMessage && (
                             <p className="text-xs text-red-600 mt-0.5 line-clamp-2">
@@ -348,9 +363,9 @@ export default function PostDetail() {
                     <Hash className="w-3.5 h-3.5 text-emerald-600" />
                     Hashtags
                   </p>
-                  {post.hashtags ? (
+                  {normalizeHashtags(post.hashtags) ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {post.hashtags.split(/[\s,]+/).filter(Boolean).map((t, idx) => (
+                      {normalizeHashtags(post.hashtags).split(/[\s,]+/).filter(Boolean).map((t, idx) => (
                         <span
                           key={idx}
                           className="px-2.5 py-1 rounded-lg bg-white text-emerald-700 font-bold text-xs border border-emerald-200 shadow-2xs"
@@ -431,20 +446,20 @@ export default function PostDetail() {
                   />
                 </div>
 
-                <div className="flex gap-3 pt-3">
+                <div className="flex gap-3 pt-3 flex-wrap">
                   <button
                     type="button"
                     disabled={saving}
                     onClick={handleSaveEdit}
-                    className="btn-primary py-2.5 px-6 text-sm font-semibold flex items-center gap-2"
+                    className="btn-primary py-2.5 px-6 text-sm font-semibold whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0"
                   >
-                    <Save className="w-4 h-4" />
-                    {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                    <Save className="w-4 h-4 shrink-0" />
+                    <span>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
-                    className="py-2.5 px-5 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50"
+                    className="py-2.5 px-5 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 whitespace-nowrap inline-flex items-center justify-center shrink-0"
                   >
                     Huỷ
                   </button>

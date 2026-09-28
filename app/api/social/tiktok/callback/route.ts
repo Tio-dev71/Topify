@@ -6,6 +6,8 @@ import prisma from '@/lib/db';
 import { encryptToken } from '@/lib/crypto';
 import { auth } from '@/lib/auth';
 
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
@@ -21,16 +23,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Missing_code_or_state', req.url));
     }
 
-    const renderDesktopHtml = (msg: string, isError: boolean) => {
+    const renderDesktopHtml = (msg: string, isError: boolean, detail?: string) => {
       const color = isError ? '#EF4444' : '#10B981';
       return new NextResponse(
         `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2 style="color: ${color};">${msg}</h2>
-            <p>Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
+          <head><meta charset="utf-8" /><title>${isError ? 'Lỗi kết nối' : 'Kết nối thành công'}</title></head>
+          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f9fafb;">
+            <div style="max-width: 480px; margin: 0 auto; background: white; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+              <div style="font-size: 48px; margin-bottom: 12px;">${isError ? '❌' : '✅'}</div>
+              <h2 style="color: ${color}; margin-bottom: 8px;">${msg}</h2>
+              ${detail ? `<p style="color: #6B7280; font-size: 13px; line-height: 1.5; margin-bottom: 20px;">${detail}</p>` : ''}
+              <p style="color: #4B5563; font-size: 14px;">Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
+              <button onclick="window.close()" style="margin-top: 16px; background: #111827; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500;">Đóng cửa sổ</button>
+            </div>
             <script>
-              setTimeout(() => { window.close(); }, 2000);
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: '${isError ? 'OAUTH_ERROR' : 'OAUTH_SUCCESS'}', provider: 'TIKTOK', error: ${JSON.stringify(msg)} }, '*');
+                }
+              } catch(e) {}
+              ${!isError ? 'setTimeout(() => { window.close(); }, 2000);' : ''}
             </script>
           </body>
         </html>`,
@@ -51,18 +63,15 @@ export async function GET(req: NextRequest) {
 
     cookieStore.delete('oauth_state_tiktok');
 
-    let userId;
-    let role;
+    let userId: string | undefined;
+    let workspaceId: string | undefined;
 
     if (originalStateParam && originalStateParam.startsWith('tiktok_')) {
       const token = originalStateParam.replace('tiktok_', '');
       try {
-        const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-        if (secret) {
-          const decoded = jwtPackage.verify(token, secret) as any;
-          userId = decoded.sub || decoded.id;
-          role = decoded.role;
-        }
+        const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
+        userId = decoded.sub || decoded.id;
+        workspaceId = decoded.workspaceId;
       } catch (e) {
         console.error('Invalid token in state', e);
       }
@@ -71,7 +80,7 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       const session = await auth();
       userId = session?.user?.id;
-      role = session?.user?.role;
+      workspaceId = (session?.user as any)?.workspaceId;
     }
 
     if (!userId) {
@@ -79,12 +88,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Unauthorized', req.url));
     }
 
+    if (!workspaceId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { workspaceId: true }
+      });
+      workspaceId = user?.workspaceId || undefined;
+    }
+
     const credentials = await getCredentials(userId);
     const clientKey = credentials.TIKTOK_CLIENT_KEY;
     const clientSecret = credentials.TIKTOK_CLIENT_SECRET;
-    const redirectUri = process.env.TIKTOK_REDIRECT_URI || `${process.env.AUTH_URL || 'http://localhost:3000'}/api/social/tiktok/callback`;
+    const redirectUri = process.env.TIKTOK_REDIRECT_URI || `${req.nextUrl.origin}/api/social/tiktok/callback`;
 
     if (!clientKey || !clientSecret) {
+      if (isDesktopClient) return renderDesktopHtml('Thiếu cấu hình TikTok Client Key hoặc Secret', true);
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Missing_TikTok_credentials', req.url));
     }
 
@@ -108,34 +126,34 @@ export async function GET(req: NextRequest) {
 
     if (!tokenResponse.ok || tokenData.error) {
       console.error('TikTok token error:', tokenData);
-      return NextResponse.redirect(new URL(`/dashboard/settings/social?error=${encodeURIComponent(tokenData.error_description || tokenData.message || 'Token exchange failed')}`, req.url));
+      const errDetail = tokenData.error_description || tokenData.message || 'Token exchange failed';
+      if (isDesktopClient) return renderDesktopHtml('Lỗi đổi token TikTok', true, errDetail);
+      return NextResponse.redirect(new URL(`/dashboard/settings/social?error=${encodeURIComponent(errDetail)}`, req.url));
     }
 
     const accessToken = tokenData.access_token;
     const refreshToken = tokenData.refresh_token;
     const openId = tokenData.open_id;
-    const expiresIn = tokenData.expires_in;
+    const expiresIn = tokenData.expires_in || 86400;
 
     // Get user info to get display name
-    const userInfoResponse = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name', {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      }
-    });
-
-    const userInfoData = await userInfoResponse.json();
     let accountName = 'TikTok Account';
-    
-    if (userInfoResponse.ok && userInfoData.data?.user) {
-      accountName = userInfoData.data.user.display_name || accountName;
+    try {
+      const userInfoResponse = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        }
+      });
+      const userInfoData = await userInfoResponse.json();
+      if (userInfoResponse.ok && userInfoData.data?.user) {
+        accountName = userInfoData.data.user.display_name || accountName;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch TikTok user info:', e);
     }
 
     // Save or update SocialAccount
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-    const workspace = await prisma.workspace.findFirst({
-      where: { users: { some: { id: userId } } }
-    });
 
     await prisma.socialAccount.upsert({
       where: {
@@ -151,6 +169,7 @@ export async function GET(req: NextRequest) {
         accountName,
         pageId: openId,
         status: 'CONNECTED',
+        workspaceId: workspaceId || undefined,
         updatedAt: new Date(),
       },
       create: {
@@ -162,12 +181,12 @@ export async function GET(req: NextRequest) {
         accountName,
         pageId: openId,
         status: 'CONNECTED',
-        workspaceId: workspace?.id,
+        workspaceId,
       },
     });
 
     if (isDesktopClient) {
-      return renderDesktopHtml('Kết nối TikTok thành công!', false);
+      return renderDesktopHtml(`Kết nối TikTok thành công: ${accountName}`, false);
     }
     return NextResponse.redirect(new URL('/dashboard/settings/social?success=tiktok_connected', req.url));
 
@@ -176,10 +195,25 @@ export async function GET(req: NextRequest) {
     const stateParam = new URL(req.url).searchParams.get('state') || '';
     if (stateParam.includes('tiktok_')) {
        return new NextResponse(
-        `<html><head><meta charset="utf-8" /></head><body style="text-align: center; padding: 50px;"><h2 style="color: #EF4444;">Lỗi kết nối TikTok</h2><script>setTimeout(() => { window.close(); }, 3000);</script></body></html>`,
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: #EF4444;">Lỗi kết nối TikTok</h2>
+            <p style="color: #6B7280;">${error.message}</p>
+            <script>
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_ERROR', provider: 'TIKTOK', error: ${JSON.stringify(error.message)} }, '*');
+                }
+              } catch(e) {}
+              setTimeout(() => { window.close(); }, 3000);
+            </script>
+          </body>
+        </html>`,
         { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
       );
     }
     return NextResponse.redirect(new URL(`/dashboard/settings/social?error=${encodeURIComponent(error.message)}`, req.url));
   }
 }
+

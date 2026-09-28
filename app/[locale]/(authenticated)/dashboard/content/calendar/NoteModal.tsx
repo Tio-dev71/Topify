@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -13,16 +13,9 @@ interface NoteModalProps {
 }
 
 export default function NoteModal({ isOpen, onClose, date, onSuccess, existingNote }: NoteModalProps) {
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(existingNote?.content || '');
+  const [selectedDate, setSelectedDate] = useState<Date>(date || new Date());
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (existingNote) {
-      setContent(existingNote.content);
-    } else {
-      setContent('');
-    }
-  }, [existingNote, isOpen]);
 
   if (!isOpen || !date) return null;
 
@@ -36,13 +29,16 @@ export default function NoteModal({ isOpen, onClose, date, onSuccess, existingNo
         await fetch(`/api/calendar/notes/${existingNote.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ 
+            date: selectedDate.toISOString(),
+            content 
+          }),
         });
       } else {
         await fetch('/api/calendar/notes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date: date.toISOString(), content }),
+          body: JSON.stringify({ date: selectedDate.toISOString(), content }),
         });
       }
       onSuccess();
@@ -84,8 +80,31 @@ export default function NoteModal({ isOpen, onClose, date, onSuccess, existingNo
           </button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-4">
-          <div className="mb-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-muted-foreground)] mb-1">
+              Date
+            </label>
+            <input
+              type="date"
+              value={format(selectedDate, 'yyyy-MM-dd')}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const [y, m, d] = e.target.value.split('-').map(Number);
+                  setSelectedDate(new Date(y, m - 1, d, 12, 0, 0));
+                }
+              }}
+              onClick={(e) => {
+                try {
+                  e.currentTarget.showPicker?.();
+                } catch {}
+              }}
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all cursor-pointer"
+              required
+            />
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-[var(--color-muted-foreground)] mb-1">
               Note Content
             </label>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 // GET /api/crm/deals - List deals with pipeline/stage info
 export async function GET(req: NextRequest) {
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { title, value, customerId, pipelineId, stageId, expectedClose } = body;
+    const workspaceId = (session.user as any).workspaceId;
 
     if (!title || !pipelineId || !stageId) {
       return NextResponse.json({ error: 'Title, pipeline, and stage are required' }, { status: 400 });
@@ -60,11 +62,25 @@ export async function POST(req: NextRequest) {
         stageId,
         ownerId: session.user.id,
         expectedClose: expectedClose ? new Date(expectedClose) : null,
-        workspaceId: (session.user as any).workspaceId,
+        workspaceId,
       },
       include: {
         customer: { select: { name: true } },
         stage: { select: { name: true, color: true } },
+      },
+    });
+
+    await recordAuditLog({
+      action: 'DEAL.CREATE',
+      entityType: 'Deal',
+      entityId: deal.id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Tạo cơ hội (Deal) mới: ${title}`,
+        value: value || 0,
+        stage: deal.stage?.name
       },
     });
 
@@ -84,6 +100,7 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const { dealId, stageId, status } = body;
+    const workspaceId = (session.user as any).workspaceId;
 
     if (!dealId) {
       return NextResponse.json({ error: 'Deal ID is required' }, { status: 400 });
@@ -101,6 +118,22 @@ export async function PATCH(req: NextRequest) {
       data,
       include: {
         stage: { select: { name: true, color: true } },
+      },
+    });
+
+    await recordAuditLog({
+      action: stageId ? 'DEAL.UPDATE_STAGE' : 'DEAL.UPDATE',
+      entityType: 'Deal',
+      entityId: dealId,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: stageId 
+          ? `Chuyển giai đoạn cơ hội: ${deal.title} -> ${deal.stage?.name || stageId}`
+          : `Cập nhật trạng thái cơ hội: ${deal.title} -> ${status}`,
+        stage: deal.stage?.name,
+        status: deal.status
       },
     });
 
@@ -126,8 +159,25 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Deal ID is required' }, { status: 400 });
     }
 
+    const existing = await prisma.deal.findFirst({
+      where: { id, workspaceId },
+      select: { title: true },
+    });
+
     await prisma.deal.deleteMany({
       where: { id, workspaceId },
+    });
+
+    await recordAuditLog({
+      action: 'DEAL.DELETE',
+      entityType: 'Deal',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Xóa cơ hội (Deal: ${existing?.title || id})` 
+      },
     });
 
     return NextResponse.json({ success: true });

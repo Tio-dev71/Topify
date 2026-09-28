@@ -12,16 +12,28 @@ export async function POST(req: NextRequest) {
 
     const url = new URL(req.url);
     const provider = url.searchParams.get('provider');
+    const accountId = url.searchParams.get('accountId');
 
-    if (!provider) {
-      return NextResponse.json({ error: 'Provider required' }, { status: 400 });
+    if (!provider && !accountId) {
+      return NextResponse.json({ error: 'Provider or Account ID required' }, { status: 400 });
+    }
+
+    const user = session.user as any;
+    const whereClause: any = {
+      OR: [
+        { userId: user.id },
+        ...(user.workspaceId ? [{ workspaceId: user.workspaceId }] : [])
+      ]
+    };
+
+    if (accountId) {
+      whereClause.id = accountId;
+    } else if (provider) {
+      whereClause.provider = provider.toUpperCase() as any;
     }
 
     await prisma.socialAccount.deleteMany({
-      where: {
-        userId: session.user.id,
-        provider: provider as any,
-      },
+      where: whereClause,
     });
 
     return NextResponse.json({ success: true });

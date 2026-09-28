@@ -6,6 +6,8 @@ import prisma from '@/lib/db';
 import { encryptToken } from '@/lib/crypto';
 import { auth } from '@/lib/auth';
 
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
@@ -22,16 +24,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Missing_code_or_state', req.url));
     }
 
-    const renderDesktopHtml = (msg: string, isError: boolean) => {
+    const renderDesktopHtml = (msg: string, isError: boolean, detail?: string) => {
       const color = isError ? '#EF4444' : '#10B981';
       return new NextResponse(
         `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2 style="color: ${color};">${msg}</h2>
-            <p>Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
+          <head><meta charset="utf-8" /><title>${isError ? 'Lỗi kết nối' : 'Kết nối thành công'}</title></head>
+          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f9fafb;">
+            <div style="max-width: 480px; margin: 0 auto; background: white; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+              <div style="font-size: 48px; margin-bottom: 12px;">${isError ? '❌' : '✅'}</div>
+              <h2 style="color: ${color}; margin-bottom: 8px;">${msg}</h2>
+              ${detail ? `<p style="color: #6B7280; font-size: 13px; line-height: 1.5; margin-bottom: 20px;">${detail}</p>` : ''}
+              <p style="color: #4B5563; font-size: 14px;">Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
+              <button onclick="window.close()" style="margin-top: 16px; background: #0068FF; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500;">Đóng cửa sổ</button>
+            </div>
             <script>
-              setTimeout(() => { window.close(); }, 2000);
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: '${isError ? 'OAUTH_ERROR' : 'OAUTH_SUCCESS'}', provider: 'ZALO', error: ${JSON.stringify(msg)} }, '*');
+                }
+              } catch(e) {}
+              ${!isError ? 'setTimeout(() => { window.close(); }, 2000);' : ''}
             </script>
           </body>
         </html>`,
@@ -54,18 +66,15 @@ export async function GET(req: NextRequest) {
     cookieStore.delete('oauth_state_zalo');
     cookieStore.delete('oauth_pkce_zalo');
 
-    let userId;
-    let role;
+    let userId: string | undefined;
+    let workspaceId: string | undefined;
 
     if (originalStateParam && originalStateParam.startsWith('zalo_')) {
       const token = originalStateParam.replace('zalo_', '');
       try {
-        const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-        if (secret) {
-          const decoded = jwtPackage.verify(token, secret) as any;
-          userId = decoded.sub || decoded.id;
-          role = decoded.role;
-        }
+        const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
+        userId = decoded.sub || decoded.id;
+        workspaceId = decoded.workspaceId;
       } catch (e) {
         console.error('Invalid token in state', e);
       }
@@ -74,7 +83,7 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       const session = await auth();
       userId = session?.user?.id;
-      role = session?.user?.role;
+      workspaceId = (session?.user as any)?.workspaceId;
     }
 
     if (!userId) {
@@ -82,11 +91,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Unauthorized', req.url));
     }
 
+    if (!workspaceId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { workspaceId: true }
+      });
+      workspaceId = user?.workspaceId || undefined;
+    }
+
     const credentials = await getCredentials(userId);
     const appId = credentials.ZALO_APP_ID;
     const secretKey = credentials.ZALO_APP_SECRET;
 
     if (!appId || !secretKey || !codeVerifier) {
+      if (isDesktopClient) return renderDesktopHtml('Thiếu cấu hình Zalo App ID hoặc Secret Key', true);
       return NextResponse.redirect(new URL('/dashboard/settings/social?error=Missing_Zalo_credentials_or_PKCE', req.url));
     }
 
@@ -109,36 +127,37 @@ export async function GET(req: NextRequest) {
 
     if (!tokenResponse.ok || tokenData.error) {
       console.error('Zalo token error:', tokenData);
-      return NextResponse.redirect(new URL(`/dashboard/settings/social?error=${encodeURIComponent(tokenData.error_name || tokenData.message || 'Token exchange failed')}`, req.url));
+      const errDetail = tokenData.error_name || tokenData.message || 'Token exchange failed';
+      if (isDesktopClient) return renderDesktopHtml('Lỗi đổi token Zalo', true, errDetail);
+      return NextResponse.redirect(new URL(`/dashboard/settings/social?error=${encodeURIComponent(errDetail)}`, req.url));
     }
 
     const accessToken = tokenData.access_token;
     const refreshToken = tokenData.refresh_token;
-    const expiresIn = parseInt(tokenData.expires_in, 10);
+    const expiresIn = parseInt(tokenData.expires_in, 10) || 86400;
 
     // Fetch OA Info to get name
-    const oaInfoResponse = await fetch('https://openapi.zalo.me/v2.0/oa/getoa', {
-      method: 'GET',
-      headers: {
-        'access_token': accessToken,
-      }
-    });
-
-    const oaInfoData = await oaInfoResponse.json();
     let accountName = 'Zalo OA Account';
     let retrievedOaId = oaId || 'unknown';
 
-    if (oaInfoData.error === 0 && oaInfoData.data) {
-      accountName = oaInfoData.data.name || accountName;
-      retrievedOaId = oaInfoData.data.oa_id || retrievedOaId;
+    try {
+      const oaInfoResponse = await fetch('https://openapi.zalo.me/v2.0/oa/getoa', {
+        method: 'GET',
+        headers: {
+          'access_token': accessToken,
+        }
+      });
+      const oaInfoData = await oaInfoResponse.json();
+      if (oaInfoData.error === 0 && oaInfoData.data) {
+        accountName = oaInfoData.data.name || accountName;
+        retrievedOaId = oaInfoData.data.oa_id || retrievedOaId;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch Zalo OA info:', e);
     }
 
     // Save or update SocialAccount
     const expiresAt = new Date(Date.now() + expiresIn * 1000);
-
-    const workspace = await prisma.workspace.findFirst({
-      where: { users: { some: { id: userId } } }
-    });
 
     await prisma.socialAccount.upsert({
       where: {
@@ -154,6 +173,7 @@ export async function GET(req: NextRequest) {
         accountName,
         pageId: retrievedOaId,
         status: 'CONNECTED',
+        workspaceId: workspaceId || undefined,
         updatedAt: new Date(),
       },
       create: {
@@ -165,12 +185,12 @@ export async function GET(req: NextRequest) {
         accountName,
         pageId: retrievedOaId,
         status: 'CONNECTED',
-        workspaceId: workspace?.id,
+        workspaceId,
       },
     });
 
     if (isDesktopClient) {
-      return renderDesktopHtml('Kết nối Zalo thành công!', false);
+      return renderDesktopHtml(`Kết nối Zalo thành công: ${accountName}`, false);
     }
     return NextResponse.redirect(new URL('/dashboard/settings/social?success=zalo_connected', req.url));
 
@@ -179,10 +199,25 @@ export async function GET(req: NextRequest) {
     const stateParam = new URL(req.url).searchParams.get('state') || '';
     if (stateParam.includes('zalo_')) {
        return new NextResponse(
-        `<html><head><meta charset="utf-8" /></head><body style="text-align: center; padding: 50px;"><h2 style="color: #EF4444;">Lỗi kết nối Zalo</h2><script>setTimeout(() => { window.close(); }, 3000);</script></body></html>`,
+        `<html>
+          <head><meta charset="utf-8" /></head>
+          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 50px;">
+            <h2 style="color: #EF4444;">Lỗi kết nối Zalo</h2>
+            <p style="color: #6B7280;">${error.message}</p>
+            <script>
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_ERROR', provider: 'ZALO', error: ${JSON.stringify(error.message)} }, '*');
+                }
+              } catch(e) {}
+              setTimeout(() => { window.close(); }, 3000);
+            </script>
+          </body>
+        </html>`,
         { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
       );
     }
     return NextResponse.redirect(new URL(`/dashboard/settings/social?error=${encodeURIComponent(error.message)}`, req.url));
   }
 }
+

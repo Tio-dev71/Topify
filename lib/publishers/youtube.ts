@@ -2,6 +2,7 @@ import type { Publisher, PublishResult } from './types';
 import type { Post, VideoAsset, SocialAccount, PostPlatform } from '@prisma/client';
 import { getStorage } from '@/lib/storage';
 import { getValidAccessToken } from './googleAuth';
+import { prisma } from '@/lib/db';
 import fs from 'fs';
 
 /**
@@ -26,13 +27,26 @@ export class YouTubeShortsPublisher implements Publisher {
       const storage = getStorage();
       const videoPath = storage.getPath(videoAsset.storageUrl);
 
-      // Ensure title includes #Shorts for YouTube to recognize it
-      let title = post.title;
+      // Ensure title includes #Shorts for YouTube algorithm to recognize it (max 100 chars for YouTube Data API)
+      let title = post.title?.trim() || 'Shorts';
       if (!title.toLowerCase().includes('#shorts')) {
-        title = `${title} #Shorts`;
+        if (title.length + 8 <= 100) {
+          title = `${title} #Shorts`;
+        } else {
+          title = `${title.slice(0, 91)} #Shorts`;
+        }
       }
 
-      const description = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
+      // Ensure description includes #Shorts tag
+      let description = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
+      if (!description.toLowerCase().includes('#shorts')) {
+        description = description ? `${description}\n\n#Shorts #YouTubeShorts` : '#Shorts #YouTubeShorts';
+      }
+
+      // Warn if video duration exceeds YouTube Shorts limits (> 180s)
+      if (videoAsset.duration && videoAsset.duration > 180) {
+        console.warn(`[YouTubeShortsPublisher] Video duration is ${videoAsset.duration}s (> 180s). YouTube will automatically process this as a Standard Long-form Video.`);
+      }
 
       // Auto-detect channel if not yet stored
       if (!socialAccount.youtubeChannelId) {
@@ -63,13 +77,15 @@ export class YouTubeShortsPublisher implements Publisher {
         }
       }
 
-      // Prepare tags from hashtags
+      // Prepare tags from hashtags and guarantee Shorts tags
       const tags = post.hashtags
         ? post.hashtags.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean)
         : [];
-      if (!tags.some(t => t.toLowerCase() === 'shorts')) {
-        tags.push('Shorts');
-      }
+      ['Shorts', 'Short', 'YouTubeShorts'].forEach(tag => {
+        if (!tags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+          tags.push(tag);
+        }
+      });
 
       // Step 1: Initialize resumable upload
       const initRes = await fetch(

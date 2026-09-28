@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 // GET /api/crm/pipelines
 export async function GET(req: NextRequest) {
@@ -87,6 +88,19 @@ export async function POST(req: NextRequest) {
       include: { stages: { orderBy: { sortOrder: 'asc' } } },
     });
 
+    await recordAuditLog({
+      action: 'PIPELINE.CREATE',
+      entityType: 'Pipeline',
+      entityId: pipeline.id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Tạo quy trình bán hàng mới: ${name}`,
+        stagesCount: pipeline.stages.length
+      },
+    });
+
     return NextResponse.json(pipeline, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -115,8 +129,13 @@ export async function DELETE(req: NextRequest) {
     });
 
     if (dealsCount > 0) {
-      return NextResponse.json({ error: `Không thể xóa phễu này vì đang có ${dealsCount} giao dịch gắn liền.` }, { status: 400 });
+      return NextResponse.json({ error: `Không thể xóa quy trình này vì đang có ${dealsCount} giao dịch gắn liền.` }, { status: 400 });
     }
+
+    const existing = await prisma.pipeline.findFirst({
+      where: { id, workspaceId },
+      select: { name: true },
+    });
 
     await prisma.stage.deleteMany({
       where: { pipelineId: id },
@@ -124,6 +143,18 @@ export async function DELETE(req: NextRequest) {
 
     await prisma.pipeline.deleteMany({
       where: { id, workspaceId },
+    });
+
+    await recordAuditLog({
+      action: 'PIPELINE.DELETE',
+      entityType: 'Pipeline',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Xóa quy trình bán hàng: ${existing?.name || id}` 
+      },
     });
 
     return NextResponse.json({ success: true });

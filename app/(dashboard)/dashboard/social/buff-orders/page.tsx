@@ -177,12 +177,12 @@ export default function BuffOrdersPage() {
           <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="text-xs text-[var(--color-muted-foreground)] uppercase bg-[var(--color-muted)]/40 border-b border-[var(--color-border)]">
               <tr>
-                <th className="px-6 py-5 font-bold tracking-wider">Mã đơn</th>
-                <th className="px-6 py-5 font-bold tracking-wider">URL / ID</th>
-                <th className="px-6 py-5 font-bold tracking-wider">Loại</th>
-                <th className="px-6 py-5 font-bold tracking-wider">Tiến độ</th>
-                <th className="px-6 py-5 font-bold tracking-wider">Trạng thái</th>
-                <th className="px-6 py-5 font-bold tracking-wider text-right">Thao tác</th>
+                <th className="px-6 py-5 font-bold tracking-wider whitespace-nowrap w-[120px]">Mã đơn</th>
+                <th className="px-6 py-5 font-bold tracking-wider whitespace-nowrap min-w-[220px]">URL / ID</th>
+                <th className="px-6 py-5 font-bold tracking-wider whitespace-nowrap w-[140px]">Loại</th>
+                <th className="px-6 py-5 font-bold tracking-wider whitespace-nowrap w-[200px]">Tiến độ</th>
+                <th className="px-6 py-5 font-bold tracking-wider whitespace-nowrap w-[160px]">Trạng thái</th>
+                <th className="px-6 py-5 font-bold tracking-wider text-right whitespace-nowrap w-[100px]">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
@@ -218,16 +218,16 @@ export default function BuffOrdersPage() {
                       transition={{ delay: Math.min(index * 0.05, 0.5) }}
                       className="hover:bg-[var(--color-muted)]/20 transition-colors group"
                     >
-                      <td className="px-6 py-5 font-mono text-xs font-bold text-[var(--color-muted-foreground)]">
+                      <td className="px-6 py-5 font-mono text-xs font-bold text-[var(--color-muted-foreground)] whitespace-nowrap w-[120px]">
                         #{order.id.slice(-6).toUpperCase()}
                       </td>
-                      <td className="px-6 py-5">
-                        <a href={order.url} target="_blank" rel="noreferrer" className="text-[var(--color-foreground)] hover:text-[#5B3DF5] font-semibold truncate block max-w-[250px] transition-colors">
+                      <td className="px-6 py-5 min-w-[220px] max-w-[320px]">
+                        <a href={order.url} target="_blank" rel="noreferrer" title={order.url} className="text-[var(--color-foreground)] hover:text-[#5B3DF5] font-semibold truncate block transition-colors">
                           {order.url}
                         </a>
                       </td>
-                      <td className="px-6 py-5">
-                        <span className="px-3 py-1.5 bg-[#5B3DF5]/10 text-[#5B3DF5] text-xs font-bold rounded-xl border border-[#5B3DF5]/20">
+                      <td className="px-6 py-5 whitespace-nowrap w-[140px]">
+                        <span className="px-3 py-1.5 bg-[#5B3DF5]/10 text-[#5B3DF5] text-xs font-bold rounded-xl border border-[#5B3DF5]/20 whitespace-nowrap inline-block">
                           {order.actionType}
                         </span>
                       </td>

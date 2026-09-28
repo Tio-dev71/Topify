@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { AutomationEngine, TaskConfig } from '@/lib/automation/engine';
+import { recordAuditLog } from '@/lib/audit-log';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,6 +27,21 @@ export async function POST(req: NextRequest) {
         data: { status: 'RUNNING' }
       });
     }
+
+    await recordAuditLog({
+      action: 'AUTOMATION.RUN',
+      entityType: 'AutomationTask',
+      entityId: taskId || undefined,
+      userId: session.user.id,
+      workspaceId: (session.user as any).workspaceId,
+      req,
+      metadata: { 
+        message: `Chạy kịch bản tự động hóa: ${config.type}`,
+        taskType: config.type,
+        accountsCount: accountIds.length,
+        taskId
+      },
+    });
 
     processBackgroundAutomation(accountIds, config, taskId).catch(e => {
       console.error('[Background Automation Error]', e);

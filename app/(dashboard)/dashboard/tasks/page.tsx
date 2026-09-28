@@ -177,13 +177,13 @@ export default function TasksPage() {
     switch (priority) {
       case 'URGENT':
       case 'HIGH':
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-red-500 bg-red-500/10 border-red-500/20 uppercase">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-red-500 bg-red-500/10 border-red-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
       case 'MEDIUM':
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-yellow-500 bg-yellow-500/10 border-yellow-500/20 uppercase">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-yellow-500 bg-yellow-500/10 border-yellow-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
       case 'LOW':
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-blue-500 bg-blue-500/10 border-blue-500/20 uppercase">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-blue-500 bg-blue-500/10 border-blue-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-zinc-500 bg-zinc-500/10 border-zinc-500/20 uppercase">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-zinc-500 bg-zinc-500/10 border-zinc-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
     }
   };
 
@@ -277,12 +277,12 @@ export default function TasksPage() {
           <table className="w-full text-sm text-left">
             <thead className="text-xs uppercase bg-[var(--color-muted)]/50 text-[var(--color-muted-foreground)] border-b border-[var(--color-border)]">
               <tr>
-                <th className="px-6 py-4 font-semibold w-12">Trạng thái</th>
-                <th className="px-6 py-4 font-semibold">Tên công việc</th>
-                <th className="px-6 py-4 font-semibold">Độ ưu tiên</th>
-                <th className="px-6 py-4 font-semibold">Hạn chót</th>
-                <th className="px-6 py-4 font-semibold">Người giao</th>
-                <th className="px-6 py-4 text-right">Thao tác</th>
+                <th className="px-6 py-4 font-semibold w-16 whitespace-nowrap">Trạng thái</th>
+                <th className="px-6 py-4 font-semibold min-w-[280px] whitespace-nowrap">Tên công việc</th>
+                <th className="px-6 py-4 font-semibold w-32 whitespace-nowrap">Độ ưu tiên</th>
+                <th className="px-6 py-4 font-semibold w-40 whitespace-nowrap">Hạn chót</th>
+                <th className="px-6 py-4 font-semibold w-40 whitespace-nowrap">Người giao</th>
+                <th className="px-6 py-4 text-right w-24 whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
@@ -301,7 +301,7 @@ export default function TasksPage() {
               ) : (
                 filteredTasks.map(task => (
                   <tr key={task.id} className="hover:bg-[var(--color-muted)]/30 transition-colors group">
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap w-16">
                       <button 
                         onClick={() => handleCycleStatus(task)}
                         className="hover:scale-110 transition-transform"
@@ -310,33 +310,43 @@ export default function TasksPage() {
                         {getStatusIcon(task.status)}
                       </button>
                     </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <span className={`font-semibold text-sm ${task.status === 'DONE' ? 'text-[var(--color-muted-foreground)] line-through' : 'text-[var(--color-foreground)]'}`}>
+                    <td className="px-6 py-4 min-w-[280px] max-w-[400px]">
+                      <div className="truncate">
+                        <span 
+                          title={task.title}
+                          className={`font-semibold text-sm block truncate ${task.status === 'DONE' ? 'text-[var(--color-muted-foreground)] line-through' : 'text-[var(--color-foreground)]'}`}
+                        >
                           {task.title}
                         </span>
                         {task.description && (
-                          <p className="text-xs text-[var(--color-muted-foreground)] line-clamp-1 mt-0.5">{task.description}</p>
+                          <p 
+                            title={task.description}
+                            className="text-xs text-[var(--color-muted-foreground)] truncate mt-0.5"
+                          >
+                            {task.description}
+                          </p>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap w-32">
                       {getPriorityBadge(task.priority)}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap w-40">
                       {task.dueDate ? (
-                        <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
-                          <Calendar className="w-3.5 h-3.5" />
+                        <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)] whitespace-nowrap">
+                          <Calendar className="w-3.5 h-3.5 shrink-0" />
                           <span>{format(new Date(task.dueDate), 'dd/MM/yyyy')}</span>
                         </div>
                       ) : (
-                        <span className="text-xs text-[var(--color-muted-foreground)]">Không thời hạn</span>
+                        <span className="text-xs text-[var(--color-muted-foreground)] whitespace-nowrap">Không thời hạn</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-xs text-[var(--color-muted-foreground)]">
-                      {task.createdBy?.name || 'Hệ thống'}
+                    <td className="px-6 py-4 whitespace-nowrap w-40 text-xs text-[var(--color-muted-foreground)]">
+                      <div className="truncate max-w-[150px]" title={task.createdBy?.name || 'Hệ thống'}>
+                        {task.createdBy?.name || 'Hệ thống'}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right whitespace-nowrap w-24">
                       <button 
                         onClick={() => handleDeleteTask(task.id)}
                         className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"

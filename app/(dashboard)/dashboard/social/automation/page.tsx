@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, RefreshCw, PlayCircle, Zap, CheckCircle2, Clock, AlertCircle, Search, Settings } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, PlayCircle, Zap, CheckCircle2, Clock, AlertCircle, Search, Settings, Eye, Edit2, X, Users, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 type AutomationTask = {
@@ -12,6 +12,7 @@ type AutomationTask = {
   profileIds: string[];
   status: string;
   createdAt: string;
+  config?: Record<string, unknown>;
 };
 
 type FbAccount = {
@@ -29,11 +30,16 @@ export default function AutomationPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
+  // View & Edit Modal state
+  const [viewingTask, setViewingTask] = useState<AutomationTask | null>(null);
+  const [editingTask, setEditingTask] = useState<AutomationTask | null>(null);
+  const [updatingTask, setUpdatingTask] = useState(false);
+
   const [formData, setFormData] = useState<{
     name: string;
     type: string;
     profileIds: string[];
-    config: any;
+    config: Record<string, unknown>;
   }>({
     name: '',
     type: 'COMMENT',
@@ -41,20 +47,31 @@ export default function AutomationPage() {
     config: {}
   });
 
-  useEffect(() => {
-    fetchTasks();
-    fetchAccounts();
-  }, []);
+  const [editFormData, setEditFormData] = useState<{
+    id: string;
+    name: string;
+    type: string;
+    profileIds: string[];
+    status: string;
+    config: Record<string, unknown>;
+  }>({
+    id: '',
+    name: '',
+    type: 'COMMENT',
+    profileIds: [],
+    status: 'IDLE',
+    config: {}
+  });
 
-  const fetchTasks = async () => {
-    setLoading(true);
+  const fetchTasks = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const res = await fetch('/api/automation/tasks');
       if (res.ok) {
         const data = await res.json();
         setTasks(data.tasks || []);
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Lỗi khi tải danh sách tác vụ');
     } finally {
       setLoading(false);
@@ -73,9 +90,37 @@ export default function AutomationPage() {
     }
   };
 
+  useEffect(() => {
+    let ignore = false;
+    fetch('/api/automation/tasks')
+      .then(res => res.json())
+      .then(data => {
+        if (!ignore) {
+          setTasks(data.tasks || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    fetch('/api/fb-profiles')
+      .then(res => res.json())
+      .then(data => {
+        if (!ignore) {
+          setAccounts(data.accounts || []);
+        }
+      })
+      .catch(console.error);
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) {
+    if (!formData.name.trim()) {
       toast.error('Vui lòng nhập tên tác vụ');
       return;
     }
@@ -101,10 +146,56 @@ export default function AutomationPage() {
         const err = await res.json();
         toast.error(err.error || 'Lỗi khi thêm tác vụ');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Lỗi khi lưu tác vụ');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOpenEdit = (task: AutomationTask) => {
+    setEditingTask(task);
+    setEditFormData({
+      id: task.id,
+      name: task.name,
+      type: task.type,
+      profileIds: task.profileIds || [],
+      status: task.status || 'IDLE',
+      config: task.config || {}
+    });
+  };
+
+  const handleUpdateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editFormData.name.trim()) {
+      toast.error('Vui lòng nhập tên tác vụ');
+      return;
+    }
+    if (editFormData.profileIds.length === 0) {
+      toast.error('Vui lòng chọn ít nhất 1 tài khoản');
+      return;
+    }
+
+    setUpdatingTask(true);
+    try {
+      const res = await fetch('/api/automation/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editFormData)
+      });
+
+      if (res.ok) {
+        toast.success('Cập nhật tác vụ thành công');
+        setEditingTask(null);
+        fetchTasks();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Cập nhật tác vụ thất bại');
+      }
+    } catch (_err) {
+      toast.error('Lỗi khi cập nhật tác vụ');
+    } finally {
+      setUpdatingTask(false);
     }
   };
 
@@ -115,17 +206,29 @@ export default function AutomationPage() {
       const res = await fetch(`/api/automation/tasks?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Đã xoá tác vụ');
+        if (viewingTask?.id === id) setViewingTask(null);
         fetchTasks();
       } else {
         toast.error('Xoá thất bại');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Xoá thất bại');
     }
   };
 
   const toggleProfileSelect = (profileId: string) => {
     setFormData(prev => {
+      const isSelected = prev.profileIds.includes(profileId);
+      if (isSelected) {
+        return { ...prev, profileIds: prev.profileIds.filter(id => id !== profileId) };
+      } else {
+        return { ...prev, profileIds: [...prev.profileIds, profileId] };
+      }
+    });
+  };
+
+  const toggleEditProfileSelect = (profileId: string) => {
+    setEditFormData(prev => {
       const isSelected = prev.profileIds.includes(profileId);
       if (isSelected) {
         return { ...prev, profileIds: prev.profileIds.filter(id => id !== profileId) };
@@ -169,8 +272,9 @@ export default function AutomationPage() {
           className="flex flex-wrap items-center gap-3 w-full lg:w-auto"
         >
           <button 
-            onClick={fetchTasks} 
+            onClick={() => { fetchTasks(true); fetchAccounts(); }} 
             className="group flex items-center justify-center p-3.5 bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 rounded-xl transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+            title="Làm mới danh sách"
           >
             <RefreshCw className={`w-5 h-5 text-zinc-400 group-hover:text-white ${loading ? 'animate-spin text-white' : ''}`} />
           </button>
@@ -219,11 +323,11 @@ export default function AutomationPage() {
             <table className="w-full text-left text-sm text-zinc-400">
               <thead className="bg-zinc-800/50 text-zinc-300 font-medium">
                 <tr>
-                  <th className="px-6 py-4 rounded-tl-2xl">Tên Tác Vụ</th>
-                  <th className="px-6 py-4">Loại</th>
-                  <th className="px-6 py-4">Số Tài Khoản</th>
-                  <th className="px-6 py-4">Trạng Thái</th>
-                  <th className="px-6 py-4 rounded-tr-2xl text-right">Thao Tác</th>
+                  <th className="px-6 py-4 rounded-tl-2xl whitespace-nowrap min-w-[240px]">Tên Tác Vụ</th>
+                  <th className="px-6 py-4 whitespace-nowrap w-[150px]">Loại</th>
+                  <th className="px-6 py-4 whitespace-nowrap w-[150px]">Số Tài Khoản</th>
+                  <th className="px-6 py-4 whitespace-nowrap w-[160px]">Trạng Thái</th>
+                  <th className="px-6 py-4 rounded-tr-2xl text-right whitespace-nowrap w-[160px]">Thao Tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
@@ -245,7 +349,7 @@ export default function AutomationPage() {
                             <AlertCircle className="w-8 h-8 text-zinc-500" />
                           </div>
                           <p className="text-lg font-medium text-white mb-1">Chưa có tác vụ nào</p>
-                          <p className="text-zinc-500">Nhấp vào "Tạo Tác Vụ" để bắt đầu thiết lập tự động hóa.</p>
+                          <p className="text-zinc-500">Nhấp vào &quot;Tạo Tác Vụ&quot; để bắt đầu thiết lập tự động hóa.</p>
                         </div>
                       </td>
                     </tr>
@@ -259,55 +363,75 @@ export default function AutomationPage() {
                         transition={{ delay: index * 0.05 }}
                         className="hover:bg-zinc-800/30 transition-colors group"
                       >
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 min-w-[240px] max-w-[360px]">
                           <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-500/10 rounded-lg group-hover:bg-indigo-500/20 transition-colors">
+                            <div className="p-2 bg-indigo-500/10 rounded-lg group-hover:bg-indigo-500/20 transition-colors shrink-0">
                               <Settings className="w-4 h-4 text-indigo-400" />
                             </div>
-                            <span className="font-medium text-zinc-200">{task.name}</span>
+                            <button
+                              onClick={() => setViewingTask(task)}
+                              className="font-medium text-zinc-200 hover:text-indigo-400 transition-colors text-left truncate block"
+                              title={task.name}
+                            >
+                              {task.name}
+                            </button>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs font-medium rounded-lg border border-purple-500/20">
+                        <td className="px-6 py-4 whitespace-nowrap w-[150px]">
+                          <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs font-medium rounded-lg border border-purple-500/20 whitespace-nowrap inline-block">
                             {task.type}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 text-zinc-400">
-                            <div className="w-2 h-2 rounded-full bg-zinc-600" />
+                        <td className="px-6 py-4 whitespace-nowrap w-[150px]">
+                          <div className="flex items-center gap-1.5 text-zinc-400 whitespace-nowrap">
+                            <div className="w-2 h-2 rounded-full bg-zinc-600 shrink-0" />
                             <span>{task.profileIds?.length || 0} tài khoản</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 whitespace-nowrap w-[160px]">
                           {task.status === 'RUNNING' ? (
-                            <span className="flex items-center gap-1.5 text-blue-400 font-medium text-xs bg-blue-400/10 px-2.5 py-1 rounded-lg w-fit border border-blue-400/20">
+                            <span className="inline-flex items-center gap-1.5 text-blue-400 font-medium text-xs bg-blue-400/10 px-2.5 py-1 rounded-lg w-fit border border-blue-400/20 whitespace-nowrap">
                               <PlayCircle className="w-3.5 h-3.5 animate-pulse" /> Đang chạy
                             </span>
                           ) : task.status === 'DONE' ? (
-                            <span className="flex items-center gap-1.5 text-emerald-400 font-medium text-xs bg-emerald-400/10 px-2.5 py-1 rounded-lg w-fit border border-emerald-400/20">
+                            <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium text-xs bg-emerald-400/10 px-2.5 py-1 rounded-lg w-fit border border-emerald-400/20 whitespace-nowrap">
                               <CheckCircle2 className="w-3.5 h-3.5" /> Hoàn thành
                             </span>
                           ) : task.status === 'FAILED' ? (
-                            <span className="flex items-center gap-1.5 text-rose-400 font-medium text-xs bg-rose-400/10 px-2.5 py-1 rounded-lg w-fit border border-rose-400/20">
+                            <span className="inline-flex items-center gap-1.5 text-rose-400 font-medium text-xs bg-rose-400/10 px-2.5 py-1 rounded-lg w-fit border border-rose-400/20 whitespace-nowrap">
                               <AlertCircle className="w-3.5 h-3.5" /> Lỗi
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1.5 text-zinc-400 font-medium text-xs bg-zinc-800 px-2.5 py-1 rounded-lg w-fit border border-zinc-700">
+                            <span className="inline-flex items-center gap-1.5 text-zinc-400 font-medium text-xs bg-zinc-800 px-2.5 py-1 rounded-lg w-fit border border-zinc-700 whitespace-nowrap">
                               <Clock className="w-3.5 h-3.5" /> Chờ xử lý
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <td className="px-6 py-4 text-right whitespace-nowrap w-[160px]">
+                          <div className="flex justify-end items-center gap-1">
                             <button 
-                              className="p-2 text-indigo-400 hover:text-white hover:bg-indigo-500/20 rounded-lg transition-colors"
+                              onClick={() => setViewingTask(task)}
+                              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                              title="Xem chi tiết"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleOpenEdit(task)}
+                              className="p-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-colors"
+                              title="Chỉnh sửa tác vụ"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              className="p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg transition-colors"
                               title="Bắt đầu chạy"
                             >
                               <PlayCircle className="w-4 h-4" />
                             </button>
                             <button 
                               onClick={() => handleDelete(task.id)}
-                              className="p-2 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
+                              className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
                               title="Xoá tác vụ"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -340,9 +464,17 @@ export default function AutomationPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-zinc-800 shrink-0 bg-zinc-900/50 backdrop-blur-md">
-                <h3 className="text-xl font-bold text-white">Tạo Tác Vụ Mới</h3>
-                <p className="text-sm text-zinc-400 mt-1">Cấu hình luồng tự động hóa</p>
+              <div className="p-6 border-b border-zinc-800 shrink-0 bg-zinc-900/50 backdrop-blur-md flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Tạo Tác Vụ Mới</h3>
+                  <p className="text-sm text-zinc-400 mt-1">Cấu hình luồng tự động hóa</p>
+                </div>
+                <button 
+                  onClick={() => setShowAddModal(false)}
+                  className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
               
               <div className="p-6 overflow-y-auto custom-scrollbar">
@@ -433,6 +565,275 @@ export default function AutomationPage() {
                 >
                   {submitting && <RefreshCw className="w-4 h-4 animate-spin" />}
                   {submitting ? 'Đang lưu...' : 'Lưu Tác Vụ'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* View Detail Modal */}
+      <AnimatePresence>
+        {viewingTask && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setViewingTask(null)}
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-zinc-800 shrink-0 bg-zinc-900/50 backdrop-blur-md flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+                    <Zap className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white leading-tight">Chi Tiết Tác Vụ</h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">Mã ID: <span className="font-mono text-zinc-300">{viewingTask.id}</span></p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setViewingTask(null)}
+                  className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Tên tác vụ</label>
+                  <p className="text-base font-medium text-white">{viewingTask.name}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-zinc-950/60 border border-zinc-800/80 rounded-xl">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">Loại tác vụ</label>
+                    <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 text-xs font-medium rounded-lg border border-purple-500/20 inline-block">
+                      {viewingTask.type}
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-zinc-950/60 border border-zinc-800/80 rounded-xl">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">Trạng thái</label>
+                    {viewingTask.status === 'RUNNING' ? (
+                      <span className="flex items-center gap-1.5 text-blue-400 font-medium text-xs bg-blue-400/10 px-2.5 py-1 rounded-lg w-fit border border-blue-400/20">
+                        <PlayCircle className="w-3.5 h-3.5 animate-pulse" /> Đang chạy
+                      </span>
+                    ) : viewingTask.status === 'DONE' ? (
+                      <span className="flex items-center gap-1.5 text-emerald-400 font-medium text-xs bg-emerald-400/10 px-2.5 py-1 rounded-lg w-fit border border-emerald-400/20">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Hoàn thành
+                      </span>
+                    ) : viewingTask.status === 'FAILED' ? (
+                      <span className="flex items-center gap-1.5 text-rose-400 font-medium text-xs bg-rose-400/10 px-2.5 py-1 rounded-lg w-fit border border-rose-400/20">
+                        <AlertCircle className="w-3.5 h-3.5" /> Lỗi
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-zinc-400 font-medium text-xs bg-zinc-800 px-2.5 py-1 rounded-lg w-fit border border-zinc-700">
+                        <Clock className="w-3.5 h-3.5" /> Chờ xử lý
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-zinc-950/60 border border-zinc-800/80 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                      <Users className="w-4 h-4 text-indigo-400" />
+                      Tài khoản thực thi ({viewingTask.profileIds?.length || 0})
+                    </label>
+                  </div>
+
+                  {(!viewingTask.profileIds || viewingTask.profileIds.length === 0) ? (
+                    <p className="text-sm text-zinc-500">Chưa gán tài khoản nào</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                      {viewingTask.profileIds.map((pid) => {
+                        const acc = accounts.find(a => a.profileId === pid);
+                        return (
+                          <div key={pid} className="flex items-center justify-between p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs">
+                            <span className="text-zinc-200 font-medium">{acc ? acc.name : 'Tài khoản UID'}</span>
+                            <span className="text-zinc-500 font-mono">{pid}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {viewingTask.createdAt && (
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Ngày tạo: {new Date(viewingTask.createdAt).toLocaleString('vi-VN')}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-6 border-t border-zinc-800 shrink-0 flex gap-3 justify-end bg-zinc-900/50 backdrop-blur-md">
+                <button 
+                  type="button"
+                  onClick={() => setViewingTask(null)}
+                  className="px-5 py-2.5 text-sm font-medium rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+                >
+                  Đóng
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    const taskToEdit = viewingTask;
+                    setViewingTask(null);
+                    handleOpenEdit(taskToEdit);
+                  }}
+                  className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Chỉnh Sửa
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {editingTask && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setEditingTask(null)}
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-zinc-800 shrink-0 bg-zinc-900/50 backdrop-blur-md flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Chỉnh Sửa Tác Vụ</h3>
+                  <p className="text-sm text-zinc-400 mt-1">Cập nhật cấu hình và thông tin tác vụ</p>
+                </div>
+                <button 
+                  onClick={() => setEditingTask(null)}
+                  className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                <form id="edit-task-form" onSubmit={handleUpdateTask} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-zinc-300">Tên tác vụ</label>
+                    <input 
+                      type="text" 
+                      value={editFormData.name}
+                      onChange={e => setEditFormData({...editFormData, name: e.target.value})}
+                      placeholder="VD: Kéo tương tác fanpage tháng 10"
+                      className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 placeholder:text-zinc-600 outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-zinc-300">Loại tác vụ</label>
+                      <select 
+                        value={editFormData.type}
+                        onChange={e => setEditFormData({...editFormData, type: e.target.value})}
+                        className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all appearance-none"
+                      >
+                        <option value="COMMENT">Bình luận dạo</option>
+                        <option value="ADD_FRIEND">Kết bạn UID</option>
+                        <option value="INVITE_GROUP">Mời nhóm</option>
+                        <option value="POST_REEL">Đăng Reels</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-zinc-300">Trạng thái</label>
+                      <select 
+                        value={editFormData.status}
+                        onChange={e => setEditFormData({...editFormData, status: e.target.value})}
+                        className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-200 outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all appearance-none"
+                      >
+                        <option value="IDLE">Chờ xử lý (IDLE)</option>
+                        <option value="RUNNING">Đang chạy (RUNNING)</option>
+                        <option value="DONE">Hoàn thành (DONE)</option>
+                        <option value="FAILED">Thất bại (FAILED)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-medium text-zinc-300">
+                        Chọn tài khoản chạy <span className="text-amber-400 ml-1">({editFormData.profileIds.length}/{accounts.length})</span>
+                      </label>
+                      <button 
+                        type="button"
+                        onClick={() => setEditFormData({...editFormData, profileIds: accounts.map(a => a.profileId)})}
+                        className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        Chọn tất cả
+                      </button>
+                    </div>
+                    
+                    {accounts.length === 0 ? (
+                      <div className="p-6 bg-zinc-950 border border-zinc-800 border-dashed rounded-xl text-center text-sm text-zinc-500">
+                        Chưa có tài khoản Facebook nào. Hãy thêm tài khoản trước.
+                      </div>
+                    ) : (
+                      <div className="border border-zinc-800 rounded-xl overflow-hidden max-h-56 overflow-y-auto custom-scrollbar bg-zinc-950">
+                        <div className="divide-y divide-zinc-800/50">
+                          {accounts.map(acc => (
+                            <label key={acc.id} className="flex items-center gap-3 p-3.5 hover:bg-zinc-800/50 cursor-pointer transition-colors group">
+                              <div className="relative flex items-center justify-center">
+                                <input 
+                                  type="checkbox" 
+                                  checked={editFormData.profileIds.includes(acc.profileId)}
+                                  onChange={() => toggleEditProfileSelect(acc.profileId)}
+                                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500/50 focus:ring-offset-zinc-950"
+                                />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition-colors leading-none">{acc.name}</p>
+                                <p className="text-xs text-zinc-500 mt-1 font-mono">{acc.profileId}</p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              
+              <div className="p-6 border-t border-zinc-800 shrink-0 flex gap-3 justify-end bg-zinc-900/50 backdrop-blur-md">
+                <button 
+                  type="button"
+                  onClick={() => setEditingTask(null)}
+                  className="px-5 py-2.5 text-sm font-medium rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all"
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit"
+                  form="edit-task-form"
+                  disabled={updatingTask}
+                  className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-amber-500 text-zinc-950 hover:bg-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {updatingTask && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  {updatingTask ? 'Đang lưu...' : 'Lưu Thay Đổi'}
                 </button>
               </div>
             </motion.div>

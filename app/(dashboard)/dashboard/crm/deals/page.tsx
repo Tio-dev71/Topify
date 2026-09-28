@@ -4,10 +4,7 @@ import { useState, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
-  Filter, 
-  MoreVertical,
   Calendar,
-  Building2,
   User,
   Trash2,
   RefreshCw,
@@ -70,45 +67,6 @@ export default function DealsPage() {
     expectedClose: '',
   });
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    if (selectedPipelineId) {
-      fetchDeals(selectedPipelineId);
-    }
-  }, [selectedPipelineId]);
-
-  const fetchInitialData = async () => {
-    setLoading(true);
-    try {
-      const [pipeRes, custRes] = await Promise.all([
-        fetch('/api/crm/pipelines'),
-        fetch('/api/crm/customers')
-      ]);
-
-      if (pipeRes.ok) {
-        const pipeData = await pipeRes.json();
-        const pList: Pipeline[] = pipeData.pipelines || [];
-        setPipelines(pList);
-        if (pList.length > 0) {
-          const defaultPipe = pList.find(p => p.isDefault) || pList[0];
-          setSelectedPipelineId(defaultPipe.id);
-        }
-      }
-
-      if (custRes.ok) {
-        const custData = await custRes.json();
-        setCustomers(custData.customers || []);
-      }
-    } catch (err) {
-      toast.error('Lỗi khi tải dữ liệu ban đầu');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchDeals = async (pipelineId: string) => {
     try {
       const res = await fetch(`/api/crm/deals?pipelineId=${pipelineId}`);
@@ -116,10 +74,71 @@ export default function DealsPage() {
         const data = await res.json();
         setDeals(data.deals || []);
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Lỗi khi tải danh sách giao dịch');
     }
   };
+
+  useEffect(() => {
+    let ignore = false;
+
+    Promise.all([
+      fetch('/api/crm/pipelines'),
+      fetch('/api/crm/customers')
+    ])
+      .then(async ([pipeRes, custRes]) => {
+        if (!ignore && pipeRes.ok) {
+          const pipeData = await pipeRes.json();
+          const pList: Pipeline[] = pipeData.pipelines || [];
+          setPipelines(pList);
+          if (pList.length > 0) {
+            const defaultPipe = pList.find(p => p.isDefault) || pList[0];
+            setSelectedPipelineId(defaultPipe.id);
+          }
+        }
+
+        if (!ignore && custRes.ok) {
+          const custData = await custRes.json();
+          setCustomers(custData.customers || []);
+        }
+      })
+      .catch((_err) => {
+        if (!ignore) {
+          toast.error('Lỗi khi tải dữ liệu ban đầu');
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedPipelineId) return;
+    let ignore = false;
+
+    fetch(`/api/crm/deals?pipelineId=${selectedPipelineId}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed'))))
+      .then((data) => {
+        if (!ignore) {
+          setDeals(data.deals || []);
+        }
+      })
+      .catch((_err) => {
+        if (!ignore) {
+          toast.error('Lỗi khi tải danh sách giao dịch');
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedPipelineId]);
 
   const currentPipeline = pipelines.find(p => p.id === selectedPipelineId) || pipelines[0];
   const stages = currentPipeline?.stages || [];
@@ -133,7 +152,7 @@ export default function DealsPage() {
 
     const stageId = newDeal.stageId || stages[0]?.id;
     if (!stageId) {
-      toast.error('Phễu hiện tại không có bước nào để tạo giao dịch');
+      toast.error('Quy trình hiện tại chưa có giai đoạn nào để tạo giao dịch');
       return;
     }
 
@@ -167,7 +186,7 @@ export default function DealsPage() {
         const err = await res.json();
         toast.error(err.error || 'Lỗi khi tạo giao dịch');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Lỗi máy chủ');
     } finally {
       setSubmitting(false);
@@ -191,7 +210,7 @@ export default function DealsPage() {
       } else {
         toast.error('Không thể chuyển giai đoạn');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Lỗi máy chủ');
     }
   };
@@ -207,7 +226,7 @@ export default function DealsPage() {
       } else {
         toast.error('Không thể xóa giao dịch');
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('Lỗi máy chủ');
     }
   };
@@ -266,7 +285,7 @@ export default function DealsPage() {
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-[var(--color-muted-foreground)]">
-              <span>Phễu bán hàng:</span>
+              <span>Quy trình bán hàng:</span>
               <select 
                 value={selectedPipelineId}
                 onChange={(e) => setSelectedPipelineId(e.target.value)}

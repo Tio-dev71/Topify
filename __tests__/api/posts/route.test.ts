@@ -50,7 +50,15 @@ describe('Posts API Route', () => {
         expires: '1' 
       } as any);
 
-      const mockPosts = [{ id: '1', title: 'Test' }];
+      const mockPosts = [{ 
+        id: '1', 
+        title: 'Test',
+        platforms: [],
+        videoAsset: {
+          originalFileName: 'Test',
+          storageUrl: '',
+        }
+      }];
       vi.mocked(prisma.post.findMany).mockResolvedValue(mockPosts as any);
 
       const req = new NextRequest('http://localhost/api/posts?status=PUBLISHED&limit=10');
@@ -83,7 +91,7 @@ describe('Posts API Route', () => {
         where: { workspaceId: 'ws-1', createdById: 'staff-1' },
         include: expect.any(Object),
         orderBy: { createdAt: 'desc' },
-        take: 50,
+        take: 100,
       });
     });
   });

@@ -17,14 +17,27 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id, status } = await req.json();
+    const { id, status, cookie } = await req.json();
     if (!id || !status) {
       return NextResponse.json({ error: 'ID and status are required' }, { status: 400 });
     }
 
+    const userWorkspaceId = (session.user as any).workspaceId;
+    if (session.user.role !== 'SUPER_ADMIN' && userWorkspaceId) {
+      const existing = await prisma.facebookAccount.findFirst({
+        where: { id, workspaceId: userWorkspaceId }
+      });
+      if (!existing) {
+        return NextResponse.json({ error: 'Account not found or access denied' }, { status: 404 });
+      }
+    }
+
     await prisma.facebookAccount.update({
       where: { id },
-      data: { status }
+      data: { 
+        status,
+        ...(cookie ? { cookie } : {})
+      }
     });
 
     return NextResponse.json({ success: true });

@@ -88,6 +88,7 @@ model Workspace {
   // Phase 12
   auditLogs        AuditLog[]
   UserApiKey       UserApiKey[]
+  automationTasks  AutomationTask[]
 }
 
 model PasswordResetToken {
@@ -450,14 +451,20 @@ model Proxy {
 }
 
 model AutomationTask {
-  id         String     @id @default(cuid())
-  name       String
-  type       String
-  config     Json?
-  profileIds Json?
-  status     TaskStatus @default(IDLE)
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id          String      @id @default(cuid())
+  name        String
+  type        String
+  config      Json?
+  profileIds  Json?
+  status      TaskStatus  @default(IDLE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  workspaceId String?
+  userId      String?
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
 }
 
 model AutomationLog {

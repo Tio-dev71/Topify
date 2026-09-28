@@ -1,16 +1,51 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, Key, Cpu, Zap, Link2 } from 'lucide-react';
+import { 
+  Settings as SettingsIcon, 
+  Save, 
+  Key, 
+  Cpu, 
+  Zap, 
+  Link2,
+  RefreshCw,
+  ExternalLink,
+  Trash2,
+  X
+} from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiBaseUrl } from '../lib/axios';
 
 export default function Settings() {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [socialAccounts, setSocialAccounts] = useState<any[]>([]);
+  const [selectedSocialAccount, setSelectedSocialAccount] = useState<any | null>(null);
+  const [refreshingToken, setRefreshingToken] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchSettings();
+
+    const handleOAuthComplete = () => {
+      fetchSettings();
+    };
+
+    const handleWindowMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_SUCCESS') {
+        toast.success(`Kết nối tài khoản ${event.data.provider || ''} thành công!`);
+        fetchSettings();
+      }
+    };
+
+    window.addEventListener('oauth-complete', handleOAuthComplete);
+    window.addEventListener('message', handleWindowMessage);
+    window.addEventListener('focus', handleOAuthComplete);
+
+    return () => {
+      window.removeEventListener('oauth-complete', handleOAuthComplete);
+      window.removeEventListener('message', handleWindowMessage);
+      window.removeEventListener('focus', handleOAuthComplete);
+    };
   }, []);
 
   const fetchSettings = async () => {
@@ -101,6 +136,75 @@ export default function Settings() {
 
   const handleChange = (key: string, value: string) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleConnectSocial = (provider: string) => {
+    if (provider === 'TIKTOK' && !settings.TIKTOK_CLIENT_KEY) {
+      toast.info('Gợi ý: Nếu chưa cấu hình TikTok Client Key/Secret, hệ thống sẽ mở trang hướng dẫn cấu hình.');
+    }
+    if (provider === 'ZALO' && !settings.ZALO_APP_ID) {
+      toast.info('Gợi ý: Nếu chưa cấu hình Zalo App ID/Secret, hệ thống sẽ mở trang hướng dẫn cấu hình.');
+    }
+
+    const token = localStorage.getItem('topify_token');
+    const baseUrl = getApiBaseUrl();
+    const endpoint = provider === 'YOUTUBE' ? 'google' : provider.toLowerCase();
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    const fullUrl = `${baseUrl}/api/social/${endpoint}${query}`;
+
+    // Mở popup OAuth chuẩn
+    const popup = window.open(fullUrl, 'OAuthPopup', 'width=600,height=720,menubar=no,toolbar=no,location=no,status=no');
+
+    if (popup) {
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          fetchSettings();
+        }
+      }, 1000);
+    }
+  };
+
+  const handleRefreshSocial = async (account: any) => {
+    setRefreshingToken(true);
+    try {
+      const endpoint = account.provider === 'YOUTUBE' ? 'google' : account.provider.toLowerCase();
+      const res = await api.post(`/social/${endpoint}/refresh`, { accountId: account.id });
+      if (res.data?.success) {
+        toast.success(`Đã làm mới token cho ${account.accountName || account.provider} thành công!`);
+        await fetchSettings();
+        if (selectedSocialAccount && selectedSocialAccount.id === account.id) {
+          setSelectedSocialAccount((prev: any) => ({
+            ...prev,
+            status: 'CONNECTED',
+            expiresAt: res.data.expiresAt || prev.expiresAt
+          }));
+        }
+      } else {
+        toast.error(res.data?.error || 'Làm mới token thất bại. Vui lòng liên kết lại.');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Không thể làm mới token. Vui lòng liên kết lại.');
+    } finally {
+      setRefreshingToken(false);
+    }
+  };
+
+  const handleDisconnectSocial = async (account: any) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn hủy liên kết tài khoản ${account.accountName || account.provider}?`)) {
+      return;
+    }
+    setDisconnecting(true);
+    try {
+      await api.post(`/social/disconnect?accountId=${account.id}&provider=${account.provider}`);
+      toast.success(`Đã hủy liên kết tài khoản ${account.accountName || account.provider}`);
+      setSelectedSocialAccount(null);
+      await fetchSettings();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi ngắt kết nối tài khoản');
+    } finally {
+      setDisconnecting(false);
+    }
   };
 
 
@@ -313,82 +417,218 @@ export default function Settings() {
             </p>
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  const token = localStorage.getItem('topify_token');
-                  const baseUrl = getApiBaseUrl();
-                  window.open(`${baseUrl}/api/social/meta?token=${token}`, '_blank');
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+                type="button"
+                onClick={() => handleConnectSocial('META')}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors font-medium cursor-pointer shadow-xs"
               >
                 <Zap className="w-4 h-4" />
                 Kết nối Meta (Facebook/Instagram)
               </button>
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  const token = localStorage.getItem('topify_token');
-                  const baseUrl = getApiBaseUrl();
-                  window.open(`${baseUrl}/api/social/google?token=${token}`, '_blank');
-                }}
-                className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+                type="button"
+                onClick={() => handleConnectSocial('YOUTUBE')}
+                className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors font-medium cursor-pointer shadow-xs"
               >
+                <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
                 Kết nối YouTube
               </button>
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  const token = localStorage.getItem('topify_token');
-                  const baseUrl = getApiBaseUrl();
-                  window.open(`${baseUrl}/api/social/tiktok?token=${token}`, '_blank');
-                }}
-                className="bg-black text-white hover:bg-gray-800 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+                type="button"
+                onClick={() => handleConnectSocial('TIKTOK')}
+                className="bg-black text-white hover:bg-gray-800 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors font-medium cursor-pointer shadow-xs"
               >
                 Kết nối TikTok
               </button>
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  const token = localStorage.getItem('topify_token');
-                  const baseUrl = getApiBaseUrl();
-                  window.open(`${baseUrl}/api/social/zalo?token=${token}`, '_blank');
-                }}
-                className="bg-[#0068ff] text-white hover:bg-blue-600 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors"
+                type="button"
+                onClick={() => handleConnectSocial('ZALO')}
+                className="bg-[#0068ff] text-white hover:bg-blue-600 rounded-lg inline-flex items-center gap-2 text-[14px] py-2 px-4 transition-colors font-medium cursor-pointer shadow-xs"
               >
                 Kết nối Zalo
               </button>
             </div>
 
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 pt-4 border-t border-gray-100">Tài khoản đã kết nối</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 pt-5 border-t border-gray-100 flex items-center justify-between">
+              <span>Tài khoản đã kết nối</span>
+              <span className="text-xs text-gray-500 font-normal">{socialAccounts.length} tài khoản</span>
+            </h3>
+
             {socialAccounts.length === 0 ? (
               <div className="text-center py-8 text-gray-500 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
                 Chưa có tài khoản mạng xã hội nào được kết nối.
               </div>
             ) : (
-              <div className="space-y-4">
-                {socialAccounts.map((account) => (
-                  <div key={account.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 text-blue-600">
-                        <Link2 className="w-5 h-5" />
+              <div className="space-y-3">
+                {socialAccounts.map((account) => {
+                  const isYoutube = account.provider === 'YOUTUBE';
+                  const isMeta = account.provider === 'META';
+                  const isTiktok = account.provider === 'TIKTOK';
+                  const isZalo = account.provider === 'ZALO';
+
+                  const isConnected = account.status === 'CONNECTED' || account.status === 'active';
+                  const isExpired = account.status === 'EXPIRED';
+
+                  return (
+                    <div 
+                      key={account.id} 
+                      className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center space-x-3.5">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-xs ${
+                          isYoutube ? 'bg-red-50 text-red-600 border border-red-100' :
+                          isMeta ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                          isTiktok ? 'bg-gray-100 text-black border border-gray-200' :
+                          'bg-blue-50 text-[#0068ff] border border-blue-100'
+                        }`}>
+                          {isYoutube ? 'YT' : isMeta ? 'FB' : isTiktok ? 'TT' : 'ZL'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-[15px] text-gray-900">{account.accountName || 'Tài khoản liên kết'}</p>
+                            <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full uppercase tracking-wider ${
+                              isConnected ? 'bg-emerald-100 text-emerald-700' :
+                              isExpired ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'
+                            }`}>
+                              {isConnected ? 'Đang kết nối' : isExpired ? 'EXPIRED' : account.status}
+                            </span>
+                          </div>
+                          <p className="text-[13px] text-gray-500 mt-0.5">
+                            {isYoutube && 'Google Account / YouTube'}
+                            {isMeta && 'Meta (Facebook / Instagram)'}
+                            {isTiktok && 'TikTok Account'}
+                            {isZalo && 'Zalo OA'}
+                            {account.youtubeChannelId && ` • ID: ${account.youtubeChannelId}`}
+                            {account.pageId && ` • Page ID: ${account.pageId}`}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-[15px] capitalize text-gray-900">{account.provider.toLowerCase()}</p>
-                        <p className="text-[13px] text-gray-500">
-                          {account.accountName || 'Tài khoản không xác định'} • <span className={account.status === 'active' ? 'text-emerald-600' : 'text-amber-600'}>{account.status}</span>
-                        </p>
-                      </div>
+                      
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedSocialAccount(account)}
+                        className="px-3.5 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-gray-700 rounded-lg text-[13px] font-medium transition-colors shadow-xs cursor-pointer active:scale-95"
+                      >
+                        Quản lý
+                      </button>
                     </div>
-                    <button className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-[12px] font-medium transition-colors">
-                      Quản lý
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal Quản lý chi tiết tài khoản liên kết */}
+      {selectedSocialAccount && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-gray-100">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                  selectedSocialAccount.provider === 'YOUTUBE' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                  {selectedSocialAccount.provider === 'YOUTUBE' ? 'YT' : 'LK'}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-[15px]">
+                    Quản lý liên kết {selectedSocialAccount.provider === 'YOUTUBE' ? 'YouTube' : selectedSocialAccount.provider}
+                  </h3>
+                  <p className="text-xs text-gray-500">Xem thông số liên kết và tùy chọn tài khoản</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setSelectedSocialAccount(null)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Tên tài khoản / Kênh:</span>
+                  <span className="font-semibold text-gray-900">{selectedSocialAccount.accountName || 'Chưa đặt tên'}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Nền tảng:</span>
+                  <span className="font-medium text-gray-900">{selectedSocialAccount.provider}</span>
+                </div>
+                {(selectedSocialAccount.youtubeChannelId || selectedSocialAccount.pageId) && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500">Channel / Page ID:</span>
+                    <span className="font-mono text-xs bg-white px-2 py-0.5 border border-gray-200 rounded text-gray-700 select-all">
+                      {selectedSocialAccount.youtubeChannelId || selectedSocialAccount.pageId}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Trạng thái:</span>
+                  <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
+                    selectedSocialAccount.status === 'CONNECTED' || selectedSocialAccount.status === 'active'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {selectedSocialAccount.status === 'CONNECTED' || selectedSocialAccount.status === 'active' ? 'Đang hoạt động (Connected)' : 'Hết hạn (EXPIRED)'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Thời hạn Access Token:</span>
+                  <span className="text-xs text-gray-700 font-mono">
+                    {selectedSocialAccount.expiresAt ? new Date(selectedSocialAccount.expiresAt).toLocaleString('vi-VN') : 'Dài hạn (Refresh Token)'}
+                  </span>
+                </div>
+                {selectedSocialAccount.createdAt && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500">Ngày kết nối:</span>
+                    <span className="text-xs text-gray-700">
+                      {new Date(selectedSocialAccount.createdAt).toLocaleString('vi-VN')}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleConnectSocial(selectedSocialAccount.provider);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm transition-colors shadow-sm cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Liên kết với tài khoản {selectedSocialAccount.provider === 'YOUTUBE' ? 'YouTube' : selectedSocialAccount.provider} khác (OAuth)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleRefreshSocial(selectedSocialAccount)}
+                  disabled={refreshingToken}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshingToken ? 'animate-spin' : ''}`} />
+                  {refreshingToken ? 'Đang kiểm tra...' : 'Kiểm tra & Làm mới Access Token'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDisconnectSocial(selectedSocialAccount)}
+                  disabled={disconnecting}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-medium text-sm transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {disconnecting ? 'Đang ngắt kết nối...' : 'Hủy liên kết tài khoản này'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

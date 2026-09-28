@@ -157,13 +157,13 @@ export default function CustomersPage() {
           <table className="w-full text-sm text-left">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>
-                <th className="px-6 py-4 font-semibold whitespace-nowrap">Tên Khách Hàng</th>
-                <th className="px-6 py-4 font-semibold whitespace-nowrap">Liên Hệ</th>
-                <th className="px-6 py-4 font-semibold whitespace-nowrap">Nguồn</th>
-                <th className="px-6 py-4 font-semibold whitespace-nowrap">Phân Loại / Thẻ</th>
-                <th className="px-6 py-4 font-semibold whitespace-nowrap">Số Giao Dịch</th>
-                <th className="px-6 py-4 font-semibold whitespace-nowrap">Ngày Tạo</th>
-                <th className="px-6 py-4 font-semibold text-right whitespace-nowrap">Thao Tác</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap min-w-[260px]">Tên Khách Hàng</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap min-w-[220px]">Liên Hệ</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[140px]">Nguồn</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[160px]">Phân Loại / Thẻ</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[140px]">Số Giao Dịch</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap w-[140px]">Ngày Tạo</th>
+                <th className="px-6 py-4 font-semibold text-right whitespace-nowrap w-[100px]">Thao Tác</th>
               </tr>
             </thead>
             <tbody>
@@ -187,43 +187,43 @@ export default function CustomersPage() {
                   
                   return (
                     <tr key={customer.id} className="border-t border-border hover:bg-muted/20 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 min-w-[260px] max-w-[320px]">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-[#5B3DF5]/10 flex items-center justify-center text-[#5B3DF5] font-bold shrink-0">
                             {customer.name.charAt(0).toUpperCase()}
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-foreground truncate">{customer.name}</p>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground truncate" title={customer.name}>{customer.name}</p>
                             {customer.notes && (
-                              <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-xs">{customer.notes}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 truncate" title={customer.notes}>{customer.notes}</p>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 min-w-[220px] max-w-[280px]">
                         <div className="flex flex-col gap-1 text-muted-foreground">
                           {customer.phone && (
-                            <span className="flex items-center gap-2 text-xs truncate">
-                              <Phone className="w-3.5 h-3.5 shrink-0 text-zinc-400" /> {customer.phone}
+                            <span className="flex items-center gap-2 text-xs truncate" title={customer.phone}>
+                              <Phone className="w-3.5 h-3.5 shrink-0 text-zinc-400" /> <span className="truncate">{customer.phone}</span>
                             </span>
                           )}
                           {customer.email && (
-                            <span className="flex items-center gap-2 text-xs truncate">
-                              <Mail className="w-3.5 h-3.5 shrink-0 text-zinc-400" /> {customer.email}
+                            <span className="flex items-center gap-2 text-xs truncate" title={customer.email}>
+                              <Mail className="w-3.5 h-3.5 shrink-0 text-zinc-400" /> <span className="truncate">{customer.email}</span>
                             </span>
                           )}
                           {!customer.phone && !customer.email && (
-                            <span className="text-xs italic text-zinc-400">Chưa cập nhật</span>
+                            <span className="text-xs italic text-zinc-400 whitespace-nowrap">Chưa cập nhật</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                      <td className="px-6 py-4 whitespace-nowrap w-[140px]">
+                        <span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 inline-block whitespace-nowrap">
                           {customer.source || "Trực tiếp"}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-md text-xs font-medium border ${
+                      <td className="px-6 py-4 whitespace-nowrap w-[160px]">
+                        <span className={`px-2.5 py-1 rounded-md text-xs font-medium border inline-block whitespace-nowrap ${
                           customer.tags === 'VIP' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
                           customer.tags === 'Khách quen' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
                           'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20'
@@ -231,7 +231,7 @@ export default function CustomersPage() {
                           {customer.tags || "Lead"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
+                      <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap w-[140px]">
                         {dealCount > 0 ? (
                           <div className="flex flex-col">
                             <span>{dealCount} đơn</span>
@@ -241,10 +241,10 @@ export default function CustomersPage() {
                           <span className="text-xs text-muted-foreground">0 đơn</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-xs text-muted-foreground whitespace-nowrap">
+                      <td className="px-6 py-4 text-xs text-muted-foreground whitespace-nowrap w-[140px]">
                         {new Date(customer.createdAt).toLocaleDateString('vi-VN')}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right whitespace-nowrap w-[100px]">
                         <button 
                           onClick={() => handleDelete(customer.id, customer.name)}
                           className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"

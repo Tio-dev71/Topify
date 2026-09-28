@@ -252,7 +252,7 @@ export default function DownloaderPage() {
           <button
             type="submit"
             disabled={loading || !url}
-            className="flex items-center justify-center gap-2 px-8 py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-base font-semibold rounded-2xl shadow-lg shadow-purple-600/30 transition-all active:scale-[0.98]"
+            className="whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 px-8 py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-base font-semibold rounded-2xl shadow-lg shadow-purple-600/30 transition-all active:scale-[0.98]"
           >
             {loading ? (
               <>
@@ -283,37 +283,52 @@ export default function DownloaderPage() {
       )}
 
       {result && !error && (
-        <div className="card-apple p-6 animate-fade-in">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Thumbnail */}
+        <div className="card-apple p-6 sm:p-8 animate-fade-in">
+          <div className="flex flex-col lg:flex-row items-start gap-8">
+            {/* Thumbnail Preview Block */}
             {(result.thumbnail || result.picture) && (
-              <div className="w-full md:w-1/3 flex-shrink-0 relative aspect-video rounded-xl overflow-hidden bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                <img
-                  src={result.thumbnail || result.picture}
-                  alt={result.title || "Video thumbnail"}
-                  className="object-cover w-full h-full"
-                />
+              <div className="w-full lg:w-[280px] xl:w-[320px] flex-shrink-0 self-start">
+                <div className="bg-gray-50 dark:bg-neutral-900 border border-gray-200/80 dark:border-neutral-800 rounded-3xl p-3 shadow-sm space-y-3">
+                  <div className="relative rounded-2xl overflow-hidden bg-black flex items-center justify-center max-h-[460px] aspect-[9/16] sm:aspect-auto">
+                    <img
+                      src={result.thumbnail || result.picture}
+                      alt={result.title || "Video thumbnail"}
+                      className="max-h-[460px] w-full object-contain mx-auto rounded-xl"
+                    />
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                      <Video className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                      Xem trước
+                    </div>
+                  </div>
+                  {result.title && (
+                    <div className="px-1 py-0.5">
+                      <p className="text-xs font-semibold text-gray-800 dark:text-neutral-200 line-clamp-2 leading-relaxed">
+                        {result.title}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             
             {/* Details and Links */}
-            <div className="flex-1 space-y-4">
+            <div className="flex-1 min-w-0 space-y-5 w-full">
               {result.title && (
-                <h3 className="text-xl font-semibold text-neutral-900 dark:text-white line-clamp-2">
+                <h3 className="text-xl font-bold text-neutral-900 dark:text-white line-clamp-2 leading-snug">
                   {result.title}
                 </h3>
               )}
               
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                    Download & Auto-Post Options
+                  <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    Tùy chọn tải về & Đăng bài
                   </h4>
                 </div>
 
                 {videoMedias.length > 0 && (
-                  <div className="p-4 bg-[var(--color-primary-soft)] border border-[var(--color-primary)] border-opacity-30 rounded-xl space-y-4 mb-4">
-                    <p className="text-[13px] text-[var(--color-primary)] font-medium">Để dùng tính năng Auto-Post cho một video bên dưới, hãy nhập Link Nhóm và Caption trước:</p>
+                  <div className="p-4 bg-[var(--color-primary-soft)] border border-[var(--color-primary)] border-opacity-30 rounded-2xl space-y-4 mb-4">
+                    <p className="text-[13px] text-[var(--color-primary)] font-semibold">Để dùng tính năng Auto-Post cho một video bên dưới, hãy nhập Link Nhóm và Caption trước:</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-[13px] font-semibold text-[var(--color-foreground)]">Facebook Group URL</label>
@@ -350,10 +365,10 @@ export default function DownloaderPage() {
                     <div className="space-y-2 pt-3 border-t border-[var(--color-primary)] border-opacity-20">
                       <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                         <Users className="w-3.5 h-3.5" />
-                        Select Accounts to Post
+                        Chọn tài khoản Facebook để đăng
                       </label>
                       {accounts.length === 0 ? (
-                        <div className="text-xs text-neutral-500">No accounts available. Please add them in the FB Accounts page.</div>
+                        <div className="text-xs text-neutral-500">Chưa có tài khoản Facebook nào. Vui lòng thêm trong trang Tài khoản FB.</div>
                       ) : (
                         <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 custom-scrollbar">
                           {accounts.map(acc => (
@@ -393,7 +408,7 @@ export default function DownloaderPage() {
                               {isVideo ? <Video className="w-4 h-4" /> : <Music className="w-4 h-4" />}
                             </div>
                             <div className="truncate">
-                              <p className="text-[14px] font-medium text-[var(--color-foreground)] truncate">
+                              <p className="text-[14px] font-semibold text-[var(--color-foreground)] truncate">
                                 {media.quality || media.type || media.extension || 'Download File'}
                               </p>
                               {(media.extension || media.size) && (
@@ -404,30 +419,30 @@ export default function DownloaderPage() {
                             </div>
                           </div>
                           
-                          <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                          <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto mt-3 sm:mt-0 flex-nowrap">
                             <button
                               type="button"
                               onClick={() => handleDownload(media)}
                               disabled={downloadingUrl === media.url}
-                              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-xl text-[13px] font-semibold transition-all ${
+                              className={`whitespace-nowrap inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[13px] font-bold transition-all shrink-0 ${
                                 downloadedFiles[media.url]
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                                  : 'btn-secondary'
+                                  : 'btn-secondary shadow-xs hover:shadow-sm'
                               }`}
                             >
                               {downloadingUrl === media.url ? (
                                 <>
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-600 flex-shrink-0" />
                                   <span>{downloadProgress[media.url] ? `${downloadProgress[media.url]}%` : 'Đang tải...'}</span>
                                 </>
                               ) : downloadedFiles[media.url] ? (
                                 <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                                   <span>Đã tải xong</span>
                                 </>
                               ) : (
                                 <>
-                                  <Download className="w-3.5 h-3.5" />
+                                  <Download className="w-3.5 h-3.5 flex-shrink-0" />
                                   <span>Tải về</span>
                                 </>
                               )}
@@ -441,11 +456,11 @@ export default function DownloaderPage() {
                                     window.electron.showItemInFolder(downloadedFiles[media.url]);
                                   }
                                 }}
-                                className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 text-xs font-medium flex items-center gap-1 transition-all"
+                                className="whitespace-nowrap inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 text-xs font-bold shrink-0 transition-all shadow-xs"
                                 title="Mở thư mục chứa video vừa tải"
                               >
-                                <FolderOpen className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Mở file</span>
+                                <FolderOpen className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span>Mở file</span>
                               </button>
                             )}
                             
@@ -459,18 +474,17 @@ export default function DownloaderPage() {
                                     return;
                                   }
                                   setSelectedVideo(media.url);
-                                  // Call handleAutoPost explicitly but simulate event
                                   handleAutoPost({ preventDefault: () => {} } as React.FormEvent);
                                 }}
                                 disabled={autoPostLoading}
-                                className="btn-primary flex-1 sm:flex-none py-2 text-[13px]"
+                                className="btn-primary whitespace-nowrap inline-flex items-center justify-center gap-2 py-2.5 px-4 text-[13px] font-bold shrink-0 shadow-xs hover:shadow-sm"
                               >
                                 {autoPostLoading && selectedVideo === media.url ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
                                 ) : (
-                                  <Send className="w-3.5 h-3.5" />
+                                  <Send className="w-3.5 h-3.5 flex-shrink-0" />
                                 )}
-                                Auto-Post
+                                <span>Auto-Post</span>
                               </button>
                             )}
                           </div>

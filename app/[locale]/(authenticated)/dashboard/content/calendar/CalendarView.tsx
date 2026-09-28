@@ -14,7 +14,7 @@ import {
   addDays,
   parseISO
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Loader2, Video, FileText, Image as ImageIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Loader2 } from 'lucide-react';
 import NoteModal from './NoteModal';
 
 interface PostEvent {
@@ -46,10 +46,6 @@ export default function CalendarView() {
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const today = () => setCurrentDate(new Date());
 
-  useEffect(() => {
-    fetchEvents();
-  }, [currentDate]);
-
   const fetchEvents = async () => {
     try {
       setLoading(true);
@@ -76,6 +72,39 @@ export default function CalendarView() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let ignore = false;
+    const start = startOfWeek(startOfMonth(currentDate)).toISOString();
+    const end = endOfWeek(endOfMonth(currentDate)).toISOString();
+
+    Promise.all([
+      fetch(`/api/posts/calendar?start=${start}&end=${end}`),
+      fetch(`/api/calendar/notes?start=${start}&end=${end}`)
+    ])
+      .then(async ([eventsRes, notesRes]) => {
+        if (!ignore && eventsRes.ok) {
+          const data = await eventsRes.json();
+          setEvents(data.events || []);
+        }
+        if (!ignore && notesRes.ok) {
+          const data = await notesRes.json();
+          setNotes(data.notes || []);
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching calendar data:', error);
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [currentDate]);
 
   const handleDayDoubleClick = (day: Date) => {
     setSelectedDate(day);
@@ -133,7 +162,7 @@ export default function CalendarView() {
   const renderDays = () => {
     const dateFormat = "EEEE";
     const days = [];
-    let startDate = startOfWeek(currentDate);
+    const startDate = startOfWeek(currentDate);
 
     for (let i = 0; i < 7; i++) {
       days.push(
@@ -242,13 +271,16 @@ export default function CalendarView() {
         </div>
       </div>
       
-      <NoteModal 
-        isOpen={isNoteModalOpen} 
-        onClose={() => setIsNoteModalOpen(false)} 
-        date={selectedDate} 
-        onSuccess={fetchEvents}
-        existingNote={editingNote}
-      />
+      {isNoteModalOpen && (
+        <NoteModal 
+          key={selectedDate ? `${selectedDate.toISOString()}-${editingNote?.id || 'new'}` : 'modal'}
+          isOpen={isNoteModalOpen} 
+          onClose={() => setIsNoteModalOpen(false)} 
+          date={selectedDate} 
+          onSuccess={fetchEvents}
+          existingNote={editingNote}
+        />
+      )}
     </div>
   );
 }

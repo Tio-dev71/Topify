@@ -1,8 +1,66 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { format } from 'date-fns';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+/**
+ * Format date safely without throwing RangeError: Invalid time value
+ */
+export function safeFormatDate(
+  dateValue: string | number | Date | null | undefined,
+  formatStr: string,
+  fallback: string = '--'
+): string {
+  if (!dateValue) return fallback;
+  try {
+    const d = typeof dateValue === 'string' || typeof dateValue === 'number' 
+      ? new Date(dateValue) 
+      : dateValue;
+    if (!(d instanceof Date) || isNaN(d.getTime())) {
+      return fallback;
+    }
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+}
+
+export interface NormalizedPlatform {
+  platform: string;
+  status: string;
+  externalPostId?: string | null;
+  errorMessage?: string | null;
+}
+
+/**
+ * Normalize platform object or string to guarantee safe property access
+ */
+export function normalizePlatform(p: any): NormalizedPlatform {
+  if (typeof p === 'string') {
+    return { platform: p, status: 'UNKNOWN' };
+  }
+  if (p && typeof p === 'object') {
+    return {
+      platform: typeof p.platform === 'string' ? p.platform : 'UNKNOWN',
+      status: typeof p.status === 'string' ? p.status : 'UNKNOWN',
+      externalPostId: p.externalPostId || null,
+      errorMessage: p.errorMessage || null,
+    };
+  }
+  return { platform: 'UNKNOWN', status: 'UNKNOWN' };
+}
+
+/**
+ * Normalize hashtags to string to prevent TypeError on .toLowerCase() or .split()
+ */
+export function normalizeHashtags(hashtags: any): string {
+  if (!hashtags) return '';
+  if (typeof hashtags === 'string') return hashtags;
+  if (Array.isArray(hashtags)) return hashtags.filter(Boolean).join(' ');
+  return String(hashtags);
 }
 
 /**
@@ -68,3 +126,4 @@ export const STATUS_CONFIG = {
   PARTIAL_FAILED: { label: 'Thất bại 1 phần', color: 'bg-orange-50 text-orange-700' },
   PENDING: { label: 'Chờ xử lý', color: 'bg-gray-100 text-gray-700' },
 } as const;
+

@@ -695,13 +695,13 @@ WHERE email = '${sqlEmail.trim() || 'admin@yourcompany.com'}';`;
               <table className="w-full text-xs text-left">
                 <thead className="bg-[var(--color-muted)]/40 text-[var(--color-muted-foreground)] uppercase text-[10px] font-bold border-b border-[var(--color-border)]">
                   <tr>
-                    <th className="px-5 py-3.5">Người dùng</th>
-                    <th className="px-5 py-3.5">Vai trò (Role)</th>
-                    <th className="px-5 py-3.5">Workspace</th>
-                    <th className="px-5 py-3.5">License Key</th>
-                    <th className="px-5 py-3.5">Bài viết</th>
-                    <th className="px-5 py-3.5">Ngày tạo</th>
-                    <th className="px-5 py-3.5 text-right">Thao tác</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap min-w-[220px]">Người dùng</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[130px]">Vai trò (Role)</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap min-w-[150px] w-[180px]">Workspace</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[140px]">License Key</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[90px]">Bài viết</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[110px]">Ngày tạo</th>
+                    <th className="px-5 py-3.5 text-right whitespace-nowrap w-[100px]">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -714,19 +714,19 @@ WHERE email = '${sqlEmail.trim() || 'admin@yourcompany.com'}';`;
                   ) : (
                     filteredUsers.map(user => (
                       <tr key={user.id} className="hover:bg-[var(--color-muted)]/20 transition-colors">
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-3.5 min-w-[220px] max-w-[300px]">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 font-bold flex items-center justify-center text-xs">
+                            <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 font-bold flex items-center justify-center text-xs shrink-0">
                               {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                              <p className="font-semibold text-[var(--color-foreground)]">{user.name || 'Chưa đặt tên'}</p>
-                              <p className="text-[11px] text-[var(--color-muted-foreground)]">{user.email}</p>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-[var(--color-foreground)] truncate" title={user.name || 'Chưa đặt tên'}>{user.name || 'Chưa đặt tên'}</p>
+                              <p className="text-[11px] text-[var(--color-muted-foreground)] truncate" title={user.email}>{user.email}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5">
-                          <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] border ${
+                        <td className="px-5 py-3.5 whitespace-nowrap w-[130px]">
+                          <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] border whitespace-nowrap inline-block ${
                             user.role === 'SUPER_ADMIN' ? 'bg-purple-500/10 text-purple-600 border-purple-500/20' :
                             user.role === 'ADMIN' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' :
                             'bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20'
@@ -734,29 +734,29 @@ WHERE email = '${sqlEmail.trim() || 'admin@yourcompany.com'}';`;
                             {user.role}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-3.5 min-w-[150px] max-w-[180px]">
                           {user.workspace ? (
-                            <span className="font-medium text-[var(--color-foreground)]">{user.workspace.name}</span>
+                            <span className="font-medium text-[var(--color-foreground)] truncate block" title={user.workspace.name}>{user.workspace.name}</span>
                           ) : (
-                            <span className="text-[var(--color-muted-foreground)] italic">Chưa gán</span>
+                            <span className="text-[var(--color-muted-foreground)] italic whitespace-nowrap">Chưa gán</span>
                           )}
                         </td>
-                        <td className="px-5 py-3.5 font-mono text-[11px] text-[var(--color-muted-foreground)]">
+                        <td className="px-5 py-3.5 font-mono text-[11px] text-[var(--color-muted-foreground)] whitespace-nowrap w-[140px]">
                           {user.licenseKey ? (
-                            <span className="px-1.5 py-0.5 rounded bg-[var(--color-muted)] text-[var(--color-foreground)]">
+                            <span className="px-1.5 py-0.5 rounded bg-[var(--color-muted)] text-[var(--color-foreground)] truncate block max-w-[130px]" title={user.licenseKey}>
                               {user.licenseKey}
                             </span>
                           ) : (
                             '—'
                           )}
                         </td>
-                        <td className="px-5 py-3.5 font-semibold text-[var(--color-foreground)]">
+                        <td className="px-5 py-3.5 font-semibold text-[var(--color-foreground)] whitespace-nowrap w-[90px]">
                           {user._count?.posts || 0}
                         </td>
-                        <td className="px-5 py-3.5 text-[var(--color-muted-foreground)] whitespace-nowrap">
+                        <td className="px-5 py-3.5 text-[var(--color-muted-foreground)] whitespace-nowrap w-[110px]">
                           {format(new Date(user.createdAt), 'dd/MM/yyyy')}
                         </td>
-                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap w-[100px]">
                           <button
                             onClick={() => setEditingUser(user)}
                             className="p-1.5 rounded-lg hover:bg-[var(--color-muted)] text-[var(--color-foreground)] transition-colors mr-1"
@@ -811,13 +811,13 @@ WHERE email = '${sqlEmail.trim() || 'admin@yourcompany.com'}';`;
               <table className="w-full text-xs text-left">
                 <thead className="bg-[var(--color-muted)]/40 text-[var(--color-muted-foreground)] uppercase text-[10px] font-bold border-b border-[var(--color-border)]">
                   <tr>
-                    <th className="px-5 py-3.5">Tên Workspace</th>
-                    <th className="px-5 py-3.5">Gói cước (Plan)</th>
-                    <th className="px-5 py-3.5">Trạng thái</th>
-                    <th className="px-5 py-3.5">Thành viên</th>
-                    <th className="px-5 py-3.5">Mạng xã hội</th>
-                    <th className="px-5 py-3.5">Bài viết</th>
-                    <th className="px-5 py-3.5 text-right">Thao tác</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap min-w-[240px]">Tên Workspace</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[140px]">Gói cước (Plan)</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[130px]">Trạng thái</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[110px]">Thành viên</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[130px]">Mạng xã hội</th>
+                    <th className="px-5 py-3.5 whitespace-nowrap w-[100px]">Bài viết</th>
+                    <th className="px-5 py-3.5 text-right whitespace-nowrap w-[160px]">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -830,54 +830,54 @@ WHERE email = '${sqlEmail.trim() || 'admin@yourcompany.com'}';`;
                   ) : (
                     filteredWorkspaces.map(ws => (
                       <tr key={ws.id} className="hover:bg-[var(--color-muted)]/20 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <div className="font-semibold text-[var(--color-foreground)]">{ws.name}</div>
+                        <td className="px-5 py-3.5 min-w-[240px] max-w-[340px]">
+                          <div className="font-semibold text-[var(--color-foreground)] truncate" title={ws.name}>{ws.name}</div>
                           {ws.allowedEmails?.[0]?.email && (
-                            <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-0.5">
+                            <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-0.5 truncate" title={`Admin: ${ws.allowedEmails[0].email}`}>
                               Admin: {ws.allowedEmails[0].email}
                             </p>
                           )}
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-3.5 whitespace-nowrap w-[140px]">
                           <select
                             value={ws.plan}
                             onChange={(e) => handleUpdateWorkspacePlan(ws.id, e.target.value as any)}
-                            className="px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] font-bold text-[10px] text-[var(--color-foreground)] focus:outline-none cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] font-bold text-[10px] text-[var(--color-foreground)] focus:outline-none cursor-pointer whitespace-nowrap"
                           >
                             <option value="FREE">FREE</option>
                             <option value="PRO">PRO</option>
                             <option value="ENTERPRISE">ENTERPRISE</option>
                           </select>
                         </td>
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-3.5 whitespace-nowrap w-[130px]">
                           <button
                             onClick={() => handleToggleWorkspaceActive(ws.id, ws.isActive)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold text-[10px] border transition-colors ${
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold text-[10px] border transition-colors whitespace-nowrap ${
                               ws.isActive
                                 ? 'bg-green-500/10 text-green-600 border-green-500/20'
                                 : 'bg-red-500/10 text-red-600 border-red-500/20'
                             }`}
                             title="Bấm để bật/tắt kích hoạt"
                           >
-                            {ws.isActive ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                            {ws.isActive ? <Unlock className="w-3 h-3 shrink-0" /> : <Lock className="w-3 h-3 shrink-0" />}
                             {ws.isActive ? 'Hoạt động' : 'Tạm khóa'}
                           </button>
                         </td>
-                        <td className="px-5 py-3.5 font-medium text-[var(--color-foreground)]">
+                        <td className="px-5 py-3.5 font-medium text-[var(--color-foreground)] whitespace-nowrap w-[110px]">
                           {ws._count.users} người
                         </td>
-                        <td className="px-5 py-3.5 text-[var(--color-foreground)]">
+                        <td className="px-5 py-3.5 text-[var(--color-foreground)] whitespace-nowrap w-[130px]">
                           {ws._count.socialAccounts} tài khoản
                         </td>
-                        <td className="px-5 py-3.5 text-[var(--color-foreground)]">
+                        <td className="px-5 py-3.5 text-[var(--color-foreground)] whitespace-nowrap w-[100px]">
                           {ws._count.posts} bài
                         </td>
-                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap w-[160px]">
                           {ws.allowedEmails?.[0]?.email && (
                             <button
                               onClick={() => generateMagicLink(ws.allowedEmails![0].email)}
                               disabled={generating === ws.allowedEmails[0].email}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-colors mr-2 inline-flex items-center gap-1 text-[11px] font-medium"
+                              className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-colors mr-2 inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap"
                               title="Tạo Magic Login Link cho Admin workspace"
                             >
                               <Link2 className="w-3 h-3" />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 // GET /api/crm/customers
 export async function GET(req: NextRequest) {
@@ -53,6 +54,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+    const workspaceId = (session.user as any).workspaceId;
+
     const customer = await prisma.customer.create({
       data: {
         name: body.name,
@@ -62,7 +65,22 @@ export async function POST(req: NextRequest) {
         source: body.source,
         notes: body.notes,
         customData: body.customData,
-        workspaceId: (session.user as any).workspaceId,
+        workspaceId,
+      },
+    });
+
+    await recordAuditLog({
+      action: 'CUSTOMER.CREATE',
+      entityType: 'Customer',
+      entityId: customer.id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Thêm khách hàng mới: ${body.name}`,
+        email: body.email,
+        phone: body.phone,
+        source: body.source
       },
     });
 
@@ -82,12 +100,31 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const workspaceId = (session.user as any).workspaceId;
+
     if (!id) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     }
 
+    const existing = await prisma.customer.findUnique({
+      where: { id },
+      select: { name: true },
+    });
+
     await prisma.customer.delete({
       where: { id },
+    });
+
+    await recordAuditLog({
+      action: 'CUSTOMER.DELETE',
+      entityType: 'Customer',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Xóa thông tin khách hàng: ${existing?.name || id}` 
+      },
     });
 
     return NextResponse.json({ success: true, message: 'Đã xóa khách hàng' });

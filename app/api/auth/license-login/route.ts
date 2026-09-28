@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sign } from 'jsonwebtoken';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
-const JWT_SECRET = process.env.AUTH_SECRET || 'topify-secret';
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 const TOKEN_TTL = '7d';
 
 // Simple in-memory rate limit (resets on server restart — good enough for license auth)
@@ -71,6 +72,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let workspaceId = user.workspaceId;
+    if (!workspaceId) {
+      const ws = await prisma.workspace.create({
+        data: {
+          name: user.name || user.email ? `${user.name || user.email}'s Workspace` : 'Personal Workspace',
+          plan: 'FREE'
+        }
+      });
+      workspaceId = ws.id;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { workspaceId: ws.id }
+      });
+    }
+
     // Sign JWT
     const token = sign(
       {
@@ -78,11 +94,25 @@ export async function POST(req: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
-        workspaceId: user.workspaceId,
+        workspaceId,
       },
       JWT_SECRET,
       { expiresIn: TOKEN_TTL }
     );
+
+    await recordAuditLog({
+      action: 'AUTH.LOGIN',
+      entityType: 'User',
+      entityId: user.id,
+      userId: user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Đăng nhập thành công qua License Key (${user.name || user.email})`,
+        email: user.email,
+        role: user.role
+      },
+    });
 
     return NextResponse.json({
       token,

@@ -15,205 +15,32 @@ if (process.env.REDIS_URL) {
   console.log("REDIS_URL starts with:", process.env.REDIS_URL.substring(0, 10));
 }
 
+import { publishPostDirectly, checkAndPublishDuePosts } from './publisher-service';
+
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
+  lazyConnect: true,
+  enableOfflineQueue: false,
+  retryStrategy(times) {
+    if (times > 3) return null;
+    return Math.min(times * 500, 2000);
+  },
 });
+
+if (connection && typeof connection.on === 'function') {
+  connection.on('error', (err: any) => {
+    if (err.code !== 'ECONNREFUSED') {
+      console.warn('[Worker IORedis Warning]:', err.message);
+    }
+  });
+}
 
 async function processPublishJob(job: Job<{ postId: string }>) {
   const { postId } = job.data;
-  console.log(`🚀 Processing publish job for post: ${postId}`);
-
-  // Get post with all relations
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: {
-      videoAsset: true,
-      platforms: true,
-      createdBy: {
-        include: {
-          socialAccounts: true,
-        },
-      },
-    },
-  });
-
-  if (!post) {
-    throw new Error(`Post not found: ${postId}`);
-  }
-
-  // Update post status to PUBLISHING
-  await prisma.post.update({
-    where: { id: postId },
-    data: { status: 'PUBLISHING' },
-  });
-
-  let allSuccess = true;
-  let anySuccess = false;
-
-  // Process each platform
-  for (const postPlatform of post.platforms) {
-    // Update platform status
-    await prisma.postPlatform.update({
-      where: { id: postPlatform.id },
-      data: { status: 'PUBLISHING' },
-    });
-
-    // Log start
-    await prisma.publishLog.create({
-      data: {
-        postId,
-        platform: postPlatform.platform,
-        level: 'INFO',
-        message: `Starting publish to ${postPlatform.platform}`,
-      },
-    });
-
-    // Find matching social account (using ADMIN's connected account)
-    const providerMap: Record<string, string> = {
-      FACEBOOK_REELS: 'META',
-      INSTAGRAM_REELS: 'META',
-      YOUTUBE_SHORTS: 'YOUTUBE',
-      TIKTOK_VIDEO: 'TIKTOK',
-      ZALO_VIDEO: 'ZALO',
-    };
-    
-    const socialAccount = await prisma.socialAccount.findFirst({
-      where: {
-        workspaceId: post.workspaceId,
-        provider: providerMap[postPlatform.platform] as never,
-      },
-    });
-
-    if (!socialAccount) {
-      await prisma.postPlatform.update({
-        where: { id: postPlatform.id },
-        data: {
-          status: 'FAILED',
-          errorMessage: `No ${providerMap[postPlatform.platform]} account connected`,
-        },
-      });
-      await prisma.publishLog.create({
-        data: {
-          postId,
-          platform: postPlatform.platform,
-          level: 'ERROR',
-          message: `No ${providerMap[postPlatform.platform]} account connected. Please connect your account in Settings.`,
-        },
-      });
-      allSuccess = false;
-      continue;
-    }
-
-    // Publish
-    try {
-      const publisher = getPublisher(postPlatform.platform);
-      
-      const postForPlatform = {
-        ...post,
-        title: postPlatform.customTitle || post.title,
-        caption: postPlatform.customCaption || post.caption,
-        firstComment: postPlatform.customFirstComment || post.firstComment,
-      };
-
-      let result: PublishResult;
-      if (post.postType === 'FEED' || post.postType === 'ARTICLE') {
-        result = await publisher.publishFeed(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
-      } else if (post.postType === 'CAROUSEL') {
-        const assets = post.videoAsset ? [post.videoAsset] : [];
-        result = await publisher.publishCarousel(postForPlatform as Post, assets, socialAccount, postPlatform);
-      } else {
-        if (!post.videoAsset) {
-          throw new Error('Reel post requires a video asset');
-        }
-        result = await publisher.publishReel(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
-      }
-
-      // Handle token expiration/auth errors (exclude cases where user just hasn't created a channel yet)
-      const isChannelMissing = result.errorMessage?.includes('youtubeSignupRequired') || result.errorMessage?.includes('chưa tạo Kênh YouTube');
-      if (!result.success && !isChannelMissing && (result.errorMessage?.toLowerCase().includes('token') || result.errorMessage?.toLowerCase().includes('expired'))) {
-        await prisma.socialAccount.update({
-          where: { id: socialAccount.id },
-          data: { status: 'DISCONNECTED' }
-        });
-      }
-
-      if (result.success) {
-        await prisma.postPlatform.update({
-          where: { id: postPlatform.id },
-          data: {
-            status: 'PUBLISHED',
-            externalPostId: result.externalPostId,
-          },
-        });
-        await prisma.publishLog.create({
-          data: {
-            postId,
-            platform: postPlatform.platform,
-            level: 'INFO',
-            message: `Successfully published to ${postPlatform.platform}`,
-            metadata: { externalPostId: result.externalPostId },
-          },
-        });
-        anySuccess = true;
-      } else {
-        await prisma.postPlatform.update({
-          where: { id: postPlatform.id },
-          data: {
-            status: 'FAILED',
-            errorMessage: result.errorMessage,
-          },
-        });
-        await prisma.publishLog.create({
-          data: {
-            postId,
-            platform: postPlatform.platform,
-            level: 'ERROR',
-            message: result.errorMessage || 'Unknown error',
-          },
-        });
-        allSuccess = false;
-      }
-    } catch (error: unknown) {
-      await prisma.postPlatform.update({
-        where: { id: postPlatform.id },
-        data: {
-          status: 'FAILED',
-          errorMessage: error instanceof Error ? error.message : String(error),
-        },
-      });
-      await prisma.publishLog.create({
-        data: {
-          postId,
-          platform: postPlatform.platform,
-          level: 'ERROR',
-          message: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
-          metadata: { stack: error instanceof Error ? error.stack : undefined },
-        },
-      });
-      allSuccess = false;
-    }
-  }
-
-  // Update final post status
-  let finalStatus: 'PUBLISHED' | 'FAILED' | 'PARTIAL_FAILED';
-  if (allSuccess) {
-    finalStatus = 'PUBLISHED';
-  } else if (anySuccess) {
-    finalStatus = 'PARTIAL_FAILED';
-  } else {
-    finalStatus = 'FAILED';
-  }
-
-  await prisma.post.update({
-    where: { id: postId },
-    data: {
-      status: finalStatus,
-      publishedAt: anySuccess ? new Date() : undefined,
-    },
-  });
-
-  console.log(`📋 Post ${postId} final status: ${finalStatus}`);
+  console.log(`🚀 [Worker] Processing publish job for post: ${postId}`);
+  await publishPostDirectly(postId);
 }
+
 
 async function processTokenMonitorJob(_job: Job) {
   console.log(`🔍 Checking token expirations...`);
@@ -405,7 +232,7 @@ async function processKeywordScraperJob(_job: Job) {
           let ts = item.created_time || item.time || item.timestamp;
           if (ts) {
             if (typeof ts === 'number' || (typeof ts === 'string' && /^\d+$/.test(ts))) {
-              postedAtDate = new Date(parseInt(ts, 10) * 1000);
+              postedAtDate = new Date(parseInt(String(ts), 10) * 1000);
             } else {
               postedAtDate = new Date(ts);
             }
@@ -452,29 +279,7 @@ async function processKeywordScraperJob(_job: Job) {
 }
 
 async function checkDueScheduledPosts() {
-  try {
-    const duePosts = await prisma.post.findMany({
-      where: {
-        status: 'SCHEDULED',
-        scheduledAt: {
-          lte: new Date(),
-        },
-      },
-      select: { id: true, title: true, scheduledAt: true },
-      take: 20,
-    });
-
-    for (const post of duePosts) {
-      console.log(`⏰ [SCHEDULE-CRON] Đang kích hoạt đăng bài hẹn giờ: ${post.id} ("${post.title}")`);
-      await prisma.post.update({
-        where: { id: post.id },
-        data: { status: 'PUBLISHING' },
-      });
-      await enqueuePublish(post.id);
-    }
-  } catch (err: any) {
-    console.error('❌ Error checking due scheduled posts:', err.message);
-  }
+  await checkAndPublishDuePosts();
 }
 
 export function startWorker() {

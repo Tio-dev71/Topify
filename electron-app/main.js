@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { runPlaywrightLogin, activeBrowsers } = require('./playwright-runner');
+const { runPlaywrightLogin, activeBrowsers, latestScreenshots } = require('./playwright-runner');
 const { startAutomationTask, stopTask } = require('./automation-runner');
 
 let mainWindow;
@@ -41,14 +41,31 @@ function createWindow() {
   }
 
   // Quản lý popup OAuth (như Facebook/Google login)
-  mainWindow.webContents.setWindowOpenHandler(() => {
-    return { action: 'allow' };
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    return { 
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 600,
+        height: 700,
+        center: true,
+        autoHideMenuBar: true,
+        title: 'Topify - Xác thực liên kết',
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        }
+      }
+    };
   });
 
   mainWindow.webContents.on('did-create-window', (childWindow) => {
+    // Override User-Agent sang chuẩn Google Chrome độc lập để Google OAuth không chặn lỗi 403 disallowed_useragent
+    childWindow.webContents.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    );
     childWindow.on('closed', () => {
-      // Khi cửa sổ OAuth đóng, tải lại cửa sổ chính để cập nhật trạng thái
-      mainWindow.webContents.executeJavaScript('window.location.reload()');
+      // Khi cửa sổ OAuth đóng, phát sự kiện oauth-complete và làm mới dữ liệu
+      mainWindow.webContents.executeJavaScript('window.dispatchEvent(new Event("oauth-complete"));');
     });
   });
 
@@ -81,6 +98,30 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+
+  // Background Scheduler: Tự động kiểm tra và kích hoạt đăng các bài viết đã đến giờ hẹn
+  const triggerScheduledPosts = () => {
+    try {
+      const http = require('http');
+      const req = http.request('http://localhost:3000/api/cron/publish-scheduled', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 5000,
+      }, (res) => {
+        res.resume();
+      });
+      req.on('error', () => {
+        // Next.js server có thể chưa bật hoặc đang khởi động, bỏ qua lỗi im lặng
+      });
+      req.end();
+    } catch (e) {
+      // bỏ qua lỗi
+    }
+  };
+
+  setTimeout(triggerScheduledPosts, 3000);
+  const cronTimer = setInterval(triggerScheduledPosts, 20000);
+  if (cronTimer.unref) cronTimer.unref();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -125,6 +166,69 @@ ipcMain.handle('stop-automation-task', async (event, { taskId, profileIds }) => 
   } catch (error) {
     console.error('[Electron IPC] Lỗi khi dừng task:', error.message);
     return { success: false, error: error.message };
+  }
+});
+
+// Giám sát trạng thái & hình ảnh chụp trực tiếp từ các trình duyệt đang chạy
+ipcMain.handle('get-active-browsers', async () => {
+  try {
+    const list = [];
+    for (const [profileId, browser] of activeBrowsers.entries()) {
+      let cached = latestScreenshots ? latestScreenshots.get(profileId) : null;
+      let screenshot = cached?.screenshot || null;
+      let url = cached?.url || '';
+      let title = cached?.title || '';
+
+      // Nếu chưa có screenshot hoặc đã quá 4 giây chưa cập nhật, thử chụp nhanh ngay lập tức
+      if (browser && (!screenshot || (Date.now() - (cached?.timestamp || 0)) > 4000)) {
+        try {
+          const pages = await browser.pages();
+          let page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || pages.find(p => !p.isClosed());
+          if (page && !page.isClosed()) {
+            url = page.url();
+            title = await page.title().catch(() => 'Facebook');
+            const buffer = await page.screenshot({ type: 'jpeg', quality: 50, timeout: 3000 }).catch(() => null);
+            if (buffer) {
+              screenshot = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+              if (latestScreenshots) {
+                latestScreenshots.set(profileId, { screenshot, url, title, timestamp: Date.now() });
+              }
+            }
+          }
+        } catch (e) {
+          // Bỏ qua lỗi chụp để không ảnh hưởng
+        }
+      }
+
+      list.push({
+        profileId,
+        status: 'RUNNING',
+        url,
+        title,
+        screenshot,
+        timestamp: cached?.timestamp || Date.now()
+      });
+    }
+    return list;
+  } catch (err) {
+    console.error('[Electron IPC] Lỗi get-active-browsers:', err);
+    return [];
+  }
+});
+
+// Đóng một trình duyệt cụ thể theo profileId từ màn hình Live Monitor
+ipcMain.handle('close-active-browser', async (event, profileId) => {
+  try {
+    const browser = activeBrowsers.get(profileId);
+    if (browser) {
+      await browser.close().catch(() => {});
+      activeBrowsers.delete(profileId);
+      if (latestScreenshots) latestScreenshots.delete(profileId);
+      return { success: true };
+    }
+    return { success: false, error: 'Trình duyệt không tồn tại hoặc đã đóng' };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 
@@ -223,6 +327,19 @@ ipcMain.handle('show-item-in-folder', async (event, filePath) => {
       return { success: true };
     }
     return { success: false, error: 'Không tìm thấy tệp tin trên máy tính' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Mở URL bằng trình duyệt mặc định của hệ thống
+ipcMain.handle('open-external', async (event, url) => {
+  try {
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      await shell.openExternal(url);
+      return { success: true };
+    }
+    return { success: false, error: 'URL không hợp lệ' };
   } catch (err) {
     return { success: false, error: err.message };
   }

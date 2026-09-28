@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { enqueuePublish, schedulePublish } from '@/lib/queue';
+import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
+import { recordAuditLog } from '@/lib/audit-log';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +14,17 @@ const createPostSchema = z.object({
   firstComment: z.string().nullable().optional(),
   hashtags: z.string().nullable().optional(),
   videoAssetId: z.string().min(1),
-  platforms: z.array(z.enum(['FACEBOOK_REELS', 'INSTAGRAM_REELS', 'YOUTUBE_SHORTS'])).min(1),
+  platforms: z.array(z.enum([
+    'FACEBOOK_REELS',
+    'FACEBOOK_POST',
+    'INSTAGRAM_REELS',
+    'INSTAGRAM_CAROUSEL',
+    'INSTAGRAM_STORY',
+    'YOUTUBE_SHORTS',
+    'TIKTOK_VIDEO',
+    'ZALO_POST',
+    'ZALO_ARTICLE'
+  ])).min(1),
   publishMode: z.enum(['now', 'schedule', 'request_approval']),
   scheduledAt: z.string().nullable().optional(),
 });
@@ -25,6 +37,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Auto-check and publish any overdue scheduled posts before listing
+    if (process.env.NODE_ENV !== 'test') {
+      checkAndPublishDuePosts().catch((e) => {
+        console.warn('Auto check due posts error in GET /api/posts:', e.message);
+      });
+    }
+
     const url = new URL(req.url);
     const status = url.searchParams.get('status');
     const search = url.searchParams.get('search');
@@ -35,14 +54,15 @@ export async function GET(req: NextRequest) {
 
     const where: any = {};
 
+    const userWorkspaceId = (session.user as any).workspaceId;
     if (session.user.role === 'SUPER_ADMIN') {
-      if (workspaceIdParam) {
+      if (workspaceIdParam && workspaceIdParam !== 'all') {
         where.workspaceId = workspaceIdParam;
-      } else if ((session.user as any).workspaceId) {
-        where.workspaceId = (session.user as any).workspaceId;
+      } else if (workspaceIdParam !== 'all' && userWorkspaceId) {
+        where.workspaceId = userWorkspaceId;
       }
     } else {
-      where.workspaceId = (session.user as any).workspaceId;
+      where.workspaceId = userWorkspaceId || 'none';
       if (session.user.role === 'STAFF') {
         where.createdById = session.user.id;
       }
@@ -126,9 +146,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Video asset not found in your workspace' }, { status: 404 });
     }
 
-    if (platforms.includes('YOUTUBE_SHORTS') && videoAsset.duration && videoAsset.duration > 60) {
+    if (platforms.includes('YOUTUBE_SHORTS') && videoAsset.duration && videoAsset.duration > 180) {
       return NextResponse.json(
-        { error: 'Video cho YouTube Shorts phải có thời lượng tối đa 60 giây.' },
+        { error: `Video cho YouTube Shorts có thời lượng tối đa 3 phút (180 giây). Video hiện tại dài ${videoAsset.duration}s nên sẽ bị YouTube tự động chuyển thành video thường.` },
         { status: 400 }
       );
     }
@@ -163,12 +183,32 @@ export async function POST(req: NextRequest) {
         await enqueuePublish(post.id);
       } else if (publishMode === 'schedule' && scheduledAt) {
         await schedulePublish(post.id, new Date(scheduledAt));
+        if (new Date(scheduledAt) <= new Date()) {
+          checkAndPublishDuePosts().catch(console.error);
+        }
       }
     } catch (queueError: any) {
-      // If queueing fails, rollback post creation to avoid getting stuck in PUBLISHING
-      await prisma.post.delete({ where: { id: post.id } });
-      throw new Error(`Failed to enqueue publish job: ${queueError.message}`);
+      console.warn('Queue publish job warning:', queueError.message);
+      if (publishMode === 'now') {
+        const { publishPostDirectly } = await import('@/lib/queue/publisher-service');
+        publishPostDirectly(post.id).catch(console.error);
+      }
     }
+
+    await recordAuditLog({
+      action: 'POST.CREATE',
+      entityType: 'Post',
+      entityId: post.id,
+      userId: session.user.id,
+      workspaceId: (session.user as any).workspaceId,
+      req,
+      metadata: { 
+        message: `Tạo bài viết mới: ${title}`,
+        platforms,
+        publishMode,
+        status: post.status
+      },
+    });
 
     return NextResponse.json(post, { status: 201 });
   } catch (error: any) {

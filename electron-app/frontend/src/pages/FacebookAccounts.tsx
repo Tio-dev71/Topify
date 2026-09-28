@@ -51,11 +51,12 @@ export default function FacebookAccounts() {
     
     // Poll for active browsers
     const interval = setInterval(async () => {
-      // @ts-ignore
       if (typeof window !== 'undefined' && window.electron && window.electron.getActiveBrowsers) {
-        // @ts-ignore
-        const activeIds = await window.electron.getActiveBrowsers();
-        setActiveBrowserIds(activeIds);
+        const activeData = await window.electron.getActiveBrowsers();
+        if (Array.isArray(activeData)) {
+          const ids = activeData.map((b: any) => (typeof b === 'string' ? b : b.profileId)).filter(Boolean);
+          setActiveBrowserIds(ids);
+        }
       }
     }, 2000);
     
@@ -129,7 +130,11 @@ export default function FacebookAccounts() {
         // @ts-ignore
         const result = await window.electron.runFacebookLogin(accountData);
         if (result.success) {
-          await api.patch('/facebook-accounts/login', { id, status: 'LIVE' });
+          await api.patch('/facebook-accounts/login', {
+            id,
+            status: 'LIVE',
+            ...(result.cookie ? { cookie: result.cookie } : {})
+          });
           fetchAccounts();
           toast.success('Đăng nhập qua Desktop App thành công!');
         } else {
@@ -248,6 +253,20 @@ export default function FacebookAccounts() {
     }
   };
 
+  const handleRemoveSingleProxy = async (id: string) => {
+    try {
+      await api.patch('/facebook-accounts', {
+        ids: [id],
+        proxy: ''
+      });
+      fetchAccounts();
+      toast.success('Đã gỡ proxy khỏi tài khoản');
+    } catch (e) {
+      console.error(e);
+      toast.error('Lỗi khi gỡ proxy');
+    }
+  };
+
   const toggleSelectAll = () => {
     if (selectedIds.length === accounts.length && accounts.length > 0) {
       setSelectedIds([]);
@@ -312,53 +331,53 @@ export default function FacebookAccounts() {
           <button
             onClick={handleDeleteSelected}
             disabled={selectedIds.length === 0 || isRunningMultiple}
-            className="bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 flex items-center gap-2 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
+            className="bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
           >
-            <Trash2 className="w-4 h-4" />
-            Xóa đã chọn
+            <Trash2 className="w-4 h-4 shrink-0" />
+            <span>Xóa đã chọn</span>
           </button>
 
           <button
             onClick={handleCheckLiveSelected}
             disabled={selectedIds.length === 0 || isRunningMultiple}
-            className="bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 flex items-center gap-2 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
+            className="bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
           >
             {isRunningMultiple ? (
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0"></div>
             ) : (
-              <Shield className="w-4 h-4" />
+              <Shield className="w-4 h-4 shrink-0" />
             )}
-            Check live đã chọn
+            <span>Check live đã chọn</span>
           </button>
 
           <button
             onClick={handleRunSelected}
             disabled={selectedIds.length === 0 || isRunningMultiple}
-            className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-50 flex items-center gap-2 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
+            className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
           >
             {isRunningMultiple ? (
-              <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin shrink-0"></div>
             ) : (
-              <Play className="w-4 h-4 fill-current" />
+              <Play className="w-4 h-4 fill-current shrink-0" />
             )}
-            Chạy đã chọn
+            <span>Chạy đã chọn</span>
           </button>
 
           <button
             onClick={openProxyModal}
             disabled={selectedIds.length === 0 || isRunningMultiple}
-            className="bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50 flex items-center gap-2 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
+            className="bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50 whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
           >
-            <Globe className="w-4 h-4" />
-            Gán Proxy
+            <Globe className="w-4 h-4 shrink-0" />
+            <span>Gán Proxy</span>
           </button>
           
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-[var(--color-primary)] hover:opacity-90 text-white flex items-center gap-2 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
+            className="bg-[var(--color-primary)] hover:opacity-90 text-white whitespace-nowrap inline-flex items-center justify-center gap-2 shrink-0 px-4 py-2 rounded-xl text-[14px] font-medium transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            Thêm tài khoản
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Thêm tài khoản</span>
           </button>
         </div>
       </div>
@@ -426,12 +445,21 @@ export default function FacebookAccounts() {
                     </td>
                     <td className="px-6 py-4">
                       {acc.proxy ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 max-w-[180px] truncate" title={acc.proxy}>
-                          <Globe className="w-3 h-3 flex-shrink-0" />
-                          {acc.proxy.replace(/^https?:\/\//, '').replace(/:.+@/, ':***@')}
-                        </span>
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 max-w-[170px] truncate" title={acc.proxy}>
+                            <Globe className="w-3 h-3 flex-shrink-0" />
+                            {acc.proxy.replace(/^https?:\/\//, '').replace(/:.+@/, ':***@')}
+                          </span>
+                          <button
+                            onClick={() => handleRemoveSingleProxy(acc.id)}
+                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                            title="Gỡ proxy"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       ) : (
-                        <span className="text-xs text-gray-400">Không có</span>
+                        <span className="text-xs text-gray-400">Trực tiếp</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">

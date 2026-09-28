@@ -23,10 +23,14 @@ export async function POST(
       return NextResponse.json({ error: 'Account ID is required' }, { status: 400 });
     }
     
+    const user = session.user as any;
     const account = await prisma.socialAccount.findFirst({
       where: {
         id: accountId,
-        userId: session.user.id,
+        OR: [
+          { userId: user.id },
+          ...(user.workspaceId ? [{ workspaceId: user.workspaceId }] : [])
+        ]
       },
     });
 

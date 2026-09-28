@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const endDate = url.searchParams.get('end');
     const workspaceId = (session.user as any).workspaceId;
 
-    const where: any = { workspaceId };
+    const where: any = { workspaceId: workspaceId || 'none' };
 
     if (startDate && endDate) {
       where.scheduledAt = {

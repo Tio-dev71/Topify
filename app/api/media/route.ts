@@ -18,9 +18,18 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(url.searchParams.get('limit') || '50', 10);
     const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 
-    const where: any = {
-      workspaceId: (session.user as any).workspaceId,
-    };
+    const userWorkspaceId = (session.user as any).workspaceId;
+    const where: any = {};
+    if (session.user.role === 'SUPER_ADMIN') {
+      const wsParam = url.searchParams.get('workspaceId');
+      if (wsParam && wsParam !== 'all') {
+        where.workspaceId = wsParam;
+      } else if (wsParam !== 'all' && userWorkspaceId) {
+        where.workspaceId = userWorkspaceId;
+      }
+    } else {
+      where.workspaceId = userWorkspaceId || 'none';
+    }
 
     if (mediaType) where.mediaType = mediaType;
     if (search) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { recordAuditLog } from '@/lib/audit-log';
 
 // POST /api/posts/[id]/approve — Approve or reject a post
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -18,9 +19,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params;
     const body = await req.json();
     const { action, reason } = body; // action: 'approve' | 'reject'
+    const workspaceId = (session.user as any).workspaceId;
 
     const post = await prisma.post.findUnique({ where: { id } });
-    if (!post || post.workspaceId !== (session.user as any).workspaceId) {
+    if (!post || post.workspaceId !== workspaceId) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
@@ -47,6 +49,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await schedulePublish(updated.id, updated.scheduledAt);
       }
 
+      await recordAuditLog({
+        action: 'POST.APPROVE',
+        entityType: 'Post',
+        entityId: id,
+        userId: session.user.id,
+        workspaceId,
+        req,
+        metadata: { 
+          message: `Duyệt bài viết: ${post.title}`,
+          nextStatus
+        },
+      });
+
       return NextResponse.json(updated);
     } else if (action === 'reject') {
       const updated = await prisma.post.update({
@@ -57,6 +72,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           approvedAt: new Date(),
         },
       });
+
+      await recordAuditLog({
+        action: 'POST.REJECT',
+        entityType: 'Post',
+        entityId: id,
+        userId: session.user.id,
+        workspaceId,
+        req,
+        metadata: { 
+          message: `Từ chối bài viết: ${post.title}`,
+          reason: reason || 'Không có lý do'
+        },
+      });
+
       return NextResponse.json(updated);
     }
 

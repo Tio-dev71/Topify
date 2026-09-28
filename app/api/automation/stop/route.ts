@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { browserManager } from '@/lib/automation/browserManager';
+import { recordAuditLog } from '@/lib/audit-log';
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,6 +35,20 @@ export async function POST(req: NextRequest) {
     await prisma.automationTask.update({
       where: { id: taskId },
       data: { status: 'DONE' }
+    });
+
+    await recordAuditLog({
+      action: 'AUTOMATION.STOP',
+      entityType: 'AutomationTask',
+      entityId: taskId,
+      userId: session.user.id,
+      workspaceId: task.workspaceId || (session.user as any).workspaceId,
+      req,
+      metadata: { 
+        message: `Dừng tác vụ tự động hóa: ${task.name}`,
+        taskType: task.type,
+        taskId
+      },
     });
 
     return NextResponse.json({ success: true, message: 'Task stopped' });
