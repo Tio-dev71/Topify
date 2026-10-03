@@ -166,7 +166,6 @@ function parseCookies(cookieInput, defaultDomain = '.facebook.com') {
   return cookies;
 }
 
-async function runPlaywrightLogin(accountData) {
 function cleanStaleLockFiles(userDataDir) {
   if (!fs.existsSync(userDataDir)) return;
   const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
