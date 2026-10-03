@@ -22,7 +22,7 @@ function generateFingerprint() {
 // 4. host:port:user:pass
 function parseProxy(proxyStr) {
   if (!proxyStr) return null;
-  
+
   try {
     // Format: protocol://... (URL format)
     if (proxyStr.includes('://')) {
@@ -49,7 +49,7 @@ function parseProxy(proxyStr) {
         };
       }
     }
-    
+
     // Format: host:port or host:port:user:pass
     const parts = proxyStr.trim().split(':');
     if (parts.length === 2) {
@@ -64,7 +64,7 @@ function parseProxy(proxyStr) {
   } catch (e) {
     console.error('[parseProxy] Failed to parse:', proxyStr, e);
   }
-  
+
   return null;
 }
 
@@ -136,7 +136,7 @@ function parseCookies(cookieInput, defaultDomain = '.facebook.com') {
         }
       }
       if (cookies.length > 0) return cookies;
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Format: key=value; key2=value2;
@@ -170,27 +170,27 @@ function cleanStaleLockFiles(userDataDir) {
   if (!fs.existsSync(userDataDir)) return;
   const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
   const lockPath = path.join(userDataDir, 'SingletonLock');
-  
+
   let targetPid = null;
   try {
     const link = fs.readlinkSync(lockPath);
     const match = link.match(/-?(\d+)$/);
     if (match) targetPid = parseInt(match[1], 10);
-  } catch (e) {}
+  } catch (e) { }
 
   if (targetPid) {
     try {
       process.kill(targetPid, 0); // Check if alive
       console.log(`[LockCleaner] Dọn dẹp tiến trình Chrome cũ (PID: ${targetPid}) cho ${userDataDir}...`);
       process.kill(targetPid, 'SIGKILL');
-    } catch (e) {}
+    } catch (e) { }
   }
 
   for (const file of lockFiles) {
     const p = path.join(userDataDir, file);
     try {
       fs.unlinkSync(p);
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -215,7 +215,7 @@ async function dismissFacebookPopups(page) {
         await page.waitForTimeout(1000);
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 async function checkFacebookLoggedIn(browser, page) {
@@ -225,15 +225,15 @@ async function checkFacebookLoggedIn(browser, page) {
 
     const isDomLoggedIn = await page.evaluate(() => {
       const nav = document.querySelector('div[role="navigation"]') ||
-                  document.querySelector('div[role="banner"]') ||
-                  document.querySelector('form[action*="/search/"]') ||
-                  document.querySelector('div[aria-label="Account"]') ||
-                  document.querySelector('div[aria-label="Tài khoản"]') ||
-                  document.querySelector('svg[aria-label="Your profile"]') ||
-                  document.querySelector('[aria-label="Facebook"][role="link"]');
+        document.querySelector('div[role="banner"]') ||
+        document.querySelector('form[action*="/search/"]') ||
+        document.querySelector('div[aria-label="Account"]') ||
+        document.querySelector('div[aria-label="Tài khoản"]') ||
+        document.querySelector('svg[aria-label="Your profile"]') ||
+        document.querySelector('[aria-label="Facebook"][role="link"]');
       const hasLoginForm = document.querySelector('input[name="email"]') ||
-                          document.querySelector('#email') ||
-                          document.querySelector('button[name="login"]');
+        document.querySelector('#email') ||
+        document.querySelector('button[name="login"]');
       return !!nav && !hasLoginForm;
     }).catch(() => false);
 
@@ -259,9 +259,9 @@ async function syncCookiesToApi(browser, accountId) {
           status: 'LIVE',
           cookie: cookieStr
         })
-      }).catch(() => {});
+      }).catch(() => { });
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 async function cleanupExtraTabs(browser, mainPage) {
@@ -272,14 +272,14 @@ async function cleanupExtraTabs(browser, mainPage) {
       if (p !== mainPage && !p.isClosed()) {
         const url = p.url();
         if (url === 'about:blank' || url === '' || url.startsWith('chrome://') || !url.includes('facebook.com')) {
-          await p.close().catch(() => {});
+          await p.close().catch(() => { });
         }
       }
     }
     if (mainPage && !mainPage.isClosed()) {
-      await mainPage.bringToFront().catch(() => {});
+      await mainPage.bringToFront().catch(() => { });
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 async function runPlaywrightLogin(accountData) {
@@ -289,7 +289,7 @@ async function runPlaywrightLogin(accountData) {
   try {
     if (browser && browser.proxyConfigStr !== (proxy || '')) {
       console.log('[Playwright] Cấu hình proxy thay đổi, khởi động lại trình duyệt...');
-      await browser.close().catch(() => {});
+      await browser.close().catch(() => { });
       activeBrowsers.delete(profileId);
       browser = null;
     }
@@ -371,11 +371,11 @@ async function runPlaywrightLogin(accountData) {
 
       browser.on('page', async (newPage) => {
         try {
-          await newPage.waitForLoadState('domcontentloaded').catch(() => {});
+          await newPage.waitForLoadState('domcontentloaded').catch(() => { });
           if (newPage.url() === 'about:blank' && browser.pages().length > 1) {
-            await newPage.close().catch(() => {});
+            await newPage.close().catch(() => { });
           }
-        } catch (e) {}
+        } catch (e) { }
       });
 
       browser.on('close', () => {
@@ -407,14 +407,14 @@ async function runPlaywrightLogin(accountData) {
     } catch (navErr) {
       const msg = (navErr.message || '').toLowerCase();
       const isProxyFailure = msg.includes('err_tunnel_connection_failed') ||
-                             msg.includes('err_proxy_connection_failed') ||
-                             msg.includes('err_connection_refused') ||
-                             msg.includes('err_timed_out') ||
-                             msg.includes('timeout');
+        msg.includes('err_proxy_connection_failed') ||
+        msg.includes('err_connection_refused') ||
+        msg.includes('err_timed_out') ||
+        msg.includes('timeout');
 
       if (browser.proxyConfigStr && isProxyFailure) {
         console.warn(`[Playwright] Proxy ${browser.proxyConfigStr} gặp sự cố (${navErr.message}). Tự động đổi sang kết nối mạng trực tiếp...`);
-        await browser.close().catch(() => {});
+        await browser.close().catch(() => { });
         activeBrowsers.delete(profileId);
         cleanStaleLockFiles(userDataDir);
 
@@ -430,7 +430,7 @@ async function runPlaywrightLogin(accountData) {
 
         if (cookie) {
           const parsedCookies = parseCookies(cookie, '.facebook.com');
-          if (parsedCookies.length > 0) await browser.addCookies(parsedCookies).catch(() => {});
+          if (parsedCookies.length > 0) await browser.addCookies(parsedCookies).catch(() => { });
         }
 
         await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 35000 });
@@ -451,7 +451,7 @@ async function runPlaywrightLogin(accountData) {
       try {
         const cookies = await browser.cookies('https://www.facebook.com');
         cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-      } catch (e) {}
+      } catch (e) { }
       await syncCookiesToApi(browser, id);
       return { success: true, message: 'Already logged in', cookie: cookieStr };
     }
@@ -472,7 +472,7 @@ async function runPlaywrightLogin(accountData) {
       if (await otherProfileBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
         console.log('[Playwright] Nhấp "Dùng trang cá nhân khác"...');
         await otherProfileBtn.click();
-        await page.waitForSelector('input[name="email"], #email, input[name="pass"]', { timeout: 7000 }).catch(() => {});
+        await page.waitForSelector('input[name="email"], #email, input[name="pass"]', { timeout: 7000 }).catch(() => { });
         hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
       }
     }
@@ -494,7 +494,7 @@ async function runPlaywrightLogin(accountData) {
       if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
         console.log('[Playwright] Nhấp "Tiếp tục" cho tài khoản đã lưu...');
         await continueBtn.click();
-        await page.waitForSelector('input[name="pass"], #pass', { timeout: 7000 }).catch(() => {});
+        await page.waitForSelector('input[name="pass"], #pass', { timeout: 7000 }).catch(() => { });
         const passInput = page.locator('input[name="pass"], #pass').first();
         await passInput.fill(password);
       } else {
@@ -537,12 +537,12 @@ async function runPlaywrightLogin(accountData) {
     // Kiểm tra sai mật khẩu
     const loginError = await page.evaluate(() => {
       const text = (document.body ? document.body.innerText : '').toLowerCase();
-      return text.includes('không kết nối với tài khoản nào') || 
-             text.includes('không chính xác') ||
-             text.includes('the password that you') ||
-             text.includes('find your account') ||
-             text.includes('sai mật khẩu') ||
-             text.includes('mật khẩu không đúng');
+      return text.includes('không kết nối với tài khoản nào') ||
+        text.includes('không chính xác') ||
+        text.includes('the password that you') ||
+        text.includes('find your account') ||
+        text.includes('sai mật khẩu') ||
+        text.includes('mật khẩu không đúng');
     });
 
     if (loginError) {
@@ -552,14 +552,14 @@ async function runPlaywrightLogin(accountData) {
     // Xử lý 2FA (cả dạng modern /two_step_verification lẫn legacy checkpoint)
     const pageText = await page.evaluate(() => document.body ? document.body.innerText : '');
     const isTwoFactor = page.url().includes('two_step_verification') ||
-                        page.url().includes('two_factor') ||
-                        page.url().includes('checkpoint') ||
-                        pageText.includes('two-factor') ||
-                        pageText.includes('6-digit code') ||
-                        pageText.includes('authentication app') ||
-                        pageText.includes('Xác thực hai yếu tố') ||
-                        pageText.includes('Xác thực 2 yếu tố') ||
-                        pageText.includes('Nhập mã');
+      page.url().includes('two_factor') ||
+      page.url().includes('checkpoint') ||
+      pageText.includes('two-factor') ||
+      pageText.includes('6-digit code') ||
+      pageText.includes('authentication app') ||
+      pageText.includes('Xác thực hai yếu tố') ||
+      pageText.includes('Xác thực 2 yếu tố') ||
+      pageText.includes('Nhập mã');
 
     if (isTwoFactor) {
       if (!twoFactorCode) {
@@ -615,7 +615,7 @@ async function runPlaywrightLogin(accountData) {
         await trustBtn.click({ force: true });
         await page.waitForTimeout(3000);
       }
-    } catch (e) {}
+    } catch (e) { }
 
     await dismissFacebookPopups(page);
 
@@ -624,7 +624,7 @@ async function runPlaywrightLogin(accountData) {
     try {
       const cookies = await browser.cookies('https://www.facebook.com');
       cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-    } catch (e) {}
+    } catch (e) { }
 
     await syncCookiesToApi(browser, id);
 
@@ -643,7 +643,7 @@ const screenshotsDir = path.join(__dirname, '..', 'public', 'screenshots');
 if (!fs.existsSync(screenshotsDir)) {
   try {
     fs.mkdirSync(screenshotsDir, { recursive: true });
-  } catch (e) {}
+  } catch (e) { }
 }
 
 setInterval(async () => {
@@ -654,7 +654,7 @@ setInterval(async () => {
       try {
         const p = path.join(screenshotsDir, `${profileId}.jpg`);
         if (fs.existsSync(p)) fs.unlinkSync(p);
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -667,7 +667,7 @@ setInterval(async () => {
       if (!page) {
         page = pages.find(p => !p.isClosed());
       }
-      
+
       if (page && !page.isClosed()) {
         const title = await page.title().catch(() => 'Facebook');
         const url = page.url();
@@ -685,7 +685,7 @@ setInterval(async () => {
           try {
             const screenshotPath = path.join(screenshotsDir, `${profileId}.jpg`);
             fs.writeFileSync(screenshotPath, buffer);
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     } catch (e) {
