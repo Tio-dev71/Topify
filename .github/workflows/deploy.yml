@@ -20,7 +20,8 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /var/www/topify
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             rm -rf .next
             npm install --legacy-peer-deps
             npm run build
