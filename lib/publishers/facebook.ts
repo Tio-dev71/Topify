@@ -2,7 +2,6 @@ import type { Publisher, PublishResult } from './types';
 import type { Post, VideoAsset, SocialAccount, PostPlatform } from '@prisma/client';
 import { getStorage } from '@/lib/storage';
 import { decryptToken } from '@/lib/crypto';
-import fs from 'fs';
 
 /**
  * Facebook Reels publisher using Meta Graph API.
@@ -28,7 +27,6 @@ export class FacebookReelsPublisher implements Publisher {
 
       const accessToken = decryptToken(socialAccount.accessToken);
       const storage = getStorage();
-      const videoPath = storage.getPath(videoAsset.storageUrl);
 
       // Step 1: Initialize upload session
       const initRes = await fetch(
@@ -51,7 +49,7 @@ export class FacebookReelsPublisher implements Publisher {
       const videoId = initData.video_id;
 
       // Step 2: Upload video binary
-      const videoBuffer = fs.readFileSync(videoPath);
+      const videoBuffer = await storage.getBuffer(videoAsset.storageUrl);
       const uploadRes = await fetch(
         `https://rupload.facebook.com/video-upload/v19.0/${videoId}`,
         {

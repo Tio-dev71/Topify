@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import { encryptApiKey, makeKeyHint } from '@/lib/crypto';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.AUTH_SECRET || 'topify-secret';
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
 // Helper to authenticate request (supports NextAuth & JWT token fallback for Desktop App)
 async function authenticate(req: NextRequest) {

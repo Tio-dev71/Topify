@@ -299,7 +299,7 @@ export async function checkAndPublishDuePosts(): Promise<{
           },
           {
             status: 'PUBLISHING',
-            scheduledAt: {
+            updatedAt: {
               lte: new Date(Date.now() - 60 * 1000), // stuck for > 1 min
             },
             platforms: {

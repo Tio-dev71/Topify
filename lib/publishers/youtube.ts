@@ -3,7 +3,6 @@ import type { Post, VideoAsset, SocialAccount, PostPlatform } from '@prisma/clie
 import { getStorage } from '@/lib/storage';
 import { getValidAccessToken } from './googleAuth';
 import { prisma } from '@/lib/db';
-import fs from 'fs';
 
 /**
  * YouTube Shorts publisher using YouTube Data API v3.
@@ -25,7 +24,6 @@ export class YouTubeShortsPublisher implements Publisher {
     try {
       const token = await getValidAccessToken(socialAccount);
       const storage = getStorage();
-      const videoPath = storage.getPath(videoAsset.storageUrl);
 
       // Ensure title includes #Shorts for YouTube algorithm to recognize it (max 100 chars for YouTube Data API)
       let title = post.title?.trim() || 'Shorts';
@@ -124,7 +122,7 @@ export class YouTubeShortsPublisher implements Publisher {
       }
 
       // Step 2: Upload video binary
-      const videoBuffer = fs.readFileSync(videoPath);
+      const videoBuffer = await storage.getBuffer(videoAsset.storageUrl);
       const uploadRes = await fetch(uploadUrl, {
         method: 'PUT',
         headers: {

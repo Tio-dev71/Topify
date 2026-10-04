@@ -46,8 +46,7 @@ export async function POST(req: NextRequest) {
 
     // Upload file
     const storage = getStorage();
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const storageUrl = await storage.upload(buffer, file.name);
+    const storageUrl = await storage.upload(file, file.name, file.type);
 
     // Read optional duration from client metadata
     const rawDuration = formData.get('duration');

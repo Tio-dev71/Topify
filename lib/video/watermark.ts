@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { getStorage } from '@/lib/storage';
 // @ts-expect-error - no types available
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
@@ -26,13 +27,8 @@ export async function addWatermark(videoUrl: string, text: string = 'Topmedia'):
   console.log(`[Watermark] Downloading video to ${rawVideoPath}...`);
   
   // Step 1: Download the video
-  const response = await fetch(videoUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to download video: ${response.statusText}`);
-  }
-  
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const storage = getStorage();
+  const buffer = await storage.getBuffer(videoUrl);
   fs.writeFileSync(rawVideoPath, buffer);
   
   console.log(`[Watermark] Adding watermark "${text}"...`);

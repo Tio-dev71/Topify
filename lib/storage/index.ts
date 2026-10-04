@@ -3,9 +3,9 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface StorageAdapter {
-  upload(file: Buffer, filename: string): Promise<string>;
+  upload(file: File | Blob | Buffer, filename: string, contentType?: string): Promise<string>;
   delete(url: string): Promise<void>;
-  getPath(url: string): string;
+  getBuffer(url: string): Promise<Buffer>;
 }
 
 class LocalStorageAdapter implements StorageAdapter {
@@ -15,7 +15,7 @@ class LocalStorageAdapter implements StorageAdapter {
     this.uploadDir = process.env.UPLOAD_DIR || './uploads';
   }
 
-  async upload(file: Buffer, filename: string): Promise<string> {
+  async upload(file: File | Blob | Buffer, filename: string, contentType?: string): Promise<string> {
     // Ensure upload directory exists
     await fs.mkdir(this.uploadDir, { recursive: true });
 
@@ -24,7 +24,8 @@ class LocalStorageAdapter implements StorageAdapter {
     const uniqueName = `${uuidv4()}${ext}`;
     const filePath = path.join(this.uploadDir, uniqueName);
 
-    await fs.writeFile(filePath, file);
+    const buffer = Buffer.isBuffer(file) ? file : Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(filePath, buffer);
 
     // Return relative URL for serving
     return `/api/uploads/${uniqueName}`;
@@ -41,9 +42,61 @@ class LocalStorageAdapter implements StorageAdapter {
     }
   }
 
-  getPath(url: string): string {
+  async getBuffer(url: string): Promise<Buffer> {
     const filename = url.replace('/api/uploads/', '');
-    return path.join(this.uploadDir, filename);
+    const filePath = path.join(process.cwd(), this.uploadDir, filename);
+    return fs.readFile(filePath);
+  }
+}
+
+import { createClient } from '@supabase/supabase-js';
+
+class SupabaseStorageAdapter implements StorageAdapter {
+  private supabase;
+  private bucket: string;
+
+  constructor() {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Supabase environment variables are missing');
+    }
+    this.supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    this.bucket = 'uploads';
+  }
+
+  async upload(file: File | Blob | Buffer, filename: string, contentType?: string): Promise<string> {
+    const ext = path.extname(filename);
+    const uniqueName = `${uuidv4()}${ext}`;
+    
+    const { error } = await this.supabase.storage
+      .from(this.bucket)
+      .upload(uniqueName, file, {
+        upsert: false,
+        contentType: contentType || 'application/octet-stream'
+      });
+      
+    if (error) throw error;
+    
+    const { data: publicUrlData } = this.supabase.storage
+      .from(this.bucket)
+      .getPublicUrl(uniqueName);
+      
+    return publicUrlData.publicUrl;
+  }
+
+  async delete(url: string): Promise<void> {
+    const urlParts = url.split('/');
+    const filename = urlParts[urlParts.length - 1];
+    await this.supabase.storage.from(this.bucket).remove([filename]);
+  }
+
+  async getBuffer(url: string): Promise<Buffer> {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch file from Supabase: ${response.statusText}`);
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
   }
 }
 
@@ -52,8 +105,11 @@ let storageInstance: StorageAdapter | null = null;
 
 export function getStorage(): StorageAdapter {
   if (!storageInstance) {
-    // In the future, check env for S3/Supabase config and return appropriate adapter
-    storageInstance = new LocalStorageAdapter();
+    if (process.env.STORAGE_PROVIDER === 'supabase') {
+      storageInstance = new SupabaseStorageAdapter();
+    } else {
+      storageInstance = new LocalStorageAdapter();
+    }
   }
   return storageInstance;
 }

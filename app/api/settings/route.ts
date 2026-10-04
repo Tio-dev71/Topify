@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function authenticate(req: NextRequest) {
+  const session = await auth();
+  if (session?.user?.id) {
+    return session.user;
+  }
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded.sub || decoded.id) {
+        return {
+          id: decoded.sub || decoded.id,
+          role: decoded.role,
+          workspaceId: decoded.workspaceId,
+        };
+      }
+    } catch (e) {
+    }
+  }
+  return null;
+}
 
 const ALLOWED_KEYS = [
   'META_APP_ID', 'META_APP_SECRET', 
@@ -11,16 +37,16 @@ const ALLOWED_KEYS = [
 ];
 
 // GET /api/settings - Fetch settings
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await authenticate(req);
+    if (!user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     let settingsMap: Record<string, string> = {};
 
-    if (session.user.role === 'SUPER_ADMIN') {
+    if (user.role === 'SUPER_ADMIN') {
       const settings = await prisma.systemSetting.findMany({
         where: { key: { in: ALLOWED_KEYS } }
       });
@@ -30,7 +56,7 @@ export async function GET() {
       }, {} as Record<string, string>);
     } else {
       const userCreds = await prisma.userCredential.findMany({
-        where: { userId: session.user.id }
+        where: { userId: user.id }
       });
       for (const cred of userCreds) {
         if (cred.provider === 'GOOGLE') {
@@ -61,8 +87,8 @@ export async function GET() {
 // POST /api/settings - Update settings
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await authenticate(req);
+    if (!user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -74,7 +100,7 @@ export async function POST(req: NextRequest) {
 
     const settings = body.settings as Record<string, string>;
 
-    if (session.user.role === 'SUPER_ADMIN') {
+    if (user.role === 'SUPER_ADMIN') {
       const operations = [];
       for (const key of ALLOWED_KEYS) {
         if (settings[key] !== undefined) {
@@ -96,13 +122,13 @@ export async function POST(req: NextRequest) {
       if (settings.GOOGLE_CLIENT_ID !== undefined || settings.GOOGLE_CLIENT_SECRET !== undefined) {
         operations.push(
           prisma.userCredential.upsert({
-            where: { userId_provider: { userId: session.user.id, provider: 'GOOGLE' } },
+            where: { userId_provider: { userId: user.id, provider: 'GOOGLE' } },
             update: { 
               clientId: (settings.GOOGLE_CLIENT_ID || '').trim(), 
               clientSecret: (settings.GOOGLE_CLIENT_SECRET || '').trim() 
             },
             create: { 
-              userId: session.user.id, 
+              userId: user.id, 
               provider: 'GOOGLE', 
               clientId: (settings.GOOGLE_CLIENT_ID || '').trim(), 
               clientSecret: (settings.GOOGLE_CLIENT_SECRET || '').trim() 
@@ -114,13 +140,13 @@ export async function POST(req: NextRequest) {
       if (settings.META_APP_ID !== undefined || settings.META_APP_SECRET !== undefined) {
         operations.push(
           prisma.userCredential.upsert({
-            where: { userId_provider: { userId: session.user.id, provider: 'META' } },
+            where: { userId_provider: { userId: user.id, provider: 'META' } },
             update: { 
               clientId: (settings.META_APP_ID || '').trim(), 
               clientSecret: (settings.META_APP_SECRET || '').trim() 
             },
             create: { 
-              userId: session.user.id, 
+              userId: user.id, 
               provider: 'META', 
               clientId: (settings.META_APP_ID || '').trim(), 
               clientSecret: (settings.META_APP_SECRET || '').trim() 
@@ -132,13 +158,13 @@ export async function POST(req: NextRequest) {
       if (settings.TIKTOK_CLIENT_KEY !== undefined || settings.TIKTOK_CLIENT_SECRET !== undefined) {
         operations.push(
           prisma.userCredential.upsert({
-            where: { userId_provider: { userId: session.user.id, provider: 'TIKTOK' } },
+            where: { userId_provider: { userId: user.id, provider: 'TIKTOK' } },
             update: { 
               clientId: (settings.TIKTOK_CLIENT_KEY || '').trim(), 
               clientSecret: (settings.TIKTOK_CLIENT_SECRET || '').trim() 
             },
             create: { 
-              userId: session.user.id, 
+              userId: user.id, 
               provider: 'TIKTOK', 
               clientId: (settings.TIKTOK_CLIENT_KEY || '').trim(), 
               clientSecret: (settings.TIKTOK_CLIENT_SECRET || '').trim() 
@@ -150,13 +176,13 @@ export async function POST(req: NextRequest) {
       if (settings.ZALO_APP_ID !== undefined || settings.ZALO_APP_SECRET !== undefined) {
         operations.push(
           prisma.userCredential.upsert({
-            where: { userId_provider: { userId: session.user.id, provider: 'ZALO' } },
+            where: { userId_provider: { userId: user.id, provider: 'ZALO' } },
             update: { 
               clientId: (settings.ZALO_APP_ID || '').trim(), 
               clientSecret: (settings.ZALO_APP_SECRET || '').trim() 
             },
             create: { 
-              userId: session.user.id, 
+              userId: user.id, 
               provider: 'ZALO', 
               clientId: (settings.ZALO_APP_ID || '').trim(), 
               clientSecret: (settings.ZALO_APP_SECRET || '').trim() 
