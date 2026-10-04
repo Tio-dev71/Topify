@@ -64,7 +64,7 @@ export const getFacebookPagePosts = async (pageUrlOrId: string) => {
   try {
     // Determine if input is a URL. If so, we need to fetch the page_id first.
     let page_id = pageUrlOrId;
-    if (pageUrlOrId.includes('facebook.com')) {
+    if (pageUrlOrId.includes('facebook.com') || pageUrlOrId.includes('fb.com') || pageUrlOrId.includes('fb.watch') || pageUrlOrId.startsWith('http')) {
       const info = await getFacebookPageInfo(pageUrlOrId);
       page_id = info?.results?.page_id || page_id;
     }

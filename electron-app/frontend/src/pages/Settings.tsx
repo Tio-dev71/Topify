@@ -105,7 +105,9 @@ export default function Settings() {
       setSettings(currentSettings);
     } catch (e: any) {
       console.error(e);
-      toast.error('Không thể tải cài đặt');
+      if (e?.response?.status !== 401 && localStorage.getItem('topify_token')) {
+        toast.error('Không thể tải cài đặt');
+      }
     } finally {
       setLoading(false);
     }

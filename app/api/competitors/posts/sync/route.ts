@@ -37,8 +37,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
 
-    let targetUrl = (inputUrl || page.url || '').trim();
-    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    let originalUrl = (inputUrl || page.url || '').trim();
+    let targetUrl = originalUrl;
+
+    const isNumericId = /^\d+$/.test(targetUrl);
+    const isTiktokHandle = targetUrl.startsWith('@');
+
+    if (!isNumericId && !isTiktokHandle && !targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       targetUrl = `https://${targetUrl}`;
     }
 
@@ -51,8 +56,8 @@ export async function POST(req: NextRequest) {
     }
 
     const collectedPosts: RawPostData[] = [];
-    const isFacebook = targetUrl.includes('facebook.com') || targetUrl.includes('fb.com') || targetUrl.includes('fb.watch');
-    const isTiktok = targetUrl.includes('tiktok.com');
+    const isFacebook = targetUrl.includes('facebook.com') || targetUrl.includes('fb.com') || targetUrl.includes('fb.watch') || isNumericId;
+    const isTiktok = targetUrl.includes('tiktok.com') || isTiktokHandle;
 
     // -------------------------------------------------------------
     // CASE 1: FACEBOOK FANPAGE

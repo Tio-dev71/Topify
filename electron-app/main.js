@@ -86,7 +86,9 @@ function createWindow() {
     });
     childWindow.on('closed', () => {
       // Khi cửa sổ OAuth đóng, phát sự kiện oauth-complete và làm mới dữ liệu
-      mainWindow.webContents.executeJavaScript('window.dispatchEvent(new Event("oauth-complete"));');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript('window.dispatchEvent(new Event("oauth-complete"));').catch(() => {});
+      }
     });
   });
 
