@@ -24,7 +24,19 @@ export class AutomationEngine {
     const start = Date.now();
     while (Date.now() - start < ms) {
       this.checkStop(profileId);
-      await page.waitForTimeout(Math.min(500, ms - (Date.now() - start)));
+      try {
+        if (page && !page.isClosed()) {
+          await page.waitForTimeout(Math.min(500, ms - (Date.now() - start)));
+        } else {
+          await new Promise(resolve => setTimeout(resolve, Math.min(500, ms - (Date.now() - start))));
+        }
+      } catch (e) {
+        if (e.message && (e.message.includes('closed') || e.message.includes('destroyed'))) {
+          await new Promise(resolve => setTimeout(resolve, Math.min(500, ms - (Date.now() - start))));
+        } else {
+          throw e;
+        }
+      }
     }
   }
 

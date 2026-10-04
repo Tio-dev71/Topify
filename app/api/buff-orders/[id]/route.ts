@@ -20,14 +20,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, currentCount } = body;
+    const { status, currentCount, url, actionType, targetCount, config } = body;
+
+    const data: any = {};
+    if (status) data.status = status;
+    if (currentCount !== undefined) data.currentCount = parseInt(currentCount);
+    if (url) data.url = url;
+    if (actionType) data.actionType = actionType;
+    if (targetCount !== undefined) data.targetCount = parseInt(targetCount);
+    if (config !== undefined) data.config = config;
 
     const updated = await prisma.buffOrder.update({
       where: { id },
-      data: {
-        ...(status && { status }),
-        ...(currentCount !== undefined && { currentCount })
-      }
+      data
     });
 
     return NextResponse.json(updated);

@@ -21,12 +21,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Maximum 50 posts per batch' }, { status: 400 });
     }
 
+    const PLATFORM_INFO: Record<string, { provider: string; name: string }> = {
+      FACEBOOK_REELS: { provider: 'META', name: 'Facebook' },
+      FACEBOOK_POST: { provider: 'META', name: 'Facebook' },
+      INSTAGRAM_REELS: { provider: 'META', name: 'Instagram' },
+      INSTAGRAM_CAROUSEL: { provider: 'META', name: 'Instagram' },
+      INSTAGRAM_STORY: { provider: 'META', name: 'Instagram' },
+      YOUTUBE_SHORTS: { provider: 'YOUTUBE', name: 'YouTube' },
+      TIKTOK_VIDEO: { provider: 'TIKTOK', name: 'TikTok' },
+      ZALO_POST: { provider: 'ZALO', name: 'Zalo' },
+      ZALO_ARTICLE: { provider: 'ZALO', name: 'Zalo' },
+    };
+
+    const userWorkspaceId = (session.user as any).workspaceId;
+    const connectedSocials = (prisma as any).socialAccount?.findMany
+      ? await (prisma as any).socialAccount.findMany({
+          where: {
+            status: 'CONNECTED',
+            OR: [
+              { userId: session.user.id },
+              ...(userWorkspaceId ? [{ workspaceId: userWorkspaceId }] : []),
+            ],
+          },
+          select: { provider: true },
+        })
+      : [];
+    const connectedProviders = new Set<string>((connectedSocials || []).map((s: any) => s.provider));
+
     const results = [];
     const errors = [];
 
     for (let i = 0; i < posts.length; i++) {
       const p = posts[i];
       try {
+        if (p.platforms && Array.isArray(p.platforms) && p.platforms.length > 0) {
+          const missing = new Set<string>();
+          for (const pl of p.platforms) {
+            const info = PLATFORM_INFO[pl];
+            if (!info) continue;
+            let isConn = false;
+            if (info.provider === 'YOUTUBE') {
+              isConn = connectedProviders.has('YOUTUBE') || connectedProviders.has('GOOGLE');
+            } else {
+              isConn = connectedProviders.has(info.provider);
+            }
+            if (!isConn) missing.add(info.name);
+          }
+          if (missing.size > 0) {
+            errors.push({ index: i, error: `Vui lòng kết nối tài khoản ${Array.from(missing).join('/')} trước khi đăng.` });
+            continue;
+          }
+        }
         const post = await prisma.post.create({
           data: {
             title: p.title || `Bài viết ${i + 1}`,

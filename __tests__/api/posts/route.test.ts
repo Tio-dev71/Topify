@@ -14,7 +14,13 @@ vi.mock('@/lib/db', () => {
     },
     videoAsset: {
       findUnique: vi.fn(),
-    }
+    },
+    socialAccount: {
+      findMany: vi.fn(),
+    },
+    facebookAccount: {
+      count: vi.fn(),
+    },
   };
   return {
     prisma: mockPrisma,
@@ -131,9 +137,34 @@ describe('Posts API Route', () => {
       expect(res.status).toBe(404);
     });
 
+    it('returns 400 if user has no connected accounts for requested platforms', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-1', workspaceId: 'ws-1' } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.facebookAccount.count).mockResolvedValue(0);
+
+      const req = new NextRequest('http://localhost/api/posts', { 
+        method: 'POST', 
+        body: JSON.stringify({
+          title: 'Test',
+          videoAssetId: 'video-1',
+          platforms: ['FACEBOOK_REELS', 'TIKTOK_VIDEO'],
+          publishMode: 'now'
+        }) 
+      });
+      const res = await POST(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error).toContain('Vui lòng kết nối tài khoản');
+      expect(json.error).toContain('Facebook');
+      expect(json.error).toContain('TikTok');
+    });
+
     it('creates post and enqueues publish if mode is now', async () => {
       vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
       vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-1', workspaceId: 'ws-1' } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'META' } as any]);
       
       const mockPost = { id: 'post-1' };
       vi.mocked(prisma.post.create).mockResolvedValue(mockPost as any);
@@ -158,6 +189,7 @@ describe('Posts API Route', () => {
     it('creates post and schedules publish if mode is schedule', async () => {
       vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
       vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-1', workspaceId: 'ws-1' } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'META' } as any]);
       
       const mockPost = { id: 'post-1' };
       vi.mocked(prisma.post.create).mockResolvedValue(mockPost as any);

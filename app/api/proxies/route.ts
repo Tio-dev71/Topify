@@ -29,6 +29,44 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+
+    if (Array.isArray(body)) {
+      const validItems = body
+        .filter((item) => item && item.host && item.port)
+        .map((item) => ({
+          protocol: item.protocol || 'http',
+          host: String(item.host).trim(),
+          port: parseInt(item.port),
+          username: item.username ? String(item.username).trim() : null,
+          password: item.password ? String(item.password) : null,
+          status: item.status || 'ACTIVE',
+        }));
+
+      if (validItems.length === 0) {
+        return NextResponse.json({ error: 'Không tìm thấy dữ liệu proxy hợp lệ' }, { status: 400 });
+      }
+
+      const created = await prisma.proxy.createMany({
+        data: validItems,
+        skipDuplicates: true,
+      });
+
+      await recordAuditLog({
+        action: 'PROXY.CREATE',
+        entityType: 'Proxy',
+        entityId: 'batch',
+        userId: session.user.id,
+        workspaceId: (session.user as any).workspaceId,
+        req,
+        metadata: {
+          message: `Thêm hàng loạt ${created.count} Proxy`,
+          count: created.count,
+        },
+      });
+
+      return NextResponse.json({ success: true, count: created.count });
+    }
+
     const { protocol, host, port, username, password } = body;
 
     if (!host || !port) {

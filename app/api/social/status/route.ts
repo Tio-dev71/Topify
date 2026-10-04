@@ -11,11 +11,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const workspaceId = (session.user as any).workspaceId;
+    const user = session.user as any;
+    const workspaceId = user.workspaceId;
 
-    // Get connected accounts for the workspace (or user)
-    let socialAccounts = await prisma.socialAccount.findMany({
-      where: workspaceId ? { workspaceId } : { userId: session.user.id },
+    // Get accounts for the workspace OR user
+    const socialAccounts = await prisma.socialAccount.findMany({
+      where: {
+        OR: [
+          ...(workspaceId ? [{ workspaceId }] : []),
+          { userId: user.id }
+        ]
+      },
       select: {
         id: true,
         provider: true,
@@ -24,61 +30,74 @@ export async function GET() {
         instagramBusinessId: true,
         youtubeChannelId: true,
         expiresAt: true,
+        status: true,
+        refreshToken: true,
+        accessToken: true,
+        userId: true,
+        workspaceId: true,
       },
     });
 
-    if (socialAccounts.length === 0 && workspaceId) {
-      socialAccounts = await prisma.socialAccount.findMany({
-        where: { userId: session.user.id },
-        select: {
-          id: true,
-          provider: true,
-          accountName: true,
-          pageId: true,
-          instagramBusinessId: true,
-          youtubeChannelId: true,
-          expiresAt: true,
-        },
-      });
-    }
+    const connections: any[] = [];
 
-    const connections: any[] = socialAccounts.map((account: any) => ({
-      ...account,
-      connected: account.status ? account.status === 'CONNECTED' : true,
-    }));
+    for (const account of socialAccounts) {
+      const isConnectedStatus = account.status === 'CONNECTED' || account.status === 'active';
+      const isExpiredTime = account.expiresAt ? new Date(account.expiresAt).getTime() < Date.now() : false;
 
-    // If Facebook accounts are configured in Topify, also expose META as connected
-    const liveFbCount = (prisma as any).facebookAccount?.count
-      ? await (prisma as any).facebookAccount.count({
-          where: {
-            status: 'LIVE',
-            workspaceId: workspaceId || 'none',
-          },
-        }).catch(() => 0)
-      : 0;
+      if (isConnectedStatus && !isExpiredTime) {
+        connections.push({
+          id: account.id,
+          provider: account.provider,
+          accountName: account.accountName,
+          pageId: account.pageId,
+          instagramBusinessId: account.instagramBusinessId,
+          youtubeChannelId: account.youtubeChannelId,
+          expiresAt: account.expiresAt,
+          status: 'CONNECTED',
+          connected: true,
+        });
 
-    if (liveFbCount > 0 && !connections.some((c: any) => c.provider === 'META' && c.connected)) {
-      connections.push({
-        id: 'fb-accounts-live',
-        provider: 'META',
-        accountName: `Facebook Profiles (${liveFbCount})`,
-        connected: true,
-      });
-    }
+        // Also expose GOOGLE as YOUTUBE if applicable
+        if (account.provider === 'GOOGLE') {
+          connections.push({
+            id: account.id,
+            provider: 'YOUTUBE',
+            accountName: account.accountName,
+            pageId: account.pageId,
+            instagramBusinessId: account.instagramBusinessId,
+            youtubeChannelId: account.youtubeChannelId,
+            expiresAt: account.expiresAt,
+            status: 'CONNECTED',
+            connected: true,
+          });
+        }
+      } else if (account.refreshToken && (account.provider === 'GOOGLE' || account.provider === 'YOUTUBE')) {
+        // Attempt on-the-fly token refresh if expired but has refresh token
+        try {
+          const { getValidAccessToken } = await import('@/lib/publishers/googleAuth');
+          await getValidAccessToken(account as any);
 
-    // Include TikTok as available if any TikTok account or mock is active
-    const tiktokCount = (prisma as any).socialAccount?.count
-      ? await (prisma as any).socialAccount.count({
-          where: { provider: 'TIKTOK' },
-        }).catch(() => 0)
-      : 0;
-    if (tiktokCount > 0 && !connections.some((c: any) => c.provider === 'TIKTOK' && c.connected)) {
-      connections.push({
-        id: 'tiktok-account-connected',
-        provider: 'TIKTOK',
-        accountName: 'TikTok Channel',
-        connected: true,
-      });
+          connections.push({
+            id: account.id,
+            provider: 'YOUTUBE',
+            accountName: account.accountName,
+            pageId: account.pageId,
+            instagramBusinessId: account.instagramBusinessId,
+            youtubeChannelId: account.youtubeChannelId,
+            expiresAt: account.expiresAt,
+            status: 'CONNECTED',
+            connected: true,
+          });
+        } catch (err: any) {
+          console.warn(`[social/status] YouTube token refresh failed for ${account.id}:`, err?.message || err);
+          if (account.status !== 'EXPIRED') {
+            await prisma.socialAccount.update({
+              where: { id: account.id },
+              data: { status: 'EXPIRED' }
+            }).catch(() => {});
+          }
+        }
+      }
     }
 
     // Fetch credentials properly using the fallback chain

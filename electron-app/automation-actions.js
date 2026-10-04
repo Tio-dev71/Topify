@@ -4,7 +4,20 @@ const dotenv = require('dotenv');
 dotenv.config({ path: '../.env' }); // load .env from root
 
 async function safeWait(page, ms) {
-  await page.waitForTimeout(ms);
+  try {
+    if (page && !page.isClosed()) {
+      await page.waitForTimeout(ms);
+    } else {
+      await new Promise(resolve => setTimeout(resolve, ms));
+    }
+  } catch (e) {
+    // Page/context closed mid-wait — fall back to simple setTimeout
+    if (e.message && (e.message.includes('closed') || e.message.includes('destroyed'))) {
+      await new Promise(resolve => setTimeout(resolve, ms));
+    } else {
+      throw e;
+    }
+  }
 }
 
 async function humanType(page, text) {
@@ -12,6 +25,23 @@ async function humanType(page, text) {
     await page.keyboard.type(char, { delay: Math.floor(Math.random() * 40) + 20 });
     if (Math.random() > 0.9) await safeWait(page, Math.floor(Math.random() * 150) + 50);
   }
+}
+
+function isSinglePostUrl(url) {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return lower.includes('/posts/') ||
+         lower.includes('/permalink.php') ||
+         lower.includes('/videos/') ||
+         lower.includes('/watch') ||
+         lower.includes('/reel/') ||
+         lower.includes('/share/p/') ||
+         lower.includes('/share/r/') ||
+         lower.includes('/share/v/') ||
+         lower.includes('fb.watch') ||
+         lower.includes('fbid=') ||
+         lower.includes('/photo') ||
+         lower.includes('/story.php');
 }
 
 // AI Comment Generator
@@ -142,16 +172,42 @@ async function randomInteract(page, config, profileId, chance = 0.3) {
   if (isLike) {
     console.log('Liking a post/reel');
     const likeHandle = await page.evaluateHandle(() => {
-      function isVisible(el) {
+      function isRendered(el) {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.pointerEvents === 'none') return false;
         const rect = el.getBoundingClientRect();
-        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
+        return rect.width > 0 && rect.height > 0;
       }
-      const likes = Array.from(document.querySelectorAll('div[aria-label="Thích"], div[aria-label="Like"], div[aria-label="Bày tỏ cảm xúc"], div[aria-label="Thích bài viết"]')).filter(isVisible);
-      const validLikes = likes.filter(el => !el.closest('[data-topify-liked="true"]'));
+      const allBtns = Array.from(document.querySelectorAll('[role="button"]'));
+      const validLikes = allBtns.filter(el => {
+        if (!isRendered(el)) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.height < 25 || rect.width < 25) return false; // Lọc các nút Thích nhỏ trong comment
+        if (el.closest('[data-topify-liked="true"]')) return false;
+        
+        // Lọc menu header/sidebar
+        if (el.closest('[role="banner"], [role="navigation"], [role="complementary"]')) return false;
+        
+        // Lọc phần bình luận
+        if (el.closest('div[aria-label*="Bình luận của"], div[aria-label*="Comment by"]')) return false;
+        
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+        const text = (el.innerText || '').toLowerCase().trim();
+        if (aria === 'thích' || aria === 'like' || aria === 'bày tỏ cảm xúc' || aria === 'thích bài viết' || aria === 'react') return true;
+        if ((text === 'thích' || text === 'like') && el.children.length < 5) return true;
+        return false;
+      });
       if (validLikes.length > 0) {
-        const target = validLikes[Math.floor(Math.random() * validLikes.length)];
+        // Lấy nút gần màn hình hiển thị nhất hoặc nút đầu tiên
+        const target = validLikes.find(el => {
+            const rect = el.getBoundingClientRect();
+            return rect.top > 0 && rect.top < window.innerHeight;
+        }) || validLikes[0];
+        
         const container = target.closest('div[role="article"], div[data-pagelet^="FeedUnit"]') || target;
-        container.setAttribute('data-topify-liked', 'true');
+        if (container) container.setAttribute('data-topify-liked', 'true');
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return target;
       }
       return null;
@@ -172,20 +228,37 @@ async function randomInteract(page, config, profileId, chance = 0.3) {
     
     const commentResult = await page.evaluateHandle(() => {
       if (!window._topifyCommented) window._topifyCommented = new Set();
-      function isVisible(el) {
+      function isRendered(el) {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.pointerEvents === 'none') return false;
         const rect = el.getBoundingClientRect();
-        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
+        return rect.width > 0 && rect.height > 0;
       }
       
-      let allBtns = Array.from(document.querySelectorAll('div[role="button"], a, span'));
-      let commentBtn = allBtns.find(el => {
-        if (!isVisible(el)) return false;
+      let allBtns = Array.from(document.querySelectorAll('[role="button"]'));
+      let validComments = allBtns.filter(el => {
+        if (!isRendered(el)) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.height < 25 || rect.width < 25) return false;
+        
         if (el.closest('[data-topify-commented="true"]')) return false;
-        let text = (el.innerText || '').toLowerCase();
-        let aria = (el.getAttribute('aria-label') || '').toLowerCase();
-        return aria.includes('bình luận') || aria.includes('comment') || aria.includes('viết bình luận') ||
-               text === 'bình luận' || text === 'comment';
+        if (el.closest('[role="banner"], [role="navigation"], [role="complementary"]')) return false;
+        if (el.closest('div[aria-label*="Bình luận của"], div[aria-label*="Comment by"]')) return false;
+        
+        let text = (el.innerText || '').toLowerCase().trim();
+        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+        
+        if (aria === 'bình luận' || aria === 'comment' || aria === 'viết bình luận' || aria === 'leave a comment') return true;
+        if ((text === 'bình luận' || text === 'comment') && el.children.length < 5) return true;
+        
+        return false;
       });
+      
+      let commentBtn = validComments.find(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.top > 0 && rect.top < window.innerHeight;
+      }) || validComments[0] || null;
 
       let text = '';
       if (commentBtn) {
@@ -221,6 +294,7 @@ async function randomInteract(page, config, profileId, chance = 0.3) {
         if (text) window._topifyCommented.add(text);
 
         const target = commentBtn.closest('[role="button"]') || commentBtn;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return { element: target, postText: text };
       }
       return { element: null, postText: '' };
@@ -384,18 +458,53 @@ async function taskFbFarmReels(page, config, profileId) {
 }
 
 async function taskFbAutoInteract(page, config, profileId) {
-  const targetUrl = config.targetUrl || 'https://www.facebook.com/';
-  console.log(`Farming feed at ${targetUrl}`);
-  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  const targetUrl = config.targetUrl ? config.targetUrl.trim() : '';
+
+  // Nếu người dùng paste link bài đăng cụ thể, chạy tương tác trực tiếp vào bài viết đó
+  if (targetUrl && isSinglePostUrl(targetUrl)) {
+    console.log(`[AutoInteract] Phát hiện link bài đăng cụ thể: ${targetUrl}. Chuyển sang thực hiện tương tác trực tiếp bài viết...`);
+    
+    // 1. Thích bài viết
+    try {
+      await taskFbBuffPost(page, {
+        ...config,
+        targetUrl,
+        buffActionType: 'LIKE'
+      }, profileId);
+    } catch (likeErr) {
+      console.warn(`[AutoInteract] Lỗi khi like bài viết:`, likeErr.message);
+    }
+
+    // 2. Bình luận bài viết nếu có cấu hình nội dung bình luận hoặc AI comment
+    if ((config.comments && config.comments.length > 0) || config.useAiComment) {
+      await safeWait(page, 3000);
+      try {
+        await taskFbBuffPost(page, {
+          ...config,
+          targetUrl,
+          buffActionType: 'COMMENT'
+        }, profileId);
+      } catch (cmtErr) {
+        console.warn(`[AutoInteract] Lỗi khi bình luận bài viết:`, cmtErr.message);
+      }
+    }
+    return;
+  }
+
+  // Nếu không phải single post, lướt feed tương tác tự nhiên
+  const feedUrl = targetUrl || 'https://www.facebook.com/';
+  console.log(`Farming feed at ${feedUrl}`);
+  await page.goto(feedUrl, { waitUntil: 'domcontentloaded', timeout: 35000 });
   await safeWait(page, 4000);
 
   await page.evaluate(() => { window._topifyCommented = new Set(); });
 
-  for (let i = 0; i < config.actionCount; i++) {
+  const totalActions = config.actionCount || 5;
+  for (let i = 0; i < totalActions; i++) {
     if (config.checkStop && config.checkStop()) throw new Error('Task stopped by user');
-    console.log(`Scrolling feed ${i + 1}/${config.actionCount}`);
+    console.log(`Scrolling feed ${i + 1}/${totalActions}`);
     await humanScroll(page, config, 2);
-    await randomInteract(page, config, profileId, 0.4);
+    await randomInteract(page, config, profileId, 0.7);
   }
 }
 
@@ -460,7 +569,7 @@ async function taskFbAddFriendsGroup(page, config, profileId) {
 
       const isValid = await btn.evaluate(el => {
         const rect = el.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.bottom > (window.innerHeight || document.documentElement.clientHeight)) return false;
+        if (rect.width === 0 && rect.height === 0) return false;
         let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
         let text = (el.innerText || '').toLowerCase().trim();
         return aria.includes('thêm bạn bè') || aria.includes('add friend') || text.includes('thêm bạn bè') || text.includes('add friend');
@@ -468,6 +577,7 @@ async function taskFbAddFriendsGroup(page, config, profileId) {
 
       if (isValid) {
         try {
+          await btn.scrollIntoViewIfNeeded().catch(() => {});
           await btn.click({ timeout: 2000 });
           addedCount++;
           clickedInThisPass = true;
@@ -595,7 +705,7 @@ async function taskFbInviteToGroup(page, config, profileId) {
 
         const canCheck = await cb.evaluate(el => {
           const rect = el.getBoundingClientRect();
-          if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.bottom > (window.innerHeight || document.documentElement.clientHeight)) return false;
+          if (rect.width === 0 && rect.height === 0) return false;
           const ariaChecked = el.getAttribute('aria-checked');
           if (ariaChecked === 'true') return false;
           if (el.tagName.toLowerCase() === 'input' && el.checked) return false;
@@ -604,6 +714,7 @@ async function taskFbInviteToGroup(page, config, profileId) {
 
         if (canCheck) {
           try {
+            await cb.scrollIntoViewIfNeeded().catch(() => {});
             await cb.click({ timeout: 2000 });
             invitedCount++;
             clickedInThisPass = true;
@@ -644,22 +755,34 @@ async function taskFbInviteToGroup(page, config, profileId) {
     }
     await sendBtnHandle.dispose();
 
-    if (sent) console.log(`Sent invites for batch of ${invitedCount}.`);
-    else {
-      console.log('Could not find Send button, closing dialog via escape');
-      await page.keyboard.press('Escape');
-    }
-    await safeWait(page, 3000);
-  } else {
-    console.log('Could not find the Invite button on the group page');
+    if (sent) console.log('[InviteGroup] Đã bấm gửi lời mời');
+    await safeWait(page, 2000);
+  }
+}
+
+function ensurePageAlive(page) {
+  if (!page || page.isClosed()) {
+    throw new Error('Page đã bị đóng trước khi hoàn thành tác vụ');
   }
 }
 
 async function taskFbBuffPost(page, config, profileId) {
   if (!config.targetUrl) throw new Error('Target URL is required for buff post task');
   if (config.checkStop && config.checkStop()) throw new Error('Task stopped by user');
-  console.log(`Buffing post: ${config.targetUrl}`);
-  await page.goto(config.targetUrl, { waitUntil: 'domcontentloaded' });
+  ensurePageAlive(page);
+  console.log(`[BuffPost] Điều hướng đến: ${config.targetUrl}`);
+  
+  // Điều hướng có retry an toàn
+  const navTarget = async () => {
+    await page.goto(config.targetUrl, { waitUntil: 'domcontentloaded', timeout: 35000 });
+  };
+  try {
+    await navTarget();
+  } catch (navErr) {
+    console.warn(`[BuffPost] Lỗi điều hướng lần 1 (${navErr.message}), thử lại sau 2 giây...`);
+    await safeWait(page, 2000);
+    await navTarget();
+  }
   await safeWait(page, 3000 + Math.random() * 2000);
 
   // Pause videos to prevent auto-scrolling to next Reel
@@ -675,281 +798,343 @@ async function taskFbBuffPost(page, config, profileId) {
     try {
       const closeSelectors = [
         'div[aria-label="Lúc khác"]', 'div[aria-label="Not Now"]',
-        'div[aria-label="Đóng vòng kết nối"]', 'div[aria-label="Close"]', 'div[aria-label="Đóng"]'
+        'div[aria-label="Đóng vòng kết nối"]', 'div[aria-label="Bỏ qua"]', 'div[aria-label="Dismiss"]'
       ];
       const closeBtns = Array.from(document.querySelectorAll(closeSelectors.join(', ')));
       for (const btn of closeBtns) {
-         if (btn.getBoundingClientRect().width > 0) {
-            btn.click();
-         }
+        if (btn.getBoundingClientRect().width > 0) {
+          btn.click();
+        }
       }
       
       const spans = Array.from(document.querySelectorAll('span'));
       for (const span of spans) {
         const text = (span.innerText || '').trim();
-        if (text === 'Lúc khác' || text === 'Not Now' || text === 'Đóng') {
-           if (span.getBoundingClientRect().width > 0) span.click();
+        if (text === 'Lúc khác' || text === 'Not Now' || text === 'Bỏ qua') {
+          if (span.getBoundingClientRect().width > 0) span.click();
         }
       }
     } catch(e) {}
   });
   await safeWait(page, 2000);
 
-  const buffActionType = config.buffActionType || 'LIKE';
+  console.log('[BuffPost] Tìm bài viết chính và cuộn trang...');
+  // Cuộn bằng chuột thật (wheel) để hoạt động cả khi bài viết mở trong popup/modal
+  const wheelScroll = async (deltaY) => {
+    try {
+      const vp = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
+      await page.mouse.move(vp.w / 2, vp.h / 2);
+      for (let i = 0; i < 4; i++) {
+        await page.mouse.wheel(0, deltaY / 4);
+        await new Promise(r => setTimeout(r, 250));
+      }
+    } catch (e) {}
+  };
+  await wheelScroll(600);
+  await safeWait(page, 1500);
+  await wheelScroll(-200);
+  await safeWait(page, 1000);
 
-  if (buffActionType === 'LIKE') {
-    console.log('Liking post...');
-    const likeResult = await page.evaluateHandle(() => {
-      function isVisible(el) {
-        const rect = el.getBoundingClientRect();
-        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
+  // Xác định các hành động cần thực hiện
+  // Mặc định (task 'Auto Comment & Like' không truyền buffActionType) => luôn Like + Comment
+  const shouldComment = config.buffActionType === 'COMMENT' || 
+                        config.buffActionType === 'BOTH' || 
+                        config.buffActionType === 'ALL' ||
+                        (!config.buffActionType);
+  const shouldLike = config.buffActionType === 'LIKE' || config.buffActionType === 'BOTH' || config.buffActionType === 'ALL' || (!config.buffActionType);
+  const shouldShare = config.buffActionType === 'SHARE' || config.buffActionType === 'ALL';
+
+  let successCount = 0;
+
+  // ===================== 1. XỬ LÝ THÍCH BÀI VIẾT (LIKE) =====================
+  if (shouldLike) {
+    ensurePageAlive(page);
+    console.log('[Buff LIKE] Đang thực hiện Thích bài viết...');
+    
+    let likeResult = { success: false, reason: 'NOT_FOUND' };
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) {
+        await wheelScroll(500);
+        await safeWait(page, 800);
       }
-      const dialog = document.querySelector('div[role="dialog"]');
-      const container = dialog || document;
-      
-      let allBtns = Array.from(container.querySelectorAll('div[role="button"], span, div[aria-label]'));
-      if (allBtns.length < 5) {
-        allBtns = Array.from(document.querySelectorAll('div[role="button"], span, div[aria-label]'));
+      likeResult = await page.evaluate(async () => {
+        // Quét tất cả dialog trước, sau đó main, cuối cùng body
+        const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
+        const btnSet = new Set();
+        for (const r of roots) r.querySelectorAll('[role="button"]').forEach(b => btnSet.add(b));
+        const btns = Array.from(btnSet);
+        
+        const likeBtn = btns.find(b => {
+          const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
+          const text = (b.innerText || '').toLowerCase().trim();
+          
+          if (aria === 'thích' || aria === 'like' || aria === 'bày tỏ cảm xúc' || aria === 'react' ||
+              aria === 'gỡ bày tỏ cảm xúc' || aria === 'remove reaction' || aria === 'bỏ thích' || aria === 'unlike' || aria.includes('thích') || aria.includes('bày tỏ')) {
+            if (aria.includes('bình luận') || aria.includes('chia sẻ') || aria.includes('nhắn tin')) return false;
+            return b.getBoundingClientRect().height > 0 && !b.closest('form');
+          }
+          if ((text === 'thích' || text === 'like') && b.children.length < 5) {
+            return b.getBoundingClientRect().height > 0 && !b.closest('form');
+          }
+          return false;
+        });
+
+        if (!likeBtn) return { success: false, reason: 'NOT_FOUND' };
+        
+        const aria = (likeBtn.getAttribute('aria-label') || '').toLowerCase().trim();
+        const text = (likeBtn.innerText || '').toLowerCase().trim();
+        if (aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
+            likeBtn.getAttribute('aria-pressed') === 'true' || 
+            (likeBtn.style && likeBtn.style.color && likeBtn.style.color.includes('rgb(8, 102, 255)'))) {
+          return { success: true, reason: 'ALREADY_LIKED' };
+        }
+
+        likeBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Đợi scroll
+        await new Promise(r => setTimeout(r, 500));
+        likeBtn.click();
+        return { success: true, reason: 'CLICKED' };
+      });
+      if (likeResult.success) break;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    if (likeResult.success) {
+      if (likeResult.reason === 'ALREADY_LIKED') {
+        console.log('[Buff LIKE] Bài viết đã được thích từ trước.');
+        await logHistory(profileId, 'LIKE', config.targetUrl, 'Bài viết đã được thích từ trước');
+        successCount++;
+      } else {
+        await safeWait(page, 2000);
+        console.log('[Buff LIKE] Đã gửi tương tác thích bài viết.');
+        await logHistory(profileId, 'LIKE', config.targetUrl, 'Đã thích bài viết thành công');
+        successCount++;
       }
-      
-      let likes = allBtns.filter(el => {
-        if (!isVisible(el)) return false;
-        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
-        let text = (el.innerText || '').toLowerCase().trim();
-        
-        if (text === 'thích' || text === 'like') return true;
-        if (aria === 'thích' || aria === 'like' || aria.includes('bày tỏ cảm xúc') || aria.includes('tỏ thái độ')) return true;
-        
+    } else {
+      console.warn('[Buff LIKE] Không tìm thấy nút Thích.');
+      throw new Error('Lỗi: Không tìm thấy nút Thích trên trang bài viết.');
+    }
+  }
+
+  // ===================== 2. XỬ LÝ BÌNH LUẬN BÀI VIẾT (COMMENT) =====================
+  if (shouldComment) {
+    ensurePageAlive(page);
+    console.log('[Buff COMMENT] Bắt đầu bình luận bài viết...');
+
+    // Lấy nội dung bài viết để AI comment nếu cần
+    let postText = '';
+    if (config.useAiComment) {
+      try {
+        postText = await page.evaluate(() => {
+          const msg = document.querySelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"]');
+          if (msg) return msg.innerText;
+          const main = document.querySelector('[role="main"]');
+          return main ? main.innerText.substring(0, 500) : '';
+        });
+      } catch (e) {}
+    }
+
+    let finalComment = (config.comments && config.comments.length > 0)
+      ? config.comments[Math.floor(Math.random() * config.comments.length)]
+      : 'Bài viết rất hay và ý nghĩa ạ!';
+
+    if (config.useAiComment && postText && postText.trim().length > 10) {
+      try {
+        console.log('[Buff COMMENT] Đang sinh bình luận AI...');
+        const aiText = await generateAIComment(postText, config.aiSettings || {});
+        if (aiText) finalComment = aiText;
+      } catch (aiErr) {
+        console.warn('[Buff COMMENT] Sinh AI comment thất bại, dùng fallback:', aiErr.message);
+      }
+    }
+
+    // Nhấp vào nút "Bình luận" để tự động focus vào textbox
+    console.log('[Buff COMMENT] Đang tìm nút mở bình luận...');
+    let clickedComment = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      clickedComment = await page.evaluate(async () => {
+        const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
+        const btnSet = new Set();
+        for (const r of roots) r.querySelectorAll('[role="button"]').forEach(b => btnSet.add(b));
+        const btns = Array.from(btnSet);
+        const commentBtn = btns.find(b => {
+          const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
+          const text = (b.innerText || '').toLowerCase().trim();
+          if ((aria.includes('bình luận') || aria.includes('comment')) && !aria.includes('thích') && !aria.includes('chia sẻ') && b.getBoundingClientRect().height > 0 && !b.closest('form')) return true;
+          if ((text === 'bình luận' || text === 'comment') && b.getBoundingClientRect().height > 0 && b.children.length < 5 && !b.closest('form')) return true;
+          return false;
+        });
+
+        if (commentBtn) {
+          commentBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await new Promise(r => setTimeout(r, 500));
+          commentBtn.click();
+          return true;
+        }
         return false;
       });
-
-      let isAlreadyLiked = likes.some(el => {
-        let aria = (el.getAttribute('aria-label') || '').toLowerCase();
-        let text = (el.innerText || '').toLowerCase();
-        return aria.includes('gỡ') || aria.includes('remove') || text.includes('đã thích');
-      });
-
-      let validLike = likes.find(el => {
-        let aria = (el.getAttribute('aria-label') || '').toLowerCase();
-        let text = (el.innerText || '').toLowerCase();
-        return !aria.includes('gỡ') && !aria.includes('remove') && !text.includes('đã thích');
-      });
-      
-      if (validLike && validLike.tagName.toLowerCase() === 'span') {
-         validLike = validLike.closest('div[role="button"]') || validLike;
-      }
-
-      return { element: validLike || (likes.length > 0 ? likes[0] : null), isAlreadyLiked };
-    });
-
-    const likeData = await likeResult.jsonValue();
-    const likeElHandle = await likeResult.evaluateHandle(r => r.element);
-    const likeEl = likeElHandle.asElement();
-    
-    let clicked = false;
-    
-    if (likeData && likeData.isAlreadyLiked) {
-       console.log('Post is already liked.');
-       clicked = true;
-       await logHistory(profileId, 'LIKE', config.targetUrl, 'Bài viết đã được thích từ trước');
-    } else if (likeEl) {
-      try {
-        await likeEl.hover();
-        await safeWait(page, 100);
-        await likeEl.click({ timeout: 3000 });
-        clicked = true;
-        await logHistory(profileId, 'LIKE', config.targetUrl, 'Đã thích bài viết');
-      } catch(e) {
-        try {
-          await likeEl.evaluate(el => el.click());
-          clicked = true;
-          await logHistory(profileId, 'LIKE', config.targetUrl, 'Đã thích bài viết (fallback)');
-        } catch(e2) {
-          console.error('Failed to click LIKE fallback', e2);
-        }
-      }
+      if (clickedComment) break;
+      // Dùng hàm delay do truyền vào không được, xài Promise
+      await new Promise(r => setTimeout(r, 2000));
     }
-    await likeElHandle.dispose();
-    await likeResult.dispose();
-    
-    if (!clicked) {
-      throw new Error('Không tìm thấy nút Thích hoặc không thể tương tác');
+
+    if (!clickedComment) {
+      console.warn('[Buff COMMENT] Không tìm thấy nút Bình luận. Sẽ thử tìm ô textbox trực tiếp.');
     }
     
-    await safeWait(page, 3000);
-  } else if (buffActionType === 'COMMENT') {
-    console.log('Commenting on post...');
-    const commentResult = await page.evaluateHandle(() => {
-      function isVisible(el) {
-        const rect = el.getBoundingClientRect();
-        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
-      }
-      
-      const dialog = document.querySelector('div[role="dialog"]');
-      const container = dialog || document;
-      let allBtns = Array.from(container.querySelectorAll('div[role="button"], a, span'));
-      if (allBtns.length < 5) allBtns = Array.from(document.querySelectorAll('div[role="button"], a, span'));
-      
-      let commentBtn = allBtns.find(el => {
-        if (!isVisible(el)) return false;
-        let text = (el.innerText || '').toLowerCase().trim();
-        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
-        return aria.includes('bình luận') || aria.includes('comment') || aria.includes('viết bình luận') ||
-               text === 'bình luận' || text === 'comment';
-      });
+    await safeWait(page, 1500);
 
-      let text = '';
-      if (commentBtn) {
-        try {
-          let commentContainer = commentBtn.closest('div[role="article"], div[data-pagelet^="FeedUnit"], div[data-pagelet^="GroupFeed"], div[aria-posinset]');
-          if (commentContainer) {
-            const messageBlock = commentContainer.querySelector('div[data-ad-preview="message"]');
-            if (messageBlock) {
-              text = messageBlock.innerText;
-            }
-          }
-        } catch(e) {}
-        const target = commentBtn.closest('[role="button"]') || commentBtn;
-        return { element: target, postText: text };
-      }
-      return { element: null, postText: '' };
-    });
-
-    const commentData = await commentResult.jsonValue();
-    const commentElHandle = await commentResult.evaluateHandle(r => r.element);
-    const commentEl = commentElHandle.asElement();
-    
-    let clicked = false;
-    let postText = commentData?.postText || '';
-
-    if (commentEl) {
-      try {
-        await commentEl.hover();
-        await safeWait(page, 100);
-        await commentEl.click({ timeout: 3000 });
-        clicked = true;
-      } catch(e) {
-        try {
-          await commentEl.evaluate(el => el.click());
-          clicked = true;
-        } catch(e2) {}
-      }
-    }
-    await commentElHandle.dispose();
-    await commentResult.dispose();
-
-    if (!clicked) {
-      throw new Error('Không tìm thấy nút Bình luận hoặc không thể tương tác');
-    }
-
-    if (clicked) {
-      await safeWait(page, 3000);
-
-      let finalComment = (config.comments && config.comments.length > 0) 
-          ? config.comments[Math.floor(Math.random() * config.comments.length)]
-          : 'Hay quá ạ!';
-          
-      try {
-        if (config.useAiComment && postText && postText.trim().length > 10) {
-          console.log('Generating AI comment for buff post...');
-          const aiText = await generateAIComment(postText, config.aiSettings || {});
-          if (aiText) finalComment = aiText;
-        }
-      } catch (e) {
-        console.log('AI Comment failed for buff post, using fallback.', e);
-      }
-
-      console.log('Sending comment: ' + finalComment);
-      await page.evaluate(() => {
-        const box = document.querySelector('form[action*="/comment/"] textarea, form div[contenteditable="true"], div[aria-label="Viết bình luận"], div[aria-label="Write a comment"], div[aria-label*="bình luận"][role="textbox"], div[aria-label*="comment"][role="textbox"]');
-        if (box) box.focus();
-      });
-      await safeWait(page, 500);
-      await humanType(page, finalComment);
-      await safeWait(page, 1000);
-      await page.keyboard.press('Enter');
-      await safeWait(page, 2000);
-      await logHistory(profileId, 'COMMENT', config.targetUrl, finalComment);
-    }
-  } else if (buffActionType === 'SHARE') {
-    console.log('Sharing post...');
-    const shareHandle = await page.evaluateHandle(() => {
-      function isVisible(el) {
-        const rect = el.getBoundingClientRect();
-        return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
-      }
-      const dialog = document.querySelector('div[role="dialog"]');
-      const container = dialog || document;
-      let allBtns = Array.from(container.querySelectorAll('div[role="button"], a, span'));
-      if (allBtns.length < 5) allBtns = Array.from(document.querySelectorAll('div[role="button"], a, span'));
-      
-      let shareBtn = allBtns.find(el => {
-        if (!isVisible(el)) return false;
-        let text = (el.innerText || '').toLowerCase().trim();
-        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
-        return aria.includes('chia sẻ') || aria.includes('share') || text === 'chia sẻ' || text === 'share';
-      });
-      if (shareBtn) {
-        return shareBtn.closest('[role="button"]') || shareBtn;
-      }
-      return null;
-    });
-
-    const shareEl = shareHandle.asElement();
-    let clickedShare = false;
-    if (shareEl) {
-      try {
-        await shareEl.hover();
-        await safeWait(page, 100);
-        await shareEl.click({ timeout: 3000 });
-        clickedShare = true;
-      } catch(e) {
-        try {
-          await shareEl.evaluate(el => el.click());
-          clickedShare = true;
-        } catch(e2) {}
-      }
-    }
-    await shareHandle.dispose();
-
-    if (!clickedShare) {
-      throw new Error('Không tìm thấy nút Chia sẻ hoặc không thể tương tác');
-    }
-
-    if (clickedShare) {
-      await safeWait(page, 2000);
-      
-      const shareNowHandle = await page.evaluateHandle(() => {
-        let options = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="button"], span'));
-        let shareNow = options.find(el => {
-          let text = (el.innerText || '').toLowerCase();
-          return text.includes('chia sẻ ngay') || text.includes('share now');
+    // Tìm ô nhập bình luận và đánh dấu để click bằng chuột thật (Lexical editor của FB cần sự kiện thật)
+    let textBoxFocused = false;
+    for (let attempt = 0; attempt < 3 && !textBoxFocused; attempt++) {
+      const found = await page.evaluate(async () => {
+        document.querySelectorAll('[data-topify-cbox]').forEach(el => el.removeAttribute('data-topify-cbox'));
+        const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
+        const boxSet = new Set();
+        for (const r of roots) r.querySelectorAll('[contenteditable="true"]').forEach(b => boxSet.add(b));
+        const boxes = Array.from(boxSet).filter(b => {
+          const rect = b.getBoundingClientRect();
+          const label = (b.getAttribute('aria-label') || b.getAttribute('aria-placeholder') || '').toLowerCase();
+          return rect.height > 0 && rect.width > 0 && !label.includes('tìm kiếm') && !label.includes('search');
         });
-        if (shareNow) {
-          return shareNow.closest('[role="menuitem"], [role="button"]') || shareNow;
-        }
-        return null;
+        const isCommentBox = (b) => {
+          const label = (b.getAttribute('aria-label') || b.getAttribute('aria-placeholder') || b.innerText || '').toLowerCase();
+          return label.includes('bình luận') || label.includes('comment') || label.includes('trả lời') || label.includes('reply');
+        };
+        const box = boxes.find(isCommentBox) || boxes[0];
+        if (!box) return false;
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(r => setTimeout(r, 600));
+        box.setAttribute('data-topify-cbox', '1');
+        return true;
       });
 
-      const shareNowEl = shareNowHandle.asElement();
-      if (shareNowEl) {
+      if (found) {
         try {
-          await shareNowEl.hover();
-          await safeWait(page, 100);
-          await shareNowEl.click({ timeout: 3000 });
-          await logHistory(profileId, 'SHARE', config.targetUrl, 'Đã chia sẻ bài viết');
-        } catch(e) {
-          try {
-            await shareNowEl.evaluate(el => el.click());
-            await logHistory(profileId, 'SHARE', config.targetUrl, 'Đã chia sẻ bài viết (fallback)');
-          } catch(e2) {}
+          await page.locator('[data-topify-cbox="1"]').first().click({ timeout: 5000 });
+          textBoxFocused = true;
+        } catch (e) {
+          // Fallback: focus bằng DOM
+          textBoxFocused = await page.evaluate(() => {
+            const el = document.querySelector('[data-topify-cbox="1"]');
+            if (!el) return false;
+            el.focus();
+            el.click();
+            return true;
+          });
         }
       } else {
-        console.log('Share now button not found, trying fallback');
+        await wheelScroll(500);
+        await safeWait(page, 1000);
       }
-      await shareNowHandle.dispose();
-      await safeWait(page, 3000);
     }
+
+    if (!textBoxFocused) {
+      throw new Error('Lỗi: Không tìm thấy ô nhập bình luận hoặc không thể click vào ô bình luận.');
+    }
+    await safeWait(page, 800);
+
+    console.log(`[Buff COMMENT] Đang gõ nội dung bình luận: "${finalComment}"`);
+    await humanType(page, finalComment);
+    await safeWait(page, 1000);
+    
+    // Gửi bình luận
+    await page.keyboard.press('Enter');
+    await safeWait(page, 2000);
+
+    // Bấm nút gửi bình luận (máy bay giấy) nếu có
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('[role="button"]'));
+      const sendBtn = btns.find(b => {
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
+        return (aria.includes('bình luận') || aria.includes('comment') || aria.includes('gửi') || aria.includes('send')) && b.getBoundingClientRect().height > 0 && b.closest('form');
+      });
+      if (sendBtn) sendBtn.click();
+    });
+
+    await safeWait(page, 3000);
+
+    // Xác minh bình luận đã được gửi bằng cách kiểm tra ô nhập có trống không, VÀ có text finalComment hay không
+    const isCommentSent = await page.evaluate((commentText) => {
+      const activeText = document.activeElement ? document.activeElement.innerText || '' : '';
+      const textOnScreen = document.body.innerText.includes(commentText.substring(0, 15));
+      // Nếu activeElement rỗng (đã gửi) hoặc chữ xuất hiện trên màn hình trong DOM (post list)
+      return activeText.trim() === '' || textOnScreen;
+    }, finalComment);
+
+    if (!isCommentSent) {
+      throw new Error('Lỗi: Đã gõ bình luận nhưng dường như chưa được gửi đi (ô nhập vẫn còn chữ).');
+    }
+
+    await logHistory(profileId, 'COMMENT', config.targetUrl, finalComment);
+    console.log('[Buff COMMENT] Đã đăng bình luận thành công!');
+    successCount++;
+    await safeWait(page, 2000);
+  }
+
+  // ===================== 3. XỬ LÝ CHIA SẺ BÀI VIẾT (SHARE) =====================
+  if (shouldShare) {
+    ensurePageAlive(page);
+    console.log('[Buff SHARE] Bắt đầu chia sẻ bài viết...');
+    
+    let clickedShare = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      clickedShare = await page.evaluate(async () => {
+        const container = document.querySelector('div[role="dialog"]') || document.querySelector('[role="main"]') || document.body;
+        const btns = Array.from(container.querySelectorAll('[role="button"]'));
+        const shareBtn = btns.find(b => {
+          const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
+          const text = (b.innerText || '').toLowerCase().trim();
+          return (aria.includes('chia sẻ') || aria.includes('share') || text === 'chia sẻ' || text === 'share') && !aria.includes('thích') && !aria.includes('bình luận') && b.getBoundingClientRect().height > 0 && !b.closest('form');
+        });
+
+        if (shareBtn) {
+          shareBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          await new Promise(r => setTimeout(r, 500));
+          shareBtn.click();
+          return true;
+        }
+        return false;
+      });
+      if (clickedShare) break;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    if (!clickedShare) {
+      throw new Error('Lỗi: Không tìm thấy nút Chia sẻ trên bài viết.');
+    }
+
+    await safeWait(page, 2500);
+
+    const clickedShareNow = await page.evaluate(async () => {
+      const items = Array.from(document.querySelectorAll('div[role="menuitem"], span, div[role="button"]'));
+      const shareNow = items.find(el => {
+        const t = (el.innerText || '').toLowerCase().trim();
+        return (t === 'chia sẻ ngay' || t === 'share now' || t === 'chia sẻ ngay (công khai)' || t.includes('chia sẻ ngay')) && el.getBoundingClientRect().height > 0;
+      });
+      if (shareNow) {
+        shareNow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(r => setTimeout(r, 500));
+        shareNow.click();
+        return true;
+      }
+      return false;
+    });
+
+    if (!clickedShareNow) {
+      throw new Error('Lỗi: Không tìm thấy tùy chọn "Chia sẻ ngay" trong menu chia sẻ.');
+    }
+    
+    await safeWait(page, 4000); // Chờ quá trình share hoàn tất
+    
+    await logHistory(profileId, 'SHARE', config.targetUrl, 'Đã chia sẻ bài viết thành công');
+    console.log('[Buff SHARE] Đã chia sẻ bài viết thành công.');
+    successCount++;
+    await safeWait(page, 2000);
+  }
+
+  if (successCount === 0) {
+    throw new Error('Lỗi: Không có hành động (Thích/Bình luận/Chia sẻ) nào được thực hiện thành công.');
   }
 }
 

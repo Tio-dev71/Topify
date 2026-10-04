@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
     }
 
     const credentials = await getCredentials(userId);
-    const clientId = credentials.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${req.nextUrl.origin}/api/social/google/callback`;
+    const clientId = credentials.GOOGLE_CLIENT_ID?.trim();
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() || `${req.nextUrl.origin}/api/social/google/callback`;
     console.log('GOOGLE OAUTH redirectUri:', redirectUri);
 
     if (!clientId) {

@@ -99,41 +99,48 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { dealId, stageId, status } = body;
+    const id = body.dealId || body.id;
+    const { title, value, customerId, stageId, status, expectedClose } = body;
     const workspaceId = (session.user as any).workspaceId;
 
-    if (!dealId) {
+    if (!id) {
       return NextResponse.json({ error: 'Deal ID is required' }, { status: 400 });
     }
 
     const data: any = {};
+    if (title !== undefined) data.title = title;
+    if (value !== undefined) data.value = typeof value === 'string' ? parseFloat(value) || 0 : value;
+    if (customerId !== undefined) data.customerId = customerId || null;
     if (stageId) data.stageId = stageId;
+    if (expectedClose !== undefined) data.expectedClose = expectedClose ? new Date(expectedClose) : null;
     if (status) {
       data.status = status;
       if (status === 'WON' || status === 'LOST') data.closedAt = new Date();
     }
 
     const deal = await prisma.deal.update({
-      where: { id: dealId },
+      where: { id },
       data,
       include: {
         stage: { select: { name: true, color: true } },
+        customer: { select: { name: true, email: true } },
       },
     });
 
     await recordAuditLog({
-      action: stageId ? 'DEAL.UPDATE_STAGE' : 'DEAL.UPDATE',
+      action: stageId && !title ? 'DEAL.UPDATE_STAGE' : 'DEAL.UPDATE',
       entityType: 'Deal',
-      entityId: dealId,
+      entityId: id,
       userId: session.user.id,
       workspaceId,
       req,
       metadata: { 
-        message: stageId 
+        message: stageId && !title
           ? `Chuyển giai đoạn cơ hội: ${deal.title} -> ${deal.stage?.name || stageId}`
-          : `Cập nhật trạng thái cơ hội: ${deal.title} -> ${status}`,
+          : `Cập nhật thông tin cơ hội: ${deal.title}`,
         stage: deal.stage?.name,
-        status: deal.status
+        status: deal.status,
+        value: deal.value,
       },
     });
 

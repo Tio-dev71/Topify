@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('electron', {
   runFacebookLogin: (accountData) => ipcRenderer.invoke('run-facebook-login', accountData),
   startAutomationTask: (taskData) => ipcRenderer.invoke('start-automation-task', taskData),
   stopAutomationTask: (data) => ipcRenderer.invoke('stop-automation-task', data),
+  getRunningAutomationTasks: () => ipcRenderer.invoke('get-running-automation-tasks'),
   getActiveBrowsers: () => ipcRenderer.invoke('get-active-browsers'),
   closeActiveBrowser: (profileId) => ipcRenderer.invoke('close-active-browser', profileId),
   downloadFile: (data) => ipcRenderer.invoke('download-file', data),

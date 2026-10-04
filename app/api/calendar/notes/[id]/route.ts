@@ -4,32 +4,35 @@ import prisma from '@/lib/db';
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
-    const { date, content } = body;
+    const { date, content, title, color } = body;
     const workspaceId = (session.user as any).workspaceId;
 
     // Verify ownership or workspace access
     const existingNote = await prisma.calendarNote.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
-    if (!existingNote || existingNote.workspaceId !== workspaceId) {
+    if (!existingNote || (workspaceId && existingNote.workspaceId !== workspaceId && existingNote.createdById !== session.user.id)) {
       return NextResponse.json({ error: 'Note not found or unauthorized' }, { status: 404 });
     }
 
     const note = await prisma.calendarNote.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         date: date ? new Date(date) : undefined,
+        title: title !== undefined ? title : undefined,
         content: content !== undefined ? content : undefined,
+        color: color !== undefined ? color : undefined,
       },
     });
 
@@ -39,11 +42,14 @@ export async function PUT(
   }
 }
 
+export const PATCH = PUT;
+
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -52,15 +58,15 @@ export async function DELETE(
     const workspaceId = (session.user as any).workspaceId;
 
     const existingNote = await prisma.calendarNote.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
-    if (!existingNote || existingNote.workspaceId !== workspaceId) {
+    if (!existingNote || (workspaceId && existingNote.workspaceId !== workspaceId && existingNote.createdById !== session.user.id)) {
       return NextResponse.json({ error: 'Note not found or unauthorized' }, { status: 404 });
     }
 
     await prisma.calendarNote.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ success: true });

@@ -68,8 +68,9 @@ export async function GET(req: NextRequest) {
     }
 
     const currentVolume = tracker?.volume || insightData?.volume || insightData?.search_volume || 0;
-    const currentTrend = tracker?.trend || (insightData?.trend > 0 ? 'UP' : insightData?.trend < 0 ? 'DOWN' : 'FLAT');
-    const trendRate = insightData?.trend !== undefined ? `${insightData.trend > 0 ? '+' : ''}${insightData.trend}%` : (currentTrend === 'UP' ? '+15%' : currentTrend === 'DOWN' ? '-10%' : '0%');
+    const numTrend = typeof insightData?.trend === 'number' ? insightData.trend : Number(insightData?.trend) || 0;
+    const currentTrend = tracker?.trend || (numTrend > 0 ? 'UP' : numTrend < 0 ? 'DOWN' : 'FLAT');
+    const trendRate = insightData?.trend !== undefined ? `${numTrend > 0 ? '+' : ''}${numTrend}%` : (currentTrend === 'UP' ? '+15%' : currentTrend === 'DOWN' ? '-10%' : '0%');
     const competitionLevel = insightData?.competition_level || (currentVolume > 20000 ? 'HIGH' : currentVolume > 5000 ? 'MEDIUM' : 'LOW');
     const competitionIndex = insightData?.competition_index !== undefined ? insightData.competition_index : 25;
 

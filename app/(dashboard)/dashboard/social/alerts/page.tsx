@@ -707,7 +707,7 @@ export default function AlertsPage() {
 
                     <div className="flex-1 min-w-0 w-full">
                       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-                        <h3 className={`text-lg font-bold truncate pr-4 ${alert.isRead ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                        <h3 className={`text-lg font-bold truncate pr-4 flex-1 min-w-0 ${alert.isRead ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-900 dark:text-zinc-100'}`} title={alert.title}>
                           {alert.title}
                         </h3>
                         <div className="flex items-center gap-3">

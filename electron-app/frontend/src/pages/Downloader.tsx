@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Download, Link as LinkIcon, Loader2, Video, Music, AlertCircle, Send, Users, FolderOpen, Check } from 'lucide-react';
 import { toast } from 'sonner';
-
-const API_URL = import.meta.env.DEV ? '/api' : 'https://topify.vn/api';
+import api from '../lib/axios';
 
 interface MediaInfo {
   url: string;
@@ -45,6 +45,7 @@ export default function DownloaderPage() {
 
   // Accounts
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
 
   // Lắng nghe tiến trình tải từ Electron Main Process
@@ -122,17 +123,26 @@ export default function DownloaderPage() {
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
-        const res = await fetch(`${API_URL}/facebook-accounts`);
-        const data = await res.json();
-        if (Array.isArray(data)) setAccounts(data);
-      } catch (e) {}
+        setAccountsLoading(true);
+        const res = await api.get('/facebook-accounts');
+        if (Array.isArray(res.data)) {
+          setAccounts(res.data);
+          // Auto select live accounts by default
+          const liveIds = res.data.filter((a: any) => a.status === 'LIVE').map((a: any) => a.id);
+          setSelectedAccounts(liveIds.length > 0 ? liveIds : res.data.map((a: any) => a.id));
+        }
+      } catch (e) {
+        console.error('Failed to load facebook accounts in Downloader:', e);
+      } finally {
+        setAccountsLoading(false);
+      }
     };
     fetchAccounts();
   }, []);
 
   const handleFetch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url) return;
+    if (!url.trim()) return;
 
     setLoading(true);
     setError('');
@@ -140,64 +150,53 @@ export default function DownloaderPage() {
     setAutoPostSuccess('');
 
     try {
-      const res = await fetch(`${API_URL}/downloader`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch video details');
-      }
-
-      setResult(data);
+      const res = await api.post('/downloader', { url: url.trim() });
+      setResult(res.data);
+      toast.success('Lấy thông tin video thành công!');
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
+      const errMsg = err.response?.data?.error || err.message || 'Lỗi khi lấy thông tin video';
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAutoPost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedVideo || !groupUrl) return;
+  const handleAutoPost = async (videoUrlToPost?: string) => {
+    const targetVideo = videoUrlToPost || selectedVideo;
+    if (!targetVideo) {
+      toast.error('Vui lòng chọn video cần đăng!');
+      return;
+    }
+    if (!groupUrl.trim()) {
+      toast.error('Vui lòng nhập Link Group hoặc Trang Facebook ở khung bên trên trước!');
+      return;
+    }
     if (selectedAccounts.length === 0) {
-      alert('Please select at least one Facebook account to post with.');
+      toast.error('Vui lòng chọn ít nhất một tài khoản Facebook để đăng!');
       return;
     }
 
+    setSelectedVideo(targetVideo);
     setAutoPostLoading(true);
     setError('');
     setAutoPostSuccess('');
 
     try {
-      const res = await fetch(`${API_URL}/autopost`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          videoUrl: selectedVideo,
-          groupUrl,
-          caption,
-          watermarkText,
-          accountIds: selectedAccounts
-        }),
+      await api.post('/autopost', {
+        videoUrl: targetVideo,
+        groupUrl: groupUrl.trim(),
+        caption,
+        watermarkText: watermarkText.trim() || 'Topmedia',
+        accountIds: selectedAccounts
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || data.details || 'Failed to process and post video');
-      }
-
-      setAutoPostSuccess('Video has been watermarked and successfully posted to the Facebook Group!');
+      setAutoPostSuccess('Video đã được đóng dấu watermark và đăng lên Facebook Group thành công!');
+      toast.success('Đăng bài lên Facebook thành công!');
     } catch (err: any) {
-      setError(err.message || 'An error occurred during auto-posting.');
+      const errMsg = err.response?.data?.error || err.response?.data?.details || err.message || 'Lỗi khi tự động đăng bài';
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setAutoPostLoading(false);
     }
@@ -270,14 +269,14 @@ export default function DownloaderPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-2xl p-4 flex items-start gap-3 text-red-800 dark:text-red-400">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 text-red-800">
           <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
           <div className="text-sm">{error}</div>
         </div>
       )}
 
       {autoPostSuccess && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30 rounded-2xl p-4 flex items-start gap-3 text-green-800 dark:text-green-400 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start gap-3 text-green-800 animate-in fade-in slide-in-from-top-2">
           <div className="text-sm font-medium">{autoPostSuccess}</div>
         </div>
       )}
@@ -288,7 +287,7 @@ export default function DownloaderPage() {
             {/* Thumbnail Preview Block */}
             {(result.thumbnail || result.picture) && (
               <div className="w-full lg:w-[280px] xl:w-[320px] flex-shrink-0 self-start">
-                <div className="bg-gray-50 dark:bg-neutral-900 border border-gray-200/80 dark:border-neutral-800 rounded-3xl p-3 shadow-sm space-y-3">
+                <div className="bg-gray-50 border border-gray-200/80 rounded-3xl p-3 shadow-sm space-y-3">
                   <div className="relative rounded-2xl overflow-hidden bg-black flex items-center justify-center max-h-[460px] aspect-[9/16] sm:aspect-auto">
                     <img
                       src={result.thumbnail || result.picture}
@@ -302,7 +301,7 @@ export default function DownloaderPage() {
                   </div>
                   {result.title && (
                     <div className="px-1 py-0.5">
-                      <p className="text-xs font-semibold text-gray-800 dark:text-neutral-200 line-clamp-2 leading-relaxed">
+                      <p className="text-xs font-semibold text-gray-800 line-clamp-2 leading-relaxed">
                         {result.title}
                       </p>
                     </div>
@@ -314,14 +313,14 @@ export default function DownloaderPage() {
             {/* Details and Links */}
             <div className="flex-1 min-w-0 space-y-5 w-full">
               {result.title && (
-                <h3 className="text-xl font-bold text-neutral-900 dark:text-white line-clamp-2 leading-snug">
+                <h3 className="text-xl font-bold text-neutral-900 line-clamp-2 leading-snug">
                   {result.title}
                 </h3>
               )}
               
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                  <h4 className="text-sm font-bold text-neutral-500 uppercase tracking-wider">
                     Tùy chọn tải về & Đăng bài
                   </h4>
                 </div>
@@ -362,32 +361,89 @@ export default function DownloaderPage() {
                       </div>
                     </div>
                     
-                    <div className="space-y-2 pt-3 border-t border-[var(--color-primary)] border-opacity-20">
-                      <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                        <Users className="w-3.5 h-3.5" />
-                        Chọn tài khoản Facebook để đăng
-                      </label>
-                      {accounts.length === 0 ? (
-                        <div className="text-xs text-neutral-500">Chưa có tài khoản Facebook nào. Vui lòng thêm trong trang Tài khoản FB.</div>
+                    <div className="space-y-2.5 pt-3 border-t border-[var(--color-primary)] border-opacity-20">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700">
+                          <Users className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Chọn tài khoản Facebook để đăng</span>
+                          {accounts.length > 0 && (
+                            <span className="text-[11px] font-normal text-gray-500">
+                              (Đã chọn {selectedAccounts.length}/{accounts.length})
+                            </span>
+                          )}
+                        </label>
+                        {accounts.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccounts(accounts.map(a => a.id))}
+                              className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold"
+                            >
+                              Chọn tất cả
+                            </button>
+                            <span className="text-gray-300">•</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccounts([])}
+                              className="text-[11px] text-gray-500 hover:text-gray-700 font-semibold"
+                            >
+                              Bỏ chọn
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {accountsLoading ? (
+                        <div className="flex items-center gap-2 p-3 text-xs text-gray-500 bg-white rounded-xl border border-gray-200">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                          <span>Đang tải danh sách tài khoản Facebook...</span>
+                        </div>
+                      ) : accounts.length === 0 ? (
+                        <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50 border border-amber-200 gap-3">
+                          <div className="text-xs text-amber-800">
+                            Chưa có tài khoản Facebook nào trong hệ thống. Vui lòng thêm tài khoản trước khi đăng.
+                          </div>
+                          <Link
+                            to="/facebook-accounts"
+                            className="whitespace-nowrap text-xs font-bold text-blue-600 hover:text-blue-700 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-xs transition-colors shrink-0"
+                          >
+                            + Thêm tài khoản FB
+                          </Link>
+                        </div>
                       ) : (
-                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 custom-scrollbar">
-                          {accounts.map(acc => (
-                            <label key={acc.id} className="flex items-center gap-1.5 cursor-pointer bg-neutral-50 dark:bg-neutral-950 px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:bg-[var(--color-primary-soft)] hover:border-[var(--color-primary)] hover:border-opacity-30 transition-all">
-                              <input 
-                                type="checkbox" 
-                                className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] bg-white border-neutral-300"
-                                checked={selectedAccounts.includes(acc.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedAccounts(prev => [...prev, acc.id]);
-                                  } else {
-                                    setSelectedAccounts(prev => prev.filter(id => id !== acc.id));
-                                  }
-                                }}
-                              />
-                              <span className="text-[13px] font-medium text-[var(--color-foreground)]">{acc.name}</span>
-                            </label>
-                          ))}
+                        <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-2 bg-white rounded-xl border border-neutral-200 custom-scrollbar">
+                          {accounts.map(acc => {
+                            const isSelected = selectedAccounts.includes(acc.id);
+                            return (
+                              <label
+                                key={acc.id}
+                                className={`flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg border text-xs transition-all ${
+                                  isSelected
+                                    ? 'bg-blue-50 border-blue-400 text-blue-900 font-semibold shadow-xs'
+                                    : 'bg-neutral-50 border-neutral-200 hover:bg-neutral-100 text-gray-700 font-medium'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 bg-white border-neutral-300 cursor-pointer"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedAccounts(prev => [...prev, acc.id]);
+                                    } else {
+                                      setSelectedAccounts(prev => prev.filter(id => id !== acc.id));
+                                    }
+                                  }}
+                                />
+                                <span>{acc.name}</span>
+                                {acc.status === 'LIVE' ? (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500" title="Tài khoản LIVE" />
+                                ) : (
+                                  <span className="w-2 h-2 rounded-full bg-gray-400" title={acc.status || 'UNKNOWN'} />
+                                )}
+                              </label>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -426,7 +482,7 @@ export default function DownloaderPage() {
                               disabled={downloadingUrl === media.url}
                               className={`whitespace-nowrap inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-[13px] font-bold transition-all shrink-0 ${
                                 downloadedFiles[media.url]
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
                                   : 'btn-secondary shadow-xs hover:shadow-sm'
                               }`}
                             >
@@ -456,7 +512,7 @@ export default function DownloaderPage() {
                                     window.electron.showItemInFolder(downloadedFiles[media.url]);
                                   }
                                 }}
-                                className="whitespace-nowrap inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 text-xs font-bold shrink-0 transition-all shadow-xs"
+                                className="whitespace-nowrap inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 text-xs font-bold shrink-0 transition-all shadow-xs"
                                 title="Mở thư mục chứa video vừa tải"
                               >
                                 <FolderOpen className="w-3.5 h-3.5 flex-shrink-0" />
@@ -469,22 +525,22 @@ export default function DownloaderPage() {
                                 type="button"
                                 onClick={(e) => {
                                   e.preventDefault();
-                                  if (!groupUrl) {
-                                    alert('Vui lòng nhập Facebook Group URL ở trên trước khi Auto-Post!');
-                                    return;
-                                  }
-                                  setSelectedVideo(media.url);
-                                  handleAutoPost({ preventDefault: () => {} } as React.FormEvent);
+                                  handleAutoPost(media.url);
                                 }}
-                                disabled={autoPostLoading}
+                                disabled={autoPostLoading && selectedVideo === media.url}
                                 className="btn-primary whitespace-nowrap inline-flex items-center justify-center gap-2 py-2.5 px-4 text-[13px] font-bold shrink-0 shadow-xs hover:shadow-sm"
                               >
                                 {autoPostLoading && selectedVideo === media.url ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                                    <span>Đang đăng...</span>
+                                  </>
                                 ) : (
-                                  <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                                  <>
+                                    <Send className="w-3.5 h-3.5 flex-shrink-0" />
+                                    <span>Auto-Post</span>
+                                  </>
                                 )}
-                                <span>Auto-Post</span>
                               </button>
                             )}
                           </div>
@@ -493,7 +549,7 @@ export default function DownloaderPage() {
                     })}
                   </div>
                 ) : (
-                  <div className="text-sm text-neutral-500 dark:text-neutral-400 italic">
+                  <div className="text-sm text-neutral-500 italic">
                     <p>No direct download links found in standard format.</p>
                   </div>
                 )}

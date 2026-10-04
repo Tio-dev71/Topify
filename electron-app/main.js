@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { runPlaywrightLogin, activeBrowsers, latestScreenshots } = require('./playwright-runner');
-const { startAutomationTask, stopTask } = require('./automation-runner');
+const { startAutomationTask, stopTask, getRunningTasks } = require('./automation-runner');
 
 let mainWindow;
 
@@ -42,6 +42,12 @@ function createWindow() {
 
   // Quản lý popup OAuth (như Facebook/Google login)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Với Google/YouTube OAuth: luôn mở bằng trình duyệt hệ thống để tránh 100% lỗi Google 403 disallowed_useragent
+    if (url.includes('accounts.google.com') || url.includes('/api/social/google')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+
     return { 
       action: 'allow',
       overrideBrowserWindowOptions: {
@@ -59,10 +65,25 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('did-create-window', (childWindow) => {
-    // Override User-Agent sang chuẩn Google Chrome độc lập để Google OAuth không chặn lỗi 403 disallowed_useragent
+    // Override User-Agent sang chuẩn Google Chrome độc lập
     childWindow.webContents.setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     );
+    // Bắt nếu có chuyển hướng tới Google OAuth trong popup con thì đưa ra trình duyệt ngoài
+    childWindow.webContents.on('will-navigate', (event, navUrl) => {
+      if (navUrl.includes('accounts.google.com') || navUrl.includes('/api/social/google')) {
+        event.preventDefault();
+        shell.openExternal(navUrl);
+        childWindow.close();
+      }
+    });
+    childWindow.webContents.on('will-redirect', (event, navUrl) => {
+      if (navUrl.includes('accounts.google.com') || navUrl.includes('/api/social/google')) {
+        event.preventDefault();
+        shell.openExternal(navUrl);
+        childWindow.close();
+      }
+    });
     childWindow.on('closed', () => {
       // Khi cửa sổ OAuth đóng, phát sự kiện oauth-complete và làm mới dữ liệu
       mainWindow.webContents.executeJavaScript('window.dispatchEvent(new Event("oauth-complete"));');
@@ -97,6 +118,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Chuẩn hóa User-Agent toàn app sang Chrome để tương thích hoàn toàn với Google APIs
+  app.userAgentFallback = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
   createWindow();
 
   // Background Scheduler: Tự động kiểm tra và kích hoạt đăng các bài viết đã đến giờ hẹn
@@ -159,13 +183,22 @@ ipcMain.handle('stop-automation-task', async (event, { taskId, profileIds }) => 
   try {
     console.log(`[Electron IPC] Yêu cầu dừng Tự động hoá cho Task ${taskId}, profiles:`, profileIds);
     if (taskId) {
-      await stopTask(taskId);
+      await stopTask(taskId, profileIds);
     }
     
     return { success: true };
   } catch (error) {
     console.error('[Electron IPC] Lỗi khi dừng task:', error.message);
     return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-running-automation-tasks', async () => {
+  try {
+    const list = getRunningTasks ? getRunningTasks() : [];
+    return { success: true, runningTaskIds: list };
+  } catch (error) {
+    return { success: false, runningTaskIds: [] };
   }
 });
 

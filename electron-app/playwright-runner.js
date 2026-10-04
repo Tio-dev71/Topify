@@ -20,13 +20,37 @@ function generateFingerprint() {
 // 2. http://user:pass@host:port
 // 3. host:port
 // 4. host:port:user:pass
+function isNetworkOrProxyFailure(err) {
+  if (!err) return false;
+  const msg = (err.message || String(err)).toLowerCase();
+  return (
+    msg.includes('net::') ||
+    msg.includes('err_connection_closed') ||
+    msg.includes('err_connection_reset') ||
+    msg.includes('err_connection_refused') ||
+    msg.includes('err_connection_aborted') ||
+    msg.includes('err_tunnel_connection_failed') ||
+    msg.includes('err_proxy_connection_failed') ||
+    msg.includes('err_empty_response') ||
+    msg.includes('err_http2_protocol_error') ||
+    msg.includes('err_name_not_resolved') ||
+    msg.includes('err_internet_disconnected') ||
+    msg.includes('err_network_changed') ||
+    msg.includes('err_timed_out') ||
+    msg.includes('timeout')
+  );
+}
+
 function parseProxy(proxyStr) {
   if (!proxyStr) return null;
 
   try {
+    const trimmed = String(proxyStr).trim();
+    if (!trimmed) return null;
+
     // Format: protocol://... (URL format)
-    if (proxyStr.includes('://')) {
-      const url = new URL(proxyStr);
+    if (trimmed.includes('://')) {
+      const url = new URL(trimmed);
       const result = {
         server: `${url.protocol}//${url.hostname}:${url.port || 80}`
       };
@@ -37,8 +61,8 @@ function parseProxy(proxyStr) {
       return result;
     }
     // Format: user:pass@host:port
-    if (proxyStr.includes('@') && !proxyStr.includes('://')) {
-      const [credentials, hostPort] = proxyStr.split('@');
+    if (trimmed.includes('@') && !trimmed.includes('://')) {
+      const [credentials, hostPort] = trimmed.split('@');
       const [username, password] = credentials.split(':');
       const [host, port] = (hostPort || '').split(':');
       if (host && port) {
@@ -51,7 +75,7 @@ function parseProxy(proxyStr) {
     }
 
     // Format: host:port or host:port:user:pass
-    const parts = proxyStr.trim().split(':');
+    const parts = trimmed.split(':');
     if (parts.length === 2) {
       return { server: `http://${parts[0]}:${parts[1]}` };
     } else if (parts.length === 4) {
@@ -67,6 +91,46 @@ function parseProxy(proxyStr) {
 
   return null;
 }
+
+async function prepareProxyForBrowser(proxyString) {
+  if (!proxyString) return { proxyOptions: null, cleanup: null };
+  const trimmed = String(proxyString).trim();
+  if (!trimmed) return { proxyOptions: null, cleanup: null };
+
+  const parsed = parseProxy(trimmed);
+  if (!parsed) return { proxyOptions: null, cleanup: null };
+
+  // If proxy has username & password, create an anonymized local tunnel with proxy-chain
+  // This avoids Chromium's known TLS/HTTPS handshake drops with authenticated proxies
+  if (parsed.username && parsed.password) {
+    try {
+      let fullUrl = trimmed;
+      if (!fullUrl.includes('://')) {
+        fullUrl = `http://${encodeURIComponent(parsed.username)}:${encodeURIComponent(parsed.password)}@${parsed.server.replace(/^https?:\/\//, '')}`;
+      }
+      const anonymizedUrl = await anonymizeProxy(fullUrl);
+      console.log(`[Proxy] Anonymized proxy tunnel created: ${anonymizedUrl} for ${parsed.server}`);
+      return {
+        proxyOptions: { server: anonymizedUrl },
+        cleanup: async () => {
+          try {
+            await closeAnonymizedProxy(anonymizedUrl, true);
+          } catch (e) { }
+        }
+      };
+    } catch (anonymizeErr) {
+      console.warn('[Proxy] anonymizeProxy error, falling back to direct credentials:', anonymizeErr.message);
+    }
+  }
+
+  const proxyOptions = { server: parsed.server };
+  if (parsed.username && parsed.password) {
+    proxyOptions.username = parsed.username;
+    proxyOptions.password = parsed.password;
+  }
+  return { proxyOptions, cleanup: null };
+}
+
 
 async function generateTOTP(secret) {
   try {
@@ -178,7 +242,7 @@ function cleanStaleLockFiles(userDataDir) {
     if (match) targetPid = parseInt(match[1], 10);
   } catch (e) { }
 
-  if (targetPid) {
+  if (targetPid && targetPid !== process.pid) {
     try {
       process.kill(targetPid, 0); // Check if alive
       console.log(`[LockCleaner] Dọn dẹp tiến trình Chrome cũ (PID: ${targetPid}) cho ${userDataDir}...`);
@@ -284,19 +348,38 @@ async function cleanupExtraTabs(browser, mainPage) {
 
 async function runPlaywrightLogin(accountData) {
   const { id, uid, password, twoFactorCode, cookie, profileId, proxy } = accountData;
-  let browser = activeBrowsers.get(profileId);
+  const safeProfileId = profileId || (uid ? `profile_${String(uid).replace(/[^a-zA-Z0-9]/g, '')}` : `profile_${id || Date.now()}`);
+  let browser = activeBrowsers.get(safeProfileId);
 
   try {
     if (browser && browser.proxyConfigStr !== (proxy || '')) {
       console.log('[Playwright] Cấu hình proxy thay đổi, khởi động lại trình duyệt...');
       await browser.close().catch(() => { });
-      activeBrowsers.delete(profileId);
+      activeBrowsers.delete(safeProfileId);
       browser = null;
     }
 
-    const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', profileId);
+    // Nếu trình duyệt đã đang mở và người dùng bấm Mở lại, ưu tiên focus vào tab hiện tại
+    if (browser) {
+      try {
+        const pages = browser.pages();
+        let page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : null);
+        if (page && !page.isClosed()) {
+          await page.bringToFront().catch(() => { });
+          return { success: true, message: 'Trình duyệt đang mở sẵn', alreadyRunning: true };
+        }
+      } catch (e) {
+        console.warn('[Playwright] Trình duyệt cũ không phản hồi, khởi động lại:', e.message);
+        browser = null;
+        activeBrowsers.delete(safeProfileId);
+      }
+    }
 
-    const buildLaunchOptions = (proxyString) => {
+    const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', safeProfileId);
+
+    let currentProxyCleanup = null;
+
+    const buildLaunchOptions = async (proxyString) => {
       const fp = generateFingerprint();
       const options = {
         headless: false,
@@ -319,13 +402,10 @@ async function runPlaywrightLogin(accountData) {
       };
 
       if (proxyString) {
-        const proxyConfig = parseProxy(proxyString);
-        if (proxyConfig) {
-          options.proxy = { server: proxyConfig.server };
-          if (proxyConfig.username && proxyConfig.password) {
-            options.proxy.username = proxyConfig.username;
-            options.proxy.password = proxyConfig.password;
-          }
+        const { proxyOptions, cleanup } = await prepareProxyForBrowser(proxyString);
+        if (proxyOptions) {
+          options.proxy = proxyOptions;
+          currentProxyCleanup = cleanup;
         }
       }
 
@@ -347,16 +427,21 @@ async function runPlaywrightLogin(accountData) {
       cleanStaleLockFiles(userDataDir);
 
       let currentProxyToUse = proxy || null;
-      let launchOpts = buildLaunchOptions(currentProxyToUse);
+      let launchOpts = await buildLaunchOptions(currentProxyToUse);
 
       try {
         browser = await launchBrowserInstance(launchOpts);
+        browser._proxyCleanup = currentProxyCleanup;
       } catch (launchErr) {
+        if (currentProxyCleanup) {
+          await currentProxyCleanup().catch(() => { });
+          currentProxyCleanup = null;
+        }
         if (currentProxyToUse) {
           console.warn('[Playwright] Khởi động với proxy lỗi, tự động chuyển sang kết nối trực tiếp:', launchErr.message);
           cleanStaleLockFiles(userDataDir);
           currentProxyToUse = null;
-          launchOpts = buildLaunchOptions(null);
+          launchOpts = await buildLaunchOptions(null);
           browser = await launchBrowserInstance(launchOpts);
         } else {
           throw launchErr;
@@ -378,10 +463,13 @@ async function runPlaywrightLogin(accountData) {
         } catch (e) { }
       });
 
-      browser.on('close', () => {
-        activeBrowsers.delete(profileId);
+      browser.on('close', async () => {
+        if (browser._proxyCleanup) {
+          await browser._proxyCleanup().catch(() => { });
+        }
+        activeBrowsers.delete(safeProfileId);
       });
-      activeBrowsers.set(profileId, browser);
+      activeBrowsers.set(safeProfileId, browser);
     }
 
     // Login Flow
@@ -400,28 +488,35 @@ async function runPlaywrightLogin(accountData) {
       }
     }
 
-    // Điều hướng vào Facebook với cơ chế dự phòng khi proxy hỏng
-    try {
-      await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await cleanupExtraTabs(browser, page);
-    } catch (navErr) {
-      const msg = (navErr.message || '').toLowerCase();
-      const isProxyFailure = msg.includes('err_tunnel_connection_failed') ||
-        msg.includes('err_proxy_connection_failed') ||
-        msg.includes('err_connection_refused') ||
-        msg.includes('err_timed_out') ||
-        msg.includes('timeout');
+    // Điều hướng vào Facebook với cơ chế tự động thử lại và tự động chuyển Direct nếu Proxy gặp sự cố
+    const navigateToFacebook = async (targetPage, timeout = 35000) => {
+      try {
+        await targetPage.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout });
+        await cleanupExtraTabs(browser, targetPage);
+        return true;
+      } catch (err) {
+        return err;
+      }
+    };
 
-      if (browser.proxyConfigStr && isProxyFailure) {
-        console.warn(`[Playwright] Proxy ${browser.proxyConfigStr} gặp sự cố (${navErr.message}). Tự động đổi sang kết nối mạng trực tiếp...`);
+    let navResult = await navigateToFacebook(page, 30000);
+    if (navResult !== true) {
+      const isNetFail = isNetworkOrProxyFailure(navResult);
+      console.warn(`[Playwright] Điều hướng lần 1 gặp sự cố (${navResult.message || navResult}).`);
+
+      if (browser.proxyConfigStr && isNetFail) {
+        console.warn(`[Playwright] Proxy ${browser.proxyConfigStr} gặp sự cố (${navResult.message}). Tự động đổi sang kết nối mạng trực tiếp...`);
+        if (browser._proxyCleanup) {
+          await browser._proxyCleanup().catch(() => { });
+        }
         await browser.close().catch(() => { });
-        activeBrowsers.delete(profileId);
+        activeBrowsers.delete(safeProfileId);
         cleanStaleLockFiles(userDataDir);
 
-        const directOpts = buildLaunchOptions(null);
+        const directOpts = await buildLaunchOptions(null);
         browser = await launchBrowserInstance(directOpts);
         browser.proxyConfigStr = '';
-        activeBrowsers.set(profileId, browser);
+        activeBrowsers.set(safeProfileId, browser);
 
         pages = browser.pages();
         page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
@@ -433,10 +528,15 @@ async function runPlaywrightLogin(accountData) {
           if (parsedCookies.length > 0) await browser.addCookies(parsedCookies).catch(() => { });
         }
 
-        await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 35000 });
-        await cleanupExtraTabs(browser, page);
-      } else {
-        throw navErr;
+        navResult = await navigateToFacebook(page, 35000);
+      } else if (isNetFail) {
+        console.warn(`[Playwright] Thử lại điều hướng Facebook lần 2 sau lỗi kết nối...`);
+        await page.waitForTimeout(2000);
+        navResult = await navigateToFacebook(page, 40000);
+      }
+
+      if (navResult !== true) {
+        throw navResult;
       }
     }
 
@@ -534,15 +634,30 @@ async function runPlaywrightLogin(accountData) {
 
     await page.waitForTimeout(5000);
 
-    // Kiểm tra sai mật khẩu
+    // Kiểm tra sai mật khẩu (chỉ tìm trong các khối thông báo lỗi cụ thể để tránh false positive từ bài đăng feed)
     const loginError = await page.evaluate(() => {
-      const text = (document.body ? document.body.innerText : '').toLowerCase();
-      return text.includes('không kết nối với tài khoản nào') ||
-        text.includes('không chính xác') ||
-        text.includes('the password that you') ||
-        text.includes('find your account') ||
-        text.includes('sai mật khẩu') ||
-        text.includes('mật khẩu không đúng');
+      // Các selector thường chứa thông báo lỗi đăng nhập của Facebook
+      const errorContainers = document.querySelectorAll('#error_box, ._9ay7, ._5v-0, ._4rbf, [data-testid="login_error"]');
+      let foundError = false;
+
+      for (const container of errorContainers) {
+        if (!container) continue;
+        const text = container.innerText.toLowerCase();
+        if (
+          text.includes('không kết nối với tài khoản nào') ||
+          text.includes('không chính xác') ||
+          text.includes('the password that you') ||
+          text.includes('find your account') ||
+          text.includes('sai mật khẩu') ||
+          text.includes('mật khẩu không đúng') ||
+          text.includes('không khớp') ||
+          text.includes('nhập sai')
+        ) {
+          foundError = true;
+          break;
+        }
+      }
+      return foundError;
     });
 
     if (loginError) {
@@ -698,6 +813,8 @@ module.exports = {
   runPlaywrightLogin,
   activeBrowsers,
   parseProxy,
+  prepareProxyForBrowser,
+  isNetworkOrProxyFailure,
   generateFingerprint,
   latestScreenshots,
   generateTOTP,
@@ -707,3 +824,4 @@ module.exports = {
   checkFacebookLoggedIn,
   syncCookiesToApi
 };
+

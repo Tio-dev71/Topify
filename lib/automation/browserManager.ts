@@ -58,11 +58,31 @@ export const browserManager = {
 
     const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', profileId);
     
-    // Check if locked
-    const lockFile = path.join(userDataDir, 'SingletonLock');
-    if (fs.existsSync(lockFile)) {
-      console.error(`[BrowserManager] Lock file exists for ${profileId}.`);
-      throw new Error('Trình duyệt của tài khoản này đang được mở ở một tiến trình khác. Hãy tắt nó trước!');
+    // Clean stale lock files if any
+    const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+    const lockPath = path.join(userDataDir, 'SingletonLock');
+    if (fs.existsSync(lockPath)) {
+      let targetPid: number | null = null;
+      try {
+        const link = fs.readlinkSync(lockPath);
+        const match = link.match(/-?(\d+)$/);
+        if (match) targetPid = parseInt(match[1], 10);
+      } catch (e) {}
+
+      if (targetPid && targetPid !== process.pid) {
+        try {
+          process.kill(targetPid, 0); // Check if alive
+          console.log(`[BrowserManager] Dọn dẹp tiến trình Chrome cũ (PID: ${targetPid}) cho ${profileId}...`);
+          process.kill(targetPid, 'SIGKILL');
+        } catch (e) {}
+      }
+
+      for (const file of lockFiles) {
+        const p = path.join(userDataDir, file);
+        try {
+          if (fs.existsSync(p)) fs.unlinkSync(p);
+        } catch (e) {}
+      }
     }
 
     const options: any = {

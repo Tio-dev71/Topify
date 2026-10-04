@@ -1009,7 +1009,9 @@ model Referral {
 model CalendarNote {
   id          String   @id @default(cuid())
   date        DateTime
-  content     String
+  title       String?
+  content     String   @default("")
+  color       String?
   createdById String
   workspaceId String?
   createdAt   DateTime @default(now())

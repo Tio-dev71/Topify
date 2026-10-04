@@ -15,14 +15,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'videoUrl and groupUrl are required' }, { status: 400 });
     }
     
-    let profilesToRun = ['chrome-profile']; // fallback
+    let profilesToRun: string[] = [];
     if (accountIds && Array.isArray(accountIds) && accountIds.length > 0) {
       const accounts = await prisma.facebookAccount.findMany({
-        where: { id: { in: accountIds } }
+        where: { id: { in: accountIds }, status: 'LIVE' }
       });
       if (accounts.length > 0) {
         profilesToRun = accounts.map(a => a.profileId);
       }
+    }
+
+    if (profilesToRun.length === 0) {
+      return NextResponse.json({
+        error: 'Vui lòng kết nối tài khoản Facebook trước khi đăng bài.'
+      }, { status: 400 });
     }
 
     console.log(`[API /autopost] Starting process for video: ${videoUrl}`);

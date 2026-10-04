@@ -84,6 +84,9 @@ export async function PUT(req: NextRequest) {
   }
 }
 
+// PATCH /api/inbox/quick-replies
+export const PATCH = PUT;
+
 // DELETE /api/inbox/quick-replies?id=...
 export async function DELETE(req: NextRequest) {
   try {

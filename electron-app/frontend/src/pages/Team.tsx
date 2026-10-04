@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Users, Mail, UserPlus, Trash2 } from 'lucide-react';
+import { 
+  Users, 
+  Mail, 
+  UserPlus, 
+  Trash2, 
+  Eye, 
+  Edit2, 
+  X, 
+  RefreshCw 
+} from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
 
@@ -20,6 +29,12 @@ export default function Team() {
   const [showModal, setShowModal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // View & Edit States
+  const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editRole, setEditRole] = useState('STAFF');
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     fetchTeam();
@@ -62,6 +77,29 @@ export default function Team() {
       toast.error(e.response?.data?.error || 'Lỗi khi thêm nhân sự');
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleOpenEdit = (member: TeamMember) => {
+    setEditingMember(member);
+    setEditRole(member.role);
+  };
+
+  const handleUpdateMemberRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+
+    setUpdating(true);
+    try {
+      await api.patch('/team', { id: editingMember.id, role: editRole });
+      toast.success('Cập nhật quyền thành công');
+      setEditingMember(null);
+      fetchTeam();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.response?.data?.error || 'Lỗi cập nhật quyền');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -137,7 +175,7 @@ export default function Team() {
                 </tr>
               ) : (
                 members.map(member => (
-                  <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={member.id} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
@@ -167,15 +205,31 @@ export default function Team() {
                       {new Date(member.createdAt).toLocaleDateString('vi-VN')}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {member.role !== 'SUPER_ADMIN' && (
+                      <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => handleRemoveMember(member.id, member.email)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Xoá thành viên"
+                          onClick={() => setViewingMember(member)}
+                          className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          title="Xem chi tiết"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
-                      )}
+                        <button
+                          onClick={() => handleOpenEdit(member)}
+                          className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Chỉnh sửa quyền"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        {member.role !== 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleRemoveMember(member.id, member.email)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Xoá thành viên"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -185,13 +239,14 @@ export default function Team() {
         </div>
       </div>
 
+      {/* Add Member Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl scale-100">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">Thêm nhân sự mới</h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleAddMember}>
@@ -220,9 +275,137 @@ export default function Team() {
                 <button
                   type="submit"
                   disabled={adding}
-                  className="px-6 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50"
+                  className="px-6 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
+                  {adding && <RefreshCw className="w-4 h-4 animate-spin" />}
                   {adding ? 'Đang thêm...' : 'Thêm'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Member Detail Modal */}
+      {viewingMember && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-base">
+                  {viewingMember.email.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Chi Tiết Thành Viên</h3>
+                  <p className="text-xs text-gray-500">{viewingMember.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setViewingMember(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Quyền hạn (Role)</span>
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                    viewingMember.role === 'ADMIN' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {viewingMember.role === 'ADMIN' ? 'Quản trị viên (Admin)' : 'Nhân viên (Staff)'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Người mời / Thêm</span>
+                  <span className="text-xs font-medium text-gray-800">
+                    {viewingMember.invitedBy?.email || 'Hệ thống'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Ngày tham gia</span>
+                  <span className="text-xs font-medium text-gray-800">
+                    {new Date(viewingMember.createdAt).toLocaleString('vi-VN')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <button
+                type="button"
+                onClick={() => {
+                  const m = viewingMember;
+                  setViewingMember(null);
+                  handleOpenEdit(m);
+                }}
+                className="px-4 py-2 text-xs font-semibold rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-1.5"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                Chỉnh sửa quyền
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingMember(null)}
+                className="px-5 py-2 text-sm font-medium text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Member Modal */}
+      {editingMember && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Phân Quyền Thành Viên</h3>
+                  <p className="text-xs text-gray-500">{editingMember.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setEditingMember(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateMemberRole}>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Quyền hạn trong Workspace</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                  >
+                    <option value="ADMIN">Quản trị viên (Admin) - Toàn quyền cấu hình & quản lý</option>
+                    <option value="STAFF">Nhân viên (Staff) - Quyền tạo bài, tương tác & xem dữ liệu</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
+                <button
+                  type="button"
+                  onClick={() => setEditingMember(null)}
+                  className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {updating && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  {updating ? 'Đang lưu...' : 'Lưu Thay Đổi'}
                 </button>
               </div>
             </form>

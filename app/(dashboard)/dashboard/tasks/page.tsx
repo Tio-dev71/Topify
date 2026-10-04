@@ -13,7 +13,12 @@ import {
   Trash2,
   X,
   CheckSquare,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Edit2,
+  FileText,
+  User,
+  Tag
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -45,6 +50,20 @@ export default function TasksPage() {
     priority: 'MEDIUM',
     dueDate: '',
   });
+
+  // View Task Modal State
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
+
+  // Edit Task Modal State
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    priority: 'MEDIUM' as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
+    status: 'TODO' as 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE',
+    dueDate: '',
+  });
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   useEffect(() => {
     fetchTasks();
@@ -173,17 +192,79 @@ export default function TasksPage() {
     }
   };
 
+  const openEditModal = (task: Task) => {
+    setEditingTask(task);
+    setEditFormData({
+      title: task.title,
+      description: task.description || '',
+      priority: task.priority,
+      status: task.status,
+      dueDate: task.dueDate ? format(new Date(task.dueDate), 'yyyy-MM-dd') : '',
+    });
+  };
+
+  const handleUpdateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask) return;
+    if (!editFormData.title.trim()) {
+      return toast.error('Vui lòng nhập tên công việc');
+    }
+
+    setIsEditSubmitting(true);
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: editingTask.id,
+          title: editFormData.title.trim(),
+          description: editFormData.description.trim() || null,
+          priority: editFormData.priority,
+          status: editFormData.status,
+          dueDate: editFormData.dueDate ? new Date(editFormData.dueDate).toISOString() : null,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const updatedTask = data.task || {
+          ...editingTask,
+          title: editFormData.title.trim(),
+          description: editFormData.description.trim() || null,
+          priority: editFormData.priority,
+          status: editFormData.status,
+          dueDate: editFormData.dueDate ? new Date(editFormData.dueDate).toISOString() : null,
+        };
+
+        setTasks(prev => prev.map(t => t.id === editingTask.id ? { ...t, ...updatedTask } : t));
+        if (viewingTask?.id === editingTask.id) {
+          setViewingTask(prev => prev ? { ...prev, ...updatedTask } : null);
+        }
+        toast.success('Đã cập nhật công việc thành công');
+        setEditingTask(null);
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Cập nhật thất bại');
+      }
+    } catch {
+      toast.error('Lỗi kết nối máy chủ');
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  };
+
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case 'URGENT':
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-red-500 bg-red-500/10 border-red-500/20 whitespace-nowrap inline-flex items-center">Khẩn cấp</span>;
       case 'HIGH':
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-red-500 bg-red-500/10 border-red-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-orange-500 bg-orange-500/10 border-orange-500/20 whitespace-nowrap inline-flex items-center">Ưu tiên cao</span>;
       case 'MEDIUM':
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-yellow-500 bg-yellow-500/10 border-yellow-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-blue-500 bg-blue-500/10 border-blue-500/20 whitespace-nowrap inline-flex items-center">Trung bình</span>;
       case 'LOW':
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-blue-500 bg-blue-500/10 border-blue-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-zinc-500 bg-zinc-500/10 border-zinc-500/20 whitespace-nowrap inline-flex items-center">Ưu tiên thấp</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-zinc-500 bg-zinc-500/10 border-zinc-500/20 uppercase whitespace-nowrap inline-flex items-center">{priority}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-xs font-medium border text-zinc-500 bg-zinc-500/10 border-zinc-500/20 whitespace-nowrap inline-flex items-center">{priority}</span>;
     }
   };
 
@@ -313,15 +394,17 @@ export default function TasksPage() {
                     <td className="px-6 py-4 min-w-[280px] max-w-[400px]">
                       <div className="truncate">
                         <span 
-                          title={task.title}
-                          className={`font-semibold text-sm block truncate ${task.status === 'DONE' ? 'text-[var(--color-muted-foreground)] line-through' : 'text-[var(--color-foreground)]'}`}
+                          onClick={() => setViewingTask(task)}
+                          title={`Xem chi tiết: ${task.title}`}
+                          className={`font-semibold text-sm block truncate cursor-pointer hover:text-[var(--color-primary)] transition-colors ${task.status === 'DONE' ? 'text-[var(--color-muted-foreground)] line-through' : 'text-[var(--color-foreground)]'}`}
                         >
                           {task.title}
                         </span>
                         {task.description && (
                           <p 
+                            onClick={() => setViewingTask(task)}
                             title={task.description}
-                            className="text-xs text-[var(--color-muted-foreground)] truncate mt-0.5"
+                            className="text-xs text-[var(--color-muted-foreground)] truncate mt-0.5 cursor-pointer hover:text-[var(--color-foreground)] transition-colors"
                           >
                             {task.description}
                           </p>
@@ -346,14 +429,30 @@ export default function TasksPage() {
                         {task.createdBy?.name || 'Hệ thống'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap w-24">
-                      <button 
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                        title="Xóa công việc"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <td className="px-6 py-4 text-right whitespace-nowrap w-28">
+                      <div className="flex items-center justify-end gap-1">
+                        <button 
+                          onClick={() => setViewingTask(task)}
+                          className="p-1.5 text-zinc-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 rounded-lg transition-colors"
+                          title="Xem chi tiết"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => openEditModal(task)}
+                          className="p-1.5 text-zinc-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors"
+                          title="Chỉnh sửa"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteTask(task.id)}
+                          className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Xóa công việc"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -415,10 +514,10 @@ export default function TasksPage() {
                     onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                   >
-                    <option value="LOW">Thấp (LOW)</option>
-                    <option value="MEDIUM">Vừa (MEDIUM)</option>
-                    <option value="HIGH">Cao (HIGH)</option>
-                    <option value="URGENT">Khẩn cấp (URGENT)</option>
+                    <option value="LOW">Ưu tiên thấp</option>
+                    <option value="MEDIUM">Trung bình</option>
+                    <option value="HIGH">Ưu tiên cao</option>
+                    <option value="URGENT">Khẩn cấp</option>
                   </select>
                 </div>
 
@@ -449,6 +548,228 @@ export default function TasksPage() {
                   className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50"
                 >
                   {submitting ? 'Đang lưu...' : 'Thêm công việc'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Task Modal */}
+      {viewingTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 animate-in fade-in duration-200">
+            <div className="flex justify-between items-start pb-3 border-b border-[var(--color-border)]">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+                    Mã: #{viewingTask.id.slice(0, 8)}
+                  </span>
+                  {getPriorityBadge(viewingTask.priority)}
+                </div>
+                <h3 className="text-lg font-bold text-[var(--color-foreground)] mt-2">
+                  {viewingTask.title}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setViewingTask(null)}
+                className="text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] p-1 rounded-lg hover:bg-[var(--color-muted)] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Status banner with quick toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
+                <div className="flex items-center gap-2.5">
+                  {getStatusIcon(viewingTask.status)}
+                  <div>
+                    <span className="text-xs text-[var(--color-muted-foreground)] block">Trạng thái</span>
+                    <span className="text-sm font-semibold text-[var(--color-foreground)]">
+                      {viewingTask.status === 'TODO' ? 'Cần làm (TODO)' :
+                       viewingTask.status === 'IN_PROGRESS' ? 'Đang thực hiện' :
+                       viewingTask.status === 'IN_REVIEW' ? 'Đang xem xét' : 'Đã hoàn thành'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    handleCycleStatus(viewingTask);
+                    const nextMap: Record<string, any> = { TODO: 'IN_PROGRESS', IN_PROGRESS: 'DONE', IN_REVIEW: 'DONE', DONE: 'TODO' };
+                    setViewingTask({ ...viewingTask, status: nextMap[viewingTask.status] || 'TODO' });
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] transition-colors"
+                >
+                  Chuyển tiếp
+                </button>
+              </div>
+
+              {/* Description */}
+              <div>
+                <span className="text-xs font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider block mb-1.5">
+                  Mô tả chi tiết
+                </span>
+                <div className="p-3.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] text-sm text-[var(--color-foreground)] min-h-[80px] whitespace-pre-wrap">
+                  {viewingTask.description || <span className="text-[var(--color-muted-foreground)] italic">Không có mô tả nào cho công việc này.</span>}
+                </div>
+              </div>
+
+              {/* Meta details */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-1">
+                  <span className="text-[var(--color-muted-foreground)] block flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" /> Hạn chót
+                  </span>
+                  <span className="font-semibold text-[var(--color-foreground)] block">
+                    {viewingTask.dueDate ? format(new Date(viewingTask.dueDate), 'dd/MM/yyyy') : 'Không thời hạn'}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-1">
+                  <span className="text-[var(--color-muted-foreground)] block flex items-center gap-1">
+                    <User className="w-3.5 h-3.5" /> Người tạo
+                  </span>
+                  <span className="font-semibold text-[var(--color-foreground)] block truncate">
+                    {viewingTask.createdBy?.name || 'Hệ thống'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-xs text-[var(--color-muted-foreground)]">
+                Ngày tạo: {format(new Date(viewingTask.createdAt), 'dd/MM/yyyy HH:mm')}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3 border-t border-[var(--color-border)]">
+              <button
+                type="button"
+                onClick={() => setViewingTask(null)}
+                className="flex-1 px-4 py-2.5 border border-[var(--color-border)] rounded-xl text-sm font-medium hover:bg-[var(--color-muted)] text-[var(--color-foreground)] transition-colors"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = viewingTask;
+                  setViewingTask(null);
+                  openEditModal(target);
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--color-primary)] text-white rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                <Edit2 className="w-4 h-4" />
+                Chỉnh sửa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Task Modal */}
+      {editingTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 animate-in fade-in duration-200">
+            <div className="flex justify-between items-center pb-3 border-b border-[var(--color-border)]">
+              <div>
+                <h3 className="text-lg font-semibold text-[var(--color-foreground)]">Chỉnh sửa công việc</h3>
+                <p className="text-xs text-[var(--color-muted-foreground)]">Cập nhật nội dung, tiến độ và hạn chót</p>
+              </div>
+              <button 
+                onClick={() => setEditingTask(null)}
+                className="text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] p-1 rounded-lg hover:bg-[var(--color-muted)]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateTask} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-foreground)] mb-1">
+                  Tên công việc *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Lên nội dung bài viết Fanpage..."
+                  value={editFormData.title}
+                  onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-foreground)] mb-1">
+                  Mô tả chi tiết
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Ghi chú chi tiết yêu cầu công việc..."
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-foreground)] mb-1">
+                    Trạng thái
+                  </label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as any })}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                  >
+                    <option value="TODO">Cần làm</option>
+                    <option value="IN_PROGRESS">Đang làm</option>
+                    <option value="IN_REVIEW">Xem xét</option>
+                    <option value="DONE">Hoàn thành</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-foreground)] mb-1">
+                    Độ ưu tiên
+                  </label>
+                  <select
+                    value={editFormData.priority}
+                    onChange={(e) => setEditFormData({ ...editFormData, priority: e.target.value as any })}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                  >
+                    <option value="LOW">Ưu tiên thấp</option>
+                    <option value="MEDIUM">Trung bình</option>
+                    <option value="HIGH">Ưu tiên cao</option>
+                    <option value="URGENT">Khẩn cấp</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-foreground)] mb-1">
+                    Hạn chót
+                  </label>
+                  <input
+                    type="date"
+                    value={editFormData.dueDate}
+                    onChange={(e) => setEditFormData({ ...editFormData, dueDate: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
+                <button
+                  type="button"
+                  onClick={() => setEditingTask(null)}
+                  className="px-4 py-2 border border-[var(--color-border)] rounded-xl text-sm font-medium hover:bg-[var(--color-muted)] text-[var(--color-foreground)]"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditSubmitting}
+                  className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                >
+                  {isEditSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>

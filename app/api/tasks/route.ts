@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/tasks - Update task status
+// PATCH /api/tasks - Update task
 export async function PATCH(req: NextRequest) {
   try {
     const session = await auth();
@@ -107,20 +107,32 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { taskId, status, priority, assigneeId } = body;
+    const { taskId, id, title, description, dueDate, status, priority, assigneeId } = body;
+    const targetId = taskId || id;
     const workspaceId = (session.user as any).workspaceId;
 
-    if (!taskId) {
+    if (!targetId) {
       return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
     }
 
+    const existing = await prisma.task.findFirst({
+      where: { id: targetId, workspaceId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
     const data: any = {};
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (dueDate !== undefined) data.dueDate = dueDate ? new Date(dueDate) : null;
     if (status) data.status = status;
     if (priority) data.priority = priority;
     if (assigneeId !== undefined) data.assigneeId = assigneeId;
 
     const task = await prisma.task.update({
-      where: { id: taskId },
+      where: { id: targetId },
       data,
       include: {
         assignee: { select: { name: true, image: true } },

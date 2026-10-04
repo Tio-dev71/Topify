@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, LayoutTemplate, Trash2, Edit, X } from 'lucide-react';
+import { Plus, LayoutTemplate, Trash2, Edit, X, Eye, Copy, Check } from 'lucide-react';
 
 type Template = {
   id: string;
@@ -19,7 +19,9 @@ export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal State
+  // View & Edit Modal State
+  const [viewingTemplate, setViewingTemplate] = useState<Template | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -152,7 +154,13 @@ export default function TemplatesPage() {
           {templates.map(template => (
             <div key={template.id} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-5 hover:border-[#5B3DF5]/50 transition-colors flex flex-col">
               <div className="flex justify-between items-start mb-3">
-                <h3 className="font-bold text-[var(--color-foreground)] truncate pr-4">{template.name}</h3>
+                <h3 
+                  onClick={() => setViewingTemplate(template)}
+                  className="font-bold text-[var(--color-foreground)] truncate pr-4 cursor-pointer hover:text-[#5B3DF5] transition-colors"
+                  title="Bấm để xem chi tiết template"
+                >
+                  {template.name}
+                </h3>
                 <span className="px-2 py-1 bg-[var(--color-muted)] text-[var(--color-muted-foreground)] rounded-lg text-xs font-medium uppercase">
                   {template.postType}
                 </span>
@@ -160,7 +168,10 @@ export default function TemplatesPage() {
               {template.description && (
                 <p className="text-sm text-[var(--color-muted-foreground)] mb-4 line-clamp-2">{template.description}</p>
               )}
-              <div className="bg-[var(--color-background)] rounded-xl p-3 mb-4 flex-1">
+              <div 
+                onClick={() => setViewingTemplate(template)}
+                className="bg-[var(--color-background)] rounded-xl p-3 mb-4 flex-1 cursor-pointer hover:ring-1 hover:ring-[#5B3DF5]/30 transition-all"
+              >
                 <p className="text-xs text-[var(--color-foreground)] whitespace-pre-wrap line-clamp-4">{template.caption || '(Không có caption)'}</p>
                 {template.hashtags && <p className="text-xs text-blue-500 mt-2 line-clamp-1">{template.hashtags}</p>}
                 {template.cta && <p className="text-xs text-green-500 mt-1 line-clamp-1">{template.cta}</p>}
@@ -169,11 +180,26 @@ export default function TemplatesPage() {
                 <p className="text-xs text-[var(--color-muted-foreground)]">
                   {new Date(template.createdAt).toLocaleDateString()}
                 </p>
-                <div className="flex gap-2">
-                  <button onClick={() => openEditModal(template)} className="p-2 hover:bg-[var(--color-muted)] rounded-lg text-[var(--color-muted-foreground)] transition-colors">
+                <div className="flex gap-1.5">
+                  <button 
+                    onClick={() => setViewingTemplate(template)} 
+                    className="p-2 hover:bg-[var(--color-muted)] rounded-lg text-[var(--color-muted-foreground)] hover:text-[#5B3DF5] transition-colors"
+                    title="Xem chi tiết"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => openEditModal(template)} 
+                    className="p-2 hover:bg-[var(--color-muted)] rounded-lg text-[var(--color-muted-foreground)] hover:text-amber-500 transition-colors"
+                    title="Chỉnh sửa"
+                  >
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(template.id)} className="p-2 hover:bg-red-500/10 hover:text-red-500 rounded-lg text-[var(--color-muted-foreground)] transition-colors">
+                  <button 
+                    onClick={() => handleDelete(template.id)} 
+                    className="p-2 hover:bg-red-500/10 hover:text-red-500 rounded-lg text-[var(--color-muted-foreground)] transition-colors"
+                    title="Xóa"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -303,6 +329,166 @@ export default function TemplatesPage() {
               >
                 {submitting ? 'Đang lưu...' : 'Lưu Template'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Template Modal */}
+      {viewingTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-[var(--color-border)] bg-[var(--color-muted)]/30">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-[#5B3DF5]/10 text-[#5B3DF5] rounded-2xl">
+                  <LayoutTemplate className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-[var(--color-foreground)]">Chi tiết Mẫu nội dung (Template)</h2>
+                  <p className="text-xs text-[var(--color-muted-foreground)]">Định dạng sẵn sàng để sao chép hoặc tái sử dụng</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setViewingTemplate(null)} 
+                className="p-2 hover:bg-[var(--color-muted)] rounded-xl text-[var(--color-muted-foreground)] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-5">
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                    Tên template
+                  </span>
+                  <div className="flex gap-2">
+                    <span className="px-2.5 py-0.5 bg-[var(--color-muted)] text-[var(--color-muted-foreground)] rounded-lg text-xs font-semibold uppercase">
+                      {viewingTemplate.postType}
+                    </span>
+                    {viewingTemplate.platform && (
+                      <span className="px-2.5 py-0.5 bg-blue-500/10 text-blue-500 rounded-lg text-xs font-semibold">
+                        {viewingTemplate.platform}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-[var(--color-foreground)]">{viewingTemplate.name}</h3>
+                {viewingTemplate.description && (
+                  <p className="text-sm text-[var(--color-muted-foreground)] mt-1">{viewingTemplate.description}</p>
+                )}
+              </div>
+
+              {/* Caption */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-[var(--color-foreground)]">Nội dung Caption mẫu</label>
+                  {viewingTemplate.caption && (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewingTemplate.caption || '');
+                        setCopiedField('caption');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }}
+                      className="flex items-center gap-1 text-xs text-[#5B3DF5] hover:underline font-medium"
+                    >
+                      {copiedField === 'caption' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedField === 'caption' ? 'Đã chép' : 'Sao chép'}
+                    </button>
+                  )}
+                </div>
+                <div className="p-4 rounded-2xl bg-[var(--color-background)] border border-[var(--color-border)]">
+                  <p className="text-sm text-[var(--color-foreground)] whitespace-pre-wrap leading-relaxed">
+                    {viewingTemplate.caption || '(Chưa có nội dung caption)'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Hashtags */}
+              {viewingTemplate.hashtags && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-[var(--color-foreground)]">Hashtags</label>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewingTemplate.hashtags || '');
+                        setCopiedField('hashtags');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }}
+                      className="flex items-center gap-1 text-xs text-blue-500 hover:underline font-medium"
+                    >
+                      {copiedField === 'hashtags' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedField === 'hashtags' ? 'Đã chép' : 'Sao chép'}
+                    </button>
+                  </div>
+                  <p className="text-sm text-blue-500 font-mono bg-blue-50/50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/40">
+                    {viewingTemplate.hashtags}
+                  </p>
+                </div>
+              )}
+
+              {/* CTA */}
+              {viewingTemplate.cta && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-[var(--color-foreground)]">Lời kêu gọi hành động (CTA)</label>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewingTemplate.cta || '');
+                        setCopiedField('cta');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }}
+                      className="flex items-center gap-1 text-xs text-emerald-500 hover:underline font-medium"
+                    >
+                      {copiedField === 'cta' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedField === 'cta' ? 'Đã chép' : 'Sao chép'}
+                    </button>
+                  </div>
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/40">
+                    {viewingTemplate.cta}
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-2 text-xs text-[var(--color-muted-foreground)]">
+                Ngày tạo: {new Date(viewingTemplate.createdAt).toLocaleString()}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-[var(--color-border)] bg-[var(--color-muted)]/20 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = viewingTemplate.id;
+                  setViewingTemplate(null);
+                  handleDelete(id);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xóa template
+              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setViewingTemplate(null)}
+                  className="px-4 py-2 border border-[var(--color-border)] rounded-xl text-sm font-medium hover:bg-[var(--color-muted)] text-[var(--color-foreground)] transition-colors"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingTemplate;
+                    setViewingTemplate(null);
+                    openEditModal(target);
+                  }}
+                  className="flex items-center gap-2 px-5 py-2 bg-[#5B3DF5] text-white rounded-xl text-sm font-semibold shadow-md hover:bg-[#5B3DF5]/90 transition-all"
+                >
+                  <Edit className="w-4 h-4" />
+                  Chỉnh sửa template
+                </button>
+              </div>
             </div>
           </div>
         </div>

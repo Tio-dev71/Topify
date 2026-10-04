@@ -107,6 +107,122 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// PATCH /api/crm/pipelines - Update pipeline and stages
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, name, description, isDefault, stages } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Pipeline ID is required' }, { status: 400 });
+    }
+
+    const workspaceId = (session.user as any).workspaceId;
+    const existing = await prisma.pipeline.findFirst({
+      where: { id, workspaceId },
+      include: { stages: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Quy trình không tồn tại hoặc không thuộc workspace của bạn' }, { status: 404 });
+    }
+
+    // If setting as default, unset other default pipelines in workspace
+    if (isDefault) {
+      await prisma.pipeline.updateMany({
+        where: { workspaceId, id: { not: id } },
+        data: { isDefault: false },
+      });
+    }
+
+    // Update pipeline basics
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name.trim();
+    if (description !== undefined) updateData.description = description;
+    if (isDefault !== undefined) updateData.isDefault = isDefault;
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.pipeline.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
+    // Handle stages update if provided
+    if (Array.isArray(stages)) {
+      const stageDelegate = (prisma.pipelineStage || (prisma as any).stage);
+      const keepStageIds = new Set<string>();
+
+      for (let i = 0; i < stages.length; i++) {
+        const s = stages[i];
+        if (s.id && existing.stages.some(es => es.id === s.id)) {
+          // Update existing stage
+          keepStageIds.add(s.id);
+          await stageDelegate.update({
+            where: { id: s.id },
+            data: {
+              name: s.name,
+              sortOrder: s.sortOrder ?? i,
+              color: s.color,
+            },
+          });
+        } else if (s.name) {
+          // Create new stage
+          const newStage = await stageDelegate.create({
+            data: {
+              name: s.name,
+              sortOrder: s.sortOrder ?? i,
+              color: s.color || '#3B82F6',
+              pipelineId: id,
+            },
+          });
+          keepStageIds.add(newStage.id);
+        }
+      }
+
+      // Check if any old stages were omitted and delete them if no deals attached
+      for (const oldStage of existing.stages) {
+        if (!keepStageIds.has(oldStage.id)) {
+          const dealCount = await prisma.deal.count({ where: { stageId: oldStage.id } });
+          if (dealCount === 0) {
+            await stageDelegate.delete({ where: { id: oldStage.id } });
+          }
+        }
+      }
+    }
+
+    const updated = await prisma.pipeline.findUnique({
+      where: { id },
+      include: {
+        stages: { orderBy: { sortOrder: 'asc' } },
+        _count: { select: { deals: true } },
+      },
+    });
+
+    await recordAuditLog({
+      action: 'PIPELINE.UPDATE',
+      entityType: 'Pipeline',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: {
+        message: `Cập nhật quy trình bán hàng: ${updated?.name || id}`,
+        stagesCount: updated?.stages?.length,
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // DELETE /api/crm/pipelines?id=...
 export async function DELETE(req: NextRequest) {
   try {
@@ -137,7 +253,8 @@ export async function DELETE(req: NextRequest) {
       select: { name: true },
     });
 
-    await prisma.stage.deleteMany({
+    const stageDelegate = (prisma.pipelineStage || (prisma as any).stage);
+    await stageDelegate.deleteMany({
       where: { pipelineId: id },
     });
 

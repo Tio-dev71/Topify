@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { id, status, name, budget } = body;
+    const { id, status, name, description, objective, startDate, endDate, budget } = body;
     const workspaceId = (session.user as any).workspaceId;
 
     if (!id) {
@@ -100,10 +100,14 @@ export async function PATCH(req: NextRequest) {
     const data: any = {};
     if (status) data.status = status;
     if (name) data.name = name;
-    if (budget !== undefined) data.budget = budget;
+    if (description !== undefined) data.description = description;
+    if (objective !== undefined) data.objective = objective;
+    if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
+    if (endDate !== undefined) data.endDate = endDate ? new Date(endDate) : null;
+    if (budget !== undefined) data.budget = Number(budget);
 
-    const campaign = await prisma.campaign.updateMany({
-      where: { id, workspaceId },
+    const campaign = await prisma.campaign.update({
+      where: { id },
       data,
     });
 

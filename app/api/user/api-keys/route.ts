@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       if (existingKey) {
         apiKey = await prisma.userApiKey.update({
           where: { id: existingKey.id },
-          update: { encrypted, iv, authTag, hint }
+          data: { encrypted, iv, authTag, hint }
         });
       } else {
         apiKey = await prisma.userApiKey.create({

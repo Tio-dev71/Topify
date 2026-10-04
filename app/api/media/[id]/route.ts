@@ -46,6 +46,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
+// PATCH /api/media/[id]
+export const PATCH = PUT;
+
 // DELETE /api/media/[id]
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

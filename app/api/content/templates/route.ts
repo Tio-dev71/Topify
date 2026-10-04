@@ -69,6 +69,9 @@ export async function PUT(req: NextRequest) {
   }
 }
 
+// PATCH /api/content/templates
+export const PATCH = PUT;
+
 // DELETE /api/content/templates?id=xxx
 export async function DELETE(req: NextRequest) {
   try {

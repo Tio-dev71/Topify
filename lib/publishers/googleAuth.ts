@@ -9,7 +9,7 @@ export async function getValidAccessToken(socialAccount: SocialAccount): Promise
   // Check if token is expired or expires in less than 5 minutes
   const isExpired = socialAccount.expiresAt && new Date(socialAccount.expiresAt).getTime() < Date.now() + 5 * 60 * 1000;
   
-  if (!isExpired) {
+  if (!isExpired && socialAccount.status === 'CONNECTED') {
     return token;
   }
 
@@ -52,6 +52,7 @@ export async function getValidAccessToken(socialAccount: SocialAccount): Promise
     data: {
       accessToken: encryptedAccessToken,
       expiresAt: newExpiresAt,
+      status: 'CONNECTED',
     },
   });
 

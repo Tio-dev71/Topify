@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Eye, Edit, Trash2, LayoutGrid, RefreshCcw, Video, CalendarDays, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Trash2, LayoutGrid, RefreshCcw, Video, CalendarDays, MoreHorizontal, X, Copy, Check, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 type Post = {
   id: string;
@@ -18,6 +19,8 @@ type Post = {
   platforms: { platform: string; status: string }[];
   createdBy: { name: string | null; email: string };
   videoAsset?: { originalFileName: string; storageUrl: string };
+  hashtags?: string | null;
+  firstComment?: string | null;
 };
 
 function safeFormatDate(
@@ -45,6 +48,20 @@ export default function PostsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [refreshing, setRefreshing] = useState(false);
+
+  // View & Edit Modal States
+  const [viewingPost, setViewingPost] = useState<Post | null>(null);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [copiedCaption, setCopiedCaption] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    caption: '',
+    hashtags: '',
+    firstComment: '',
+    scheduledAt: '',
+    status: 'DRAFT',
+  });
 
   const fetchPosts = async (silent = false) => {
     try {
@@ -87,6 +104,82 @@ export default function PostsPage() {
   const handleRefresh = () => {
     setRefreshing(true);
     fetchPosts();
+  };
+
+  const handleOpenView = (post: Post) => {
+    setViewingPost(post);
+    setCopiedCaption(false);
+  };
+
+  const handleOpenEdit = (post: Post) => {
+    setEditingPost(post);
+    setEditFormData({
+      title: post.title || '',
+      caption: post.caption || '',
+      hashtags: post.hashtags || '',
+      firstComment: post.firstComment || '',
+      scheduledAt: post.scheduledAt ? new Date(post.scheduledAt).toISOString().slice(0, 16) : '',
+      status: post.status || 'DRAFT',
+    });
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPost) return;
+    if (!editFormData.title.trim()) {
+      toast.error('Vui lòng nhập tiêu đề bài viết');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/posts/${editingPost.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editFormData.title.trim(),
+          caption: editFormData.caption,
+          hashtags: editFormData.hashtags,
+          firstComment: editFormData.firstComment,
+          scheduledAt: editFormData.scheduledAt ? new Date(editFormData.scheduledAt).toISOString() : null,
+          status: editFormData.status,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Đã cập nhật bài viết thành công');
+        setEditingPost(null);
+        fetchPosts(true);
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Cập nhật bài viết thất bại');
+      }
+    } catch (_err) {
+      toast.error('Lỗi kết nối khi cập nhật bài viết');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeletePost = async (post: Post) => {
+    if (!confirm(`Bạn có chắc muốn xóa bài viết "${post.title}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/posts/${post.id}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        toast.success('Đã xóa bài viết thành công');
+        setPosts((prev) => prev.filter((p) => p.id !== post.id));
+        if (viewingPost?.id === post.id) setViewingPost(null);
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Xóa bài viết thất bại');
+      }
+    } catch (_err) {
+      toast.error('Lỗi kết nối khi xóa bài viết');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -262,7 +355,11 @@ export default function PostsPage() {
                     {/* Main Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-1">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">
+                        <h3 
+                          onClick={() => handleOpenView(post)}
+                          className="text-lg font-bold text-gray-900 dark:text-white truncate flex-1 min-w-0 cursor-pointer hover:text-[#5B3DF5] transition-colors" 
+                          title={post.title}
+                        >
                           {post.title}
                         </h3>
                         {getStatusBadge(post.status)}
@@ -305,13 +402,25 @@ export default function PostsPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <button className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 hover:text-[#5B3DF5] hover:border-[#5B3DF5]/30 hover:shadow-md transition-all" title="Xem chi tiết">
+                        <button 
+                          onClick={() => handleOpenView(post)}
+                          className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 hover:text-[#5B3DF5] hover:border-[#5B3DF5]/30 hover:shadow-md transition-all" 
+                          title="Xem chi tiết"
+                        >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 hover:text-amber-500 hover:border-amber-500/30 hover:shadow-md transition-all" title="Chỉnh sửa">
+                        <button 
+                          onClick={() => handleOpenEdit(post)}
+                          className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 hover:text-amber-500 hover:border-amber-500/30 hover:shadow-md transition-all" 
+                          title="Chỉnh sửa"
+                        >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 hover:text-rose-500 hover:bg-rose-50 hover:border-rose-200 dark:hover:bg-rose-500/10 dark:hover:border-rose-500/30 transition-all" title="Xoá">
+                        <button 
+                          onClick={() => handleDeletePost(post)}
+                          className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-500 hover:text-rose-500 hover:bg-rose-50 hover:border-rose-200 dark:hover:bg-rose-500/10 dark:hover:border-rose-500/30 transition-all" 
+                          title="Xoá"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -323,6 +432,302 @@ export default function PostsPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* View Post Modal */}
+      {viewingPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-[#5B3DF5]/10 text-[#5B3DF5] rounded-2xl">
+                  <LayoutGrid className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Chi tiết Bài viết</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">ID: {viewingPost.id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setViewingPost(null)}
+                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Header Title & Status */}
+              <div>
+                <div className="flex items-center justify-between gap-4 mb-2">
+                  <span className="text-xs uppercase font-semibold text-gray-400 tracking-wider">
+                    Loại: {viewingPost.postType}
+                  </span>
+                  {getStatusBadge(viewingPost.status)}
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{viewingPost.title}</h3>
+              </div>
+
+              {/* Video Asset Preview if any */}
+              {viewingPost.videoAsset && viewingPost.videoAsset.storageUrl && (
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/80 border border-gray-200/80 dark:border-gray-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Video className="w-5 h-5 text-[#5B3DF5]" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-xs">
+                      {viewingPost.videoAsset.originalFileName || 'Tệp Video đính kèm'}
+                    </span>
+                  </div>
+                  <a 
+                    href={viewingPost.videoAsset.storageUrl} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-[#5B3DF5] font-semibold hover:underline"
+                  >
+                    Xem video <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
+              {/* Caption */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-900 dark:text-white">Nội dung Caption</label>
+                  {viewingPost.caption && (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(viewingPost.caption || '');
+                        setCopiedCaption(true);
+                        toast.success('Đã sao chép nội dung caption');
+                        setTimeout(() => setCopiedCaption(false), 2000);
+                      }}
+                      className="flex items-center gap-1 text-xs text-[#5B3DF5] hover:underline font-medium"
+                    >
+                      {copiedCaption ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedCaption ? 'Đã sao chép' : 'Sao chép'}
+                    </button>
+                  )}
+                </div>
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200/60 dark:border-gray-800">
+                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                    {viewingPost.caption || '(Chưa có nội dung caption)'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Hashtags */}
+              {viewingPost.hashtags && (
+                <div>
+                  <label className="text-sm font-semibold text-gray-900 dark:text-white block mb-2">Hashtags</label>
+                  <p className="text-sm text-blue-500 font-medium bg-blue-50/50 dark:bg-blue-900/20 px-3.5 py-2 rounded-xl border border-blue-100 dark:border-blue-800/40">
+                    {viewingPost.hashtags}
+                  </p>
+                </div>
+              )}
+
+              {/* First comment */}
+              {viewingPost.firstComment && (
+                <div>
+                  <label className="text-sm font-semibold text-gray-900 dark:text-white block mb-2">Bình luận đầu tiên (First Comment)</label>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-3.5 rounded-xl border border-gray-200/60 dark:border-gray-800 whitespace-pre-wrap">
+                    {viewingPost.firstComment}
+                  </p>
+                </div>
+              )}
+
+              {/* Platforms */}
+              <div>
+                <label className="text-sm font-semibold text-gray-900 dark:text-white block mb-2">Nền tảng xuất bản</label>
+                <div className="flex flex-wrap gap-2">
+                  {(viewingPost.platforms || []).map((p, i) => {
+                    const platName = typeof p === 'string' ? p : p?.platform || '';
+                    const platStatus = typeof p === 'string' ? '' : p?.status || '';
+                    return (
+                      <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200/60 dark:border-gray-800 text-xs font-medium">
+                        <span className="font-bold text-gray-800 dark:text-gray-200">{platName}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 uppercase">
+                          {platStatus || 'PENDING'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Meta Timestamps */}
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
+                <div>
+                  <span className="block text-gray-400 mb-0.5">Ngày tạo</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                    {safeFormatDate(viewingPost.createdAt, 'dd/MM/yyyy HH:mm')}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-gray-400 mb-0.5">Thời gian lên lịch</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">
+                    {viewingPost.scheduledAt ? safeFormatDate(viewingPost.scheduledAt, 'dd/MM/yyyy HH:mm') : 'Đăng ngay'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
+              <button
+                onClick={() => handleDeletePost(viewingPost)}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xóa bài viết
+              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setViewingPost(null)}
+                  className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors"
+                >
+                  Đóng
+                </button>
+                <button
+                  onClick={() => {
+                    const target = viewingPost;
+                    setViewingPost(null);
+                    handleOpenEdit(target);
+                  }}
+                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-[#5B3DF5] to-[#7B61FF] text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all"
+                >
+                  <Edit className="w-4 h-4" />
+                  Chỉnh sửa
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Post Modal */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500/10 text-amber-600 rounded-2xl">
+                  <Edit className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Chỉnh sửa Bài viết</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Cập nhật nội dung và lịch đăng</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setEditingPost(null)}
+                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-6 overflow-y-auto space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-900 dark:text-white block mb-1.5">
+                  Tiêu đề bài viết *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.title}
+                  onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                  placeholder="Nhập tiêu đề bài viết..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/30 focus:border-[#5B3DF5]"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-900 dark:text-white block mb-1.5">
+                  Nội dung Caption
+                </label>
+                <textarea
+                  rows={4}
+                  value={editFormData.caption}
+                  onChange={(e) => setEditFormData({ ...editFormData, caption: e.target.value })}
+                  placeholder="Nhập caption bài viết..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/30 focus:border-[#5B3DF5]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-900 dark:text-white block mb-1.5">
+                    Hashtags
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.hashtags}
+                    onChange={(e) => setEditFormData({ ...editFormData, hashtags: e.target.value })}
+                    placeholder="#topify #viral"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/30 focus:border-[#5B3DF5]"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-900 dark:text-white block mb-1.5">
+                    Trạng thái
+                  </label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/30 focus:border-[#5B3DF5]"
+                  >
+                    <option value="DRAFT">Bản nháp (DRAFT)</option>
+                    <option value="PENDING_REVIEW">Chờ duyệt (PENDING_REVIEW)</option>
+                    <option value="SCHEDULED">Đã lên lịch (SCHEDULED)</option>
+                    <option value="APPROVED">Đã duyệt (APPROVED)</option>
+                    <option value="PUBLISHED">Đã xuất bản (PUBLISHED)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-900 dark:text-white block mb-1.5">
+                  Thời gian lên lịch (Tuỳ chọn)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editFormData.scheduledAt}
+                  onChange={(e) => setEditFormData({ ...editFormData, scheduledAt: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/30 focus:border-[#5B3DF5]"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-900 dark:text-white block mb-1.5">
+                  Bình luận đầu tiên (First Comment)
+                </label>
+                <textarea
+                  rows={2}
+                  value={editFormData.firstComment}
+                  onChange={(e) => setEditFormData({ ...editFormData, firstComment: e.target.value })}
+                  placeholder="Để lại bình luận ghim đầu tiên..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/30 focus:border-[#5B3DF5]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingPost(null)}
+                  disabled={submitting}
+                  className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-6 py-2 bg-gradient-to-r from-[#5B3DF5] to-[#7B61FF] text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-all disabled:opacity-50"
+                >
+                  {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

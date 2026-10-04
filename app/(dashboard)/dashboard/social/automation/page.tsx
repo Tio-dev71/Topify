@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, RefreshCw, PlayCircle, Zap, CheckCircle2, Clock, AlertCircle, Search, Settings, Eye, Edit2, X, Users, Calendar } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, PlayCircle, StopCircle, Zap, CheckCircle2, Clock, AlertCircle, Search, Settings, Eye, Edit2, X, Users, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 type AutomationTask = {
@@ -196,6 +196,72 @@ export default function AutomationPage() {
       toast.error('Lỗi khi cập nhật tác vụ');
     } finally {
       setUpdatingTask(false);
+    }
+  };
+
+  const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
+
+  const handleRunTask = async (task: AutomationTask) => {
+    if (!task.profileIds || task.profileIds.length === 0) {
+      toast.error('Tác vụ chưa chọn tài khoản Facebook nào. Vui lòng bấm Chỉnh sửa để chọn tài khoản.');
+      return;
+    }
+
+    try {
+      setRunningTaskId(task.id);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'RUNNING' } : t));
+      if (viewingTask && viewingTask.id === task.id) {
+        setViewingTask({ ...viewingTask, status: 'RUNNING' });
+      }
+
+      const res = await fetch('/api/automation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id,
+          accountIds: task.profileIds,
+          config: {
+            type: task.type,
+            ...(task.config || {})
+          }
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        toast.error(data.error || 'Khởi chạy kịch bản thất bại');
+        fetchTasks();
+      } else {
+        toast.success('Đã kích hoạt kịch bản tự động hóa ngầm thành công!');
+        fetchTasks();
+      }
+    } catch (err: any) {
+      toast.error('Lỗi khi kích hoạt tác vụ: ' + (err.message || 'Lỗi kết nối'));
+      fetchTasks();
+    } finally {
+      setRunningTaskId(null);
+    }
+  };
+
+  const handleStopTask = async (task: AutomationTask) => {
+    try {
+      const res = await fetch('/api/automation/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: task.id })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        toast.error(data.error || 'Không thể dừng tác vụ');
+      } else {
+        toast.success('Đã gửi lệnh dừng tác vụ');
+        fetchTasks();
+        if (viewingTask && viewingTask.id === task.id) {
+          setViewingTask({ ...viewingTask, status: 'IDLE' });
+        }
+      }
+    } catch (_err) {
+      toast.error('Lỗi khi gửi lệnh dừng tác vụ');
     }
   };
 
@@ -423,12 +489,24 @@ export default function AutomationPage() {
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
-                            <button 
-                              className="p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg transition-colors"
-                              title="Bắt đầu chạy"
-                            >
-                              <PlayCircle className="w-4 h-4" />
-                            </button>
+                            {task.status === 'RUNNING' ? (
+                              <button 
+                                onClick={() => handleStopTask(task)}
+                                className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                title="Dừng tác vụ"
+                              >
+                                <StopCircle className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => handleRunTask(task)}
+                                disabled={runningTaskId === task.id}
+                                className="p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg transition-colors disabled:opacity-50"
+                                title="Bắt đầu chạy"
+                              >
+                                {runningTaskId === task.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                              </button>
+                            )}
                             <button 
                               onClick={() => handleDelete(task.id)}
                               className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
@@ -683,6 +761,26 @@ export default function AutomationPage() {
                 >
                   Đóng
                 </button>
+                {viewingTask.status === 'RUNNING' ? (
+                  <button 
+                    type="button"
+                    onClick={() => handleStopTask(viewingTask)}
+                    className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-rose-500 hover:bg-rose-400 text-white transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(244,63,94,0.3)]"
+                  >
+                    <StopCircle className="w-4 h-4" />
+                    Dừng Tác Vụ
+                  </button>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => handleRunTask(viewingTask)}
+                    disabled={runningTaskId === viewingTask.id}
+                    className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(99,102,241,0.3)] disabled:opacity-50"
+                  >
+                    {runningTaskId === viewingTask.id ? <RefreshCw className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                    Kích Hoạt Chạy
+                  </button>
+                )}
                 <button 
                   type="button"
                   onClick={() => {

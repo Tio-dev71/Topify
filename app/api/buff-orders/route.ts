@@ -67,6 +67,54 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, url, actionType, targetCount, currentCount, status, config } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
+
+    const data: any = {};
+    if (url) data.url = url;
+    if (actionType) data.actionType = actionType;
+    if (targetCount !== undefined) data.targetCount = parseInt(targetCount);
+    if (currentCount !== undefined) data.currentCount = parseInt(currentCount);
+    if (status) data.status = status;
+    if (config !== undefined) data.config = config;
+
+    const updated = await prisma.buffOrder.update({
+      where: { id },
+      data,
+    });
+
+    await recordAuditLog({
+      action: 'BUFF_ORDER.UPDATE',
+      entityType: 'BuffOrder',
+      entityId: id,
+      userId: session.user.id,
+      workspaceId: (session.user as any).workspaceId,
+      req,
+      metadata: { 
+        message: `Cập nhật đơn Buff dịch vụ: ${updated.actionType} (${updated.targetCount})`,
+        url: updated.url,
+        status: updated.status,
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    console.error('[BUFF_ORDERS_PATCH]', error);
+    return NextResponse.json({ error: error.message || 'Internal error' }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const session = await auth();

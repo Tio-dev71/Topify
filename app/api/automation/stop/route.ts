@@ -23,7 +23,14 @@ export async function POST(req: NextRequest) {
     const profileIds = (task.profileIds as string[]) || [];
     if (profileIds.length > 0) {
       for (const accountId of profileIds) {
-        const account = await prisma.facebookAccount.findUnique({ where: { id: accountId } });
+        const account = await prisma.facebookAccount.findFirst({
+          where: {
+            OR: [
+              { id: accountId },
+              { profileId: accountId }
+            ]
+          }
+        });
         if (account && account.profileId) {
           // Set the stop flag
           browserManager.stopTask(account.profileId);
@@ -31,10 +38,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Update DB status to STOPPED
+    // Update DB status to IDLE
     await prisma.automationTask.update({
       where: { id: taskId },
-      data: { status: 'DONE' }
+      data: { status: 'IDLE' }
     });
 
     await recordAuditLog({

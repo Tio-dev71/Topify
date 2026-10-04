@@ -256,7 +256,7 @@ export default function CompetitorsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || 'Đã cào và cập nhật bài viết mới thành công');
+        toast.success(data.message || 'Đã quét và cập nhật bài viết mới thành công');
         await fetchPosts(selectedPage);
         await fetchPages();
       } else {
@@ -282,7 +282,7 @@ export default function CompetitorsPage() {
           </div>
           <h1 className="text-2xl font-bold text-[var(--color-foreground)] flex items-center gap-2">
             <Target className="w-6 h-6 text-[#5B3DF5]" />
-            Spy Đối Thủ
+            Theo dõi đối thủ (Competitors)
           </h1>
           <p className="text-sm text-[var(--color-muted-foreground)] mt-1">
             Theo dõi fanpage đối thủ, quét bài viết viral và phân tích nội dung
@@ -293,7 +293,7 @@ export default function CompetitorsPage() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[var(--color-foreground)] text-[var(--color-background)] hover:opacity-90 transition-opacity shadow-sm"
         >
           <Plus className="w-4 h-4" />
-          Thêm Fanpage Mới
+          Thêm Fanpage theo dõi
         </button>
       </div>
 
@@ -493,10 +493,10 @@ export default function CompetitorsPage() {
                     onClick={handleSyncPosts}
                     disabled={loadingPosts || !currentUrl.trim()}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 text-xs sm:text-sm bg-[#5B3DF5] hover:bg-[#4C30D4] text-white rounded-xl transition-all font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Truy cập và cào dữ liệu bài viết mới nhất từ link vừa nhập"
+                    title="Truy cập và quét dữ liệu bài viết mới nhất từ link vừa nhập"
                   >
                     <RefreshCw className={`w-4 h-4 ${loadingPosts ? 'animate-spin' : ''}`} />
-                    <span>{loadingPosts ? 'Đang cào dữ liệu...' : 'Quét bài mới'}</span>
+                    <span>{loadingPosts ? 'Đang quét dữ liệu...' : 'Quét bài mới'}</span>
                   </button>
                 </div>
               </div>
@@ -505,7 +505,7 @@ export default function CompetitorsPage() {
                 {loadingPosts ? (
                   <div className="flex flex-col items-center justify-center h-full text-[var(--color-muted-foreground)]">
                     <RefreshCw className="w-8 h-8 animate-spin mb-4 text-[#5B3DF5]" />
-                    <p>Đang truy cập và cào dữ liệu bài viết...</p>
+                    <p>Đang truy cập và quét dữ liệu bài viết...</p>
                   </div>
                 ) : posts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-[var(--color-muted-foreground)] p-6 text-center">
@@ -530,9 +530,9 @@ export default function CompetitorsPage() {
                     {posts.map(post => (
                       <div key={post.id} className="border border-[var(--color-border)] bg-[var(--color-card)] rounded-xl overflow-hidden flex flex-col hover:border-[#5B3DF5]/50 transition-colors">
                         <div className="p-4 flex-1">
-                          <p className="text-xs text-[var(--color-muted-foreground)] mb-2 flex justify-between">
-                            <span>{new Date(post.postedAt || post.scrapedAt).toLocaleDateString('vi-VN')}</span>
-                            {post.externalId && <span className="font-mono text-gray-400">ID: {post.externalId}</span>}
+                          <p className="text-xs text-[var(--color-muted-foreground)] mb-2 flex justify-between items-center gap-2">
+                            <span className="shrink-0">{new Date(post.postedAt || post.scrapedAt).toLocaleDateString('vi-VN')}</span>
+                            {post.externalId && <span className="font-mono text-gray-400 truncate flex-1 text-right" title={`ID: ${post.externalId}`}>ID: {post.externalId}</span>}
                           </p>
                           <p className="text-sm text-[var(--color-foreground)] line-clamp-4 whitespace-pre-wrap leading-relaxed">
                             {post.content || 'Không có nội dung chữ'}
@@ -691,7 +691,7 @@ export default function CompetitorsPage() {
                 <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)]">
                   <div className="flex items-center gap-2 text-zinc-500 mb-1">
                     <TrendingUp className="w-4 h-4 text-[#5B3DF5]" />
-                    <span className="text-xs font-medium">Bài viết đã cào</span>
+                    <span className="text-xs font-medium">Bài viết đã thu thập</span>
                   </div>
                   <div className="text-2xl font-bold text-[var(--color-foreground)]">
                     {viewingCompetitor.id === selectedPage ? posts.length : 'Đang cập nhật'}

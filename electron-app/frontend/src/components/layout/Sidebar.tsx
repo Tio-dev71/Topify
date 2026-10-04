@@ -18,24 +18,24 @@ import {
 } from 'lucide-react';
 
 const navigation = [
-  { key: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { key: 'Trực tiếp', href: '/live', icon: Play },
-  { key: 'Bài viết', href: '/posts', icon: Calendar },
-  { key: 'Tải xuống', href: '/downloader', icon: Download },
-  { key: 'Tài khoản FB', href: '/accounts', icon: Users },
-  { key: 'Proxies', href: '/proxies', icon: Globe },
+  { key: 'Tổng quan (Dashboard)', href: '/dashboard', icon: LayoutDashboard },
+  { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play },
+  { key: 'Quản lý bài viết', href: '/posts', icon: Calendar },
+  { key: 'Tải video / media', href: '/downloader', icon: Download },
+  { key: 'Tài khoản Facebook', href: '/accounts', icon: Users },
+  { key: 'Quản lý Proxy', href: '/proxies', icon: Globe },
   { key: 'Tự động hóa', href: '/automation', icon: Play },
-  { key: 'Buff tương tác', href: '/buff', icon: Heart },
-  { key: 'Lịch sử', href: '/history', icon: Activity },
-  { key: 'Cài đặt', href: '/settings', icon: Settings },
+  { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart },
+  { key: 'Nhật ký hoạt động', href: '/history', icon: Activity },
+  { key: 'Cài đặt hệ thống', href: '/settings', icon: Settings },
 ];
 
 const adminNavigation = [
-  { key: 'Nhân sự', href: '/team', icon: Users },
+  { key: 'Quản lý nhân sự', href: '/team', icon: Users },
 ];
 
 const superAdminNavigation = [
-  { key: 'Workspaces', href: '/super-admin', icon: Building2 },
+  { key: 'Không gian làm việc (Workspaces)', href: '/super-admin', icon: Building2 },
 ];
 
 export function Sidebar() {

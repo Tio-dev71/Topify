@@ -132,3 +132,64 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// PATCH /api/crm/customers - Update customer details
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, name, email, phone, tags, source, notes, customData } = body;
+    const workspaceId = (session.user as any).workspaceId;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
+    }
+
+    const existing = await prisma.customer.findFirst({
+      where: { id, workspaceId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Không tìm thấy khách hàng' }, { status: 404 });
+    }
+
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone;
+    if (tags !== undefined) updateData.tags = tags;
+    if (source !== undefined) updateData.source = source;
+    if (notes !== undefined) updateData.notes = notes;
+    if (customData !== undefined) updateData.customData = customData;
+
+    const customer = await prisma.customer.update({
+      where: { id },
+      data: updateData,
+      include: { deals: { select: { id: true, title: true, value: true, status: true } } },
+    });
+
+    await recordAuditLog({
+      action: 'CUSTOMER.UPDATE',
+      entityType: 'Customer',
+      entityId: customer.id,
+      userId: session.user.id,
+      workspaceId,
+      req,
+      metadata: { 
+        message: `Cập nhật thông tin khách hàng: ${customer.name}`,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+    });
+
+    return NextResponse.json(customer);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+

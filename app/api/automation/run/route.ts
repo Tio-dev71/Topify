@@ -17,6 +17,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing accountIds or config' }, { status: 400 });
     }
 
+    const normalizeType = (t: string) => {
+      const lower = (t || '').toLowerCase();
+      if (lower === 'comment') return 'fb_buff_post';
+      if (lower === 'add_friend') return 'fb_add_friends_group';
+      if (lower === 'invite_group') return 'fb_invite_to_group';
+      if (lower === 'post_reel') return 'fb_farm_reels';
+      return t;
+    };
+    config.type = normalizeType(config.type);
+
     if ((config.type === 'fb_add_friends_group' || config.type === 'fb_invite_to_group') && (!config.targetUrl || config.targetUrl.trim() === '')) {
       return NextResponse.json({ error: 'Vui lòng điền Target URL (Link Group) vào kịch bản này trước khi chạy!' }, { status: 400 });
     }
@@ -56,8 +66,16 @@ export async function POST(req: NextRequest) {
 }
 
 async function processBackgroundAutomation(accountIds: string[], config: TaskConfig, taskId?: string) {
+  let hasError = false;
   await Promise.all(accountIds.map(async (accountId) => {
-    const account = await prisma.facebookAccount.findUnique({ where: { id: accountId } });
+    const account = await prisma.facebookAccount.findFirst({
+      where: {
+        OR: [
+          { id: accountId },
+          { profileId: accountId }
+        ]
+      }
+    });
     if (!account) return;
 
     console.log(`[Automation Runner] Starting task ${config.type} for account ${account.name}`);
@@ -66,13 +84,14 @@ async function processBackgroundAutomation(accountIds: string[], config: TaskCon
       console.log(`[Automation Runner] Completed task for account ${account.name}`);
     } catch (e) {
       console.error(`[Automation Runner] Failed for account ${account.name}:`, e);
+      hasError = true;
     }
   }));
 
   if (taskId) {
     await prisma.automationTask.update({
       where: { id: taskId },
-      data: { status: 'DONE' }
-    });
+      data: { status: hasError ? 'FAILED' : 'DONE' }
+    }).catch(() => {});
   }
 }

@@ -58,87 +58,106 @@ async function processTokenMonitorJob(_job: Job) {
   });
 
   for (const acc of expiringAccounts) {
-    console.log(`⚠️ Account ${acc.id} (${acc.provider}) is expiring soon.`);
-    if (acc.expiresAt && acc.expiresAt < new Date()) {
+    console.log(`⚠️ Account ${acc.id} (${acc.provider}) is expiring soon or expired.`);
+    
+    // Attempt refresh if refresh token or method exists
+    try {
+      if (acc.provider === 'YOUTUBE' || acc.provider === 'GOOGLE' || acc.provider === 'GOOGLE_DRIVE') {
+        if (!acc.refreshToken) {
+          if (acc.expiresAt && acc.expiresAt < new Date()) {
+            await prisma.socialAccount.update({
+              where: { id: acc.id },
+              data: { status: 'EXPIRED' }
+            });
+            console.log(`❌ Account ${acc.id} has no refresh token and marked as EXPIRED.`);
+          }
+          continue;
+        }
+
+        const { getValidAccessToken } = await import('@/lib/publishers/googleAuth');
+        await getValidAccessToken(acc as any);
+        console.log(`✅ Google/YouTube Token for ${acc.id} refreshed successfully.`);
+        continue;
+      }
+
+      let newAccessToken = acc.accessToken;
+      let newExpiresAt = acc.expiresAt;
+
+      if (acc.provider === 'META') {
+        // Meta long-lived token refresh
+        const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+        const clientSecret = process.env.FACEBOOK_APP_SECRET;
+        if (clientId && clientSecret) {
+          const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${acc.accessToken}`);
+          const data = await res.json();
+          if (data.access_token) {
+            newAccessToken = data.access_token;
+            newExpiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
+          }
+        }
+      } else if (acc.provider === 'TIKTOK') {
+        // TikTok token refresh
+        const clientKey = process.env.TIKTOK_CLIENT_KEY;
+        const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
+        if (clientKey && clientSecret && acc.refreshToken) {
+          const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_key: clientKey,
+              client_secret: clientSecret,
+              grant_type: 'refresh_token',
+              refresh_token: acc.refreshToken,
+            })
+          });
+          const data = await res.json();
+          if (data.access_token) {
+            newAccessToken = data.access_token;
+            newExpiresAt = new Date(Date.now() + data.expires_in * 1000);
+          }
+        }
+      } else if (acc.provider === 'ZALO') {
+        // Zalo token refresh
+        const appId = process.env.ZALO_APP_ID;
+        const secretKey = process.env.ZALO_APP_SECRET;
+        if (appId && secretKey && acc.refreshToken) {
+          const res = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'secret_key': secretKey
+            },
+            body: new URLSearchParams({
+              app_id: appId,
+              grant_type: 'refresh_token',
+              refresh_token: acc.refreshToken
+            })
+          });
+          const data = await res.json();
+          if (data.access_token) {
+            newAccessToken = data.access_token;
+            newExpiresAt = new Date(Date.now() + parseInt(data.expires_in) * 1000);
+          }
+        }
+      }
+      
       await prisma.socialAccount.update({
         where: { id: acc.id },
-        data: { status: 'EXPIRED' }
-      });
-      console.log(`❌ Account ${acc.id} marked as EXPIRED.`);
-    } else {
-      console.log(`🔄 Call API to refresh token for ${acc.id}...`);
-      try {
-        let newAccessToken = acc.accessToken;
-        let newExpiresAt = acc.expiresAt;
-
-        if (acc.provider === 'META') {
-          // Meta long-lived token refresh
-          const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-          const clientSecret = process.env.FACEBOOK_APP_SECRET;
-          if (clientId && clientSecret) {
-            const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${acc.accessToken}`);
-            const data = await res.json();
-            if (data.access_token) {
-              newAccessToken = data.access_token;
-              newExpiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
-            }
-          }
-        } else if (acc.provider === 'TIKTOK') {
-          // TikTok token refresh
-          const clientKey = process.env.TIKTOK_CLIENT_KEY;
-          const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
-          if (clientKey && clientSecret && acc.refreshToken) {
-            const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                client_key: clientKey,
-                client_secret: clientSecret,
-                grant_type: 'refresh_token',
-                refresh_token: acc.refreshToken,
-              })
-            });
-            const data = await res.json();
-            if (data.access_token) {
-              newAccessToken = data.access_token;
-              newExpiresAt = new Date(Date.now() + data.expires_in * 1000);
-            }
-          }
-        } else if (acc.provider === 'ZALO') {
-           // Zalo token refresh
-           const appId = process.env.ZALO_APP_ID;
-           const secretKey = process.env.ZALO_APP_SECRET;
-           if (appId && secretKey && acc.refreshToken) {
-             const res = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
-               method: 'POST',
-               headers: {
-                 'Content-Type': 'application/x-www-form-urlencoded',
-                 'secret_key': secretKey
-               },
-               body: new URLSearchParams({
-                 app_id: appId,
-                 grant_type: 'refresh_token',
-                 refresh_token: acc.refreshToken
-               })
-             });
-             const data = await res.json();
-             if (data.access_token) {
-               newAccessToken = data.access_token;
-               newExpiresAt = new Date(Date.now() + parseInt(data.expires_in) * 1000);
-             }
-           }
+        data: {
+          accessToken: newAccessToken,
+          expiresAt: newExpiresAt,
+          status: 'CONNECTED',
         }
-        
+      });
+      console.log(`✅ Token for ${acc.id} refreshed successfully.`);
+    } catch (err: unknown) {
+      console.error(`❌ Failed to refresh token for ${acc.id}:`, err instanceof Error ? err.message : String(err));
+      if (acc.expiresAt && acc.expiresAt < new Date()) {
         await prisma.socialAccount.update({
           where: { id: acc.id },
-          data: {
-             accessToken: newAccessToken,
-             expiresAt: newExpiresAt
-          }
-        });
-        console.log(`✅ Token for ${acc.id} refreshed successfully.`);
-      } catch (err: unknown) {
-        console.error(`❌ Failed to refresh token for ${acc.id}:`, err instanceof Error ? err.message : String(err));
+          data: { status: 'EXPIRED' }
+        }).catch(() => {});
+        console.log(`❌ Account ${acc.id} marked as EXPIRED after failed refresh.`);
       }
     }
   }

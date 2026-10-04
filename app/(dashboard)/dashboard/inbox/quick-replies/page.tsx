@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, Edit2, Trash2, MessageSquareQuote, Check, RefreshCw, X } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, MessageSquareQuote, Check, RefreshCw, X, Eye, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 type QuickReply = {
@@ -18,6 +18,8 @@ export default function QuickRepliesPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [viewingReply, setViewingReply] = useState<QuickReply | null>(null);
+  const [copied, setCopied] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   
@@ -215,16 +217,22 @@ export default function QuickRepliesPage() {
           ) : (
             filtered.map(reply => (
               <div key={reply.id} className="p-4 flex items-start gap-4 hover:bg-[var(--color-muted)]/50 transition-colors group">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-muted)] flex items-center justify-center flex-shrink-0 mt-1">
+                <div 
+                  onClick={() => setViewingReply(reply)}
+                  className="w-10 h-10 rounded-lg bg-[var(--color-muted)] flex items-center justify-center flex-shrink-0 mt-1 cursor-pointer hover:bg-indigo-500/10 transition-colors"
+                >
                   <MessageSquareQuote className="w-5 h-5 text-indigo-500" />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div 
+                  onClick={() => setViewingReply(reply)}
+                  className="flex-1 min-w-0 cursor-pointer"
+                >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-xs bg-indigo-500/10 text-indigo-500 font-semibold px-2 py-0.5 rounded border border-indigo-500/20">
                       /{reply.shortcut}
                     </span>
                     {reply.title && (
-                      <span className="font-semibold text-sm text-[var(--color-foreground)]">
+                      <span className="font-semibold text-sm text-[var(--color-foreground)] hover:text-indigo-500 transition-colors">
                         {reply.title}
                       </span>
                     )}
@@ -238,14 +246,23 @@ export default function QuickRepliesPage() {
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
+                    onClick={() => setViewingReply(reply)}
+                    className="p-1.5 text-[var(--color-muted-foreground)] hover:text-indigo-500 hover:bg-[var(--color-muted)] rounded transition-colors"
+                    title="Xem chi tiết"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button 
                     onClick={() => handleOpenModal(reply)}
                     className="p-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)] rounded transition-colors"
+                    title="Chỉnh sửa"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button 
                     onClick={() => handleDelete(reply.id)}
                     className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                    title="Xóa"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -255,6 +272,107 @@ export default function QuickRepliesPage() {
           )}
         </div>
       </div>
+
+      {/* View Quick Reply Modal */}
+      {viewingReply && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 animate-in fade-in-0 zoom-in-95 duration-150">
+            <div className="flex justify-between items-start pb-3 border-b border-[var(--color-border)]">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-sm bg-indigo-500/10 text-indigo-500 font-bold px-2.5 py-0.5 rounded-lg border border-indigo-500/20">
+                    /{viewingReply.shortcut}
+                  </span>
+                  {viewingReply.category && (
+                    <span className="text-xs bg-[var(--color-muted)] text-[var(--color-muted-foreground)] px-2.5 py-0.5 rounded-full font-medium">
+                      {viewingReply.category}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-bold text-[var(--color-foreground)]">
+                  {viewingReply.title || `Mẫu /${viewingReply.shortcut}`}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setViewingReply(null)}
+                className="text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] p-1 rounded-lg hover:bg-[var(--color-muted)] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+                    Nội dung câu trả lời
+                  </label>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(viewingReply.content);
+                      setCopied(true);
+                      toast.success("Đã sao chép nội dung");
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-600 font-medium px-2 py-1 rounded hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? "Đã sao chép" : "Sao chép"}
+                  </button>
+                </div>
+                <div className="p-4 rounded-xl bg-[var(--color-muted)]/50 border border-[var(--color-border)] text-sm text-[var(--color-foreground)] whitespace-pre-wrap leading-relaxed select-text">
+                  {viewingReply.content}
+                </div>
+              </div>
+
+              {viewingReply.createdAt && (
+                <div className="text-xs text-[var(--color-muted-foreground)] flex items-center justify-between pt-2">
+                  <span>Ngày tạo:</span>
+                  <span className="font-medium text-[var(--color-foreground)]">
+                    {new Date(viewingReply.createdAt).toLocaleString("vi-VN")}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-[var(--color-border)]">
+              <button
+                type="button"
+                onClick={() => {
+                  const toDelete = viewingReply.id;
+                  setViewingReply(null);
+                  handleDelete(toDelete);
+                }}
+                className="px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Xóa mẫu này
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewingReply(null)}
+                  className="px-4 py-2 border border-[var(--color-border)] rounded-xl text-sm font-medium hover:bg-[var(--color-muted)] text-[var(--color-foreground)] transition-colors"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const r = viewingReply;
+                    setViewingReply(null);
+                    handleOpenModal(r);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Chỉnh sửa
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {showModal && (

@@ -14,6 +14,25 @@ type VideoAsset = {
   createdAt: string;
 };
 
+const PLATFORM_PROVIDER_MAP: Record<string, string> = {
+  FACEBOOK_REELS: 'META',
+  FACEBOOK_POST: 'META',
+  INSTAGRAM_REELS: 'META',
+  INSTAGRAM_CAROUSEL: 'META',
+  INSTAGRAM_STORY: 'META',
+  YOUTUBE_SHORTS: 'YOUTUBE',
+  TIKTOK_VIDEO: 'TIKTOK',
+  ZALO_POST: 'ZALO',
+  ZALO_ARTICLE: 'ZALO',
+};
+
+const PLATFORM_NAME_MAP: Record<string, string> = {
+  META: 'Facebook',
+  TIKTOK: 'TikTok',
+  YOUTUBE: 'YouTube',
+  ZALO: 'Zalo',
+};
+
 export default function CreatePostPage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -23,7 +42,7 @@ export default function CreatePostPage() {
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState('');
   const [firstComment, setFirstComment] = useState('');
-  const [platforms, setPlatforms] = useState<string[]>(['FACEBOOK_REELS']);
+  const [platforms, setPlatforms] = useState<string[]>([]);
   const [publishMode, setPublishMode] = useState<'now' | 'schedule' | 'auto_schedule' | 'request_approval'>('now');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
@@ -43,7 +62,38 @@ export default function CreatePostPage() {
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [loadingVideos, setLoadingVideos] = useState(true);
 
+  // Social connection state
+  const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});
+
   const selectedVideo = videos.find(v => v.id === selectedVideoId);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch('/api/social/status');
+        if (res.ok) {
+          const data = await res.json();
+          const providers: Record<string, boolean> = {};
+          if (data.connections) {
+            data.connections.forEach((conn: any) => {
+              if (conn.provider && conn.connected !== false) {
+                providers[conn.provider] = true;
+              }
+            });
+          }
+          setConnectedProviders(providers);
+          // Clean up any previously selected platform that is not connected
+          setPlatforms(prev => prev.filter(p => {
+            const req = PLATFORM_PROVIDER_MAP[p];
+            return req ? !!providers[req] : false;
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch social status', err);
+      }
+    };
+    fetchStatus();
+  }, []);
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -70,6 +120,13 @@ export default function CreatePostPage() {
   }, []);
 
   const handlePlatformToggle = (platform: string) => {
+    const req = PLATFORM_PROVIDER_MAP[platform];
+    const isConnected = req ? !!connectedProviders[req] : false;
+    if (!isConnected) {
+      const name = PLATFORM_NAME_MAP[req] || req || 'mạng xã hội';
+      alert(`Vui lòng kết nối tài khoản ${name} trước khi chọn.`);
+      return;
+    }
     setPlatforms(prev => 
       prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]
     );
@@ -77,10 +134,29 @@ export default function CreatePostPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !selectedVideoId || platforms.length === 0) {
-      alert('Vui lòng nhập tiêu đề, chọn video và ít nhất 1 nền tảng.');
+    if (!title || !selectedVideoId) {
+      alert('Vui lòng nhập tiêu đề và chọn video.');
       return;
     }
+    if (platforms.length === 0) {
+      alert('Vui lòng chọn ít nhất 1 nền tảng mạng xã hội đã kết nối.');
+      return;
+    }
+
+    const unconnected = platforms.filter(p => {
+      const req = PLATFORM_PROVIDER_MAP[p];
+      return !req || !connectedProviders[req];
+    });
+
+    if (unconnected.length > 0) {
+      const missingNames = Array.from(new Set(unconnected.map(p => {
+        const req = PLATFORM_PROVIDER_MAP[p];
+        return PLATFORM_NAME_MAP[req] || req || p;
+      }))).join('/');
+      alert(`Vui lòng kết nối tài khoản ${missingNames} trước khi đăng.`);
+      return;
+    }
+
     if (publishMode === 'schedule' && (!scheduledDate || !scheduledTime)) {
       alert('Vui lòng chọn ngày giờ lên lịch.');
       return;
@@ -312,27 +388,37 @@ export default function CreatePostPage() {
               <h2 className="text-xl font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-700/50 pb-5">Nền tảng đăng <span className="text-rose-500">*</span></h2>
               <div className="space-y-4">
                 {[
-                  { id: 'FACEBOOK_REELS', label: 'Facebook Reels', color: 'bg-[#1877F2]' },
-                  { id: 'INSTAGRAM_REELS', label: 'Instagram Reels', color: 'bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF]' },
-                  { id: 'YOUTUBE_SHORTS', label: 'YouTube Shorts', color: 'bg-[#FF0000]' },
-                  { id: 'TIKTOK_VIDEO', label: 'TikTok Video', color: 'bg-black dark:bg-white' },
-                ].map(platform => (
-                  <label key={platform.id} className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${platforms.includes(platform.id) ? 'border-[#5B3DF5] bg-[#5B3DF5]/5 shadow-[0_4px_15px_rgba(91,61,245,0.1)]' : 'border-gray-200 dark:border-gray-700 hover:border-[#5B3DF5]/30 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
-                    <div className="flex items-center gap-4">
-                      <div className={`w-3.5 h-3.5 rounded-full ${platform.color} shadow-sm`} />
-                      <span className={`text-base font-bold ${platforms.includes(platform.id) ? 'text-[#5B3DF5]' : 'text-gray-700 dark:text-gray-300'}`}>{platform.label}</span>
+                  { id: 'FACEBOOK_REELS', label: 'Facebook Reels', color: 'bg-[#1877F2]', provider: 'META' },
+                  { id: 'INSTAGRAM_REELS', label: 'Instagram Reels', color: 'bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF]', provider: 'META' },
+                  { id: 'YOUTUBE_SHORTS', label: 'YouTube Shorts', color: 'bg-[#FF0000]', provider: 'YOUTUBE' },
+                  { id: 'TIKTOK_VIDEO', label: 'TikTok Video', color: 'bg-black dark:bg-white', provider: 'TIKTOK' },
+                ].map(platform => {
+                  const isConnected = !!connectedProviders[platform.provider];
+                  const isSelected = platforms.includes(platform.id);
+                  return (
+                    <div 
+                      key={platform.id} 
+                      onClick={() => handlePlatformToggle(platform.id)}
+                      className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${
+                        !isConnected 
+                          ? 'opacity-60 border-red-200 bg-red-50/20 dark:bg-red-950/10 hover:border-red-300' 
+                          : isSelected 
+                            ? 'border-[#5B3DF5] bg-[#5B3DF5]/5 shadow-[0_4px_15px_rgba(91,61,245,0.1)]' 
+                            : 'border-gray-200 dark:border-gray-700 hover:border-[#5B3DF5]/30 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                      }`} 
+                      title={!isConnected ? `Vui lòng kết nối tài khoản ${PLATFORM_NAME_MAP[platform.provider] || platform.label} trong Cài đặt trước khi đăng` : ''}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-3.5 h-3.5 rounded-full ${platform.color} shadow-sm`} />
+                        <span className={`text-base font-bold ${isSelected ? 'text-[#5B3DF5]' : 'text-gray-700 dark:text-gray-300'}`}>{platform.label}</span>
+                        {!isConnected && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-md ml-2">CHƯA KẾT NỐI</span>}
+                      </div>
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-[#5B3DF5] border-[#5B3DF5]' : 'border-gray-300 dark:border-gray-600'}`}>
+                        {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
+                      </div>
                     </div>
-                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${platforms.includes(platform.id) ? 'bg-[#5B3DF5] border-[#5B3DF5]' : 'border-gray-300 dark:border-gray-600'}`}>
-                      {platforms.includes(platform.id) && <CheckCircle2 className="w-4 h-4 text-white" />}
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={platforms.includes(platform.id)}
-                      onChange={() => handlePlatformToggle(platform.id)}
-                      className="hidden"
-                    />
-                  </label>
-                ))}
+                  );
+                })}
 
                 {platforms.includes('YOUTUBE_SHORTS') && (
                   <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs space-y-1.5 animate-in fade-in duration-300">
@@ -473,6 +559,17 @@ export default function CreatePostPage() {
               </div>
             </motion.div>
 
+            {platforms.some(p => !connectedProviders[PLATFORM_PROVIDER_MAP[p]]) && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 dark:bg-rose-950/20 dark:border-rose-800/40 text-rose-700 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
+                <span>⚠️ Vui lòng kết nối tài khoản mạng xã hội trước khi đăng bài.</span>
+              </div>
+            )}
+            {platforms.length === 0 && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 text-xs font-semibold flex items-center gap-2">
+                <span>⚠️ Vui lòng chọn ít nhất 1 nền tảng mạng xã hội đã kết nối.</span>
+              </div>
+            )}
+
             <motion.button 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -480,7 +577,7 @@ export default function CreatePostPage() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               type="submit" 
-              disabled={submitting || !isChecklistComplete}
+              disabled={submitting || !isChecklistComplete || platforms.length === 0 || platforms.some(p => !connectedProviders[PLATFORM_PROVIDER_MAP[p]])}
               className="w-full py-4 rounded-2xl text-base font-extrabold bg-gradient-to-r from-[#5B3DF5] to-[#3B82F6] text-white shadow-xl shadow-[#5B3DF5]/30 hover:shadow-2xl hover:shadow-[#5B3DF5]/50 transition-all disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-3"
             >
               {submitting ? (

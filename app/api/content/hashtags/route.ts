@@ -49,6 +49,37 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// PATCH /api/content/hashtags
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const body = await req.json();
+    const { id, name, hashtags, category } = body;
+
+    if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+
+    const existing = await prisma.hashtagLibrary.findUnique({ where: { id } });
+    if (!existing || existing.workspaceId !== (session.user as any).workspaceId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const updated = await prisma.hashtagLibrary.update({
+      where: { id },
+      data: {
+        ...(name ? { name } : {}),
+        ...(hashtags !== undefined ? { hashtags } : {}),
+        ...(category ? { category } : {}),
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // DELETE /api/content/hashtags?id=xxx
 export async function DELETE(req: NextRequest) {
   try {

@@ -201,22 +201,28 @@ export async function POST(req: NextRequest) {
 
           const html = htmlRes.data;
           if (typeof html === 'string') {
+            const cheerio = await import('cheerio');
+            const $ = cheerio.load(html);
             const seenTitles = new Set<string>();
             const seenUrls = new Set<string>();
 
-            // Strategy 1: Heading tags <h2>, <h3>, <h4>, <article> containing links
-            const headingRegex = /<(?:h2|h3|h4|article)[^>]*>[\s\S]*?<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/(?:h2|h3|h4|article)>/gi;
-            let hMatch;
-            while ((hMatch = headingRegex.exec(html)) !== null && collectedPosts.length < 20) {
-              const relUrl = hMatch[1];
-              const title = hMatch[2].replace(/<[^>]+>/g, '').trim();
-              if (title && title.length > 15 && !seenTitles.has(title) && !seenUrls.has(relUrl)) {
+            const addPost = (relUrl: string, title: string) => {
+              if (collectedPosts.length >= 20) return;
+              title = title.replace(/\s+/g, ' ').trim();
+              if (title && title.length > 15 && !seenTitles.has(title)) {
+                let fullUrl = relUrl;
+                try {
+                  fullUrl = new URL(relUrl, targetUrl).href;
+                } catch (e) {
+                  return;
+                }
+                if (seenUrls.has(fullUrl)) return;
+                
                 seenTitles.add(title);
-                seenUrls.add(relUrl);
-                const fullArticleUrl = relUrl.startsWith('http') ? relUrl : new URL(relUrl, targetUrl).href;
+                seenUrls.add(fullUrl);
 
                 collectedPosts.push({
-                  externalId: fullArticleUrl,
+                  externalId: fullUrl,
                   content: title,
                   mediaUrl: null,
                   likesCount: Math.floor(Math.random() * 150) + 10,
@@ -225,56 +231,40 @@ export async function POST(req: NextRequest) {
                   postedAt: new Date()
                 });
               }
-            }
+            };
+
+            // Remove scripts, styles and other non-content tags before text extraction
+            $('script, style, noscript, iframe, svg, img').remove();
+
+            // Strategy 1: Heading tags containing links
+            $('h1 a, h2 a, h3 a, h4 a, article a').each((_, el) => {
+              const relUrl = $(el).attr('href');
+              const title = $(el).attr('title') || $(el).text();
+              if (relUrl && title) {
+                addPost(relUrl, title);
+              }
+            });
 
             // Strategy 2: Anchor tags with title attributes
-            if (collectedPosts.length < 5) {
-              const anchorTitleRegex = /<a[^>]+href=["']([^"']+)["'][^>]*title=["']([^"']+)["'][^>]*>/gi;
-              let aMatch;
-              while ((aMatch = anchorTitleRegex.exec(html)) !== null && collectedPosts.length < 20) {
-                const relUrl = aMatch[1];
-                const title = aMatch[2].replace(/<[^>]+>/g, '').trim();
-                if (title && title.length > 20 && !seenTitles.has(title) && !seenUrls.has(relUrl)) {
-                  seenTitles.add(title);
-                  seenUrls.add(relUrl);
-                  const fullArticleUrl = relUrl.startsWith('http') ? relUrl : new URL(relUrl, targetUrl).href;
-
-                  collectedPosts.push({
-                    externalId: fullArticleUrl,
-                    content: title,
-                    mediaUrl: null,
-                    likesCount: Math.floor(Math.random() * 120) + 8,
-                    commentsCount: Math.floor(Math.random() * 20) + 1,
-                    sharesCount: Math.floor(Math.random() * 8) + 1,
-                    postedAt: new Date()
-                  });
+            if (collectedPosts.length < 20) {
+              $('a[title]').each((_, el) => {
+                const relUrl = $(el).attr('href');
+                const title = $(el).attr('title') || $(el).text();
+                if (relUrl && title) {
+                  addPost(relUrl, title);
                 }
-              }
+              });
             }
 
             // Strategy 3: General articles ending with .html
-            if (collectedPosts.length < 5) {
-              const articleRegex = /<a[^>]+href=["']([^"']+\.html[^"']*)["'][^>]*>(.*?)<\/a>/gis;
-              let match;
-              while ((match = articleRegex.exec(html)) !== null && collectedPosts.length < 15) {
-                const relUrl = match[1];
-                const title = match[2].replace(/<[^>]+>/g, '').trim();
-                if (title && title.length > 20 && !seenTitles.has(title) && !seenUrls.has(relUrl)) {
-                  seenTitles.add(title);
-                  seenUrls.add(relUrl);
-                  const fullArticleUrl = relUrl.startsWith('http') ? relUrl : new URL(relUrl, targetUrl).href;
-
-                  collectedPosts.push({
-                    externalId: fullArticleUrl,
-                    content: title,
-                    mediaUrl: null,
-                    likesCount: Math.floor(Math.random() * 100) + 5,
-                    commentsCount: Math.floor(Math.random() * 15) + 1,
-                    sharesCount: Math.floor(Math.random() * 5) + 1,
-                    postedAt: new Date()
-                  });
+            if (collectedPosts.length < 20) {
+              $('a[href$=".html"], a[href*="/article/"]').each((_, el) => {
+                const relUrl = $(el).attr('href');
+                const title = $(el).attr('title') || $(el).text();
+                if (relUrl && title) {
+                  addPost(relUrl, title);
                 }
-              }
+              });
             }
           }
         } catch (crawlErr) {

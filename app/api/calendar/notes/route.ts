@@ -44,18 +44,20 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { date, content } = body;
-    const workspaceId = (session.user as any).workspaceId;
+    const { date, content, title, color } = body;
+    const workspaceId = (session.user as any).workspaceId || null;
     const createdById = session.user.id;
 
-    if (!date || !content) {
+    if (!date || (!content && !title)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     const note = await prisma.calendarNote.create({
       data: {
         date: new Date(date),
-        content,
+        title: title?.trim() || null,
+        content: content?.trim() || '',
+        color: color || null,
         createdById,
         workspaceId,
       },

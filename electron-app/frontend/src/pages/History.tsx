@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Activity, Play, MessageSquare, PlusSquare, History as HistoryIcon, Link as LinkIcon, RefreshCcw } from 'lucide-react';
+import { 
+  Activity, 
+  Play, 
+  MessageSquare, 
+  PlusSquare, 
+  History as HistoryIcon, 
+  Link as LinkIcon, 
+  RefreshCcw,
+  Eye,
+  X,
+  Calendar,
+  ExternalLink
+} from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
 
@@ -25,14 +37,15 @@ export default function History() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedLog, setSelectedLog] = useState<AutomationLog | null>(null);
 
   const fetchLogs = async (pageNumber = 1) => {
     setIsLoading(true);
     try {
       const res = await api.get(`/automation-logs?page=${pageNumber}&limit=50`);
-      setLogs(res.data.logs);
-      setStats(res.data.stats);
-      setTotalPages(res.data.totalPages);
+      setLogs(res.data.logs || []);
+      setStats(res.data.stats || { runningTasks: 0, totalComments: 0, totalPosts: 0 });
+      setTotalPages(res.data.totalPages || 1);
     } catch (error) {
       console.error(error);
       toast.error('Lỗi khi tải lịch sử');
@@ -115,20 +128,21 @@ export default function History() {
                 <th className="px-6 py-4 font-medium">Hành động</th>
                 <th className="px-6 py-4 font-medium">Nội dung / Kết quả</th>
                 <th className="px-6 py-4 font-medium">Link</th>
+                <th className="px-6 py-4 font-medium text-right">Chi tiết</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Đang tải dữ liệu...</td>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">Đang tải dữ liệu...</td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Chưa có lịch sử hoạt động nào</td>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">Chưa có lịch sử hoạt động nào</td>
                 </tr>
               ) : (
                 logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={log.id} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-6 py-4 text-gray-500 whitespace-nowrap">
                       {new Date(log.createdAt).toLocaleString('vi-VN')}
                     </td>
@@ -147,6 +161,15 @@ export default function History() {
                           <LinkIcon className="w-3.5 h-3.5" /> Xem
                         </a>
                       ) : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => setSelectedLog(log)}
+                        className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                        title="Xem chi tiết nhật ký"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -179,6 +202,88 @@ export default function History() {
           </div>
         )}
       </div>
+
+      {/* View Log Detail Modal */}
+      {selectedLog && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Chi Tiết Nhật Ký Hoạt Động</h3>
+                  <p className="text-xs text-gray-500">Log ID: #{selectedLog.id.slice(-8)}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedLog(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <span className="text-xs text-gray-500 block mb-1">Tài khoản</span>
+                  <span className="font-semibold text-xs text-gray-900 block truncate">
+                    {selectedLog.accountName || selectedLog.profileId}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <span className="text-xs text-gray-500 block mb-1">Hành động</span>
+                  <div>{getActionLabel(selectedLog.actionType)}</div>
+                </div>
+              </div>
+
+              {selectedLog.link && (
+                <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-1">
+                  <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+                    <LinkIcon className="w-3.5 h-3.5 text-purple-600" />
+                    Đường dẫn tương tác
+                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs text-gray-800 break-all select-all">
+                      {selectedLog.link}
+                    </span>
+                    <a
+                      href={selectedLog.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 rounded text-purple-600 hover:bg-purple-100 transition-colors shrink-0"
+                      title="Mở liên kết"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 space-y-1.5">
+                <span className="text-xs font-medium text-gray-500">Nội dung kết quả / Thông báo</span>
+                <div className="bg-white p-3 rounded-lg border border-gray-200 text-xs text-gray-800 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
+                  {selectedLog.message || 'Không có thông báo'}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 px-1">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Thời gian: {new Date(selectedLog.createdAt).toLocaleString('vi-VN')}</span>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex justify-end bg-gray-50/50">
+              <button
+                type="button"
+                onClick={() => setSelectedLog(null)}
+                className="px-5 py-2 text-sm font-medium text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

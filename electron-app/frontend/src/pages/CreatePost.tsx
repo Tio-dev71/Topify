@@ -20,8 +20,20 @@ import { toast } from 'sonner';
 import api from '../lib/axios';
 import { PLATFORM_CONFIG, safeFormatDate } from '../lib/utils';
 
-type Platform = 'FACEBOOK_REELS' | 'INSTAGRAM_REELS' | 'YOUTUBE_SHORTS';
+type Platform = keyof typeof PLATFORM_CONFIG;
 type PublishMode = 'now' | 'schedule';
+
+export const PLATFORM_PROVIDER_MAP: Record<string, string> = {
+  FACEBOOK_REELS: 'META',
+  FACEBOOK_POST: 'META',
+  INSTAGRAM_REELS: 'META',
+  INSTAGRAM_CAROUSEL: 'META',
+  INSTAGRAM_STORY: 'META',
+  YOUTUBE_SHORTS: 'YOUTUBE',
+  TIKTOK_VIDEO: 'TIKTOK',
+  ZALO_POST: 'ZALO',
+  ZALO_ARTICLE: 'ZALO',
+};
 
 interface UploadedVideo {
   id: string;
@@ -101,15 +113,36 @@ export default function CreatePost() {
         if (res.data && res.data.connections) {
           const providers: Record<string, boolean> = {};
           res.data.connections.forEach((conn: any) => {
-            providers[conn.provider] = true;
+            if (conn.provider && conn.connected !== false) {
+              providers[conn.provider] = true;
+              if (conn.provider === 'GOOGLE') providers['YOUTUBE'] = true;
+              if (conn.provider === 'YOUTUBE') providers['GOOGLE'] = true;
+            }
           });
           setConnectedProviders(providers);
+          // Auto filter out any platform that is not connected
+          setPlatforms((prev) =>
+            prev.filter((p) => {
+              const req = PLATFORM_PROVIDER_MAP[p];
+              return req ? !!providers[req] : false;
+            })
+          );
         }
       } catch (error) {
         console.error('Failed to fetch social status', error);
       }
     };
     fetchStatus();
+
+    const handleFocus = () => fetchStatus();
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') fetchStatus();
+    });
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // Handle file upload
@@ -211,6 +244,13 @@ export default function CreatePost() {
   );
 
   const togglePlatform = (platform: Platform) => {
+    const requiredProvider = PLATFORM_PROVIDER_MAP[platform];
+    const isConnected = requiredProvider ? !!connectedProviders[requiredProvider] : false;
+    if (!isConnected) {
+      const name = requiredProvider === 'META' ? 'Facebook' : requiredProvider === 'TIKTOK' ? 'TikTok' : requiredProvider;
+      toast.error(`Vui lòng kết nối tài khoản ${name} trước khi chọn!`);
+      return;
+    }
     setPlatforms((prev) =>
       prev.includes(platform) ? prev.filter((p) => p !== platform) : [...prev, platform]
     );
@@ -256,6 +296,25 @@ export default function CreatePost() {
       toast.error('Vui lòng chọn ít nhất 1 nền tảng.');
       return;
     }
+
+    const unconnected = platforms.filter(p => {
+      const req = PLATFORM_PROVIDER_MAP[p];
+      return !req || !connectedProviders[req];
+    });
+
+    if (unconnected.length > 0) {
+      const missingNames = Array.from(new Set(unconnected.map(p => {
+        const req = PLATFORM_PROVIDER_MAP[p];
+        if (req === 'META') return 'Facebook';
+        if (req === 'TIKTOK') return 'TikTok';
+        if (req === 'YOUTUBE') return 'YouTube';
+        if (req === 'ZALO') return 'Zalo';
+        return req || p;
+      }))).join('/');
+      toast.error(`Vui lòng kết nối tài khoản ${missingNames} trước khi đăng.`);
+      return;
+    }
+
     if (publishMode === 'schedule') {
       if (!scheduledAt) {
         toast.error('Vui lòng chọn ngày và giờ đăng bài.');
@@ -578,34 +637,36 @@ export default function CreatePost() {
                 {(Object.entries(PLATFORM_CONFIG) as [Platform, typeof PLATFORM_CONFIG[keyof typeof PLATFORM_CONFIG]][]).map(
                   ([key, config]) => {
                     const selected = platforms.includes(key);
-                    
-                    let requiredProvider = '';
-                    if (key === 'FACEBOOK_REELS' || key === 'INSTAGRAM_REELS') {
-                      requiredProvider = 'META';
-                    } else if (key === 'YOUTUBE_SHORTS') {
-                      requiredProvider = 'YOUTUBE';
-                    } else if (key === 'TIKTOK_VIDEO') {
-                      requiredProvider = 'TIKTOK';
-                    }
-                    
-                    const isConnected = requiredProvider ? connectedProviders[requiredProvider] : true;
+                    const requiredProvider = PLATFORM_PROVIDER_MAP[key] || '';
+                    const isConnected = requiredProvider ? !!connectedProviders[requiredProvider] : false;
+
+                    const handlePlatformClick = () => {
+                      if (!isConnected) {
+                        const providerName = requiredProvider === 'META' ? 'Meta (Facebook / Instagram)' : requiredProvider;
+                        toast.error(`Nền tảng "${config.name}" chưa được kết nối. Vui lòng vào Cài đặt hệ thống > Kết nối tài khoản ${providerName}.`);
+                        return;
+                      }
+                      togglePlatform(key);
+                    };
 
                     return (
                       <button
                         key={key}
                         type="button"
-                        disabled={!isConnected}
-                        onClick={() => togglePlatform(key)}
-                        className={`platform-chip px-5 py-3.5 rounded-2xl text-[14px] font-bold whitespace-nowrap inline-flex items-center gap-2.5 shrink-0 border-2 transition-all duration-200
-                          ${!isConnected ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400' : 
-                            selected ? 'shadow-sm' : 'border-gray-200 hover:border-gray-300 bg-white hover:shadow-sm text-gray-700'}`}
+                        onClick={handlePlatformClick}
+                        className={`platform-chip px-5 py-3.5 rounded-2xl text-[14px] font-bold whitespace-nowrap inline-flex items-center gap-2.5 shrink-0 border-2 transition-all duration-200 cursor-pointer
+                          ${!isConnected 
+                            ? 'opacity-40 bg-gray-50 border-gray-200 text-gray-400 select-none hover:bg-gray-100/80 hover:border-gray-300' 
+                            : selected 
+                              ? 'shadow-sm' 
+                              : 'border-gray-200 hover:border-gray-300 bg-white hover:shadow-sm text-gray-700'}`}
                         style={selected && isConnected ? { color: config.color, backgroundColor: `${config.color}14`, borderColor: config.color } : {}}
-                        title={!isConnected ? `Vui lòng kết nối ${requiredProvider} trong Cài đặt` : ''}
+                        title={!isConnected ? `Nhấp để xem hướng dẫn kết nối ${requiredProvider}` : ''}
                       >
                         <Film className="w-4 h-4" />
                         {config.name}
                         {!isConnected && (
-                          <span className="text-[11px] ml-1 px-1.5 py-0.5 rounded-md bg-red-100 text-red-600 font-bold tracking-wide">
+                          <span className="text-[11px] ml-1 px-2 py-0.5 rounded-md bg-red-50 text-red-500 border border-red-200 font-bold tracking-wide">
                             CHƯA KẾT NỐI
                           </span>
                         )}
@@ -710,11 +771,24 @@ export default function CreatePost() {
             )}
 
             {/* Submit Button */}
-            <div className="pt-4">
+            <div className="pt-4 space-y-3">
+              {platforms.some(p => !connectedProviders[PLATFORM_PROVIDER_MAP[p]]) && (
+                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-600 text-[13px] font-semibold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+                  <span>Vui lòng kết nối tài khoản mạng xã hội trước khi đăng bài.</span>
+                </div>
+              )}
+              {platforms.length === 0 && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-[13px] font-semibold flex items-center gap-2">
+                  <Info className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>Vui lòng chọn ít nhất 1 nền tảng mạng xã hội đã kết nối để tiếp tục.</span>
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={submitting || platforms.length === 0}
-                className="btn-primary w-full py-4 text-[16px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-2.5 shrink-0 shadow-md hover:shadow-lg transition-all rounded-2xl"
+                disabled={submitting || platforms.length === 0 || platforms.some(p => !connectedProviders[PLATFORM_PROVIDER_MAP[p]])}
+                className="btn-primary w-full py-4 text-[16px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-2.5 shrink-0 shadow-md hover:shadow-lg transition-all rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <>

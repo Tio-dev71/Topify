@@ -53,9 +53,12 @@ const navigation: any[] = [
 ];
 
 const contentNavigation = [
+  { key: 'sidebar.posts', href: '/dashboard/content/posts', icon: FileText },
   { key: 'sidebar.calendar', href: '/dashboard/content/calendar', icon: Calendar },
   { key: 'sidebar.media_library', href: '/dashboard/content/media', icon: ImageIcon },
   { key: 'sidebar.templates', href: '/dashboard/content/templates', icon: LayoutTemplate },
+  { key: 'sidebar.pillars', href: '/dashboard/content/pillars', icon: Layers },
+  { key: 'sidebar.hashtags', href: '/dashboard/content/hashtags', icon: Hash },
   { key: 'sidebar.approval', href: '/dashboard/content/approval', icon: CheckCircle },
   { key: 'sidebar.utm_builder', href: '/dashboard/content/utm', icon: Link2 },
 ];
@@ -72,6 +75,7 @@ const crmNavigation = [
 ];
 
 const automationNavigation = [
+  { key: 'sidebar.buff_orders', href: '/dashboard/social/buff-orders', icon: Zap },
   { key: 'sidebar.competitors', href: '/dashboard/social/competitors', icon: Building2 },
   { key: 'sidebar.keywords', href: '/dashboard/social/keywords', icon: Hash },
   { key: 'sidebar.alerts', href: '/dashboard/social/alerts', icon: Activity },
@@ -229,7 +233,7 @@ export function Sidebar() {
           <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
             {!collapsed && (
               <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Content Studio
+                {t('sidebar.section_content')}
               </p>
             )}
             <div className="space-y-1">
@@ -264,7 +268,7 @@ export function Sidebar() {
           <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
             {!collapsed && (
               <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Automation & Social
+                {t('sidebar.section_social')}
               </p>
             )}
             <div className="space-y-1">
@@ -299,7 +303,7 @@ export function Sidebar() {
           <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
             {!collapsed && (
               <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Inbox
+                {t('sidebar.section_inbox')}
               </p>
             )}
             <div className="space-y-1">
@@ -334,7 +338,7 @@ export function Sidebar() {
           <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
             {!collapsed && (
               <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                CRM
+                {t('sidebar.section_crm')}
               </p>
             )}
             <div className="space-y-1">
@@ -369,7 +373,7 @@ export function Sidebar() {
           <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
             {!collapsed && (
               <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Operations
+                {t('sidebar.section_operations')}
               </p>
             )}
             <div className="space-y-1">
@@ -404,7 +408,7 @@ export function Sidebar() {
           <div className="mt-5 pt-5 border-t border-[var(--color-sidebar-border)]">
             {!collapsed && (
               <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
-                Wallet
+                {t('sidebar.section_wallet')}
               </p>
             )}
             <div className="space-y-1">

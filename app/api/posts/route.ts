@@ -153,6 +153,57 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate that user/workspace has connected accounts for all selected platforms
+    const PLATFORM_INFO: Record<string, { provider: string; name: string }> = {
+      FACEBOOK_REELS: { provider: 'META', name: 'Facebook' },
+      FACEBOOK_POST: { provider: 'META', name: 'Facebook' },
+      INSTAGRAM_REELS: { provider: 'META', name: 'Instagram' },
+      INSTAGRAM_CAROUSEL: { provider: 'META', name: 'Instagram' },
+      INSTAGRAM_STORY: { provider: 'META', name: 'Instagram' },
+      YOUTUBE_SHORTS: { provider: 'YOUTUBE', name: 'YouTube' },
+      TIKTOK_VIDEO: { provider: 'TIKTOK', name: 'TikTok' },
+      ZALO_POST: { provider: 'ZALO', name: 'Zalo' },
+      ZALO_ARTICLE: { provider: 'ZALO', name: 'Zalo' },
+    };
+
+    const userWorkspaceId = (session.user as any).workspaceId;
+    const connectedSocials = (prisma as any).socialAccount?.findMany
+      ? await (prisma as any).socialAccount.findMany({
+          where: {
+            status: 'CONNECTED',
+            OR: [
+              { userId: session.user.id },
+              ...(userWorkspaceId ? [{ workspaceId: userWorkspaceId }] : []),
+            ],
+          },
+          select: { provider: true },
+        })
+      : [];
+    const connectedProviders = new Set<string>((connectedSocials || []).map((s: any) => s.provider));
+
+    const missingPlatforms = new Set<string>();
+    for (const p of platforms) {
+      const info = PLATFORM_INFO[p];
+      if (!info) continue;
+      let isConnected = false;
+      if (info.provider === 'YOUTUBE') {
+        isConnected = connectedProviders.has('YOUTUBE') || connectedProviders.has('GOOGLE');
+      } else {
+        isConnected = connectedProviders.has(info.provider);
+      }
+      if (!isConnected) {
+        missingPlatforms.add(info.name);
+      }
+    }
+
+    if (missingPlatforms.size > 0) {
+      const missingNames = Array.from(missingPlatforms).join('/');
+      return NextResponse.json(
+        { error: `Vui lòng kết nối tài khoản ${missingNames} trước khi đăng.` },
+        { status: 400 }
+      );
+    }
+
     // Create post with platforms
     const post = await prisma.post.create({
       data: {

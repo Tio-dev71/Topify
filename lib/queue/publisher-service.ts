@@ -110,38 +110,8 @@ export async function publishPostDirectly(postId: string): Promise<{
       });
     }
 
-    if (!socialAccount) {
-      socialAccount = await prisma.socialAccount.findFirst({
-        where: {
-          provider: provider as never,
-          status: 'CONNECTED',
-        },
-      });
-    }
-
-    // Auto-provision a default TikTok account if none exists so TikTok simulation/upload succeeds
-    if (!socialAccount && provider === 'TIKTOK') {
-      try {
-        socialAccount = await prisma.socialAccount.create({
-          data: {
-            userId: post.createdById,
-            workspaceId: post.workspaceId,
-            provider: 'TIKTOK',
-            accessToken: 'tiktok_channel_token_' + Date.now(),
-            accountName: 'Kênh TikTok Topify',
-            status: 'CONNECTED',
-          },
-        });
-        console.log(`[PublisherService] Tự động khởi tạo kết nối TikTok cho người dùng ${post.createdById}`);
-      } catch (tiktokCreateErr: any) {
-        socialAccount = await prisma.socialAccount.findFirst({
-          where: { provider: 'TIKTOK' },
-        });
-      }
-    }
-
-    // Mock fallback when USE_MOCK_PUBLISHERS=true
-    if (!socialAccount && process.env.USE_MOCK_PUBLISHERS === 'true') {
+    // Mock fallback ONLY in explicit test environments
+    if (!socialAccount && process.env.NODE_ENV === 'test' && process.env.USE_MOCK_PUBLISHERS === 'true') {
       socialAccount = {
         id: `mock-${provider.toLowerCase()}-${Date.now()}`,
         userId: post.createdById,

@@ -21,7 +21,10 @@ export async function GET(req: NextRequest) {
         where.workspaceId = userWorkspaceId;
       }
     } else if (userWorkspaceId) {
-      where.workspaceId = userWorkspaceId;
+      where.OR = [
+        { workspaceId: userWorkspaceId },
+        { workspaceId: null }
+      ];
     }
 
     const queryOptions: any = {
@@ -54,7 +57,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing raw account data' }, { status: 400 });
     }
 
-    const lines = rawAccounts.split('\n').filter((l: string) => l.trim() !== '');
+    let workspaceId = (session.user as any).workspaceId || null;
+    if (!workspaceId && session.user.id) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { workspaceId: true }
+      });
+      workspaceId = user?.workspaceId || null;
+    }
+
+    const lines = rawAccounts.split(/\r?\n/).filter((l: string) => l.trim() !== '');
     const addedAccounts = [];
 
     // Fetch active proxies only if user explicitly wants auto-assignment
@@ -63,65 +75,92 @@ export async function POST(req: NextRequest) {
       : [];
 
     for (const line of lines) {
-      const parts = line.split('|').map((p: string) => p.trim());
-      const uid = parts[0];
-      const password = parts[1];
+      try {
+        const parts = line.split('|').map((p: string) => p.trim());
+        const uid = parts[0];
+        const password = parts[1];
 
-      if (uid && password) {
-        let twoFactorCode: string | null = null;
-        let cookie: string | null = null;
-        let proxyStr: string | null = null;
+        if (uid && password) {
+          let twoFactorCode: string | null = null;
+          let cookie: string | null = null;
+          let proxyStr: string | null = null;
 
-        const remainingParts = parts.slice(2);
-        for (const part of remainingParts) {
-          if (!part) continue;
+          const remainingParts = parts.slice(2);
+          for (const part of remainingParts) {
+            if (!part) continue;
 
-          // Check if part is a proxy format
-          if (/^(https?|socks[45]):\/\//i.test(part) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}/.test(part)) {
-            proxyStr = part.startsWith('http') || part.startsWith('socks') ? part : `http://${part}`;
+            // Check if part is a proxy format
+            if (/^(https?|socks[45]):\/\//i.test(part) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}/.test(part)) {
+              proxyStr = part.startsWith('http') || part.startsWith('socks') ? part : `http://${part}`;
+            }
+            // Check if part is a cookie (contains c_user, xs, or starts with JSON bracket/brace)
+            else if (part.includes('c_user=') || part.includes('xs=') || part.startsWith('[') || part.startsWith('{') || (part.includes(';') && part.includes('='))) {
+              cookie = part;
+            }
+            // Check if part is 2FA code (16-64 alphanumeric chars base32, no @ or . symbols)
+            else if (!twoFactorCode && /^[A-Z0-9]{16,64}$/i.test(part.replace(/\s+/g, '')) && !part.includes('@') && !part.includes('.')) {
+              twoFactorCode = part.replace(/\s+/g, '');
+            }
           }
-          // Check if part is a cookie (contains c_user, xs, or starts with JSON bracket/brace)
-          else if (part.includes('c_user=') || part.includes('xs=') || part.startsWith('[') || part.startsWith('{') || (part.includes(';') && part.includes('='))) {
-            cookie = part;
-          }
-          // Check if part is 2FA code (16-64 alphanumeric chars base32, no @ or . symbols)
-          else if (!twoFactorCode && /^[A-Z0-9]{16,64}$/i.test(part.replace(/\s+/g, '')) && !part.includes('@') && !part.includes('.')) {
-            twoFactorCode = part.replace(/\s+/g, '');
-          }
-          // Other parts like recovery emails or passwords for mail are ignored as cookie
-        }
 
-        // Only assign random proxy if explicitly requested and no proxy was supplied in the line
-        if (!proxyStr && autoAssignProxy && activeProxies.length > 0) {
-          const proxy = activeProxies[Math.floor(Math.random() * activeProxies.length)];
-          if (proxy.username && proxy.password) {
-            proxyStr = `${proxy.protocol}://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`;
+          // Only assign random proxy if explicitly requested and no proxy was supplied in the line
+          if (!proxyStr && autoAssignProxy && activeProxies.length > 0) {
+            const proxy = activeProxies[Math.floor(Math.random() * activeProxies.length)];
+            if (proxy.username && proxy.password) {
+              proxyStr = `${proxy.protocol}://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`;
+            } else {
+              proxyStr = `${proxy.protocol}://${proxy.host}:${proxy.port}`;
+            }
+          }
+
+          const cleanUid = uid.replace(/[^a-zA-Z0-9]/g, '');
+          const randomSuffix = Math.random().toString(36).substring(2, 8);
+          const name = `Clone ${uid.substring(0, 5)}...`;
+
+          // Check if an account with this UID already exists in workspace
+          const existing = await prisma.facebookAccount.findFirst({
+            where: {
+              uid,
+              ...(workspaceId ? { workspaceId } : {})
+            }
+          });
+
+          let account;
+          if (existing) {
+            account = await prisma.facebookAccount.update({
+              where: { id: existing.id },
+              data: {
+                password,
+                twoFactorCode: twoFactorCode || existing.twoFactorCode,
+                cookie: cookie || existing.cookie,
+                proxy: proxyStr || existing.proxy,
+                status: 'LIVE'
+              }
+            });
           } else {
-            proxyStr = `${proxy.protocol}://${proxy.host}:${proxy.port}`;
+            const profileId = `profile_${cleanUid || 'acc'}_${Date.now()}_${randomSuffix}`;
+            account = await prisma.facebookAccount.create({
+              data: {
+                name,
+                uid,
+                password,
+                twoFactorCode,
+                cookie,
+                profileId,
+                proxy: proxyStr,
+                status: 'LIVE',
+                workspaceId,
+              },
+            });
+
+            // Auto-generate and save the fingerprint for this profile
+            getOrGenerateFingerprint(profileId);
           }
+
+          addedAccounts.push(account);
         }
-
-        const name = `Clone ${uid.substring(0, 5)}...`;
-        const profileId = `profile_${uid}_${Date.now()}`;
-
-        const account = await prisma.facebookAccount.create({
-          data: {
-            name,
-            uid,
-            password,
-            twoFactorCode,
-            cookie,
-            profileId,
-            proxy: proxyStr,
-            status: 'LIVE',
-            workspaceId: (session.user as any).workspaceId || null,
-          },
-        });
-
-        // Auto-generate and save the fingerprint for this profile
-        getOrGenerateFingerprint(profileId);
-
-        addedAccounts.push(account);
+      } catch (lineErr) {
+        console.error(`[FB Accounts] Error processing line "${line}":`, lineErr);
       }
     }
 
@@ -174,25 +213,30 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { ids, proxy, cookie, status } = await req.json();
+    const body = await req.json();
+    const { id, ids, name, password, twoFactorCode, proxy, cookie, status } = body;
 
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ error: 'IDs array is required' }, { status: 400 });
+    const targetIds = Array.isArray(ids) ? ids : (id ? [id] : []);
+    if (targetIds.length === 0) {
+      return NextResponse.json({ error: 'ID hoặc danh sách IDs là bắt buộc' }, { status: 400 });
     }
 
     const dataToUpdate: any = {};
+    if (name !== undefined) dataToUpdate.name = name.trim();
+    if (password !== undefined) dataToUpdate.password = password.trim();
+    if (twoFactorCode !== undefined) dataToUpdate.twoFactorCode = twoFactorCode.trim() || null;
     if (proxy !== undefined) {
-      dataToUpdate.proxy = proxy === '' ? null : proxy;
+      dataToUpdate.proxy = proxy === '' ? null : proxy.trim();
     }
     if (cookie !== undefined) {
-      dataToUpdate.cookie = cookie === '' ? null : cookie;
+      dataToUpdate.cookie = cookie === '' ? null : cookie.trim();
     }
     if (status !== undefined) {
       dataToUpdate.status = status;
     }
 
     const userWorkspaceId = (session.user as any).workspaceId;
-    const where: any = { id: { in: ids } };
+    const where: any = { id: { in: targetIds } };
     if (session.user.role !== 'SUPER_ADMIN' && userWorkspaceId) {
       where.workspaceId = userWorkspaceId;
     }

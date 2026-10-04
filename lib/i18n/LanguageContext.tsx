@@ -16,8 +16,7 @@ const detectLanguage = (): Language => {
   const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY) as Language | null;
   if (saved && dictionaries[saved]) return saved;
 
-  const browserLang = navigator.language.toLowerCase();
-  if (browserLang.startsWith('en')) return 'en';
+  // Default to Vietnamese for Topify's primary audience unless explicitly set
   return 'vi';
 };
 

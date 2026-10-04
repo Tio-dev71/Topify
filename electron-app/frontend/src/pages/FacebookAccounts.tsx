@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Shield, AlertCircle, CheckCircle2, Play, Users, Key, X, Globe } from 'lucide-react';
+import { Plus, Trash2, Shield, AlertCircle, CheckCircle2, Play, Users, Key, X, Globe, Square, ExternalLink, Eye, Edit2, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import * as OTPAuth from 'otpauth';
 import api from '../lib/axios';
@@ -33,6 +33,18 @@ export default function FacebookAccounts() {
   const [adding, setAdding] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   
+  // View & Edit Modal states
+  const [viewingAccount, setViewingAccount] = useState<FbAccount | null>(null);
+  const [editingAccount, setEditingAccount] = useState<FbAccount | null>(null);
+  const [editAccountForm, setEditAccountForm] = useState({
+    name: '',
+    twoFactorCode: '',
+    proxy: '',
+    status: 'LIVE' as 'LIVE' | 'CHECKPOINT' | 'DEAD'
+  });
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isRunningMultiple, setIsRunningMultiple] = useState(false);
@@ -97,11 +109,46 @@ export default function FacebookAccounts() {
     try {
       await api.delete(`/facebook-accounts?id=${id}`);
       setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
+      if (viewingAccount?.id === id) setViewingAccount(null);
+      if (editingAccount?.id === id) setEditingAccount(null);
       fetchAccounts();
       toast.success('Đã xoá tài khoản');
     } catch (e) {
       console.error(e);
       toast.error('Lỗi khi xoá tài khoản');
+    }
+  };
+
+  const handleOpenEdit = (acc: FbAccount) => {
+    setEditingAccount(acc);
+    setEditAccountForm({
+      name: acc.name || '',
+      twoFactorCode: acc.twoFactorCode || '',
+      proxy: acc.proxy || '',
+      status: acc.status || 'LIVE',
+    });
+    setViewingAccount(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAccount) return;
+    setIsUpdatingAccount(true);
+    try {
+      await api.patch('/facebook-accounts', {
+        id: editingAccount.id,
+        name: editAccountForm.name.trim(),
+        twoFactorCode: editAccountForm.twoFactorCode.trim() || null,
+        proxy: editAccountForm.proxy.trim() || '',
+        status: editAccountForm.status,
+      });
+      toast.success('Đã cập nhật thông tin tài khoản');
+      setEditingAccount(null);
+      fetchAccounts();
+    } catch (e: any) {
+      toast.error(`Lỗi: ${e.response?.data?.error || 'Không thể cập nhật tài khoản'}`);
+    } finally {
+      setIsUpdatingAccount(false);
     }
   };
 
@@ -148,6 +195,22 @@ export default function FacebookAccounts() {
       toast.error(`Lỗi kết nối: ${e.message}`);
     } finally {
       setProcessingId(null);
+    }
+  };
+
+  const handleCloseBrowser = async (profileId: string) => {
+    try {
+      // @ts-ignore
+      if (typeof window !== 'undefined' && window.electron && window.electron.closeActiveBrowser) {
+        // @ts-ignore
+        const res = await window.electron.closeActiveBrowser(profileId);
+        setActiveBrowserIds(prev => prev.filter(p => p !== profileId));
+        if (res.success) {
+          toast.success('Đã đóng trình duyệt');
+        }
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -207,7 +270,8 @@ export default function FacebookAccounts() {
     // Fetch proxy pool
     try {
       const res = await api.get('/proxies');
-      if (Array.isArray(res.data)) setProxyPool(res.data.filter((p: ProxyItem) => p.status === 'ACTIVE'));
+      const list = Array.isArray(res.data) ? res.data : (res.data?.proxies || []);
+      setProxyPool(list.filter((p: ProxyItem) => p.status === 'ACTIVE'));
     } catch (e) {
       console.error(e);
     }
@@ -485,13 +549,23 @@ export default function FacebookAccounts() {
                               </button>
                             )}
                             {activeBrowserIds.includes(acc.profileId) ? (
-                              <button
-                                disabled
-                                className="p-2 text-amber-500 rounded-lg transition-colors opacity-70 cursor-not-allowed"
-                                title="Đang chạy"
-                              >
-                                <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleTestLogin(acc.id)}
+                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold"
+                                  title="Đang mở - Bấm để hiện cửa sổ Facebook"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                  <span className="hidden sm:inline">Mở</span>
+                                </button>
+                                <button
+                                  onClick={() => handleCloseBrowser(acc.profileId)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Đóng trình duyệt này"
+                                >
+                                  <Square className="w-3.5 h-3.5 fill-red-600" />
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={() => handleTestLogin(acc.id)}
@@ -501,6 +575,20 @@ export default function FacebookAccounts() {
                                 <Play className="w-4 h-4" />
                               </button>
                             )}
+                            <button
+                              onClick={() => setViewingAccount(acc)}
+                              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Xem chi tiết"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenEdit(acc)}
+                              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Chỉnh sửa"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleDelete(acc.id)}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -632,6 +720,224 @@ export default function FacebookAccounts() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Account Modal */}
+      {viewingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setViewingAccount(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 p-6 space-y-5 animate-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start pb-3 border-b border-gray-100">
+              <div>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 inline-block mb-1">
+                  Chi tiết tài khoản Facebook
+                </span>
+                <h3 className="text-lg font-bold text-gray-900">{viewingAccount.name}</h3>
+              </div>
+              <button 
+                onClick={() => setViewingAccount(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-[13px]">
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-gray-400 block">UID Facebook:</span>
+                  <span className="font-mono font-medium text-gray-800">{viewingAccount.uid || 'Chưa xác định'}</span>
+                </div>
+                {viewingAccount.uid && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(viewingAccount.uid || '');
+                      setCopiedField('uid');
+                      setTimeout(() => setCopiedField(null), 1500);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-indigo-600 rounded"
+                    title="Sao chép UID"
+                  >
+                    {copiedField === 'uid' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-gray-400 block">Trạng thái:</span>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium mt-0.5 ${
+                    viewingAccount.status === 'LIVE' ? 'bg-emerald-50 text-emerald-700' :
+                    viewingAccount.status === 'CHECKPOINT' ? 'bg-amber-50 text-amber-700' :
+                    'bg-red-50 text-red-700'
+                  }`}>
+                    {viewingAccount.status === 'LIVE' ? 'Hoạt động (LIVE)' :
+                     viewingAccount.status === 'CHECKPOINT' ? 'Checkpoint' : 'Đã chết (DEAD)'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-400 block">Profile ID:</span>
+                  <span className="font-mono text-xs text-gray-600 truncate max-w-[140px] block" title={viewingAccount.profileId}>
+                    {viewingAccount.profileId}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <span className="text-xs text-gray-400 block mb-1">Proxy mạng:</span>
+                <span className="font-mono text-xs text-gray-800 break-all select-all block">
+                  {viewingAccount.proxy || 'Không có (Kết nối trực tiếp mạng máy chủ)'}
+                </span>
+              </div>
+
+              {viewingAccount.twoFactorCode && (
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-indigo-500 font-medium block">Khóa bảo mật 2FA:</span>
+                    <span className="font-mono text-xs text-indigo-900 truncate max-w-[240px] block" title={viewingAccount.twoFactorCode}>
+                      {viewingAccount.twoFactorCode}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleGet2FA(viewingAccount)}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium flex items-center gap-1 transition-colors shadow-sm"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    Lấy OTP
+                  </button>
+                </div>
+              )}
+
+              {viewingAccount.createdAt && (
+                <div className="text-xs text-gray-400 flex justify-between pt-1">
+                  <span>Ngày thêm vào hệ thống:</span>
+                  <span className="font-medium text-gray-600">
+                    {new Date(viewingAccount.createdAt).toLocaleString('vi-VN')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = viewingAccount.id;
+                  handleDelete(id);
+                }}
+                className="px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Xóa tài khoản
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewingAccount(null)}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const acc = viewingAccount;
+                    handleOpenEdit(acc);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[13px] font-medium transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Chỉnh sửa
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Account Modal */}
+      {editingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150" onClick={() => setEditingAccount(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 p-6 space-y-4 animate-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-indigo-600" />
+                Chỉnh sửa tài khoản Facebook
+              </h3>
+              <button 
+                onClick={() => setEditingAccount(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Tên gợi nhớ *</label>
+                <input
+                  type="text"
+                  required
+                  value={editAccountForm.name}
+                  onChange={e => setEditAccountForm({ ...editAccountForm, name: e.target.value })}
+                  placeholder="Clone 1, TK Chính..."
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Khóa bí mật 2FA (Secret Key)</label>
+                <input
+                  type="text"
+                  value={editAccountForm.twoFactorCode}
+                  onChange={e => setEditAccountForm({ ...editAccountForm, twoFactorCode: e.target.value })}
+                  placeholder="JBSWY3DPEHPK3PXP..."
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Proxy mạng</label>
+                <input
+                  type="text"
+                  value={editAccountForm.proxy}
+                  onChange={e => setEditAccountForm({ ...editAccountForm, proxy: e.target.value })}
+                  placeholder="http://user:pass@ip:port hoặc http://ip:port"
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-medium text-gray-700 mb-1">Trạng thái tài khoản</label>
+                <select
+                  value={editAccountForm.status}
+                  onChange={e => setEditAccountForm({ ...editAccountForm, status: e.target.value as any })}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="LIVE">Hoạt động (LIVE)</option>
+                  <option value="CHECKPOINT">Checkpoint</option>
+                  <option value="DEAD">Đã chết (DEAD)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingAccount(null)}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingAccount}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[13px] font-medium transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {isUpdatingAccount ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

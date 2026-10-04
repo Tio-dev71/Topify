@@ -39,10 +39,23 @@ export async function addWatermark(videoUrl: string, text: string = 'Topmedia'):
 
   // Step 2: Apply watermark using ffmpeg
   return new Promise((resolve, reject) => {
+    // Find an existing system font or omit fontfile parameter for fallback
+    const possibleFonts = [
+      '/System/Library/Fonts/Helvetica.ttc',
+      '/Library/Fonts/Arial.ttf',
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+      '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+      '/usr/share/fonts/dejavu/DejaVuSans.ttf',
+      '/usr/share/fonts/TTF/DejaVuSans.ttf',
+      'C:\\Windows\\Fonts\\arial.ttf'
+    ];
+    const foundFont = possibleFonts.find(p => fs.existsSync(p));
+    const fontParam = foundFont ? `fontfile='${foundFont}':` : '';
+    const safeText = (text || 'Topmedia').replace(/'/g, "\\'").replace(/:/g, '\\:');
+
     ffmpeg(rawVideoPath)
       .outputOptions([
-        // Place text at top left (10px from edge). White text, black shadow for visibility.
-        `-vf`, `drawtext=fontfile='/System/Library/Fonts/Helvetica.ttc':text='${text}':x=20:y=20:fontsize=32:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2`,
+        `-vf`, `drawtext=${fontParam}text='${safeText}':x=20:y=20:fontsize=32:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2`,
         '-c:a copy', // Copy audio without re-encoding
         '-preset fast'
       ])

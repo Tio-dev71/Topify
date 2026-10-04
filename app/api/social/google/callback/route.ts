@@ -16,14 +16,28 @@ export async function GET(req: NextRequest) {
 
     const renderDesktopError = (msg: string) => {
       return new NextResponse(
-        `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2 style="color: #EF4444;">${msg}</h2>
-            <p>Vui lòng đóng cửa sổ này và thử lại.</p>
-            <script>
-              setTimeout(() => { window.close(); }, 3000);
-            </script>
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Topify - Lỗi kết nối Google</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8F9FA; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; color: #111827; }
+              .card { background: white; border-radius: 20px; padding: 40px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E7EB; }
+              .badge { width: 64px; height: 64px; background: #FEE2E2; color: #EF4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 20px; }
+              h2 { margin: 0 0 10px; color: #111827; font-size: 20px; font-weight: 700; }
+              p { margin: 0 0 20px; color: #4B5563; font-size: 14px; line-height: 1.5; }
+              .btn { display: inline-block; background: #111827; color: white; font-weight: 600; padding: 10px 24px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">✕</div>
+              <h2>Kết nối thất bại</h2>
+              <p>${msg}</p>
+              <button class="btn" onclick="window.close()">Đóng cửa sổ này</button>
+            </div>
           </body>
         </html>`,
         { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
@@ -36,9 +50,8 @@ export async function GET(req: NextRequest) {
     const [csrfState, ...restState] = rawState.split('::');
     const state = restState.join('::');
 
-    let session = await auth();
-    let userId = session?.user?.id;
-    let workspaceId = (session?.user as any)?.workspaceId;
+    let userId: string | undefined;
+    let workspaceId: string | undefined;
     let isDesktopClient = false;
     let providerState = state;
 
@@ -51,13 +64,19 @@ export async function GET(req: NextRequest) {
         const jwt = require('jsonwebtoken');
         const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
         const decoded = jwt.verify(token, secret) as any;
-        if (!userId) {
+        if (decoded?.sub || decoded?.id) {
           userId = decoded.sub || decoded.id;
           workspaceId = decoded.workspaceId;
         }
       } catch (err) {
         console.error('Invalid token in google state:', err);
       }
+    }
+
+    if (!userId) {
+      const session = await auth();
+      userId = session?.user?.id;
+      workspaceId = (session?.user as any)?.workspaceId;
     }
 
     if (!isDesktopClient && (!storedState || storedState !== csrfState)) {
@@ -70,6 +89,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/login', baseUrl));
     }
 
+    if (!workspaceId) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { workspaceId: true }
+      });
+      workspaceId = dbUser?.workspaceId || undefined;
+    }
+
     if (error || !code) {
       if (isDesktopClient) return renderDesktopError('Lỗi xác thực Google: ' + (error || 'Không nhận được mã xác thực code'));
       return NextResponse.redirect(
@@ -78,9 +105,9 @@ export async function GET(req: NextRequest) {
     }
 
     const credentials = await getCredentials(userId);
-    const clientId = credentials.GOOGLE_CLIENT_ID!;
-    const clientSecret = credentials.GOOGLE_CLIENT_SECRET!;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/social/google/callback`;
+    const clientId = credentials.GOOGLE_CLIENT_ID?.trim()!;
+    const clientSecret = credentials.GOOGLE_CLIENT_SECRET?.trim()!;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() || `${baseUrl}/api/social/google/callback`;
 
     // Exchange code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -174,6 +201,7 @@ export async function GET(req: NextRequest) {
         },
       },
       update: {
+        workspaceId: workspaceId || undefined,
         accessToken: encryptedAccessToken,
         refreshToken: encryptedRefreshToken || undefined,
         expiresAt,
@@ -197,21 +225,52 @@ export async function GET(req: NextRequest) {
 
     if (isDesktopClient) {
       return new NextResponse(
-        `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 40px; line-height: 1.6;">
-            <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
-            <h2 style="color: #10B981; margin: 0 0 10px;">Kết nối ${provider === 'YOUTUBE' ? 'YouTube' : 'Google Drive'} thành công!</h2>
-            <p style="color: #374151; font-weight: 500;">Tài khoản: <strong>${accountName}</strong></p>
-            ${!youtubeChannelId && provider === 'YOUTUBE' ? '<p style="color: #D97706; font-size: 13px;">Lưu ý: Chưa tìm thấy kênh YouTube mặc định trên tài khoản này. Bạn có thể vào studio.youtube.com để tạo kênh nếu cần đăng video.</p>' : ''}
-            <p style="color: #6B7280; font-size: 13px;">Cửa sổ này sẽ tự động đóng sau 2 giây...</p>
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Topify - Kết nối YouTube thành công</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8F9FA; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; color: #111827; }
+              .card { background: white; border-radius: 24px; padding: 40px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #F3F4F6; }
+              .badge { width: 64px; height: 64px; background: #ECFDF5; color: #10B981; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 20px; border: 1px solid #D1FAE5; }
+              h2 { margin: 0 0 12px; color: #111827; font-size: 22px; font-weight: 700; }
+              p { margin: 0 0 16px; color: #4B5563; font-size: 14px; line-height: 1.5; }
+              .account-box { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 14px; padding: 14px 18px; margin: 16px 0 24px; text-align: left; }
+              .account-label { font-size: 12px; color: #6B7280; margin-bottom: 4px; font-weight: 500; }
+              .account-val { font-size: 15px; color: #111827; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+              .channel-id { font-family: monospace; font-size: 12px; background: #E5E7EB; padding: 2px 6px; border-radius: 6px; color: #374151; }
+              .btn { display: inline-flex; align-items: center; justify-content: center; background: #5B3DF5; color: white; font-weight: 600; padding: 12px 28px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 14px; width: 100%; transition: all 0.2s; box-shadow: 0 2px 4px rgba(91,61,245,0.2); }
+              .btn:hover { background: #4A2DE0; }
+              .note { font-size: 12px; color: #9CA3AF; margin-top: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">✓</div>
+              <h2>Kết nối ${provider === 'YOUTUBE' ? 'YouTube' : 'Google Drive'} thành công!</h2>
+              <p>Tài khoản đã được liên kết với ứng dụng Topify Automation.</p>
+              <div class="account-box">
+                <div class="account-label">Tài khoản Google / Kênh:</div>
+                <div class="account-val">
+                  <span>${accountName}</span>
+                  ${youtubeChannelId ? `<span class="channel-id">ID: ${youtubeChannelId}</span>` : ''}
+                </div>
+              </div>
+              ${!youtubeChannelId && provider === 'YOUTUBE' ? '<p style="color: #D97706; font-size: 13px; text-align: left; background: #FFFBEB; padding: 10px; border-radius: 10px; margin-bottom: 16px;">⚠️ Lưu ý: Chưa tìm thấy kênh YouTube mặc định trên tài khoản này. Bạn có thể vào studio.youtube.com để tạo kênh nếu cần đăng video.</p>' : ''}
+              <button class="btn" onclick="window.close()">Đóng trang & Quay lại Topify</button>
+              <p class="note">Cửa sổ sẽ tự động đóng sau vài giây...</p>
+            </div>
             <script>
               try {
                 if (window.opener) {
                   window.opener.postMessage({ type: 'OAUTH_SUCCESS', provider: '${provider}' }, '*');
                 }
               } catch(e) {}
-              setTimeout(() => { window.close(); }, 2000);
+              setTimeout(() => {
+                try { window.close(); } catch(e) {}
+              }, 4000);
             </script>
           </body>
         </html>`,
@@ -220,21 +279,34 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.redirect(
-      new URL(`/dashboard/settings?success=${provider.toLowerCase()}`, baseUrl)
+      new URL(`/dashboard/settings?tab=social&success=${provider.toLowerCase()}`, baseUrl)
     );
   } catch (error: any) {
     console.error('Google callback error:', error);
     const stateParam = new URL(req.url).searchParams.get('state') || '';
     if (stateParam.includes('youtube_') || stateParam.includes('google_drive_')) {
       return new NextResponse(
-        `<html>
-          <head><meta charset="utf-8" /></head>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2 style="color: #EF4444;">Lỗi kết nối Google</h2>
-            <p>Vui lòng đóng cửa sổ này và thử lại.</p>
-            <script>
-              setTimeout(() => { window.close(); }, 3000);
-            </script>
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Topify - Lỗi kết nối Google</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8F9FA; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; color: #111827; }
+              .card { background: white; border-radius: 20px; padding: 40px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E7EB; }
+              .badge { width: 64px; height: 64px; background: #FEE2E2; color: #EF4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 20px; }
+              h2 { margin: 0 0 10px; color: #111827; font-size: 20px; font-weight: 700; }
+              p { margin: 0 0 20px; color: #4B5563; font-size: 14px; }
+              .btn { display: inline-block; background: #111827; color: white; font-weight: 600; padding: 10px 24px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">✕</div>
+              <h2>Lỗi kết nối Google</h2>
+              <p>Đã xảy ra sự cố trong quá trình liên kết tài khoản. Vui lòng đóng cửa sổ và thử lại.</p>
+              <button class="btn" onclick="window.close()">Đóng cửa sổ này</button>
+            </div>
           </body>
         </html>`,
         { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }

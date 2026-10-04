@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Settings as SettingsIcon, 
   Save, 
@@ -23,6 +24,17 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Helper định dạng ngày an toàn tránh lỗi runtime Invalid Date
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    try {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d.toLocaleString('vi-VN');
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
 
@@ -40,6 +52,9 @@ export default function Settings() {
     window.addEventListener('oauth-complete', handleOAuthComplete);
     window.addEventListener('message', handleWindowMessage);
     window.addEventListener('focus', handleOAuthComplete);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') fetchSettings();
+    });
 
     return () => {
       window.removeEventListener('oauth-complete', handleOAuthComplete);
@@ -47,6 +62,17 @@ export default function Settings() {
       window.removeEventListener('focus', handleOAuthComplete);
     };
   }, []);
+
+  // Lắng nghe phím Escape để đóng modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedSocialAccount(null);
+    };
+    if (selectedSocialAccount) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSocialAccount]);
 
   const fetchSettings = async () => {
     try {
@@ -152,6 +178,21 @@ export default function Settings() {
     const query = token ? `?token=${encodeURIComponent(token)}` : '';
     const fullUrl = `${baseUrl}/api/social/${endpoint}${query}`;
 
+    // Tự động kiểm tra làm mới danh sách tài khoản sau khi xác thực (polling mỗi 2s trong 30s)
+    let pollCount = 0;
+    const pollInterval = setInterval(() => {
+      pollCount++;
+      fetchSettings();
+      if (pollCount > 15) clearInterval(pollInterval);
+    }, 2000);
+
+    // Đối với YouTube / Google trên Desktop App: mở bằng trình duyệt hệ thống để tránh 100% lỗi Google 403 disallowed_useragent
+    if (provider === 'YOUTUBE' && (window as any).electron?.openExternal) {
+      toast.info('Đang mở trình duyệt để xác thực Google / YouTube an toàn...');
+      (window as any).electron.openExternal(fullUrl);
+      return;
+    }
+
     // Mở popup OAuth chuẩn
     const popup = window.open(fullUrl, 'OAuthPopup', 'width=600,height=720,menubar=no,toolbar=no,location=no,status=no');
 
@@ -159,6 +200,7 @@ export default function Settings() {
       const timer = setInterval(() => {
         if (popup.closed) {
           clearInterval(timer);
+          clearInterval(pollInterval);
           fetchSettings();
         }
       }, 1000);
@@ -471,7 +513,8 @@ export default function Settings() {
                   return (
                     <div 
                       key={account.id} 
-                      className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors"
+                      onClick={() => setSelectedSocialAccount(account)}
+                      className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer group"
                     >
                       <div className="flex items-center space-x-3.5">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-xs shadow-xs ${
@@ -484,7 +527,9 @@ export default function Settings() {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-[15px] text-gray-900">{account.accountName || 'Tài khoản liên kết'}</p>
+                            <p className="font-medium text-[15px] text-gray-900 group-hover:text-purple-600 transition-colors">
+                              {account.accountName || 'Tài khoản liên kết'}
+                            </p>
                             <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full uppercase tracking-wider ${
                               isConnected ? 'bg-emerald-100 text-emerald-700' :
                               isExpired ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'
@@ -505,9 +550,13 @@ export default function Settings() {
                       
                       <button 
                         type="button"
-                        onClick={() => setSelectedSocialAccount(account)}
-                        className="px-3.5 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-gray-700 rounded-lg text-[13px] font-medium transition-colors shadow-xs cursor-pointer active:scale-95"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSocialAccount(account);
+                        }}
+                        className="px-3.5 py-1.5 border border-gray-200 bg-white hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 text-gray-700 rounded-lg text-[13px] font-medium transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
                       >
+                        <SettingsIcon className="w-3.5 h-3.5 text-gray-400 group-hover:text-purple-500" />
                         Quản lý
                       </button>
                     </div>
@@ -519,10 +568,18 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Modal Quản lý chi tiết tài khoản liên kết */}
-      {selectedSocialAccount && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-gray-100">
+      {/* Modal Quản lý chi tiết tài khoản liên kết (sử dụng createPortal gắn vào document.body tránh bị kẹt transform) */}
+      {selectedSocialAccount && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[9999] flex items-center justify-center p-4 animate-fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedSocialAccount(null);
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
               <div className="flex items-center gap-2.5">
@@ -579,14 +636,14 @@ export default function Settings() {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-500">Thời hạn Access Token:</span>
                   <span className="text-xs text-gray-700 font-mono">
-                    {selectedSocialAccount.expiresAt ? new Date(selectedSocialAccount.expiresAt).toLocaleString('vi-VN') : 'Dài hạn (Refresh Token)'}
+                    {formatDate(selectedSocialAccount.expiresAt) || 'Dài hạn (Refresh Token)'}
                   </span>
                 </div>
                 {selectedSocialAccount.createdAt && (
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-500">Ngày kết nối:</span>
                     <span className="text-xs text-gray-700">
-                      {new Date(selectedSocialAccount.createdAt).toLocaleString('vi-VN')}
+                      {formatDate(selectedSocialAccount.createdAt) || 'N/A'}
                     </span>
                   </div>
                 )}
@@ -598,8 +655,9 @@ export default function Settings() {
                   type="button"
                   onClick={() => {
                     handleConnectSocial(selectedSocialAccount.provider);
+                    setSelectedSocialAccount(null);
                   }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm transition-colors shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm transition-colors shadow-sm cursor-pointer active:scale-98"
                 >
                   <ExternalLink className="w-4 h-4" />
                   Liên kết với tài khoản {selectedSocialAccount.provider === 'YOUTUBE' ? 'YouTube' : selectedSocialAccount.provider} khác (OAuth)
@@ -609,7 +667,7 @@ export default function Settings() {
                   type="button"
                   onClick={() => handleRefreshSocial(selectedSocialAccount)}
                   disabled={refreshingToken}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm transition-colors disabled:opacity-50 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm transition-colors disabled:opacity-50 cursor-pointer active:scale-98"
                 >
                   <RefreshCw className={`w-4 h-4 ${refreshingToken ? 'animate-spin' : ''}`} />
                   {refreshingToken ? 'Đang kiểm tra...' : 'Kiểm tra & Làm mới Access Token'}
@@ -619,7 +677,7 @@ export default function Settings() {
                   type="button"
                   onClick={() => handleDisconnectSocial(selectedSocialAccount)}
                   disabled={disconnecting}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-medium text-sm transition-colors disabled:opacity-50 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 font-medium text-sm transition-colors disabled:opacity-50 cursor-pointer active:scale-98"
                 >
                   <Trash2 className="w-4 h-4" />
                   {disconnecting ? 'Đang ngắt kết nối...' : 'Hủy liên kết tài khoản này'}
@@ -627,7 +685,8 @@ export default function Settings() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

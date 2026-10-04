@@ -62,3 +62,36 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// PATCH /api/content/pillars
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const body = await req.json();
+    const { id, name, description, color } = body;
+    if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
+
+    const existing = await prisma.contentPillar.findUnique({ where: { id } });
+    if (!existing || existing.workspaceId !== (session.user as any).workspaceId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (color !== undefined) data.color = color;
+
+    const pillar = await prisma.contentPillar.update({
+      where: { id },
+      data,
+      include: { _count: { select: { plans: true } } },
+    });
+
+    return NextResponse.json(pillar);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+

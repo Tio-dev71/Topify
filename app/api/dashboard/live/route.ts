@@ -10,8 +10,17 @@ export async function GET() {
     const screenshotsDir = path.join(process.cwd(), 'public', 'screenshots');
     let fileProfiles: string[] = [];
     if (fs.existsSync(screenshotsDir)) {
+      const now = Date.now();
       fileProfiles = fs.readdirSync(screenshotsDir)
-        .filter(f => f.endsWith('.jpg'))
+        .filter(f => {
+          if (!f.endsWith('.jpg')) return false;
+          try {
+            const stat = fs.statSync(path.join(screenshotsDir, f));
+            return (now - stat.mtimeMs) < 60000; // Only consider active if updated within last 60s
+          } catch {
+            return false;
+          }
+        })
         .map(f => f.replace('.jpg', ''));
     }
 
@@ -58,6 +67,7 @@ export async function GET() {
 
     return NextResponse.json({
       activeProfiles: allProfileIds,
+      fileProfiles,
       runningTasks,
       accounts,
       recentLogs,

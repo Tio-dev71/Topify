@@ -5,6 +5,8 @@ const fs = require('fs');
 const {
   activeBrowsers,
   parseProxy,
+  prepareProxyForBrowser,
+  isNetworkOrProxyFailure,
   generateFingerprint,
   generateTOTP,
   parseCookies,
@@ -14,14 +16,57 @@ const {
   syncCookiesToApi
 } = require('./playwright-runner');
 
-const stopFlags = new Set(); // Keep track of stopped tasks
 
-async function stopTask(taskId) {
-  stopFlags.add(taskId);
+const stopFlags = new Set(); // Keep track of stopped tasks
+const runningTasks = new Set(); // Keep track of actively executing task IDs
+const taskProfileMap = new Map(); // Map taskId -> Set of profileIds
+
+function getRunningTasks() {
+  return Array.from(runningTasks);
+}
+
+async function stopTask(taskId, extraProfileIds = []) {
+  if (taskId) {
+    stopFlags.add(taskId);
+    runningTasks.delete(taskId);
+  }
+
+  const pIds = new Set([
+    ...((taskId && taskProfileMap.get(taskId)) || []),
+    ...(Array.isArray(extraProfileIds) ? extraProfileIds : [])
+  ]);
+
+  for (const pId of pIds) {
+    const b = activeBrowsers.get(pId);
+    if (b) {
+      console.log(`[Automation] Dừng và đóng browser cho profile ${pId}`);
+      try {
+        await b.close().catch(() => {});
+      } catch (e) {}
+      activeBrowsers.delete(pId);
+    }
+  }
+
+  if (taskId) {
+    taskProfileMap.delete(taskId);
+  }
 }
 
 async function safeWait(page, ms) {
-  await page.waitForTimeout(ms);
+  try {
+    if (page && !page.isClosed()) {
+      await page.waitForTimeout(ms);
+    } else {
+      await new Promise(resolve => setTimeout(resolve, ms));
+    }
+  } catch (e) {
+    // Page/context closed mid-wait — fall back to simple setTimeout
+    if (e.message && (e.message.includes('closed') || e.message.includes('destroyed'))) {
+      await new Promise(resolve => setTimeout(resolve, ms));
+    } else {
+      throw e;
+    }
+  }
 }
 
 async function logHistory(profileId, actionType, link, message) {
@@ -64,12 +109,27 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
     }
   }
 
-  // Bước 2: Tải trang Facebook
-  if (page.url() === 'about:blank' || !page.url().includes('facebook.com')) {
-    await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 35000 });
-  } else {
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 35000 });
+  // Bước 2: Tải trang Facebook với cơ chế tự động thử lại khi mạng chập chờn
+  const loadFacebook = async () => {
+    if (page.url() === 'about:blank' || !page.url().includes('facebook.com')) {
+      await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 35000 });
+    } else {
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 35000 });
+    }
+  };
+
+  try {
+    await loadFacebook();
+  } catch (loadErr) {
+    if (isNetworkOrProxyFailure(loadErr)) {
+      console.warn(`[Automation] Lỗi tải trang Facebook lần 1 (${loadErr.message}), thử lại sau 2 giây...`);
+      await safeWait(page, 2000);
+      await loadFacebook();
+    } else {
+      throw loadErr;
+    }
   }
+
   await safeWait(page, 2000);
   await dismissFacebookPopups(page);
 
@@ -171,13 +231,24 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
 
   // Kiểm tra lỗi đăng nhập
   const loginError = await page.evaluate(() => {
-    const text = (document.body ? document.body.innerText : '').toLowerCase();
-    return text.includes('không kết nối với tài khoản nào') || 
-           text.includes('không chính xác') ||
-           text.includes('the password that you') ||
-           text.includes('find your account') ||
-           text.includes('sai mật khẩu') ||
-           text.includes('mật khẩu không đúng');
+    // Only check for login errors if we are still on the login page or a login failure page
+    const url = window.location.href;
+    if (!url.includes('login') && !url.includes('recover')) return false;
+
+    // Check specific error containers on the login page
+    const errorContainers = document.querySelectorAll('#error_box, ._9ay7, ._4rbf, [role="alert"]');
+    for (const el of errorContainers) {
+      const text = el.innerText.toLowerCase();
+      if (text.includes('không kết nối với tài khoản nào') || 
+          text.includes('không chính xác') ||
+          text.includes('the password that you') ||
+          text.includes('find your account') ||
+          text.includes('sai mật khẩu') ||
+          text.includes('mật khẩu không đúng')) {
+        return true;
+      }
+    }
+    return false;
   });
 
   if (loginError) {
@@ -269,13 +340,16 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
 }
 
 async function runAutomationStub(profileId, actionType, config, accountData) {
-  let browser = activeBrowsers.get(profileId);
+  const safeProfileId = accountData?.profileId || profileId || (accountData?.uid ? `profile_${accountData.uid}` : `profile_${accountData?.id || Date.now()}`);
+  let browser = activeBrowsers.get(safeProfileId);
   let isNewBrowser = false;
 
   try {
-    const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', profileId);
+    const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', safeProfileId);
 
-    const buildLaunchOptions = (proxyString) => {
+    let currentProxyCleanup = null;
+
+    const buildLaunchOptions = async (proxyString) => {
       const fp = generateFingerprint();
       const options = {
         headless: false,
@@ -298,13 +372,10 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
       };
 
       if (proxyString) {
-        const proxyConfig = parseProxy(proxyString);
-        if (proxyConfig) {
-          options.proxy = { server: proxyConfig.server };
-          if (proxyConfig.username && proxyConfig.password) {
-            options.proxy.username = proxyConfig.username;
-            options.proxy.password = proxyConfig.password;
-          }
+        const { proxyOptions, cleanup } = await prepareProxyForBrowser(proxyString);
+        if (proxyOptions) {
+          options.proxy = proxyOptions;
+          currentProxyCleanup = cleanup;
         }
       }
       return options;
@@ -325,16 +396,21 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
       cleanStaleLockFiles(userDataDir);
 
       let currentProxyToUse = accountData?.proxy || null;
-      let launchOpts = buildLaunchOptions(currentProxyToUse);
+      let launchOpts = await buildLaunchOptions(currentProxyToUse);
 
       try {
         browser = await launchBrowserInstance(launchOpts);
+        browser._proxyCleanup = currentProxyCleanup;
       } catch (launchErr) {
+        if (currentProxyCleanup) {
+          await currentProxyCleanup().catch(() => {});
+          currentProxyCleanup = null;
+        }
         if (currentProxyToUse) {
           console.warn('[Automation] Khởi động với proxy lỗi, tự động chuyển sang kết nối trực tiếp:', launchErr.message);
           cleanStaleLockFiles(userDataDir);
           currentProxyToUse = null;
-          launchOpts = buildLaunchOptions(null);
+          launchOpts = await buildLaunchOptions(null);
           browser = await launchBrowserInstance(launchOpts);
         } else {
           throw launchErr;
@@ -347,14 +423,17 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       });
 
-      browser.on('close', () => {
-        activeBrowsers.delete(profileId);
+      browser.on('close', async () => {
+        if (browser._proxyCleanup) {
+          await browser._proxyCleanup().catch(() => {});
+        }
+        activeBrowsers.delete(safeProfileId);
       });
-      activeBrowsers.set(profileId, browser);
+      activeBrowsers.set(safeProfileId, browser);
       isNewBrowser = true;
     }
 
-    console.log(`[Automation] Starting task ${actionType} for profile ${profileId}`);
+    console.log(`[Automation] Starting task ${actionType} for profile ${safeProfileId}`);
     
     let pages = browser.pages();
     let page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
@@ -362,31 +441,29 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
     
     // TỰ ĐỘNG ĐĂNG NHẬP / NẠP COOKIE TRƯỚC KHI THỰC HIỆN TÁC VỤ (có dự phòng proxy lỗi)
     try {
-      await ensureFacebookAuthenticated(browser, page, accountData, profileId);
+      await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId);
     } catch (authErr) {
-      const msg = (authErr.message || '').toLowerCase();
-      const isProxyFailure = msg.includes('err_tunnel_connection_failed') ||
-                             msg.includes('err_proxy_connection_failed') ||
-                             msg.includes('err_connection_refused') ||
-                             msg.includes('err_timed_out') ||
-                             msg.includes('timeout');
+      const isProxyFailure = isNetworkOrProxyFailure(authErr);
 
       if (browser.proxyConfigStr && isProxyFailure) {
-        console.warn(`[Automation] Proxy gặp sự cố khi xác thực, chuyển sang kết nối trực tiếp...`);
+        console.warn(`[Automation] Proxy gặp sự cố khi xác thực (${authErr.message}), chuyển sang kết nối trực tiếp...`);
+        if (browser._proxyCleanup) {
+          await browser._proxyCleanup().catch(() => {});
+        }
         await browser.close().catch(() => {});
-        activeBrowsers.delete(profileId);
+        activeBrowsers.delete(safeProfileId);
         cleanStaleLockFiles(userDataDir);
 
-        const directOpts = buildLaunchOptions(null);
+        const directOpts = await buildLaunchOptions(null);
         browser = await launchBrowserInstance(directOpts);
         browser.proxyConfigStr = '';
-        activeBrowsers.set(profileId, browser);
+        activeBrowsers.set(safeProfileId, browser);
 
         pages = browser.pages();
         page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
         await page.bringToFront();
 
-        await ensureFacebookAuthenticated(browser, page, accountData, profileId);
+        await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId);
       } else {
         throw authErr;
       }
@@ -405,45 +482,54 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
 
     switch (actionType) {
       case 'fb_farm_reels':
-        await taskFbFarmReels(page, config, profileId);
+        await taskFbFarmReels(page, config, safeProfileId);
         break;
       case 'fb_buff_post':
-        await taskFbBuffPost(page, config, profileId);
+        await taskFbBuffPost(page, config, safeProfileId);
         break;
       case 'fb_auto_interact':
-        await taskFbAutoInteract(page, config, profileId);
+        await taskFbAutoInteract(page, config, safeProfileId);
         break;
       case 'fb_add_friends_group':
-        await taskFbAddFriendsGroup(page, config, profileId);
+        await taskFbAddFriendsGroup(page, config, safeProfileId);
         break;
       case 'fb_invite_to_group':
-        await taskFbInviteToGroup(page, config, profileId);
+        await taskFbInviteToGroup(page, config, safeProfileId);
         break;
       default:
         console.warn(`[Automation] Unknown task type: ${actionType}`);
-        await page.waitForTimeout(2000);
+        await safeWait(page, 2000);
     }
     
-    console.log(`[Automation] Finished action for ${profileId}`);
-    return { success: true, profileId, message: 'Hoạt động thành công' };
+    console.log(`[Automation] Finished action for ${safeProfileId}`);
+    return { success: true, profileId: safeProfileId, message: 'Hoạt động thành công' };
   } catch (error) {
-    console.error(`[Automation] Error for profile ${profileId}:`, error);
-    await logHistory(profileId, actionType, '', `Lỗi: ${error.message}`);
-    return { success: false, profileId, error: error.message };
+    console.error(`[Automation] Error for profile ${safeProfileId}:`, error);
+    await logHistory(safeProfileId, actionType, '', `Lỗi: ${error.message}`);
+    return { success: false, profileId: safeProfileId, error: error.message };
   } finally {
-    console.log(`[Automation] Xong task cho ${profileId}, tiến hành đóng trình duyệt...`);
+    console.log(`[Automation] Xong task cho ${safeProfileId}, tiến hành đóng trình duyệt...`);
     if (browser) {
       try {
-        if (typeof page !== 'undefined' && page) {
-          await page.close().catch(() => {});
+        // Close extra pages first (not the main page, which may already be gone)
+        try {
+          const allPages = browser.pages ? browser.pages() : [];
+          for (const p of allPages) {
+            if (!p.isClosed()) {
+              await p.close().catch(() => {});
+            }
+          }
+        } catch (pageCloseErr) {
+          // Browser may already be closed, ignore
         }
         await Promise.race([
-          browser.close(),
+          browser.close().catch(() => {}),
           new Promise(resolve => setTimeout(resolve, 5000))
         ]);
-        activeBrowsers.delete(profileId);
       } catch (e) {
-        console.error(`[Automation] Lỗi khi đóng trình duyệt ${profileId}:`, e);
+        console.error(`[Automation] Lỗi khi đóng trình duyệt ${safeProfileId}:`, e);
+      } finally {
+        activeBrowsers.delete(safeProfileId);
       }
     }
   }
@@ -451,76 +537,87 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
 
 async function startAutomationTask(taskData) {
   const { taskId, actionType, profileIds, accounts, config } = taskData;
-  console.log(`[Automation] Starting Task ${taskId} with ${profileIds.length} profiles`);
+  console.log(`[Automation] Starting Task ${taskId} with ${profileIds ? profileIds.length : 0} profiles`);
   
-  stopFlags.delete(taskId);
-  
-  const results = [];
-  const concurrency = 3; // Giới hạn số trình duyệt mở cùng lúc để tránh treo máy
-  
-  const accountMap = new Map();
-  if (Array.isArray(accounts)) {
-    for (const acc of accounts) {
-      if (acc.profileId) accountMap.set(acc.profileId, acc);
-      if (acc.id) accountMap.set(acc.id, acc);
-      if (acc.uid) accountMap.set(acc.uid, acc);
-    }
+  if (!profileIds || profileIds.length === 0) {
+    return { success: false, error: 'Chưa có tài khoản Facebook nào được chọn cho tác vụ này.' };
   }
 
-  let apiAccountsLoaded = false;
-  const getAccount = async (pId) => {
-    if (accountMap.has(pId)) return accountMap.get(pId);
-    if (!apiAccountsLoaded) {
-      apiAccountsLoaded = true;
-      try {
-        const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
-        const res = await fetch(`${apiUrl}/facebook-accounts`);
-        if (res.ok) {
-          const apiAccounts = await res.json();
-          if (Array.isArray(apiAccounts)) {
-            for (const a of apiAccounts) {
-              if (a.profileId) accountMap.set(a.profileId, a);
-              if (a.id) accountMap.set(a.id, a);
-              if (a.uid) accountMap.set(a.uid, a);
+  stopFlags.delete(taskId);
+  runningTasks.add(taskId);
+  taskProfileMap.set(taskId, new Set(profileIds));
+
+  try {
+    const results = [];
+    const concurrency = 3; // Giới hạn số trình duyệt mở cùng lúc để tránh treo máy
+    
+    const accountMap = new Map();
+    if (Array.isArray(accounts)) {
+      for (const acc of accounts) {
+        if (acc.profileId) accountMap.set(acc.profileId, acc);
+        if (acc.id) accountMap.set(acc.id, acc);
+        if (acc.uid) accountMap.set(acc.uid, acc);
+      }
+    }
+
+    let apiAccountsLoaded = false;
+    const getAccount = async (pId) => {
+      if (accountMap.has(pId)) return accountMap.get(pId);
+      if (!apiAccountsLoaded) {
+        apiAccountsLoaded = true;
+        try {
+          const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
+          const res = await fetch(`${apiUrl}/facebook-accounts`);
+          if (res.ok) {
+            const apiAccounts = await res.json();
+            if (Array.isArray(apiAccounts)) {
+              for (const a of apiAccounts) {
+                if (a.profileId) accountMap.set(a.profileId, a);
+                if (a.id) accountMap.set(a.id, a);
+                if (a.uid) accountMap.set(a.uid, a);
+              }
             }
           }
+        } catch (err) {
+          console.warn('[Automation] Error fetching accounts from API:', err.message);
         }
-      } catch (err) {
-        console.warn('[Automation] Error fetching accounts from API:', err.message);
       }
-    }
-    return accountMap.get(pId) || null;
-  };
+      return accountMap.get(pId) || null;
+    };
 
-  for (let i = 0; i < profileIds.length; i += concurrency) {
-    if (stopFlags.has(taskId)) {
-      console.log(`[Automation] Task ${taskId} was stopped.`);
-      break;
-    }
-    
-    const chunk = profileIds.slice(i, i + concurrency);
-    console.log(`[Automation] Running batch ${Math.floor(i / concurrency) + 1} (${chunk.length} profiles)`);
-    
-    const promises = chunk.map(async (profileId) => {
+    for (let i = 0; i < profileIds.length; i += concurrency) {
       if (stopFlags.has(taskId)) {
-        return { success: false, profileId, error: 'Task stopped by user' };
+        console.log(`[Automation] Task ${taskId} was stopped.`);
+        break;
       }
-      const accData = await getAccount(profileId);
-      const profileConfig = { ...config, checkStop: () => stopFlags.has(taskId) };
-      return await runAutomationStub(profileId, actionType, profileConfig, accData);
-    });
+      
+      const chunk = profileIds.slice(i, i + concurrency);
+      console.log(`[Automation] Running batch ${Math.floor(i / concurrency) + 1} (${chunk.length} profiles)`);
+      
+      const promises = chunk.map(async (profileId) => {
+        if (stopFlags.has(taskId)) {
+          return { success: false, profileId, error: 'Task stopped by user' };
+        }
+        const accData = await getAccount(profileId);
+        const profileConfig = { ...config, checkStop: () => stopFlags.has(taskId) };
+        return await runAutomationStub(profileId, actionType, profileConfig, accData);
+      });
 
-    const chunkResults = await Promise.all(promises);
-    results.push(...chunkResults);
-    
-    // Đợi một chút giữa các batch để giảm tải CPU
-    if (i + concurrency < profileIds.length) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      const chunkResults = await Promise.all(promises);
+      results.push(...chunkResults);
+      
+      // Đợi một chút giữa các batch để giảm tải CPU
+      if (i + concurrency < profileIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
     }
-  }
 
-  stopFlags.delete(taskId);
-  return { success: true, results };
+    return { success: true, results };
+  } finally {
+    runningTasks.delete(taskId);
+    taskProfileMap.delete(taskId);
+    stopFlags.delete(taskId);
+  }
 }
 
-module.exports = { startAutomationTask, stopTask };
+module.exports = { startAutomationTask, stopTask, getRunningTasks };
