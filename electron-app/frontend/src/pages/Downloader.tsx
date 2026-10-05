@@ -28,7 +28,7 @@ export default function DownloaderPage() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DownloaderResponse | null>(null);
-  const [error, setError] = useState('');
+  const [fetchError, setFetchError] = useState('');
 
   // Download states for Electron / Web
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
@@ -41,6 +41,8 @@ export default function DownloaderPage() {
   const [caption, setCaption] = useState('');
   const [watermarkText, setWatermarkText] = useState('Topmedia');
   const [autoPostLoading, setAutoPostLoading] = useState(false);
+  const [autoPostStatus, setAutoPostStatus] = useState('');
+  const [autoPostError, setAutoPostError] = useState('');
   const [autoPostSuccess, setAutoPostSuccess] = useState('');
 
   // Accounts
@@ -56,6 +58,18 @@ export default function DownloaderPage() {
           ...prev,
           [data.url]: data.percent,
         }));
+      });
+      return cleanup;
+    }
+  }, []);
+
+  // Lắng nghe tiến trình Auto-Post từ Electron Main Process
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electron?.onAutoPostStatus) {
+      const cleanup = window.electron.onAutoPostStatus((data: any) => {
+        if (data?.message) {
+          setAutoPostStatus(data.message);
+        }
       });
       return cleanup;
     }
@@ -145,9 +159,11 @@ export default function DownloaderPage() {
     if (!url.trim()) return;
 
     setLoading(true);
-    setError('');
+    setFetchError('');
+    setAutoPostError('');
     setResult(null);
     setAutoPostSuccess('');
+    setAutoPostStatus('');
 
     try {
       const res = await api.post('/downloader', { url: url.trim() });
@@ -155,7 +171,7 @@ export default function DownloaderPage() {
       toast.success('Lấy thông tin video thành công!');
     } catch (err: any) {
       const errMsg = err.response?.data?.error || err.message || 'Lỗi khi lấy thông tin video';
-      setError(errMsg);
+      setFetchError(errMsg);
       toast.error(errMsg);
     } finally {
       setLoading(false);
@@ -179,26 +195,63 @@ export default function DownloaderPage() {
 
     setSelectedVideo(targetVideo);
     setAutoPostLoading(true);
-    setError('');
+    setAutoPostError('');
     setAutoPostSuccess('');
+    setAutoPostStatus('Đang chuẩn bị tiến trình đăng bài...');
 
     try {
-      await api.post('/autopost', {
-        videoUrl: targetVideo,
-        groupUrl: groupUrl.trim(),
-        caption,
-        watermarkText: watermarkText.trim() || 'Topmedia',
-        accountIds: selectedAccounts
-      });
+      // Nếu chạy trong Desktop App Electron -> Chạy trực tiếp qua Playwright trên máy người dùng
+      if (typeof window !== 'undefined' && window.electron?.postFacebookGroup) {
+        const targetAccounts = accounts.filter(a => selectedAccounts.includes(a.id) || selectedAccounts.includes(a.profileId));
+        const realProfileIds = targetAccounts.map(a => a.profileId || a.id);
 
-      setAutoPostSuccess('Video đã được đóng dấu watermark và đăng lên Facebook Group thành công!');
-      toast.success('Đăng bài lên Facebook thành công!');
+        const res = await window.electron.postFacebookGroup({
+          videoUrl: targetVideo,
+          groupUrl: groupUrl.trim(),
+          caption,
+          watermarkText: watermarkText.trim() || 'Topmedia',
+          accounts: targetAccounts,
+          profileIds: realProfileIds
+        });
+
+        if (res.success) {
+          if (res.results && Array.isArray(res.results)) {
+            const anySuccess = res.results.some((r: any) => r.success);
+            const failed = res.results.filter((r: any) => !r.success);
+            if (!anySuccess && failed.length > 0) {
+              const errMsg = failed[0].error || 'Lỗi khi tự động đăng bài lên Group';
+              setAutoPostError(errMsg);
+              toast.error(errMsg);
+              return;
+            }
+          }
+          setAutoPostSuccess('Video đã được tải, xử lý và đăng lên Facebook Group thành công!');
+          toast.success('Đăng bài lên Facebook Group thành công!');
+        } else {
+          const errMsg = res.error || 'Lỗi khi tự động đăng bài lên Group';
+          setAutoPostError(errMsg);
+          toast.error(errMsg);
+        }
+      } else {
+        // Fallback Web API
+        await api.post('/autopost', {
+          videoUrl: targetVideo,
+          groupUrl: groupUrl.trim(),
+          caption,
+          watermarkText: watermarkText.trim() || 'Topmedia',
+          accountIds: selectedAccounts
+        });
+
+        setAutoPostSuccess('Video đã được đóng dấu watermark và đăng lên Facebook Group thành công!');
+        toast.success('Đăng bài lên Facebook thành công!');
+      }
     } catch (err: any) {
       const errMsg = err.response?.data?.error || err.response?.data?.details || err.message || 'Lỗi khi tự động đăng bài';
-      setError(errMsg);
+      setAutoPostError(errMsg);
       toast.error(errMsg);
     } finally {
       setAutoPostLoading(false);
+      setAutoPostStatus('');
     }
   };
 
@@ -268,20 +321,14 @@ export default function DownloaderPage() {
         </form>
       </div>
 
-      {error && (
+      {fetchError && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 text-red-800">
           <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
-          <div className="text-sm">{error}</div>
+          <div className="text-sm">{fetchError}</div>
         </div>
       )}
 
-      {autoPostSuccess && (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start gap-3 text-green-800 animate-in fade-in slide-in-from-top-2">
-          <div className="text-sm font-medium">{autoPostSuccess}</div>
-        </div>
-      )}
-
-      {result && !error && (
+      {result && (
         <div className="card-apple p-6 sm:p-8 animate-fade-in">
           <div className="flex flex-col lg:flex-row items-start gap-8">
             {/* Thumbnail Preview Block */}
@@ -447,6 +494,35 @@ export default function DownloaderPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* AutoPost Live Status & Feedback */}
+                    {autoPostStatus && (
+                      <div className="flex items-center gap-2.5 p-3 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-medium animate-pulse">
+                        <Loader2 className="w-4 h-4 animate-spin text-purple-600 flex-shrink-0" />
+                        <span>{autoPostStatus}</span>
+                      </div>
+                    )}
+
+                    {autoPostError && (
+                      <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2.5 animate-in fade-in">
+                        <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold">Lỗi khi đăng bài:</p>
+                          <p className="mt-0.5">{autoPostError}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {autoPostSuccess && (
+                      <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2.5 animate-in fade-in">
+                        <Check className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold">Thành công!</p>
+                          <p className="mt-0.5">{autoPostSuccess}</p>
+                          <p className="mt-1 text-[11px] text-emerald-700">💡 Bạn có thể xem ảnh màn hình quá trình đăng bài trong tab <b>Phát trực tiếp (Live)</b>.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 

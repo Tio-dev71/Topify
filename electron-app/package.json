@@ -1,6 +1,6 @@
 {
   "name": "electron-app",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "description": "",
   "repository": {
     "type": "git",
@@ -39,6 +39,7 @@
     "wait-on": "^9.1.0"
   },
   "dependencies": {
+    "2captcha": "^3.0.5-2",
     "dotenv": "^17.4.2",
     "playwright": "^1.63.0",
     "proxy-chain": "^3.0.1",

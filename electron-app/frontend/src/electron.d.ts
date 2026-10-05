@@ -32,6 +32,8 @@ declare global {
       showItemInFolder?: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       openExternal?: (url: string) => Promise<{ success: boolean; error?: string }>;
       onDownloadProgress?: (callback: (data: DownloadProgressEvent) => void) => () => void;
+      postFacebookGroup?: (options: any) => Promise<{ success: boolean; error?: string; results?: any[] }>;
+      onAutoPostStatus?: (callback: (data: any) => void) => () => void;
     };
   }
 }

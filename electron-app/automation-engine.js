@@ -20,6 +20,41 @@ export class AutomationEngine {
     }
   }
 
+  
+  static async safePageEvaluate(page: Page, fn: any, ...args: any[]) {
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        return await page.evaluate(fn, ...args);
+      } catch (e: any) {
+        if (e.message && e.message.includes('Execution context was destroyed')) {
+          retries--;
+          if (retries === 0) throw e;
+          await new Promise(r => setTimeout(r, 1000));
+        } else {
+          throw e;
+        }
+      }
+    }
+  }
+
+  static async safePageEvaluateHandle(page: Page, fn: any, ...args: any[]) {
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        return await page.evaluateHandle(fn, ...args);
+      } catch (e: any) {
+        if (e.message && e.message.includes('Execution context was destroyed')) {
+          retries--;
+          if (retries === 0) throw e;
+          await new Promise(r => setTimeout(r, 1000));
+        } else {
+          throw e;
+        }
+      }
+    }
+  }
+
   static async safeWait(page: Page, ms: number, profileId: string) {
     const start = Date.now();
     while (Date.now() - start < ms) {
@@ -68,7 +103,7 @@ export class AutomationEngine {
 
     if (isLike) {
       console.log('Liking a post/reel');
-      await page.evaluate(() => {
+      await this.safePageEvaluate(page, () => {
         function isVisible(el: Element) {
           const rect = el.getBoundingClientRect();
           return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
@@ -82,7 +117,7 @@ export class AutomationEngine {
     } else if ((config.comments && config.comments.length > 0) || config.useAiComment) {
       console.log('Commenting on a post/reel');
       
-      const { clicked, postText } = await page.evaluate(() => {
+      const { clicked, postText } = await this.safePageEvaluate(page, () => {
         function isVisible(el: Element) {
           const rect = el.getBoundingClientRect();
           return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
@@ -228,7 +263,7 @@ export class AutomationEngine {
           console.log('AI Comment failed, using fallback.', e);
         }
 
-        await page.evaluate(() => {
+        await this.safePageEvaluate(page, () => {
           const box = document.querySelector('form[action*="/comment/"] textarea, form div[contenteditable="true"], div[aria-label="Viết bình luận"], div[aria-label="Write a comment"]') as HTMLElement;
           if (box) box.focus();
         });
@@ -237,7 +272,7 @@ export class AutomationEngine {
         await this.safeWait(page, 500, profileId);
         await page.keyboard.press('Enter');
 
-        const postLink = await page.evaluate(() => {
+        const postLink = await this.safePageEvaluate(page, () => {
           if (window.location.href.includes('/reel/') || window.location.href.includes('/watch/')) {
             return window.location.href;
           }
@@ -281,7 +316,7 @@ export class AutomationEngine {
       await page.goto(reelsUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await this.safeWait(page, 5000, profileId);
 
-      await page.evaluate(() => {
+      await this.safePageEvaluate(page, () => {
         const reel = document.querySelector('a[href*="/reel/"]') as HTMLElement;
         if (reel) reel.click();
       });
@@ -316,7 +351,7 @@ export class AutomationEngine {
         await this.humanScroll(page, profileId, Math.floor(i / 4));
       }
 
-      const clicked = await page.evaluate((index) => {
+      const clicked = await this.safePageEvaluate(page, (index) => {
         const reels = Array.from(document.querySelectorAll('a[href*="/reel/"]')) as HTMLElement[];
         if (reels.length > index) {
           reels[index].click();
@@ -385,13 +420,19 @@ export class AutomationEngine {
       for (const btn of btns) {
         if (addedCount >= config.actionCount) break;
 
-        const isValid = await btn.evaluate(el => {
-          const rect = el.getBoundingClientRect();
-          if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.bottom > (window.innerHeight || document.documentElement.clientHeight)) return false;
-          let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
-          let text = ((el as HTMLElement).innerText || '').toLowerCase().trim();
-          return aria.includes('thêm bạn bè') || aria.includes('add friend') || text.includes('thêm bạn bè') || text.includes('add friend');
-        });
+        let isValid = false;
+        try {
+          isValid = await btn.evaluate(el => {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.bottom > (window.innerHeight || document.documentElement.clientHeight)) return false;
+            let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+            let text = ((el as HTMLElement).innerText || '').toLowerCase().trim();
+            return aria.includes('thêm bạn bè') || aria.includes('add friend') || text.includes('thêm bạn bè') || text.includes('add friend');
+          });
+        } catch (e: any) {
+          if (e.message && e.message.includes('Execution context was destroyed')) isValid = false;
+          else throw e;
+        }
 
         if (isValid) {
           try {
@@ -433,7 +474,7 @@ export class AutomationEngine {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await this.safeWait(page, 4000 + Math.random() * 2000, profileId);
 
-    const opened = await page.evaluate(() => {
+    const opened = await this.safePageEvaluate(page, () => {
       const inviteSelectors = [
         'div[aria-label="Mời"]',
         'div[aria-label="Invite"]',
@@ -464,7 +505,7 @@ export class AutomationEngine {
       console.log('Opened Invite dialog');
       await this.safeWait(page, 3000, profileId);
 
-      await page.evaluate(() => {
+      await this.safePageEvaluate(page, () => {
         let spans = Array.from(document.querySelectorAll('span'));
         let subBtn = spans.find(span => {
           let text = span.innerText?.toLowerCase() || '';
@@ -487,14 +528,20 @@ export class AutomationEngine {
         for (const cb of checkboxes) {
           if (invitedCount >= config.actionCount) break;
 
-          const canCheck = await cb.evaluate(el => {
-            const rect = el.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.bottom > (window.innerHeight || document.documentElement.clientHeight)) return false;
-            const ariaChecked = el.getAttribute('aria-checked');
-            if (ariaChecked === 'true') return false;
-            if (el.tagName.toLowerCase() === 'input' && (el as HTMLInputElement).checked) return false;
-            return true;
-          });
+          let canCheck = false;
+          try {
+            canCheck = await cb.evaluate(el => {
+              const rect = el.getBoundingClientRect();
+              if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.bottom > (window.innerHeight || document.documentElement.clientHeight)) return false;
+              const ariaChecked = el.getAttribute('aria-checked');
+              if (ariaChecked === 'true') return false;
+              if (el.tagName.toLowerCase() === 'input' && (el as HTMLInputElement).checked) return false;
+              return true;
+            });
+          } catch (e: any) {
+            if (e.message && e.message.includes('Execution context was destroyed')) canCheck = false;
+            else throw e;
+          }
 
           if (canCheck) {
             try {
@@ -516,7 +563,7 @@ export class AutomationEngine {
         }
       }
 
-      const sent = await page.evaluate(() => {
+      const sent = await this.safePageEvaluate(page, () => {
         let spans = Array.from(document.querySelectorAll('div[role="button"] span'));
         let sendBtn = spans.find(span => {
           let txt = ((span as HTMLElement).innerText || '').toLowerCase().trim();
@@ -552,7 +599,7 @@ export class AutomationEngine {
     await this.humanScroll(page, profileId, 1);
 
     console.log('Liking post...');
-    await page.evaluate(() => {
+    await this.safePageEvaluate(page, () => {
       function isVisible(el: Element) {
         const rect = el.getBoundingClientRect();
         return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);
@@ -573,7 +620,7 @@ export class AutomationEngine {
     
     // Borrow logic from randomInteract (which I see is lines 70-240)
     // To keep it simple, I'll extract just the clicking and typing part.
-    const { clicked, postText } = await page.evaluate(() => {
+    const { clicked, postText } = await this.safePageEvaluate(page, () => {
       function isVisible(el: Element) {
         const rect = el.getBoundingClientRect();
         return rect.top >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight);

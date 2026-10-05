@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { execSync } = require('child_process');
 const { runPlaywrightLogin, activeBrowsers, latestScreenshots } = require('./playwright-runner');
 const { startAutomationTask, stopTask, getRunningTasks } = require('./automation-runner');
 
@@ -42,8 +44,8 @@ function createWindow() {
 
   // Quản lý popup OAuth (như Facebook/Google login)
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Với Google/YouTube OAuth: luôn mở bằng trình duyệt hệ thống để tránh 100% lỗi Google 403 disallowed_useragent
-    if (url.includes('accounts.google.com') || url.includes('/api/social/google')) {
+    // Với Google/YouTube/Facebook OAuth: luôn mở bằng trình duyệt hệ thống
+    if (url.includes('accounts.google.com') || url.includes('/api/social/google') || url.includes('facebook.com') || url.includes('/api/social/meta')) {
       shell.openExternal(url);
       return { action: 'deny' };
     }
@@ -69,16 +71,16 @@ function createWindow() {
     childWindow.webContents.setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     );
-    // Bắt nếu có chuyển hướng tới Google OAuth trong popup con thì đưa ra trình duyệt ngoài
+    // Bắt nếu có chuyển hướng tới OAuth trong popup con thì đưa ra trình duyệt ngoài
     childWindow.webContents.on('will-navigate', (event, navUrl) => {
-      if (navUrl.includes('accounts.google.com') || navUrl.includes('/api/social/google')) {
+      if (navUrl.includes('accounts.google.com') || navUrl.includes('/api/social/google') || navUrl.includes('facebook.com') || navUrl.includes('/api/social/meta')) {
         event.preventDefault();
         shell.openExternal(navUrl);
         childWindow.close();
       }
     });
     childWindow.webContents.on('will-redirect', (event, navUrl) => {
-      if (navUrl.includes('accounts.google.com') || navUrl.includes('/api/social/google')) {
+      if (navUrl.includes('accounts.google.com') || navUrl.includes('/api/social/google') || navUrl.includes('facebook.com') || navUrl.includes('/api/social/meta')) {
         event.preventDefault();
         shell.openExternal(navUrl);
         childWindow.close();
@@ -264,6 +266,133 @@ ipcMain.handle('close-active-browser', async (event, profileId) => {
     return { success: false, error: 'Trình duyệt không tồn tại hoặc đã đóng' };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+});
+
+// Tự động tải video, đóng dấu Watermark và Đăng bài lên Facebook Group bằng các profile cục bộ
+ipcMain.handle('post-facebook-group', async (event, { videoUrl, groupUrl, caption, watermarkText, accounts, profileIds }) => {
+  let rawVideoPath = '';
+  let finalVideoPath = '';
+  
+  try {
+    if (!videoUrl || !groupUrl) {
+      return { success: false, error: 'Thiếu đường dẫn Video hoặc Link Group Facebook' };
+    }
+    if (!profileIds || profileIds.length === 0) {
+      return { success: false, error: 'Vui lòng chọn ít nhất một tài khoản Facebook để đăng bài' };
+    }
+
+    const tmpDir = path.join(os.tmpdir(), 'topify-autopost');
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    const fileId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    rawVideoPath = path.join(tmpDir, `${fileId}_raw.mp4`);
+    finalVideoPath = rawVideoPath;
+
+    // Bước 1: Tải video từ videoUrl
+    console.log(`[IPC AutoPost] Đang tải video từ: ${videoUrl}`);
+    mainWindow?.webContents?.send('autopost-status', { step: 'downloading', message: 'Đang tải video nguồn về máy...' });
+
+    const fetchStream = async (targetUrl) => {
+      const response = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': '*/*'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return response;
+    };
+
+    let response;
+    try {
+      response = await fetchStream(videoUrl);
+    } catch (err) {
+      console.warn('[IPC AutoPost] Tải trực tiếp lỗi, thử qua proxy-download...');
+      const proxyUrl = `https://topify.vn/api/proxy-download?url=${encodeURIComponent(videoUrl)}&filename=video.mp4`;
+      response = await fetchStream(proxyUrl);
+    }
+
+    const fileStream = fs.createWriteStream(rawVideoPath);
+    for await (const chunk of response.body) {
+      fileStream.write(chunk);
+    }
+    await new Promise((resolve, reject) => {
+      fileStream.end((err) => (err ? reject(err) : resolve()));
+    });
+    console.log(`[IPC AutoPost] ✅ Đã tải video thành công: ${rawVideoPath}`);
+
+    // Bước 2: Xử lý Watermark nếu có
+    const cleanWatermark = (watermarkText || '').trim();
+    if (cleanWatermark && cleanWatermark.toLowerCase() !== 'none') {
+      mainWindow?.webContents?.send('autopost-status', { step: 'watermarking', message: `Đang đóng dấu watermark "${cleanWatermark}"...` });
+      const watermarkedPath = path.join(tmpDir, `${fileId}_watermarked.mp4`);
+      
+      try {
+        let ffmpegBin = '';
+        try {
+          ffmpegBin = require('@ffmpeg-installer/ffmpeg').path;
+        } catch (e) {}
+        if (!ffmpegBin || !fs.existsSync(ffmpegBin)) {
+          ffmpegBin = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find(p => fs.existsSync(p)) || 'ffmpeg';
+        }
+        const possibleFonts = [
+          '/System/Library/Fonts/Supplemental/Arial.ttf',
+          '/System/Library/Fonts/Helvetica.ttc',
+          '/Library/Fonts/Arial.ttf',
+          '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+          'C:\\Windows\\Fonts\\arial.ttf'
+        ];
+        const foundFont = possibleFonts.find(p => fs.existsSync(p));
+        const fontParam = foundFont ? `fontfile='${foundFont}':` : '';
+        const safeText = cleanWatermark.replace(/'/g, "\\'").replace(/:/g, '\\:');
+        
+        execSync(`"${ffmpegBin}" -y -i "${rawVideoPath}" -vf "drawtext=${fontParam}text='${safeText}':x=20:y=20:fontsize=32:fontcolor=white:shadowcolor=black:shadowx=2:shadowy=2" -c:a copy -preset fast "${watermarkedPath}"`, { stdio: 'pipe' });
+        
+        if (fs.existsSync(watermarkedPath) && fs.statSync(watermarkedPath).size > 0) {
+          finalVideoPath = watermarkedPath;
+          console.log(`[IPC AutoPost] ✅ Đã đóng dấu watermark thành công: ${watermarkedPath}`);
+        }
+      } catch (ffErr) {
+        console.warn(`[IPC AutoPost] Đóng dấu watermark thất bại (${ffErr.message}), sử dụng video gốc.`);
+        finalVideoPath = rawVideoPath;
+      }
+    }
+
+    // Bước 3: Đăng bài lên Facebook Group qua automation runner
+    mainWindow?.webContents?.send('autopost-status', { step: 'posting', message: `Bắt đầu đăng bài lên Group với ${profileIds.length} tài khoản...` });
+    
+    const taskRes = await startAutomationTask({
+      taskId: `autopost-group-${Date.now()}`,
+      actionType: 'fb_post_group',
+      profileIds,
+      accounts: accounts || [],
+      config: {
+        targetUrl: groupUrl,
+        groupUrl: groupUrl,
+        caption: caption || '',
+        mediaPath: finalVideoPath
+      }
+    });
+
+    mainWindow?.webContents?.send('autopost-status', { step: 'done', message: 'Hoàn tất đăng bài lên Facebook Group!' });
+    return taskRes;
+
+  } catch (error) {
+    console.error('[IPC AutoPost] Lỗi tổng thể:', error);
+    mainWindow?.webContents?.send('autopost-status', { step: 'error', message: `Lỗi: ${error.message}` });
+    return { success: false, error: error.message };
+  } finally {
+    setTimeout(() => {
+      try {
+        if (rawVideoPath && fs.existsSync(rawVideoPath)) fs.unlinkSync(rawVideoPath);
+        if (finalVideoPath && finalVideoPath !== rawVideoPath && fs.existsSync(finalVideoPath)) fs.unlinkSync(finalVideoPath);
+      } catch (e) {}
+    }, 15000);
   }
 });
 

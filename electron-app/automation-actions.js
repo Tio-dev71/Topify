@@ -3,6 +3,41 @@ const dotenv = require('dotenv');
 
 dotenv.config({ path: '../.env' }); // load .env from root
 
+
+async function safePageEvaluate(page, fn, ...args) {
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      return await page.evaluate(fn, ...args);
+    } catch (e) {
+      if (e.message && e.message.includes('Execution context was destroyed')) {
+        retries--;
+        if (retries === 0) throw e;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
+async function safePageEvaluateHandle(page, fn, ...args) {
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      return await page.evaluateHandle(fn, ...args);
+    } catch (e) {
+      if (e.message && e.message.includes('Execution context was destroyed')) {
+        retries--;
+        if (retries === 0) throw e;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 async function safeWait(page, ms) {
   try {
     if (page && !page.isClosed()) {
@@ -171,7 +206,7 @@ async function randomInteract(page, config, profileId, chance = 0.3) {
 
   if (isLike) {
     console.log('Liking a post/reel');
-    const likeHandle = await page.evaluateHandle(() => {
+    const likeHandle = await safePageEvaluateHandle(page, () => {
       function isRendered(el) {
         if (!el) return false;
         const style = window.getComputedStyle(el);
@@ -226,7 +261,7 @@ async function randomInteract(page, config, profileId, chance = 0.3) {
   } else if ((config.comments && config.comments.length > 0) || config.useAiComment) {
     console.log('Commenting on a post/reel');
     
-    const commentResult = await page.evaluateHandle(() => {
+    const commentResult = await safePageEvaluateHandle(page, () => {
       if (!window._topifyCommented) window._topifyCommented = new Set();
       function isRendered(el) {
         if (!el) return false;
@@ -336,7 +371,7 @@ async function randomInteract(page, config, profileId, chance = 0.3) {
         console.log('AI Comment failed, using fallback.', e);
       }
 
-      await page.evaluate(() => {
+      await safePageEvaluate(page, () => {
         const box = document.querySelector('form[action*="/comment/"] textarea, form div[contenteditable="true"], div[aria-label="Viết bình luận"], div[aria-label="Write a comment"]');
         if (box) box.focus();
       });
@@ -345,7 +380,7 @@ async function randomInteract(page, config, profileId, chance = 0.3) {
       await safeWait(page, 500);
       await page.keyboard.press('Enter');
 
-      const postLink = await page.evaluate(() => {
+      const postLink = await safePageEvaluate(page, () => {
         if (window.location.href.includes('/reel/') || window.location.href.includes('/watch/')) {
           return window.location.href;
         }
@@ -379,7 +414,7 @@ async function taskFbFarmReels(page, config, profileId) {
     await page.goto(reelsUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await safeWait(page, 5000);
 
-    const reelHandle = await page.evaluateHandle(() => {
+    const reelHandle = await safePageEvaluateHandle(page, () => {
       return document.querySelector('a[href*="/reel/"]');
     });
     const reelEl = reelHandle.asElement();
@@ -424,7 +459,7 @@ async function taskFbFarmReels(page, config, profileId) {
       await humanScroll(page, config, Math.floor(i / 4));
     }
 
-    const reelHandle = await page.evaluateHandle((index) => {
+    const reelHandle = await safePageEvaluateHandle(page, (index) => {
       const reels = Array.from(document.querySelectorAll('a[href*="/reel/"]'));
       if (reels.length > index) {
         return reels[index];
@@ -497,7 +532,7 @@ async function taskFbAutoInteract(page, config, profileId) {
   await page.goto(feedUrl, { waitUntil: 'domcontentloaded', timeout: 35000 });
   await safeWait(page, 4000);
 
-  await page.evaluate(() => { window._topifyCommented = new Set(); });
+  await safePageEvaluate(page, () => { window._topifyCommented = new Set(); });
 
   const totalActions = config.actionCount || 5;
   for (let i = 0; i < totalActions; i++) {
@@ -527,7 +562,7 @@ async function taskFbAddFriendsGroup(page, config, profileId) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await safeWait(page, 4000 + Math.random() * 2000);
 
-  const joinHandle = await page.evaluateHandle(() => {
+  const joinHandle = await safePageEvaluateHandle(page, () => {
     let btns = Array.from(document.querySelectorAll('div[role="button"], span'));
     let joinBtn = btns.find(b => {
       let t = (b.innerText || '').toLowerCase().trim();
@@ -567,13 +602,19 @@ async function taskFbAddFriendsGroup(page, config, profileId) {
     for (const btn of btns) {
       if (addedCount >= config.actionCount) break;
 
-      const isValid = await btn.evaluate(el => {
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) return false;
-        let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
-        let text = (el.innerText || '').toLowerCase().trim();
-        return aria.includes('thêm bạn bè') || aria.includes('add friend') || text.includes('thêm bạn bè') || text.includes('add friend');
-      });
+      let isValid = false;
+      try {
+        isValid = await btn.evaluate(el => {
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return false;
+          let aria = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+          let text = (el.innerText || '').toLowerCase().trim();
+          return aria.includes('thêm bạn bè') || aria.includes('add friend') || text.includes('thêm bạn bè') || text.includes('add friend');
+        });
+      } catch (e) {
+        if (e.message && e.message.includes('Execution context was destroyed')) isValid = false;
+        else throw e;
+      }
 
       if (isValid) {
         try {
@@ -608,7 +649,7 @@ async function taskFbInviteToGroup(page, config, profileId) {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await safeWait(page, 4000 + Math.random() * 2000);
 
-  const joinHandle = await page.evaluateHandle(() => {
+  const joinHandle = await safePageEvaluateHandle(page, () => {
     let btns = Array.from(document.querySelectorAll('div[role="button"], span'));
     let joinBtn = btns.find(b => {
       let t = (b.innerText || '').toLowerCase().trim();
@@ -636,7 +677,7 @@ async function taskFbInviteToGroup(page, config, profileId) {
     await safeWait(page, 5000);
   }
 
-  const inviteHandle = await page.evaluateHandle(() => {
+  const inviteHandle = await safePageEvaluateHandle(page, () => {
     const inviteSelectors = ['div[aria-label="Mời"]', 'div[aria-label="Invite"]', 'div[aria-label*="Mời tham gia"]', 'div[role="button"]', 'a', 'span'];
     let allBtns = Array.from(document.querySelectorAll(inviteSelectors.join(', ')));
     let inviteBtn = allBtns.find(el => {
@@ -670,7 +711,7 @@ async function taskFbInviteToGroup(page, config, profileId) {
     console.log('Opened Invite dialog');
     await safeWait(page, 3000);
 
-    const subBtnHandle = await page.evaluateHandle(() => {
+    const subBtnHandle = await safePageEvaluateHandle(page, () => {
       let spans = Array.from(document.querySelectorAll('span'));
       let subBtn = spans.find(span => {
         let text = span.innerText?.toLowerCase() || '';
@@ -703,14 +744,20 @@ async function taskFbInviteToGroup(page, config, profileId) {
       for (const cb of checkboxes) {
         if (invitedCount >= config.actionCount) break;
 
-        const canCheck = await cb.evaluate(el => {
-          const rect = el.getBoundingClientRect();
-          if (rect.width === 0 && rect.height === 0) return false;
-          const ariaChecked = el.getAttribute('aria-checked');
-          if (ariaChecked === 'true') return false;
-          if (el.tagName.toLowerCase() === 'input' && el.checked) return false;
-          return true;
-        });
+        let canCheck = false;
+        try {
+          canCheck = await cb.evaluate(el => {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return false;
+            const ariaChecked = el.getAttribute('aria-checked');
+            if (ariaChecked === 'true') return false;
+            if (el.tagName.toLowerCase() === 'input' && el.checked) return false;
+            return true;
+          });
+        } catch (e) {
+          if (e.message && e.message.includes('Execution context was destroyed')) canCheck = false;
+          else throw e;
+        }
 
         if (canCheck) {
           try {
@@ -731,7 +778,7 @@ async function taskFbInviteToGroup(page, config, profileId) {
       }
     }
 
-    const sendBtnHandle = await page.evaluateHandle(() => {
+    const sendBtnHandle = await safePageEvaluateHandle(page, () => {
       let spans = Array.from(document.querySelectorAll('div[role="button"] span'));
       let sendBtn = spans.find(span => {
         let txt = (span.innerText || '').toLowerCase().trim();
@@ -786,7 +833,7 @@ async function taskFbBuffPost(page, config, profileId) {
   await safeWait(page, 3000 + Math.random() * 2000);
 
   // Pause videos to prevent auto-scrolling to next Reel
-  await page.evaluate(() => {
+  await safePageEvaluate(page, () => {
     const videos = document.querySelectorAll('video');
     videos.forEach(v => {
       try { v.pause(); } catch(e) {}
@@ -794,7 +841,7 @@ async function taskFbBuffPost(page, config, profileId) {
   });
 
   // Đóng các popup che khuất màn hình
-  await page.evaluate(() => {
+  await safePageEvaluate(page, () => {
     try {
       const closeSelectors = [
         'div[aria-label="Lúc khác"]', 'div[aria-label="Not Now"]',
@@ -822,7 +869,7 @@ async function taskFbBuffPost(page, config, profileId) {
   // Cuộn bằng chuột thật (wheel) để hoạt động cả khi bài viết mở trong popup/modal
   const wheelScroll = async (deltaY) => {
     try {
-      const vp = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
+      const vp = await safePageEvaluate(page, () => ({ w: window.innerWidth, h: window.innerHeight }));
       await page.mouse.move(vp.w / 2, vp.h / 2);
       for (let i = 0; i < 4; i++) {
         await page.mouse.wheel(0, deltaY / 4);
@@ -857,7 +904,7 @@ async function taskFbBuffPost(page, config, profileId) {
         await wheelScroll(500);
         await safeWait(page, 800);
       }
-      likeResult = await page.evaluate(async () => {
+      likeResult = await safePageEvaluate(page, async () => {
         // Quét tất cả dialog trước, sau đó main, cuối cùng body
         const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
         const btnSet = new Set();
@@ -925,7 +972,7 @@ async function taskFbBuffPost(page, config, profileId) {
     let postText = '';
     if (config.useAiComment) {
       try {
-        postText = await page.evaluate(() => {
+        postText = await safePageEvaluate(page, () => {
           const msg = document.querySelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"]');
           if (msg) return msg.innerText;
           const main = document.querySelector('[role="main"]');
@@ -952,7 +999,7 @@ async function taskFbBuffPost(page, config, profileId) {
     console.log('[Buff COMMENT] Đang tìm nút mở bình luận...');
     let clickedComment = false;
     for (let attempt = 0; attempt < 3; attempt++) {
-      clickedComment = await page.evaluate(async () => {
+      clickedComment = await safePageEvaluate(page, async () => {
         const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
         const btnSet = new Set();
         for (const r of roots) r.querySelectorAll('[role="button"]').forEach(b => btnSet.add(b));
@@ -987,7 +1034,7 @@ async function taskFbBuffPost(page, config, profileId) {
     // Tìm ô nhập bình luận và đánh dấu để click bằng chuột thật (Lexical editor của FB cần sự kiện thật)
     let textBoxFocused = false;
     for (let attempt = 0; attempt < 3 && !textBoxFocused; attempt++) {
-      const found = await page.evaluate(async () => {
+      const found = await safePageEvaluate(page, async () => {
         document.querySelectorAll('[data-topify-cbox]').forEach(el => el.removeAttribute('data-topify-cbox'));
         const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
         const boxSet = new Set();
@@ -1015,7 +1062,7 @@ async function taskFbBuffPost(page, config, profileId) {
           textBoxFocused = true;
         } catch (e) {
           // Fallback: focus bằng DOM
-          textBoxFocused = await page.evaluate(() => {
+          textBoxFocused = await safePageEvaluate(page, () => {
             const el = document.querySelector('[data-topify-cbox="1"]');
             if (!el) return false;
             el.focus();
@@ -1043,7 +1090,7 @@ async function taskFbBuffPost(page, config, profileId) {
     await safeWait(page, 2000);
 
     // Bấm nút gửi bình luận (máy bay giấy) nếu có
-    await page.evaluate(() => {
+    await safePageEvaluate(page, () => {
       const btns = Array.from(document.querySelectorAll('[role="button"]'));
       const sendBtn = btns.find(b => {
         const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
@@ -1055,7 +1102,7 @@ async function taskFbBuffPost(page, config, profileId) {
     await safeWait(page, 3000);
 
     // Xác minh bình luận đã được gửi bằng cách kiểm tra ô nhập có trống không, VÀ có text finalComment hay không
-    const isCommentSent = await page.evaluate((commentText) => {
+    const isCommentSent = await safePageEvaluate(page, (commentText) => {
       const activeText = document.activeElement ? document.activeElement.innerText || '' : '';
       const textOnScreen = document.body.innerText.includes(commentText.substring(0, 15));
       // Nếu activeElement rỗng (đã gửi) hoặc chữ xuất hiện trên màn hình trong DOM (post list)
@@ -1079,7 +1126,7 @@ async function taskFbBuffPost(page, config, profileId) {
     
     let clickedShare = false;
     for (let attempt = 0; attempt < 3; attempt++) {
-      clickedShare = await page.evaluate(async () => {
+      clickedShare = await safePageEvaluate(page, async () => {
         const container = document.querySelector('div[role="dialog"]') || document.querySelector('[role="main"]') || document.body;
         const btns = Array.from(container.querySelectorAll('[role="button"]'));
         const shareBtn = btns.find(b => {
@@ -1106,7 +1153,7 @@ async function taskFbBuffPost(page, config, profileId) {
 
     await safeWait(page, 2500);
 
-    const clickedShareNow = await page.evaluate(async () => {
+    const clickedShareNow = await safePageEvaluate(page, async () => {
       const items = Array.from(document.querySelectorAll('div[role="menuitem"], span, div[role="button"]'));
       const shareNow = items.find(el => {
         const t = (el.innerText || '').toLowerCase().trim();
@@ -1138,11 +1185,545 @@ async function taskFbBuffPost(page, config, profileId) {
   }
 }
 
+async function fillPostCaption(page, captionText) {
+  if (!captionText || !captionText.trim()) return false;
+  const cleanCaption = captionText.trim();
+  const sample = cleanCaption.substring(0, Math.min(cleanCaption.length, 5));
+  console.log(`[PostGroup] Bắt đầu nhập nội dung bài viết: "${cleanCaption.substring(0, 50)}"...`);
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    // Đánh dấu ô contenteditable hoặc placeholder trong dialog
+    const boxFound = await page.evaluate(() => {
+      document.querySelectorAll('[data-topify-cbox]').forEach(e => e.removeAttribute('data-topify-cbox'));
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(d => {
+        const rect = d.getBoundingClientRect();
+        return rect.width > 200 && rect.height > 200;
+      });
+      const d = dialogs[dialogs.length - 1] || document.querySelector('[role="dialog"]');
+      if (!d) return false;
+
+      // 1. Tìm các phần tử contenteditable
+      const editables = Array.from(d.querySelectorAll('[contenteditable="true"]')).filter(el => {
+        const rect = el.getBoundingClientRect();
+        const lbl = (el.getAttribute('aria-label') || '').toLowerCase();
+        return rect.width > 0 && rect.height > 0 && !lbl.includes('search') && !lbl.includes('tìm kiếm');
+      });
+
+      if (editables.length > 0) {
+        const box = editables[0];
+        box.setAttribute('data-topify-cbox', '1');
+        box.focus();
+        return true;
+      }
+
+      // 2. Tìm phần tử chứa placeholder text nếu contenteditable chưa xuất hiện
+      const allElements = Array.from(d.querySelectorAll('*'));
+      const placeholder = allElements.find(el => {
+        const t = (el.textContent || '').trim().toLowerCase();
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        const ph = (el.getAttribute('aria-placeholder') || '').toLowerCase();
+        return (
+          t.includes('create a public post') || t.includes('tạo bài viết') || t.includes('viết gì') || t.includes('write something') ||
+          aria.includes('create a public post') || aria.includes('tạo bài viết') || aria.includes('write something') ||
+          ph.includes('create a public post') || ph.includes('write something')
+        );
+      });
+
+      if (placeholder) {
+        placeholder.setAttribute('data-topify-cbox', '1');
+        return true;
+      }
+
+      return false;
+    });
+
+    if (boxFound) {
+      const box = page.locator('[data-topify-cbox="1"]').first();
+      await box.scrollIntoViewIfNeeded().catch(() => {});
+      await box.click({ timeout: 5000, force: true }).catch(() => {});
+      await safeWait(page, 200);
+
+      // Thử click theo tọa độ chuột vào đầu box để đặt cursor chắc chắn
+      const bBox = await box.boundingBox().catch(() => null);
+      if (bBox) {
+        await page.mouse.click(bBox.x + Math.min(25, Math.max(10, bBox.width / 4)), bBox.y + Math.min(20, Math.max(10, bBox.height / 2))).catch(() => {});
+        await safeWait(page, 200);
+      }
+
+      const isMac = process.platform === 'darwin';
+      await page.keyboard.press(isMac ? 'Meta+A' : 'Control+A').catch(() => {});
+      await page.keyboard.press('Backspace').catch(() => {});
+      await safeWait(page, 150);
+
+      // Thử 1: Gõ bàn phím theo delay (Lexical native input events)
+      await page.keyboard.type(cleanCaption, { delay: 30 }).catch(() => {});
+      await safeWait(page, 400);
+
+      // Kiểm tra xem chữ đã xuất hiện trong dialog chưa
+      let hasText = await page.evaluate((sampleText) => {
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(d => {
+          const rect = d.getBoundingClientRect();
+          return rect.width > 200 && rect.height > 200;
+        });
+        const d = dialogs[dialogs.length - 1] || document.querySelector('[role="dialog"]');
+        return d ? (d.innerText || d.textContent || '').includes(sampleText) : false;
+      }, sample);
+
+      if (!hasText) {
+        // Thử 2: Dùng insertText của Playwright (beforeinput)
+        await page.keyboard.insertText(cleanCaption).catch(() => {});
+        await safeWait(page, 400);
+      }
+
+      hasText = await page.evaluate((sampleText) => {
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(d => {
+          const rect = d.getBoundingClientRect();
+          return rect.width > 200 && rect.height > 200;
+        });
+        const d = dialogs[dialogs.length - 1] || document.querySelector('[role="dialog"]');
+        return d ? (d.innerText || d.textContent || '').includes(sampleText) : false;
+      }, sample);
+
+      if (!hasText) {
+        // Thử 3: Dispatch ClipboardEvent paste
+        await page.evaluate((text) => {
+          const el = document.querySelector('[data-topify-cbox="1"]') || document.querySelector('[role="dialog"] [contenteditable="true"]');
+          if (!el) return;
+          el.focus();
+          try {
+            const dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            const pasteEv = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+            el.dispatchEvent(pasteEv);
+          } catch(e) {}
+        }, cleanCaption);
+        await safeWait(page, 400);
+      }
+
+      hasText = await page.evaluate((sampleText) => {
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(d => {
+          const rect = d.getBoundingClientRect();
+          return rect.width > 200 && rect.height > 200;
+        });
+        const d = dialogs[dialogs.length - 1] || document.querySelector('[role="dialog"]');
+        return d ? (d.innerText || d.textContent || '').includes(sampleText) : false;
+      }, sample);
+
+      if (!hasText) {
+        // Thử 4: document.execCommand insertText
+        await page.evaluate((text) => {
+          const el = document.querySelector('[data-topify-cbox="1"]') || document.querySelector('[role="dialog"] [contenteditable="true"]');
+          if (!el) return;
+          el.focus();
+          try {
+            document.execCommand('insertText', false, text);
+          } catch(e) {}
+        }, cleanCaption);
+        await safeWait(page, 400);
+      }
+
+      hasText = await page.evaluate((sampleText) => {
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(d => {
+          const rect = d.getBoundingClientRect();
+          return rect.width > 200 && rect.height > 200;
+        });
+        const d = dialogs[dialogs.length - 1] || document.querySelector('[role="dialog"]');
+        return d ? (d.innerText || d.textContent || '').includes(sampleText) : false;
+      }, sample);
+
+      if (hasText) {
+        console.log(`[PostGroup] ✅ Đã nhập thành công Caption: "${cleanCaption}"`);
+        return true;
+      }
+    }
+
+    await safeWait(page, 800);
+  }
+
+  console.warn('[PostGroup] Chưa thể nhập Caption sau các lần thử, tiếp tục tiến trình...');
+  return false;
+}
+
+async function taskFbPostGroup(page, config, profileId) {
+  const url = config.targetUrl || config.groupUrl;
+  if (!url) throw new Error('Vui lòng nhập Link Group Facebook cần đăng bài!');
+  if (config.checkStop && config.checkStop()) throw new Error('Tác vụ đã bị người dùng dừng');
+  ensurePageAlive(page);
+
+  const caption = config.caption || '';
+  const mediaPath = config.mediaPath || '';
+
+  console.log(`[PostGroup] Bắt đầu đăng bài lên Group: ${url} (Profile: ${profileId})`);
+
+  // Bước 1: Điều hướng tới trang Group
+  const navGroup = async () => {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  };
+  try {
+    await navGroup();
+  } catch (err) {
+    console.warn(`[PostGroup] Lỗi điều hướng lần 1 (${err.message}), thử lại...`);
+    await safeWait(page, 2500);
+    await navGroup();
+  }
+
+  await safeWait(page, 3000 + Math.random() * 2000);
+  ensurePageAlive(page);
+
+  // Đóng các popup thông báo hoặc overlay
+  await safePageEvaluate(page, () => {
+    try {
+      const closeSelectors = [
+        'div[aria-label="Lúc khác"]', 'div[aria-label="Not Now"]',
+        'div[aria-label="Đóng vòng kết nối"]', 'div[aria-label="Bỏ qua"]', 'div[aria-label="Dismiss"]',
+        'div[aria-label="Đóng"]', 'div[aria-label="Close"]'
+      ];
+      document.querySelectorAll(closeSelectors.join(', ')).forEach(el => {
+        if (el.getBoundingClientRect().width > 0) el.click();
+      });
+    } catch(e) {}
+  });
+
+  // Bước 2: Tìm và bấm nút Tạo bài viết trong Group
+  console.log('[PostGroup] Đang tìm nút Tạo bài viết trong nhóm...');
+  const createPostSelectors = [
+    '[role="button"]:has-text("Bạn viết gì đi")',
+    '[role="button"]:has-text("Viết gì đó")',
+    '[role="button"]:has-text("Tạo bài viết")',
+    '[role="button"]:has-text("Write something")',
+    '[role="button"]:has-text("Create a post")',
+    '[role="button"]:has-text("Create a public post")',
+    '[aria-label="Tạo bài viết"]',
+    '[aria-label="Create a post"]',
+    'div[data-pagelet="GroupInlineComposer"] [role="button"]'
+  ];
+
+  let dialogOpened = false;
+  for (const selector of createPostSelectors) {
+    if (config.checkStop && config.checkStop()) throw new Error('Tác vụ đã bị người dùng dừng');
+    try {
+      const count = await page.locator(selector).count().catch(() => 0);
+      for (let i = 0; i < count; i++) {
+        const item = page.locator(selector).nth(i);
+        if (await item.isVisible().catch(() => false)) {
+          await item.click({ timeout: 5000, force: true });
+          await safeWait(page, 1500);
+          const hasDialog = await page.locator('[role="dialog"]').count().catch(() => 0);
+          if (hasDialog > 0) {
+            dialogOpened = true;
+            break;
+          }
+        }
+      }
+      if (dialogOpened) break;
+    } catch (e) {}
+  }
+
+  if (!dialogOpened) {
+    const clickedByText = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('[role="button"], div[tabindex="0"]'));
+      const target = buttons.find(b => {
+        const t = (b.textContent || '').trim().toLowerCase();
+        return t.includes('viết gì') || t.includes('tạo bài viết') || t.includes('write something') || t.includes('create a post');
+      });
+      if (target) {
+        target.click();
+        return true;
+      }
+      return false;
+    }).catch(() => false);
+    if (clickedByText) {
+      await safeWait(page, 2000);
+      dialogOpened = (await page.locator('[role="dialog"]').count().catch(() => 0)) > 0;
+    }
+  }
+
+  if (!dialogOpened) {
+    throw new Error('Không thể mở khung Tạo bài viết trong Nhóm Facebook này (có thể nhóm yêu cầu duyệt tham gia hoặc không cho đăng)');
+  }
+
+  console.log('[PostGroup] Đã mở popup tạo bài viết thành công.');
+  await safeWait(page, 1500);
+
+  // Bước 3: Nhập Caption nếu có
+  if (caption && caption.trim()) {
+    await fillPostCaption(page, caption);
+    await safeWait(page, 1000);
+  }
+
+  // Bước 4: Đính kèm Media (Video)
+  if (mediaPath && fs.existsSync(mediaPath)) {
+    console.log(`[PostGroup] Đang tải file video lên: ${mediaPath}`);
+    const dialog = page.locator('[role="dialog"]').last();
+
+    let uploaded = false;
+
+    // Cách 1: Thử tìm input[type="file"] đã có sẵn trong DOM
+    const existingInputs = page.locator('input[type="file"]');
+    const existCount = await existingInputs.count().catch(() => 0);
+    if (existCount > 0) {
+      for (let i = existCount - 1; i >= 0; i--) {
+        try {
+          await existingInputs.nth(i).setInputFiles(mediaPath);
+          uploaded = true;
+          console.log(`[PostGroup] ✅ Đã gắn video qua input[type="file"] có sẵn (thứ ${i + 1})`);
+          break;
+        } catch (e) {}
+      }
+    }
+
+    // Cách 2: Nếu chưa có input file, tìm và bấm nút "Ảnh/video" để Facebook mở khung upload
+    if (!uploaded) {
+      console.log('[PostGroup] Đang tìm và bấm nút "Ảnh/video" để mở khung upload...');
+      const attachButtons = [
+        '[role="dialog"] [aria-label="Ảnh/video"]',
+        '[role="dialog"] [aria-label="Photo/video"]',
+        '[role="dialog"] [aria-label="Ảnh/Video"]',
+        '[role="dialog"] [aria-label="Photo/Video"]',
+        '[role="dialog"] [aria-label*="Ảnh"]',
+        '[role="dialog"] [aria-label*="Photo"]',
+        '[role="dialog"] [aria-label*="Thêm vào bài viết"] [role="button"]',
+        '[role="dialog"] [aria-label*="Add to your post"] [role="button"]',
+        '[role="dialog"] [role="button"]:has-text("Ảnh/video")',
+        '[role="dialog"] [role="button"]:has-text("Photo/video")',
+        '[role="dialog"] [role="button"]:has-text("Ảnh/Video")',
+        '[role="dialog"] [role="button"]:has-text("Photo/Video")'
+      ];
+
+      let btnClicked = false;
+      for (const sel of attachButtons) {
+        const btn = page.locator(sel).first();
+        if (await btn.isVisible().catch(() => false)) {
+          try {
+            await btn.scrollIntoViewIfNeeded().catch(() => {});
+            await safeWait(page, 400);
+            await btn.click({ timeout: 5000, force: true });
+            btnClicked = true;
+            console.log(`[PostGroup] Đã nhấp nút Ảnh/video qua selector: ${sel}`);
+            break;
+          } catch (e) {}
+        }
+      }
+
+      // Fallback click bằng DOM evaluate nếu các selector trên chưa bắt được
+      if (!btnClicked) {
+        btnClicked = await page.evaluate(() => {
+          const dialogs = document.querySelectorAll('[role="dialog"]');
+          const d = dialogs[dialogs.length - 1];
+          if (!d) return false;
+
+          // Tìm thanh "Thêm vào bài viết của bạn" và bấm icon đầu tiên
+          const addBars = Array.from(d.querySelectorAll('*')).filter(el => {
+            const lbl = (el.getAttribute('aria-label') || '').toLowerCase();
+            const txt = (el.textContent || '').toLowerCase();
+            return lbl.includes('thêm vào bài viết') || lbl.includes('add to your post') || txt.includes('thêm vào bài viết') || txt.includes('add to your post');
+          });
+
+          for (const bar of addBars) {
+            const firstBtn = bar.querySelector('[role="button"], div[tabindex="0"]');
+            if (firstBtn) {
+              firstBtn.scrollIntoView({ block: 'center', behavior: 'instant' });
+              firstBtn.click();
+              return true;
+            }
+          }
+
+          // Tìm bất kỳ nút nào có aria-label chứa ảnh/photo
+          const allBtns = Array.from(d.querySelectorAll('[role="button"], div[tabindex="0"], div[aria-label]'));
+          const photoBtn = allBtns.find(el => {
+            const lbl = (el.getAttribute('aria-label') || '').toLowerCase();
+            const txt = (el.textContent || '').toLowerCase();
+            return (lbl.includes('ảnh') || lbl.includes('photo') || txt.includes('ảnh/video') || txt.includes('photo/video')) && !txt.includes('tạo bài viết');
+          });
+
+          if (photoBtn) {
+            photoBtn.scrollIntoView({ block: 'center', behavior: 'instant' });
+            photoBtn.click();
+            return true;
+          }
+          return false;
+        }).catch(() => false);
+        if (btnClicked) console.log('[PostGroup] Đã nhấp nút Ảnh/video qua DOM evaluate');
+      }
+
+      await safeWait(page, 1500);
+
+      // Sau khi bấm Ảnh/video, Facebook chèn input[type="file"] vào popup. Kiểm tra và tải file lên:
+      const postClickInputs = page.locator('[role="dialog"] input[type="file"], input[type="file"]');
+      const pCount = await postClickInputs.count().catch(() => 0);
+      console.log(`[PostGroup] Tìm thấy ${pCount} input[type="file"] sau khi mở khung upload`);
+      if (pCount > 0) {
+        for (let i = pCount - 1; i >= 0; i--) {
+          try {
+            await postClickInputs.nth(i).setInputFiles(mediaPath);
+            uploaded = true;
+            console.log(`[PostGroup] ✅ Đã tải file video vào input[type="file"] thứ ${i + 1}`);
+            break;
+          } catch (e) {
+            console.warn(`[PostGroup] Thử input[${i}] lỗi:`, e.message);
+          }
+        }
+      }
+
+      // Cách 3: Nếu vẫn chưa được, bấm trực tiếp vào vùng dropzone ("Thêm ảnh/video")
+      if (!uploaded) {
+        console.log('[PostGroup] Thử nhấp vào vùng dropzone...');
+        const dropzones = [
+          dialog.locator('text=/Thêm ảnh\\/video|Add Photos\\/Videos|Thêm ảnh|Add Photos|Kéo thả|Drag.*drop/i').first(),
+          dialog.locator('[role="button"]:has-text("Thêm")').first(),
+          dialog.locator('[role="button"]:has-text("Add")').first()
+        ];
+        for (const dz of dropzones) {
+          if (await dz.isVisible().catch(() => false)) {
+            try {
+              const fileChooserPromise = page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null);
+              await dz.click({ timeout: 4000, force: true });
+              const fc = await fileChooserPromise;
+              if (fc) {
+                await fc.setFiles(mediaPath);
+                uploaded = true;
+                console.log('[PostGroup] ✅ Đã gắn video qua FileChooser của dropzone');
+                break;
+              }
+              const lastInputs = page.locator('input[type="file"]');
+              if ((await lastInputs.count().catch(() => 0)) > 0) {
+                await lastInputs.last().setInputFiles(mediaPath);
+                uploaded = true;
+                console.log('[PostGroup] ✅ Đã gắn video qua input[type="file"] sau khi nhấp dropzone');
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    }
+
+    if (!uploaded) {
+      throw new Error('Không thể tải file video vào bài viết Facebook. Vui lòng kiểm tra lại định dạng video.');
+    }
+
+    console.log('[PostGroup] Đang đợi Facebook tải xong và xử lý video...');
+    await page.waitForFunction(() => {
+      const d = document.querySelector('[role="dialog"]');
+      if (!d) return false;
+      const media = d.querySelectorAll('img[src^="blob:"], video, [style*="blob:"], [role="progressbar"]');
+      return media.length > 0;
+    }, { timeout: 35000 }).catch(() => {});
+
+    await safeWait(page, 4000);
+
+    // Bước 4.5: Kiểm tra và đảm bảo Caption đã xuất hiện sau khi đính kèm video
+    if (caption && caption.trim()) {
+      const sampleCheck = caption.trim().substring(0, Math.min(caption.trim().length, 5));
+      const hasCaptionAfterMedia = await page.evaluate((sample) => {
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(d => {
+          const rect = d.getBoundingClientRect();
+          return rect.width > 200 && rect.height > 200;
+        });
+        const d = dialogs[dialogs.length - 1] || document.querySelector('[role="dialog"]');
+        return d ? (d.innerText || d.textContent || '').includes(sample) : false;
+      }, sampleCheck);
+
+      if (!hasCaptionAfterMedia) {
+        console.log('[PostGroup] ⚠️ Caption chưa có trong bài viết sau khi gắn video, tiến hành nhập vào ô bài viết...');
+        await fillPostCaption(page, caption);
+        await safeWait(page, 1500);
+      } else {
+        console.log('[PostGroup] ✅ Caption đã có trong bài viết sau khi gắn video.');
+      }
+    }
+  }
+
+  // Bước 5: Bấm nút "Đăng" / "Post"
+  console.log('[PostGroup] Đang chờ nút Đăng sẵn sàng...');
+  await page.waitForFunction(() => {
+    const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).filter(d => {
+      const rect = d.getBoundingClientRect();
+      return rect.width > 200 && rect.height > 200;
+    });
+    const d = dialogs[dialogs.length - 1] || document.querySelector('[role="dialog"]');
+    if (!d) return false;
+    const btns = Array.from(d.querySelectorAll('[role="button"], button'));
+    const postBtn = btns.find(b => {
+      const txt = (b.textContent || '').trim().toLowerCase();
+      const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+      return txt === 'đăng' || txt === 'post' || aria === 'đăng' || aria === 'post';
+    });
+    if (!postBtn) return false;
+    const ariaDisabled = postBtn.getAttribute('aria-disabled');
+    const disabled = postBtn.hasAttribute('disabled');
+    return ariaDisabled !== 'true' && !disabled;
+  }, { timeout: 45000 }).catch(() => {
+    console.log('[PostGroup] Đã hết thời gian chờ nút Đăng enabled, sẽ tiến hành click trực tiếp...');
+  });
+
+  const postBtnSelectors = [
+    '[role="dialog"] [aria-label="Đăng"]',
+    '[role="dialog"] [aria-label="Post"]',
+    '[role="dialog"] button:has-text("Đăng")',
+    '[role="dialog"] button:has-text("Post")',
+    '[role="dialog"] [role="button"]:has-text("Đăng")',
+    '[role="dialog"] [role="button"]:has-text("Post")'
+  ];
+
+  let postClicked = false;
+  for (const sel of postBtnSelectors) {
+    const btn = page.locator(sel).last();
+    if (await btn.isVisible().catch(() => false)) {
+      try {
+        await btn.scrollIntoViewIfNeeded().catch(() => {});
+        await safeWait(page, 500);
+        await btn.click({ timeout: 8000, force: true });
+        postClicked = true;
+        console.log(`[PostGroup] Đã bấm nút Đăng qua selector: ${sel}`);
+        break;
+      } catch (e) {}
+    }
+  }
+
+  if (!postClicked) {
+    // Fallback bấm nút Đăng qua evaluate
+    postClicked = await page.evaluate(() => {
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      const d = dialogs[dialogs.length - 1];
+      if (!d) return false;
+      const btns = Array.from(d.querySelectorAll('[role="button"], button'));
+      const postBtn = btns.reverse().find(b => {
+        const txt = (b.textContent || '').trim().toLowerCase();
+        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+        return txt === 'đăng' || txt === 'post' || aria === 'đăng' || aria === 'post';
+      });
+      if (postBtn) {
+        postBtn.click();
+        return true;
+      }
+      return false;
+    }).catch(() => false);
+  }
+
+  if (!postClicked) {
+    throw new Error('Không tìm thấy hoặc không thể bấm nút "Đăng" trong popup bài viết');
+  }
+
+  console.log('[PostGroup] Đang đợi bài viết được đăng hoàn tất...');
+  await page.waitForFunction(() => {
+    return document.querySelectorAll('[role="dialog"]').length === 0;
+  }, { timeout: 35000 }).catch(() => {
+    console.log('[PostGroup] Popup chưa đóng sau 35s, nhưng lệnh Đăng đã được gửi.');
+  });
+
+  await safeWait(page, 5000);
+
+  await logHistory(profileId, 'POST_GROUP', url, `Đã đăng video lên Group thành công: ${caption ? caption.substring(0, 40) : 'Video'}`);
+  console.log(`[PostGroup] ✅ Đăng bài lên Group thành công cho profile: ${profileId}`);
+}
+
 module.exports = {
   taskFbFarmReels,
   taskFbAutoInteract,
   taskFbAddFriendsGroup,
   taskFbInviteToGroup,
   taskFbBuffPost,
+  taskFbPostGroup,
   generateAIComment
 };

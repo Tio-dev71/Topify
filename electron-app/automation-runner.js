@@ -52,6 +52,41 @@ async function stopTask(taskId, extraProfileIds = []) {
   }
 }
 
+
+async function safePageEvaluate(page, fn, ...args) {
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      return await page.evaluate(fn, ...args);
+    } catch (e) {
+      if (e.message && e.message.includes('Execution context was destroyed')) {
+        retries--;
+        if (retries === 0) throw e;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
+async function safePageEvaluateHandle(page, fn, ...args) {
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      return await page.evaluateHandle(fn, ...args);
+    } catch (e) {
+      if (e.message && e.message.includes('Execution context was destroyed')) {
+        retries--;
+        if (retries === 0) throw e;
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 async function safeWait(page, ms) {
   try {
     if (page && !page.isClosed()) {
@@ -85,7 +120,8 @@ const {
   taskFbAutoInteract,
   taskFbAddFriendsGroup,
   taskFbInviteToGroup,
-  taskFbBuffPost
+  taskFbBuffPost,
+  taskFbPostGroup
 } = require('./automation-actions');
 
 /**
@@ -230,7 +266,7 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
   await safeWait(page, 4000);
 
   // Kiểm tra lỗi đăng nhập
-  const loginError = await page.evaluate(() => {
+  const loginError = await safePageEvaluate(page, () => {
     // Only check for login errors if we are still on the login page or a login failure page
     const url = window.location.href;
     if (!url.includes('login') && !url.includes('recover')) return false;
@@ -256,7 +292,7 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
   }
 
   // Xử lý 2FA nếu có yêu cầu
-  const pageText = await page.evaluate(() => document.body ? document.body.innerText : '');
+  const pageText = await safePageEvaluate(page, () => document.body ? document.body.innerText : '');
   const isTwoFactor = page.url().includes('two_step_verification') ||
                       page.url().includes('two_factor') ||
                       page.url().includes('checkpoint') ||
@@ -495,6 +531,9 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
         break;
       case 'fb_invite_to_group':
         await taskFbInviteToGroup(page, config, safeProfileId);
+        break;
+      case 'fb_post_group':
+        await taskFbPostGroup(page, config, safeProfileId);
         break;
       default:
         console.warn(`[Automation] Unknown task type: ${actionType}`);

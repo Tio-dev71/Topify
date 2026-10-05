@@ -8,12 +8,18 @@ contextBridge.exposeInMainWorld('electron', {
   getActiveBrowsers: () => ipcRenderer.invoke('get-active-browsers'),
   closeActiveBrowser: (profileId) => ipcRenderer.invoke('close-active-browser', profileId),
   downloadFile: (data) => ipcRenderer.invoke('download-file', data),
+  postFacebookGroup: (data) => ipcRenderer.invoke('post-facebook-group', data),
   showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   onDownloadProgress: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('download-progress', listener);
     return () => ipcRenderer.removeListener('download-progress', listener);
+  },
+  onAutoPostStatus: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('autopost-status', listener);
+    return () => ipcRenderer.removeListener('autopost-status', listener);
   },
   isDesktopApp: true
 });

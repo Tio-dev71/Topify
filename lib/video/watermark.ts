@@ -1,13 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Readable } from 'stream';
 import { getStorage } from '@/lib/storage';
 // @ts-expect-error - no types available
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 
-// Ensure fluent-ffmpeg uses the installed binary
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+// Ensure fluent-ffmpeg uses system ffmpeg if available, otherwise installed binary
+const systemFfmpeg = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find(p => fs.existsSync(p));
+ffmpeg.setFfmpegPath(systemFfmpeg || ffmpegInstaller.path);
 
 /**
  * Downloads a video from a URL and applies a text watermark.
@@ -27,16 +29,45 @@ export async function addWatermark(videoUrl: string, text: string = 'Topmedia'):
   console.log(`[Watermark] Downloading video to ${rawVideoPath}...`);
   
   // Step 1: Download the video
-  const storage = getStorage();
-  const buffer = await storage.getBuffer(videoUrl);
-  fs.writeFileSync(rawVideoPath, buffer);
+  if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
+    const res = await fetch(videoUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': '*/*'
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`Không thể tải video từ nguồn (${res.status} ${res.statusText})`);
+    }
+
+    const fileStream = fs.createWriteStream(rawVideoPath);
+    // @ts-ignore
+    const bodyStream = Readable.fromWeb(res.body);
+    await new Promise<void>((resolve, reject) => {
+      bodyStream.pipe(fileStream);
+      fileStream.on('finish', () => resolve());
+      fileStream.on('error', reject);
+    });
+  } else {
+    const storage = getStorage();
+    const buffer = await storage.getBuffer(videoUrl);
+    fs.writeFileSync(rawVideoPath, buffer);
+  }
+
+  const cleanText = (text || '').trim();
+  if (!cleanText || cleanText.toLowerCase() === 'none') {
+    console.log(`[Watermark] No watermark text provided, using raw video directly.`);
+    return rawVideoPath;
+  }
   
-  console.log(`[Watermark] Adding watermark "${text}"...`);
+  console.log(`[Watermark] Adding watermark "${cleanText}"...`);
 
   // Step 2: Apply watermark using ffmpeg
   return new Promise((resolve, reject) => {
     // Find an existing system font or omit fontfile parameter for fallback
     const possibleFonts = [
+      '/System/Library/Fonts/Supplemental/Arial.ttf',
       '/System/Library/Fonts/Helvetica.ttc',
       '/Library/Fonts/Arial.ttf',
       '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
@@ -47,7 +78,7 @@ export async function addWatermark(videoUrl: string, text: string = 'Topmedia'):
     ];
     const foundFont = possibleFonts.find(p => fs.existsSync(p));
     const fontParam = foundFont ? `fontfile='${foundFont}':` : '';
-    const safeText = (text || 'Topmedia').replace(/'/g, "\\'").replace(/:/g, '\\:');
+    const safeText = cleanText.replace(/'/g, "\\'").replace(/:/g, '\\:');
 
     ffmpeg(rawVideoPath)
       .outputOptions([
@@ -58,7 +89,7 @@ export async function addWatermark(videoUrl: string, text: string = 'Topmedia'):
       .save(outputVideoPath)
       .on('end', () => {
         console.log(`[Watermark] Successfully created ${outputVideoPath}`);
-        // Optionally clean up the raw video
+        // Clean up the raw video
         if (fs.existsSync(rawVideoPath)) {
           fs.unlinkSync(rawVideoPath);
         }
@@ -66,10 +97,14 @@ export async function addWatermark(videoUrl: string, text: string = 'Topmedia'):
       })
       .on('error', (err: unknown) => {
         console.error(`[Watermark] Error applying watermark:`, err);
-        // Clean up partial files
-        if (fs.existsSync(rawVideoPath)) fs.unlinkSync(rawVideoPath);
+        // Fallback to raw video if watermark failed, rather than crashing completely
         if (fs.existsSync(outputVideoPath)) fs.unlinkSync(outputVideoPath);
-        reject(err);
+        if (fs.existsSync(rawVideoPath)) {
+          console.warn(`[Watermark] Fallback using raw video without watermark due to ffmpeg error.`);
+          resolve(rawVideoPath);
+        } else {
+          reject(err);
+        }
       });
   });
 }

@@ -43,6 +43,19 @@ class LocalStorageAdapter implements StorageAdapter {
   }
 
   async getBuffer(url: string): Promise<Buffer> {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': '*/*'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file from remote URL (${response.status}): ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    }
     const filename = url.replace('/api/uploads/', '');
     const filePath = path.join(process.cwd(), this.uploadDir, filename);
     return fs.readFile(filePath);

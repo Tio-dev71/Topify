@@ -188,9 +188,9 @@ export default function Settings() {
       if (pollCount > 15) clearInterval(pollInterval);
     }, 2000);
 
-    // Đối với YouTube / Google trên Desktop App: mở bằng trình duyệt hệ thống để tránh 100% lỗi Google 403 disallowed_useragent
-    if (provider === 'YOUTUBE' && (window as any).electron?.openExternal) {
-      toast.info('Đang mở trình duyệt để xác thực Google / YouTube an toàn...');
+    // Đối với YouTube / Google và Meta trên Desktop App: mở bằng trình duyệt hệ thống để sử dụng phiên đăng nhập sẵn có
+    if ((provider === 'YOUTUBE' || provider === 'META') && (window as any).electron?.openExternal) {
+      toast.info(`Đang mở trình duyệt để xác thực ${provider === 'YOUTUBE' ? 'Google / YouTube' : 'Meta'} an toàn...`);
       (window as any).electron.openExternal(fullUrl);
       return;
     }

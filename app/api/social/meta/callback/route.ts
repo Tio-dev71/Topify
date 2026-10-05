@@ -187,14 +187,9 @@ export async function GET(req: NextRequest) {
               <h2 style="color: #10B981; margin: 0 0 10px;">Kết nối Meta thành công!</h2>
               <p style="color: #374151; font-weight: 500;">Tài khoản: <strong>${accountDisplayName}</strong></p>
               ${page ? `<p style="color: #059669; font-size: 13px;">Fanpage: ${page.name}</p>` : '<p style="color: #D97706; font-size: 13px;">Lưu ý: Chưa tìm thấy Fanpage nào được cấp quyền. Bạn có thể cấp quyền Fanpage trong cài đặt Facebook.</p>'}
-              <p style="color: #6B7280; font-size: 13px; margin-top: 16px;">Cửa sổ sẽ tự động đóng sau 2 giây...</p>
+              <p style="color: #6B7280; font-size: 14px; margin-top: 16px;">Bạn có thể đóng tab trình duyệt này và quay lại ứng dụng Topify.</p>
             </div>
             <script>
-              try {
-                if (window.opener) {
-                  window.opener.postMessage({ type: 'OAUTH_SUCCESS', provider: 'META' }, '*');
-                }
-              } catch(e) {}
               setTimeout(() => { window.close(); }, 2000);
             </script>
           </body>

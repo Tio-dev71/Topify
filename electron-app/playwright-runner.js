@@ -3,6 +3,8 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const { anonymizeProxy, closeAnonymizedProxy } = require('proxy-chain');
+const captchaSolver = require('./captcha-solver');
+
 
 const activeBrowsers = new Map();
 
@@ -258,6 +260,246 @@ function cleanStaleLockFiles(userDataDir) {
   }
 }
 
+async function safePageEvaluate(page, pageFunction, ...args) {
+  try {
+    return await page.evaluate(pageFunction, ...args);
+  } catch (error) {
+    if (error.message.includes('Execution context was destroyed')) {
+      console.warn('[Playwright] Bỏ qua lỗi Execution context was destroyed.');
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function checkAndSolveImageCaptcha(page) {
+  try {
+    const captchaImg = page.locator('img[src*="/captcha/"], img[src*="captcha"]').first();
+    const captchaInput = page.locator('input[name="captcha_response"], input[name="captcha_answer"]').first();
+
+    if (await captchaImg.isVisible({ timeout: 2000 }).catch(() => false) &&
+      await captchaInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('[Playwright] Phát hiện Image Captcha! Bắt đầu giải mã...');
+
+      const buffer = await captchaImg.screenshot();
+      const base64Image = buffer.toString('base64');
+
+      const token = await captchaSolver.solveImageCaptcha(base64Image);
+
+      if (token) {
+        console.log('[Playwright] Giải Image Captcha thành công, điền kết quả...');
+        await captchaInput.fill(token);
+
+        const submitBtn = page.locator('button:has-text("Gửi"), button:has-text("Submit"), button:has-text("Tiếp tục"), button[type="submit"]').first();
+        if (await submitBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await submitBtn.click({ force: true });
+          await page.waitForTimeout(5000);
+        }
+        return true;
+      }
+    } else {
+      console.log(`[Playwright] Không tìm thấy Image Captcha trên trang: ${page.url()}`);
+    }
+  } catch (e) {
+    console.error('[Playwright] Lỗi giải Image Captcha:', e);
+  }
+  return false;
+}
+
+async function checkAndSolveFunCaptcha(page) {
+  try {
+    // 1. Kiểm tra xem trang có Arkose / FunCaptcha / MatchKey không
+    const arkoseStatus = await safePageEvaluate(page, () => {
+      const arkoseEl = document.querySelector('#arkose-captcha, iframe[src*="arkose"], iframe[src*="funcaptcha"], iframe[id*="arkose"]');
+      const isElVisible = arkoseEl && (arkoseEl.offsetParent !== null || arkoseEl.offsetWidth > 0 || arkoseEl.offsetHeight > 0);
+
+      const bodyText = document.body ? document.body.innerText : '';
+      const textHasArkose = bodyText.includes('Arkose Labs') ||
+        bodyText.includes('MatchKey') ||
+        bodyText.includes('quy trình kiểm tra bảo mật') ||
+        bodyText.includes('kiểm tra bảo mật') ||
+        bodyText.includes('thử thách này') ||
+        bodyText.includes('chống lại hành vi có hại');
+
+      return {
+        detected: Boolean(arkoseEl || textHasArkose),
+        isElVisible: Boolean(isElVisible),
+        hasText: textHasArkose,
+        iframeSrc: arkoseEl ? arkoseEl.getAttribute('src') : null,
+        iframeId: arkoseEl ? arkoseEl.id : null,
+      };
+    });
+
+    // Cũng kiểm tra các frame của Playwright
+    let arkoseFrameFound = false;
+    for (const frame of page.frames()) {
+      const u = frame.url();
+      if (u.includes('arkoselabs') || u.includes('funcaptcha')) {
+        arkoseFrameFound = true;
+        break;
+      }
+    }
+
+    const hasArkose = arkoseStatus?.detected || arkoseFrameFound;
+
+    if (!hasArkose) {
+      console.log(`[Playwright] Không tìm thấy FunCaptcha trên trang: ${page.url()}`);
+      return false;
+    }
+
+    console.log('[Playwright] ⚠️ PHÁT HIỆN THỬ THÁCH BẢO MẬT ARKOSE CAPTCHA (MatchKey / FunCaptcha)!');
+    console.log(`[Playwright] Chi tiết phát hiện: Element=${arkoseStatus?.isElVisible}, Text=${arkoseStatus?.hasText}, Frame=${arkoseFrameFound}, ID=${arkoseStatus?.iframeId}`);
+
+    // Đưa cửa sổ trình duyệt lên trên cùng để người dùng thấy rõ
+    await page.bringToFront().catch(() => { });
+
+    // Trích xuất Public Key và Blob từ các frames hoặc network nếu có
+    let publicKey = null;
+    let serviceUrl = 'https://client-api.arkoselabs.com';
+    let blob = null;
+
+    for (const frame of page.frames()) {
+      const fUrl = frame.url();
+      if (fUrl.includes('arkoselabs') || fUrl.includes('funcaptcha')) {
+        try {
+          const u = new URL(fUrl);
+          publicKey = u.searchParams.get('public_key') || u.searchParams.get('pkey');
+          if (!publicKey) {
+            const match = u.pathname.match(/\/v2\/([A-Z0-9-]+)\//i) || u.pathname.match(/\/fc\/gc\/\?.*(?:\?|&)public_key=([A-Z0-9-]+)/i);
+            if (match && match[1]) publicKey = match[1];
+          }
+          blob = u.searchParams.get('blob') || u.searchParams.get('data[blob]');
+          serviceUrl = u.origin;
+          if (publicKey) break;
+        } catch (e) { }
+      }
+    }
+
+    if (!publicKey) {
+      // Thử tìm trong DOM
+      try {
+        const domData = await safePageEvaluate(page, () => {
+          const pkeyAttr = document.querySelector('[data-pkey]')?.getAttribute('data-pkey');
+          const blobInput = document.querySelector('input[name="data[blob]"], input[name="blob"], #arkose-blob');
+          return { pkey: pkeyAttr, blob: blobInput ? blobInput.value : null };
+        });
+        if (domData?.pkey) publicKey = domData.pkey;
+        if (domData?.blob) blob = domData.blob;
+      } catch (e) { }
+    }
+
+    let solverPromise = null;
+    if (publicKey) {
+      console.log(`[Playwright] Trích xuất Public Key: ${publicKey}, Blob: ${blob ? 'Có' : 'Không'}`);
+      console.log('[Playwright] Đang gửi yêu cầu giải FunCaptcha đến 2Captcha...');
+      solverPromise = captchaSolver.solveFunCaptcha(publicKey, page.url(), serviceUrl, blob)
+        .then(token => {
+          console.log('[Playwright] 2Captcha đã trả lời token thành công!');
+          return token;
+        })
+        .catch(err => {
+          console.warn(`[Playwright] 2Captcha không giải được Arkose: ${err.message}`);
+          return null;
+        });
+    }
+
+    console.log('================================================================');
+    console.log('👉 HÃY CHUYỂN SANG CỬA SỔ TRÌNH DUYỆT CHROME ĐANG MỞ ĐỂ GIẢI CAPTCHA:');
+    console.log('   1. Bấm các mũi tên trái/phải để ghép biểu tượng vào đúng quỹ đạo.');
+    console.log('   2. Bấm nút "Gửi" màu xanh cho đủ 10 hình.');
+    console.log('   3. Ngay khi bạn gửi xong, script sẽ TỰ ĐỘNG nhận diện và nhập mã 2FA!');
+    console.log('================================================================');
+
+    // Chờ tối đa 180s (mỗi 2s kiểm tra trạng thái 1 lần)
+    const startTime = Date.now();
+    const maxWaitMs = 180000;
+    let loopCount = 0;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      if (page.isClosed()) return false;
+      loopCount++;
+
+      // Log đếm ngược mỗi 10 giây để người dùng biết hệ thống vẫn đang lắng nghe
+      if (loopCount % 5 === 0) {
+        const remainingSec = Math.max(0, Math.round((maxWaitMs - (Date.now() - startTime)) / 1000));
+        console.log(`[Playwright] ⏳ Đang chờ hoàn thành thử thách trên Chrome... (còn lại ${remainingSec}s)`);
+      }
+
+      // Nếu 2captcha trả về token, thử chèn token vào
+      if (solverPromise) {
+        const token = await Promise.race([solverPromise, Promise.resolve('NOT_YET')]);
+        if (token && token !== 'NOT_YET') {
+          console.log('[Playwright] Đang chèn token từ 2Captcha vào trang...');
+          await safePageEvaluate(page, (tok) => {
+            const fcInput = document.getElementById('fc-token') || document.querySelector('[name="fc-token"]') || document.querySelector('input[name="captcha_response"]');
+            if (fcInput) fcInput.value = tok;
+            document.querySelectorAll('input[name="captcha_response"], input[name="captcha_response_token"]').forEach(el => el.value = tok);
+          }, token);
+
+          const submitBtn = page.locator('button:has-text("Gửi"), button:has-text("Submit"), button:has-text("Tiếp tục"), button[type="submit"]').first();
+          if (await submitBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+            await submitBtn.click({ force: true }).catch(() => { });
+          }
+          solverPromise = null;
+        }
+      }
+
+      // Kiểm tra xem captcha đã biến mất chưa hoặc trang đã chuyển hướng
+      const checkStatus = await safePageEvaluate(page, () => {
+        const arkose = document.querySelector('#arkose-captcha, iframe[src*="arkose"], iframe[src*="funcaptcha"]');
+        const isArkoseVisible = arkose && arkose.offsetParent !== null;
+
+        const body = document.body ? document.body.innerText : '';
+        const hasArkoseText = body.includes('quy trình kiểm tra bảo mật') || body.includes('MatchKey') || body.includes('thử thách này');
+
+        // Kiểm tra xem đã có ô nhập mã 2FA xuất hiện chưa
+        const visibleInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="checkbox"])')).filter(el => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        });
+
+        return {
+          arkoseGone: !isArkoseVisible && !hasArkoseText,
+          hasVisibleInputs: visibleInputs.length > 0,
+          currentUrl: window.location.href,
+        };
+      });
+
+      // Kiểm tra cookies xem đã đăng nhập chưa
+      let isLoggedIn = false;
+      try {
+        const cookies = await page.context().cookies('https://www.facebook.com');
+        isLoggedIn = cookies.some(c => c.name === 'c_user');
+      } catch (e) { }
+
+      if (isLoggedIn) {
+        console.log('[Playwright] ✅ Đã đăng nhập thành công sau khi hoàn thành Captcha (phát hiện cookie c_user)!');
+        return true;
+      }
+
+      if (checkStatus?.hasVisibleInputs) {
+        console.log('[Playwright] ✅ Đã vượt qua Arkose Captcha! Ô nhập mã 2FA đã xuất hiện.');
+        await page.waitForTimeout(2000);
+        return true;
+      }
+
+      if (checkStatus?.arkoseGone && !page.url().includes('flow=pre_authentication')) {
+        console.log('[Playwright] ✅ Arkose Captcha đã hoàn thành và biến mất khỏi trang.');
+        await page.waitForTimeout(3000);
+        return true;
+      }
+
+      await page.waitForTimeout(2000);
+    }
+
+    console.warn('[Playwright] ⚠️ Hết thời gian chờ giải Arkose Captcha (180s).');
+    return false;
+  } catch (e) {
+    console.error('[Playwright] Lỗi trong quá trình xử lý FunCaptcha:', e);
+  }
+  return false;
+}
+
 async function dismissFacebookPopups(page) {
   try {
     const dismissSelectors = [
@@ -287,7 +529,7 @@ async function checkFacebookLoggedIn(browser, page) {
     const cookies = await browser.cookies('https://www.facebook.com');
     const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
 
-    const isDomLoggedIn = await page.evaluate(() => {
+    const isDomLoggedIn = await safePageEvaluate(page, () => {
       const nav = document.querySelector('div[role="navigation"]') ||
         document.querySelector('div[role="banner"]') ||
         document.querySelector('form[action*="/search/"]') ||
@@ -579,10 +821,10 @@ async function runPlaywrightLogin(accountData) {
 
     if (hasEmail) {
       console.log(`[Playwright] Điền tài khoản và mật khẩu cho UID ${uid}...`);
-      await emailInput.fill(uid);
+      await emailInput.fill(uid).catch(() => { });
       await page.waitForTimeout(300);
       const passInput = page.locator('input[name="pass"], #pass').first();
-      await passInput.fill(password);
+      await passInput.fill(password, { timeout: 3000 }).catch(e => console.log('[Playwright] Bỏ qua điền mật khẩu do trang đang chuyển hướng.'));
     } else {
       const continueBtn = page.locator(
         'div[role="button"]:has-text("Continue"), ' +
@@ -593,21 +835,21 @@ async function runPlaywrightLogin(accountData) {
 
       if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
         console.log('[Playwright] Nhấp "Tiếp tục" cho tài khoản đã lưu...');
-        await continueBtn.click();
-        await page.waitForSelector('input[name="pass"], #pass', { timeout: 7000 }).catch(() => { });
+        await continueBtn.click().catch(() => { });
+        await page.waitForSelector('input[name="pass"], #pass', { timeout: 4000 }).catch(() => { });
         const passInput = page.locator('input[name="pass"], #pass').first();
-        await passInput.fill(password);
+        await passInput.fill(password, { timeout: 3000 }).catch(() => { });
       } else {
         // Fallback: chuyển đến trang login trực tiếp
         console.log('[Playwright] Chuyển đến facebook.com/login/...');
-        await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => { });
         await page.waitForTimeout(2000);
         emailInput = page.locator('input[name="email"], #email').first();
         if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-          await emailInput.fill(uid);
+          await emailInput.fill(uid).catch(() => { });
           await page.waitForTimeout(300);
           const passInput = page.locator('input[name="pass"], #pass').first();
-          await passInput.fill(password);
+          await passInput.fill(password, { timeout: 3000 }).catch(() => { });
         }
       }
     }
@@ -627,15 +869,27 @@ async function runPlaywrightLogin(accountData) {
     ).first();
 
     if (await submitBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-      await submitBtn.click({ force: true });
+      await submitBtn.click({ force: true }).catch(() => { });
     } else {
-      await page.keyboard.press('Enter');
+      if (!page.url().includes('two_step_verification') && !page.url().includes('checkpoint')) {
+        await page.keyboard.press('Enter').catch(() => { });
+      }
     }
 
     await page.waitForTimeout(5000);
 
+    // Giải captcha nếu xuất hiện sau khi submit
+    let captchaSolved = await checkAndSolveFunCaptcha(page);
+    if (!captchaSolved) {
+      captchaSolved = await checkAndSolveImageCaptcha(page);
+    }
+    if (captchaSolved) {
+      console.log('[Playwright] Captcha đã được giải thành công. Đợi tải trang...');
+      await page.waitForTimeout(5000);
+    }
+
     // Kiểm tra sai mật khẩu (chỉ tìm trong các khối thông báo lỗi cụ thể để tránh false positive từ bài đăng feed)
-    const loginError = await page.evaluate(() => {
+    const loginError = await safePageEvaluate(page, () => {
       // Các selector thường chứa thông báo lỗi đăng nhập của Facebook
       const errorContainers = document.querySelectorAll('#error_box, ._9ay7, ._5v-0, ._4rbf, [data-testid="login_error"]');
       let foundError = false;
@@ -665,7 +919,7 @@ async function runPlaywrightLogin(accountData) {
     }
 
     // Xử lý 2FA (cả dạng modern /two_step_verification lẫn legacy checkpoint)
-    const pageText = await page.evaluate(() => document.body ? document.body.innerText : '');
+    const pageText = await safePageEvaluate(page, () => document.body ? document.body.innerText : '');
     const isTwoFactor = page.url().includes('two_step_verification') ||
       page.url().includes('two_factor') ||
       page.url().includes('checkpoint') ||
@@ -685,36 +939,179 @@ async function runPlaywrightLogin(accountData) {
       const token = await generateTOTP(twoFactorCode);
       console.log(`[Playwright] Mã 2FA TOTP đã tạo: ${token}`);
 
-      const codeInput = page.locator(
-        'input[type="text"]:visible, ' +
-        'input[inputmode="numeric"]:visible, ' +
-        'input[autocomplete="one-time-code"]:visible, ' +
-        '#approvals_code:visible, ' +
-        'input[name="approvals_code"]:visible'
-      ).first();
+      // Kiểm tra xem trang 2FA có bị dính FunCaptcha hay không
+      let captchaOn2FA = await checkAndSolveFunCaptcha(page);
+      if (!captchaOn2FA) captchaOn2FA = await checkAndSolveImageCaptcha(page);
+      if (captchaOn2FA) {
+        console.log('[Playwright] Đã xử lý xong captcha trên trang 2FA. Chờ tải tiếp...');
+        await page.waitForTimeout(3000);
+      }
 
-      if (await codeInput.isVisible({ timeout: 8000 }).catch(() => false)) {
-        await codeInput.fill(token);
+      // Kiểm tra xem đã có cookie c_user chưa (đăng nhập thành công mà không cần mã OTP)
+      let alreadyLoggedIn = false;
+      try {
+        const curCookies = await browser.cookies('https://www.facebook.com');
+        alreadyLoggedIn = curCookies.some(c => c.name === 'c_user');
+      } catch (e) { }
+
+      if (alreadyLoggedIn) {
+        console.log('[Playwright] ✅ Tài khoản đã đăng nhập thành công ngay sau bước giải Captcha (không cần nhập mã 2FA)!');
+      } else {
+        // Tạo mã TOTP mới nhất để tránh mã cũ bị quá hạn 30s trong thời gian giải captcha
+        const freshToken = await generateTOTP(twoFactorCode);
+        console.log(`[Playwright] Tạo mã 2FA TOTP mới nhất: ${freshToken}`);
+
+        // === DIAGNOSTIC: Log tất cả input trên trang để debug ===
+        await page.waitForTimeout(2000); // Chờ trang 2FA load xong
+        try {
+          const allInputs = await safePageEvaluate(page, () => {
+            const inputs = document.querySelectorAll('input');
+            return Array.from(inputs).map((el, i) => ({
+              index: i,
+              type: el.type,
+              name: el.name,
+              id: el.id,
+              placeholder: el.placeholder,
+              inputmode: el.inputMode,
+              autocomplete: el.autocomplete,
+              ariaLabel: el.getAttribute('aria-label'),
+              dataTestId: el.getAttribute('data-testid'),
+              visible: el.offsetParent !== null,
+              className: el.className.substring(0, 80),
+            }));
+          });
+          console.log(`[Playwright][2FA-DEBUG] Tìm thấy ${allInputs.length} input trên trang:`);
+          allInputs.forEach(inp => {
+            console.log(`  [input #${inp.index}] type="${inp.type}" name="${inp.name}" id="${inp.id}" placeholder="${inp.placeholder}" inputmode="${inp.inputmode}" autocomplete="${inp.autocomplete}" aria-label="${inp.ariaLabel}" data-testid="${inp.dataTestId}" visible=${inp.visible} class="${inp.className}"`);
+          });
+        } catch (debugErr) {
+          console.log('[Playwright][2FA-DEBUG] Lỗi khi log inputs:', debugErr.message);
+        }
+
+        // === Tìm ô nhập 2FA với selector mở rộng ===
+        const codeInput = page.locator(
+          'input[type="text"]:visible, ' +
+          'input[type="tel"]:visible, ' +
+          'input[type="number"]:visible, ' +
+          'input[inputmode="numeric"]:visible, ' +
+          'input[autocomplete="one-time-code"]:visible, ' +
+          '#approvals_code:visible, ' +
+          'input[name="approvals_code"]:visible'
+        ).first();
+
+        let found2FAInput = await codeInput.isVisible({ timeout: 10000 }).catch(() => false);
+
+      // === Fallback: Dùng JS evaluate tìm input nếu locator thất bại ===
+      if (!found2FAInput) {
+        console.log('[Playwright] Locator không tìm thấy, thử fallback JS evaluate...');
+        try {
+          const fallbackResult = await safePageEvaluate(page, (totpCode) => {
+            // Tìm tất cả input, ưu tiên input visible và chưa có value
+            const allInputs = Array.from(document.querySelectorAll('input'));
+            const candidates = allInputs.filter(el => {
+              const rect = el.getBoundingClientRect();
+              const style = window.getComputedStyle(el);
+              const isVisible = rect.width > 0 && rect.height > 0 &&
+                style.display !== 'none' && style.visibility !== 'hidden';
+              const isHiddenType = el.type === 'hidden' || el.type === 'submit' || el.type === 'checkbox' || el.type === 'radio';
+              return isVisible && !isHiddenType;
+            });
+
+            if (candidates.length === 0) return { success: false, reason: 'Không tìm thấy input visible nào' };
+
+            // Ưu tiên theo thứ tự: numeric inputmode > tel type > text type > bất kỳ
+            const prioritized = candidates.sort((a, b) => {
+              const score = (el) => {
+                if (el.inputMode === 'numeric' || el.autocomplete === 'one-time-code') return 0;
+                if (el.type === 'tel' || el.type === 'number') return 1;
+                if (el.name?.includes('code') || el.name?.includes('approvals') || el.id?.includes('code')) return 2;
+                if (el.type === 'text') return 3;
+                return 4;
+              };
+              return score(a) - score(b);
+            });
+
+            const target = prioritized[0];
+            // Focus, clear, và nhập mã
+            target.focus();
+            target.value = '';
+            // Dispatch input event để React nhận
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // Set value qua nativeInputValueSetter (bypass React controlled input)
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+              window.HTMLInputElement.prototype, 'value'
+            ).set;
+            nativeInputValueSetter.call(target, totpCode);
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+
+            return {
+              success: true,
+              inputInfo: {
+                type: target.type,
+                name: target.name,
+                id: target.id,
+                placeholder: target.placeholder,
+              },
+              totalCandidates: candidates.length,
+            };
+          }, freshToken);
+
+          if (fallbackResult && fallbackResult.success) {
+            console.log(`[Playwright] Fallback JS đã điền mã 2FA thành công vào input:`, JSON.stringify(fallbackResult.inputInfo));
+            found2FAInput = true; // Đánh dấu đã tìm thấy
+          } else {
+            console.log(`[Playwright] Fallback JS thất bại:`, fallbackResult?.reason || 'unknown');
+          }
+        } catch (fallbackErr) {
+          console.log('[Playwright] Fallback JS lỗi:', fallbackErr.message);
+        }
+      }
+
+      if (found2FAInput) {
+        // Nếu tìm được bằng locator thì fill bình thường
+        if (await codeInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+          console.log('[Playwright] Tìm thấy ô nhập 2FA bằng locator, tiến hành điền mã...');
+          await codeInput.fill(freshToken);
+        }
         await page.waitForTimeout(500);
 
+        // Tìm nút Continue/Submit
         const continue2FA = page.locator(
           'div[role="button"]:has-text("Continue"):visible, ' +
           'div[role="button"]:has-text("Tiếp tục"):visible, ' +
           'button:has-text("Continue"):visible, ' +
           'button:has-text("Tiếp tục"):visible, ' +
-          '#checkpointSubmitButton:visible'
+          'button:has-text("Submit"):visible, ' +
+          'button:has-text("Gửi"):visible, ' +
+          'button:has-text("Xác nhận"):visible, ' +
+          '#checkpointSubmitButton:visible, ' +
+          'button[type="submit"]:visible'
         ).first();
 
-        if (await continue2FA.isVisible({ timeout: 2000 }).catch(() => false)) {
+        if (await continue2FA.isVisible({ timeout: 3000 }).catch(() => false)) {
+          console.log('[Playwright] Tìm thấy nút Continue/Submit (2FA), click...');
           await continue2FA.click({ force: true });
         } else {
-          await codeInput.press('Enter');
+          console.log('[Playwright] Không tìm thấy nút Continue, thử nhấn Enter...');
+          // Nếu fill bằng fallback JS, press Enter trên page
+          try {
+            await page.keyboard.press('Enter');
+          } catch (e) {
+            console.log('[Playwright] Lỗi nhấn Enter:', e.message);
+          }
         }
 
         await page.waitForTimeout(7000);
+      } else {
+        console.log('[Playwright] KHÔNG tìm thấy ô nhập 2FA bằng cả locator lẫn fallback JS.');
+      }
       }
     }
 
+    console.log('[Playwright] Đang xử lý các popup Lưu trình duyệt nếu có...');
     // Xử lý màn hình "Lưu trình duyệt" (Save Browser) hoặc thông báo tạm
     await dismissFacebookPopups(page);
     try {
