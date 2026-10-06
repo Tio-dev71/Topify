@@ -96,6 +96,54 @@ export async function POST(req: NextRequest) {
 
       const data = tiktokData.data;
       const medias: any[] = [];
+      const isPhotoPost = Array.isArray(data.images) && data.images.length > 0;
+
+      if (isPhotoPost) {
+        // Handle TikTok Photo Mode (Slide ảnh)
+        data.images.forEach((imgUrl: string, idx: number) => {
+          medias.push({
+            url: imgUrl,
+            quality: `Ảnh ${idx + 1} (HD Không Logo)`,
+            extension: 'jpg',
+            type: 'image',
+            size: '',
+            isNoWatermark: true,
+            isRecommended: idx === 0,
+          });
+        });
+
+        // Background music for photo slide
+        const musicUrl = data.music || data.music_info?.play || (typeof data.play === 'string' && (data.play.includes('.mp3') || data.play.includes('mime_type=audio_mpeg')) ? data.play : undefined);
+        if (musicUrl) {
+          medias.push({
+            url: musicUrl,
+            quality: data.music_info?.title ? `Nhạc nền (${data.music_info.title})` : 'Nhạc nền (Original Audio)',
+            extension: 'mp3',
+            type: 'audio',
+            size: '',
+            isNoWatermark: false,
+            isRecommended: false,
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          isTikTok: true,
+          isPhotoPost: true,
+          images: data.images,
+          title: data.title || 'TikTok Photo Album',
+          thumbnail: data.cover || data.origin_cover || data.images[0],
+          duration: 0,
+          author: data.author
+            ? {
+                nickname: data.author.nickname,
+                unique_id: data.author.unique_id,
+                avatar: data.author.avatar,
+              }
+            : undefined,
+          medias,
+        });
+      }
 
       // 1. No Watermark Video (Top recommendation)
       if (data.play) {
@@ -140,6 +188,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         isTikTok: true,
+        isPhotoPost: false,
         title: data.title || 'TikTok Video',
         thumbnail: data.cover || data.origin_cover || data.ai_dynamic_cover,
         duration: data.duration,

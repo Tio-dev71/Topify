@@ -14,6 +14,8 @@ import {
   X,
   Film,
   CheckCircle2,
+  Image as ImageIcon,
+  Images,
 } from 'lucide-react';
 
 interface MediaInfo {
@@ -32,6 +34,8 @@ interface DownloaderResponse {
   picture?: string;
   duration?: number;
   isTikTok?: boolean;
+  isPhotoPost?: boolean;
+  images?: string[];
   author?: {
     nickname?: string;
     unique_id?: string;
@@ -372,13 +376,15 @@ export default function DownloaderClient() {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <h3 className="text-base font-bold text-slate-900">
                 {result.isTikTok
-                  ? 'Video TikTok đã sẵn sàng (No Watermark)'
+                  ? result.isPhotoPost
+                    ? `Album Ảnh TikTok đã sẵn sàng (${result.images?.length || medias.filter((m) => m.type === 'image').length} ảnh HD)`
+                    : 'Video TikTok đã sẵn sàng (No Watermark)'
                   : 'Kết quả lấy link video'}
               </h3>
             </div>
             {result.isTikTok && (
               <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                ✓ Đã loại bỏ Watermark
+                {result.isPhotoPost ? '✓ Album Ảnh Không Logo' : '✓ Đã loại bỏ Watermark'}
               </span>
             )}
           </div>
@@ -393,12 +399,17 @@ export default function DownloaderClient() {
                     alt={result.title || 'Video thumbnail'}
                     className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                   />
-                  {result.duration && (
+                  {result.duration && result.duration > 0 ? (
                     <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-sm text-white text-xs font-mono font-medium">
                       {Math.floor(result.duration / 60)}:
                       {String(Math.floor(result.duration % 60)).padStart(2, '0')}
                     </div>
-                  )}
+                  ) : result.isPhotoPost ? (
+                    <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-md bg-black/75 backdrop-blur-sm text-white text-xs font-medium flex items-center gap-1.5">
+                      <Images className="w-3.5 h-3.5" />
+                      <span>{result.images?.length || medias.filter((m) => m.type === 'image').length} Ảnh</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Author Info (TikTok) */}
@@ -442,26 +453,33 @@ export default function DownloaderClient() {
                 </h5>
 
                 {medias.length > 0 ? (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
                     {medias.map((media, idx) => {
                       const isAudio =
                         media.extension === 'mp3' || media.type?.includes('audio');
+                      const isImage =
+                        media.type === 'image' || media.extension === 'jpg';
                       const isNoWatermark = media.isNoWatermark;
                       const isRecommended = media.isRecommended;
+
+                      const extension = isAudio ? '.mp3' : isImage ? '.jpg' : '.mp4';
+                      const suffix = isAudio
+                        ? '-audio'
+                        : isImage
+                        ? `-anh-${idx + 1}`
+                        : isNoWatermark
+                        ? '-no-watermark'
+                        : '';
 
                       const encodedDownloadUrl = `/api/proxy-download?url=${encodeURIComponent(
                         media.url
                       )}&filename=${encodeURIComponent(
                         (result.title
                           ? result.title.substring(0, 40).replace(/[^a-zA-Z0-9\s-_]/g, '')
-                          : 'video'
+                          : 'tiktok'
                         ).trim() +
-                          (isNoWatermark
-                            ? '-no-watermark'
-                            : isAudio
-                            ? '-audio'
-                            : '') +
-                          (isAudio ? '.mp3' : '.mp4')
+                          suffix +
+                          extension
                       )}`;
 
                       return (
@@ -480,11 +498,15 @@ export default function DownloaderClient() {
                                   ? 'bg-emerald-100 text-emerald-700'
                                   : isAudio
                                   ? 'bg-purple-100 text-purple-700'
+                                  : isImage
+                                  ? 'bg-indigo-100 text-indigo-700'
                                   : 'bg-slate-100 text-slate-700'
                               }`}
                             >
                               {isAudio ? (
                                 <Music className="w-5 h-5" />
+                              ) : isImage ? (
+                                <ImageIcon className="w-5 h-5" />
                               ) : isNoWatermark ? (
                                 <Sparkles className="w-5 h-5 text-emerald-600" />
                               ) : (
@@ -497,7 +519,11 @@ export default function DownloaderClient() {
                                 <p className="text-sm font-bold text-slate-900">
                                   {media.quality ||
                                     media.type ||
-                                    (isNoWatermark ? 'Video Không Logo' : 'Tải Video')}
+                                    (isImage
+                                      ? `Ảnh ${idx + 1} (Không Logo)`
+                                      : isNoWatermark
+                                      ? 'Video Không Logo'
+                                      : 'Tải Video')}
                                 </p>
                                 {isRecommended && (
                                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white shadow-xs shrink-0">
@@ -508,7 +534,8 @@ export default function DownloaderClient() {
 
                               <p className="text-xs text-slate-500 mt-0.5">
                                 {[
-                                  media.extension?.toUpperCase() || (isAudio ? 'MP3' : 'MP4'),
+                                  media.extension?.toUpperCase() ||
+                                    (isAudio ? 'MP3' : isImage ? 'JPG' : 'MP4'),
                                   media.size,
                                 ]
                                   .filter(Boolean)
@@ -544,7 +571,9 @@ export default function DownloaderClient() {
                             >
                               <Download className="w-4 h-4" />
                               <span>
-                                {isNoWatermark
+                                {isImage
+                                  ? 'Tải Ảnh HD'
+                                  : isNoWatermark
                                   ? 'Tải Không Logo'
                                   : isAudio
                                   ? 'Tải Nhạc MP3'
