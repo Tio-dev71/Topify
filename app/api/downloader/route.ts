@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
             type: 'image',
             size: '',
             isNoWatermark: true,
-            isRecommended: idx === 0,
+            isRecommended: false,
           });
         });
 
@@ -142,6 +142,8 @@ export async function POST(req: NextRequest) {
               }
             : undefined,
           medias,
+          musicUrl,
+          musicTitle: data.music_info?.title || 'Nhạc nền TikTok',
         });
       }
 

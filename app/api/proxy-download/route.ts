@@ -32,7 +32,17 @@ export async function GET(req: NextRequest) {
     }
 
     // Forward the content type from the original response
-    const contentType = response.headers.get('content-type') || (filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4');
+    const contentType =
+      response.headers.get('content-type') ||
+      (filename.endsWith('.mp3')
+        ? 'audio/mpeg'
+        : filename.endsWith('.jpg') || filename.endsWith('.jpeg')
+        ? 'image/jpeg'
+        : filename.endsWith('.png')
+        ? 'image/png'
+        : filename.endsWith('.webp')
+        ? 'image/webp'
+        : 'video/mp4');
 
     // Set headers to force download
     const headers = new Headers();
