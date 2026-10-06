@@ -1001,113 +1001,113 @@ async function runPlaywrightLogin(accountData) {
 
         let found2FAInput = await codeInput.isVisible({ timeout: 10000 }).catch(() => false);
 
-      // === Fallback: Dùng JS evaluate tìm input nếu locator thất bại ===
-      if (!found2FAInput) {
-        console.log('[Playwright] Locator không tìm thấy, thử fallback JS evaluate...');
-        try {
-          const fallbackResult = await safePageEvaluate(page, (totpCode) => {
-            // Tìm tất cả input, ưu tiên input visible và chưa có value
-            const allInputs = Array.from(document.querySelectorAll('input'));
-            const candidates = allInputs.filter(el => {
-              const rect = el.getBoundingClientRect();
-              const style = window.getComputedStyle(el);
-              const isVisible = rect.width > 0 && rect.height > 0 &&
-                style.display !== 'none' && style.visibility !== 'hidden';
-              const isHiddenType = el.type === 'hidden' || el.type === 'submit' || el.type === 'checkbox' || el.type === 'radio';
-              return isVisible && !isHiddenType;
-            });
-
-            if (candidates.length === 0) return { success: false, reason: 'Không tìm thấy input visible nào' };
-
-            // Ưu tiên theo thứ tự: numeric inputmode > tel type > text type > bất kỳ
-            const prioritized = candidates.sort((a, b) => {
-              const score = (el) => {
-                if (el.inputMode === 'numeric' || el.autocomplete === 'one-time-code') return 0;
-                if (el.type === 'tel' || el.type === 'number') return 1;
-                if (el.name?.includes('code') || el.name?.includes('approvals') || el.id?.includes('code')) return 2;
-                if (el.type === 'text') return 3;
-                return 4;
-              };
-              return score(a) - score(b);
-            });
-
-            const target = prioritized[0];
-            // Focus, clear, và nhập mã
-            target.focus();
-            target.value = '';
-            // Dispatch input event để React nhận
-            target.dispatchEvent(new Event('input', { bubbles: true }));
-            target.dispatchEvent(new Event('change', { bubbles: true }));
-
-            // Set value qua nativeInputValueSetter (bypass React controlled input)
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-              window.HTMLInputElement.prototype, 'value'
-            ).set;
-            nativeInputValueSetter.call(target, totpCode);
-            target.dispatchEvent(new Event('input', { bubbles: true }));
-            target.dispatchEvent(new Event('change', { bubbles: true }));
-
-            return {
-              success: true,
-              inputInfo: {
-                type: target.type,
-                name: target.name,
-                id: target.id,
-                placeholder: target.placeholder,
-              },
-              totalCandidates: candidates.length,
-            };
-          }, freshToken);
-
-          if (fallbackResult && fallbackResult.success) {
-            console.log(`[Playwright] Fallback JS đã điền mã 2FA thành công vào input:`, JSON.stringify(fallbackResult.inputInfo));
-            found2FAInput = true; // Đánh dấu đã tìm thấy
-          } else {
-            console.log(`[Playwright] Fallback JS thất bại:`, fallbackResult?.reason || 'unknown');
-          }
-        } catch (fallbackErr) {
-          console.log('[Playwright] Fallback JS lỗi:', fallbackErr.message);
-        }
-      }
-
-      if (found2FAInput) {
-        // Nếu tìm được bằng locator thì fill bình thường
-        if (await codeInput.isVisible({ timeout: 1000 }).catch(() => false)) {
-          console.log('[Playwright] Tìm thấy ô nhập 2FA bằng locator, tiến hành điền mã...');
-          await codeInput.fill(freshToken);
-        }
-        await page.waitForTimeout(500);
-
-        // Tìm nút Continue/Submit
-        const continue2FA = page.locator(
-          'div[role="button"]:has-text("Continue"):visible, ' +
-          'div[role="button"]:has-text("Tiếp tục"):visible, ' +
-          'button:has-text("Continue"):visible, ' +
-          'button:has-text("Tiếp tục"):visible, ' +
-          'button:has-text("Submit"):visible, ' +
-          'button:has-text("Gửi"):visible, ' +
-          'button:has-text("Xác nhận"):visible, ' +
-          '#checkpointSubmitButton:visible, ' +
-          'button[type="submit"]:visible'
-        ).first();
-
-        if (await continue2FA.isVisible({ timeout: 3000 }).catch(() => false)) {
-          console.log('[Playwright] Tìm thấy nút Continue/Submit (2FA), click...');
-          await continue2FA.click({ force: true });
-        } else {
-          console.log('[Playwright] Không tìm thấy nút Continue, thử nhấn Enter...');
-          // Nếu fill bằng fallback JS, press Enter trên page
+        // === Fallback: Dùng JS evaluate tìm input nếu locator thất bại ===
+        if (!found2FAInput) {
+          console.log('[Playwright] Locator không tìm thấy, thử fallback JS evaluate...');
           try {
-            await page.keyboard.press('Enter');
-          } catch (e) {
-            console.log('[Playwright] Lỗi nhấn Enter:', e.message);
+            const fallbackResult = await safePageEvaluate(page, (totpCode) => {
+              // Tìm tất cả input, ưu tiên input visible và chưa có value
+              const allInputs = Array.from(document.querySelectorAll('input'));
+              const candidates = allInputs.filter(el => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                const isVisible = rect.width > 0 && rect.height > 0 &&
+                  style.display !== 'none' && style.visibility !== 'hidden';
+                const isHiddenType = el.type === 'hidden' || el.type === 'submit' || el.type === 'checkbox' || el.type === 'radio';
+                return isVisible && !isHiddenType;
+              });
+
+              if (candidates.length === 0) return { success: false, reason: 'Không tìm thấy input visible nào' };
+
+              // Ưu tiên theo thứ tự: numeric inputmode > tel type > text type > bất kỳ
+              const prioritized = candidates.sort((a, b) => {
+                const score = (el) => {
+                  if (el.inputMode === 'numeric' || el.autocomplete === 'one-time-code') return 0;
+                  if (el.type === 'tel' || el.type === 'number') return 1;
+                  if (el.name?.includes('code') || el.name?.includes('approvals') || el.id?.includes('code')) return 2;
+                  if (el.type === 'text') return 3;
+                  return 4;
+                };
+                return score(a) - score(b);
+              });
+
+              const target = prioritized[0];
+              // Focus, clear, và nhập mã
+              target.focus();
+              target.value = '';
+              // Dispatch input event để React nhận
+              target.dispatchEvent(new Event('input', { bubbles: true }));
+              target.dispatchEvent(new Event('change', { bubbles: true }));
+
+              // Set value qua nativeInputValueSetter (bypass React controlled input)
+              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value'
+              ).set;
+              nativeInputValueSetter.call(target, totpCode);
+              target.dispatchEvent(new Event('input', { bubbles: true }));
+              target.dispatchEvent(new Event('change', { bubbles: true }));
+
+              return {
+                success: true,
+                inputInfo: {
+                  type: target.type,
+                  name: target.name,
+                  id: target.id,
+                  placeholder: target.placeholder,
+                },
+                totalCandidates: candidates.length,
+              };
+            }, freshToken);
+
+            if (fallbackResult && fallbackResult.success) {
+              console.log(`[Playwright] Fallback JS đã điền mã 2FA thành công vào input:`, JSON.stringify(fallbackResult.inputInfo));
+              found2FAInput = true; // Đánh dấu đã tìm thấy
+            } else {
+              console.log(`[Playwright] Fallback JS thất bại:`, fallbackResult?.reason || 'unknown');
+            }
+          } catch (fallbackErr) {
+            console.log('[Playwright] Fallback JS lỗi:', fallbackErr.message);
           }
         }
 
-        await page.waitForTimeout(7000);
-      } else {
-        console.log('[Playwright] KHÔNG tìm thấy ô nhập 2FA bằng cả locator lẫn fallback JS.');
-      }
+        if (found2FAInput) {
+          // Nếu tìm được bằng locator thì fill bình thường
+          if (await codeInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+            console.log('[Playwright] Tìm thấy ô nhập 2FA bằng locator, tiến hành điền mã...');
+            await codeInput.fill(freshToken);
+          }
+          await page.waitForTimeout(500);
+
+          // Tìm nút Continue/Submit
+          const continue2FA = page.locator(
+            'div[role="button"]:has-text("Continue"):visible, ' +
+            'div[role="button"]:has-text("Tiếp tục"):visible, ' +
+            'button:has-text("Continue"):visible, ' +
+            'button:has-text("Tiếp tục"):visible, ' +
+            'button:has-text("Submit"):visible, ' +
+            'button:has-text("Gửi"):visible, ' +
+            'button:has-text("Xác nhận"):visible, ' +
+            '#checkpointSubmitButton:visible, ' +
+            'button[type="submit"]:visible'
+          ).first();
+
+          if (await continue2FA.isVisible({ timeout: 3000 }).catch(() => false)) {
+            console.log('[Playwright] Tìm thấy nút Continue/Submit (2FA), click...');
+            await continue2FA.click({ force: true });
+          } else {
+            console.log('[Playwright] Không tìm thấy nút Continue, thử nhấn Enter...');
+            // Nếu fill bằng fallback JS, press Enter trên page
+            try {
+              await page.keyboard.press('Enter');
+            } catch (e) {
+              console.log('[Playwright] Lỗi nhấn Enter:', e.message);
+            }
+          }
+
+          await page.waitForTimeout(7000);
+        } else {
+          console.log('[Playwright] KHÔNG tìm thấy ô nhập 2FA bằng cả locator lẫn fallback JS.');
+        }
       }
     }
 
