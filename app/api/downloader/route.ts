@@ -34,6 +34,112 @@ async function resolveTikTokUrl(inputUrl: string): Promise<string> {
   }
 }
 
+async function getFacebookMetadata(inputUrl: string): Promise<{
+  title?: string;
+  author?: string;
+  description?: string;
+  thumbnail?: string;
+} | null> {
+  try {
+    const res = await fetch(inputUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        'User-Agent':
+          'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'vi,en-US;q=0.9,en;q=0.8',
+      },
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const decodeEntities = (str: string) => {
+      if (!str) return '';
+      return str
+        .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+        .replace(/&#([0-9]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 10)))
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .trim();
+    };
+
+    const ogTitleMatch =
+      html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
+      html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
+    const ogDescMatch =
+      html.match(/<meta\s+(?:property|name)=["']og:description["']\s+content=["']([^"']+)["']/i) ||
+      html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:description["']/i);
+    const ogImageMatch =
+      html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+      html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+
+    const ogTitle = ogTitleMatch ? decodeEntities(ogTitleMatch[1]) : '';
+    const ogDesc = ogDescMatch ? decodeEntities(ogDescMatch[1]) : '';
+    const pageTitle = titleMatch ? decodeEntities(titleMatch[1]) : '';
+    const thumbnail = ogImageMatch ? decodeEntities(ogImageMatch[1]) : undefined;
+
+    const isGeneric = (t: string) => {
+      if (!t) return true;
+      const lower = t.toLowerCase();
+      return (
+        lower === '- facebook reel' ||
+        lower === 'facebook reel' ||
+        lower === '- facebook video' ||
+        lower === 'facebook video' ||
+        lower === '- facebook watch' ||
+        lower === 'facebook watch' ||
+        lower === 'video' ||
+        lower === 'reel' ||
+        lower === 'user' ||
+        lower.startsWith('- facebook reel') ||
+        lower.startsWith('- facebook video')
+      );
+    };
+
+    let chosenTitle = !isGeneric(ogTitle) ? ogTitle : !isGeneric(ogDesc) ? ogDesc : pageTitle;
+
+    let author = '';
+    if (chosenTitle.includes(' | ')) {
+      const parts = chosenTitle.split(' | ');
+      author = parts.pop()?.trim() || '';
+      chosenTitle = parts.join(' | ').trim();
+    } else if (chosenTitle.endsWith(' - Facebook')) {
+      chosenTitle = chosenTitle.replace(/ - Facebook$/, '').trim();
+    }
+
+    chosenTitle = chosenTitle
+      .replace(/\s*-\s*Facebook Reel\s*/gi, ' ')
+      .replace(/\s*-\s*Facebook Video\s*/gi, ' ')
+      .replace(/^-\s*/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (isGeneric(chosenTitle) && ogDesc && !isGeneric(ogDesc)) {
+      chosenTitle = ogDesc
+        .replace(/\s*-\s*Facebook Reel\s*/gi, ' ')
+        .replace(/^-\s*/, '')
+        .trim();
+    }
+
+    return {
+      title: chosenTitle || undefined,
+      author: author || undefined,
+      description: ogDesc || undefined,
+      thumbnail: thumbnail,
+    };
+  } catch (err) {
+    console.warn('[Downloader] Error scraping Facebook metadata:', err);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -212,15 +318,24 @@ export async function POST(req: NextRequest) {
     const fetchUrl = `https://${rapidApiHost}/v1/social/autolink`;
     console.log(`[Universal Downloader] Fetching: ${fetchUrl} for ${trimmedUrl}`);
 
-    const response = await fetch(fetchUrl, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-rapidapi-key': rapidApiKey,
-        'x-rapidapi-host': rapidApiHost,
-      },
-      body: JSON.stringify({ url: trimmedUrl }),
-    });
+    const isFacebook =
+      trimmedUrl.includes('facebook.com') ||
+      trimmedUrl.includes('fb.watch') ||
+      trimmedUrl.includes('fb.com');
+
+    // Run Facebook metadata scraping in parallel if Facebook link
+    const [fbMeta, response] = await Promise.all([
+      isFacebook ? getFacebookMetadata(trimmedUrl) : Promise.resolve(null),
+      fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-rapidapi-key': rapidApiKey,
+          'x-rapidapi-host': rapidApiHost,
+        },
+        body: JSON.stringify({ url: trimmedUrl }),
+      }),
+    ]);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -232,6 +347,59 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
+
+    const isGenericTitle = (t?: string) => {
+      if (!t) return true;
+      const clean = t.trim().toLowerCase();
+      return (
+        clean === '- facebook reel' ||
+        clean === 'facebook reel' ||
+        clean === '- facebook video' ||
+        clean === 'facebook video' ||
+        clean === '- facebook watch' ||
+        clean === 'facebook watch' ||
+        clean === 'user' ||
+        clean === 'video' ||
+        clean.startsWith('- facebook reel') ||
+        clean.startsWith('- facebook video')
+      );
+    };
+
+    // Apply resolved Facebook metadata
+    if (fbMeta?.title) {
+      data.title = fbMeta.title;
+      if (fbMeta.author && (!data.author || data.author === 'User')) {
+        data.author = fbMeta.author;
+      }
+      if (!data.thumbnail && fbMeta.thumbnail) {
+        data.thumbnail = fbMeta.thumbnail;
+      }
+    } else if (
+      isGenericTitle(data.title) &&
+      (isFacebook || data.source === 'facebook' || (data.url && data.url.includes('facebook.com')))
+    ) {
+      // Lazy fetch if parallel fetch was skipped or didn't get title
+      const fallbackMeta = await getFacebookMetadata(data.url || trimmedUrl);
+      if (fallbackMeta?.title) {
+        data.title = fallbackMeta.title;
+        if (fallbackMeta.author && (!data.author || data.author === 'User')) {
+          data.author = fallbackMeta.author;
+        }
+        if (!data.thumbnail && fallbackMeta.thumbnail) {
+          data.thumbnail = fallbackMeta.thumbnail;
+        }
+      }
+    }
+
+    // Clean up any remaining "- Facebook Reel" or leading dashes in title
+    if (typeof data.title === 'string') {
+      data.title = data.title
+        .replace(/\s*-\s*Facebook Reel\s*/gi, ' ')
+        .replace(/\s*-\s*Facebook Video\s*/gi, ' ')
+        .replace(/^-\s*/, '')
+        .trim();
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('[Downloader API Error]:', error);

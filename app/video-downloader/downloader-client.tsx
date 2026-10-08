@@ -187,9 +187,37 @@ export default function DownloaderClient() {
     medias.find((m) => m.type === 'audio' || m.extension === 'mp3') ||
     (result?.musicUrl ? { url: result.musicUrl, extension: 'mp3', quality: result.musicTitle || 'Nhạc nền MP3' } : undefined);
 
-  const safeTitle = (
-    result?.title ? result.title.substring(0, 40).replace(/[^a-zA-Z0-9\s-_]/g, '') : 'tiktok'
-  ).trim();
+  // Clean up title and generate a valid filename that preserves Vietnamese / UTF-8
+  const getSafeTitle = (rawTitle?: string) => {
+    if (!rawTitle) return '';
+    return rawTitle
+      .replace(/\s*-\s*Facebook Reel\s*/gi, ' ')
+      .replace(/\s*-\s*Facebook Video\s*/gi, ' ')
+      .replace(/\s*-\s*Facebook\s*$/gi, '')
+      .replace(/^-\s*/, '')
+      .trim();
+  };
+
+  const displayTitle =
+    getSafeTitle(result?.title) ||
+    (result?.source ? `${result.source.toUpperCase()} Video` : 'Video');
+
+  const safeFilename = (() => {
+    const titleToUse = getSafeTitle(result?.title);
+    if (!titleToUse) {
+      return result?.isTikTok
+        ? 'tiktok-video'
+        : result?.source
+        ? `${result.source}-video`
+        : 'video';
+    }
+    // Clean characters illegal in file systems while preserving Vietnamese unicode
+    const cleaned = titleToUse
+      .replace(/[\\/:*?"<>|#\n\r\t]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned.substring(0, 80).trim() || 'video';
+  })();
 
   // Batch download all photos sequentially
   const handleDownloadAllPhotos = async () => {
@@ -200,7 +228,7 @@ export default function DownloaderClient() {
     for (let i = 0; i < imageMedias.length; i++) {
       setDownloadProgress(i + 1);
       const item = imageMedias[i];
-      const filename = `${safeTitle}-anh-${i + 1}.jpg`;
+      const filename = `${safeFilename}-anh-${i + 1}.jpg`;
       const downloadUrl = `/api/proxy-download?url=${encodeURIComponent(item.url)}&filename=${encodeURIComponent(
         filename
       )}`;
@@ -479,9 +507,9 @@ export default function DownloaderClient() {
                 </div>
               </div>
 
-              {result.title && (
+              {displayTitle && (
                 <p className="text-sm sm:text-base font-medium text-slate-800 leading-snug px-1">
-                  {result.title}
+                  {displayTitle}
                 </p>
               )}
 
@@ -491,7 +519,7 @@ export default function DownloaderClient() {
                 {audioMedia && (
                   <a
                     href={`/api/proxy-download?url=${encodeURIComponent(audioMedia.url)}&filename=${encodeURIComponent(
-                      `${safeTitle}-audio.mp3`
+                      `${safeFilename}-audio.mp3`
                     )}`}
                     download
                     className="w-full sm:w-auto min-w-[300px] inline-flex items-center justify-center gap-2.5 h-13 px-8 rounded-full font-bold text-base text-white bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-lg shadow-purple-500/25 active:scale-[0.98] transition-all"
@@ -551,7 +579,7 @@ export default function DownloaderClient() {
                   {imageMedias.map((media, idx) => {
                     const photoDownloadUrl = `/api/proxy-download?url=${encodeURIComponent(
                       media.url
-                    )}&filename=${encodeURIComponent(`${safeTitle}-anh-${idx + 1}.jpg`)}`;
+                    )}&filename=${encodeURIComponent(`${safeFilename}-anh-${idx + 1}.jpg`)}`;
 
                     return (
                       <div
@@ -621,10 +649,10 @@ export default function DownloaderClient() {
                     ) : null}
                   </div>
 
-                  {/* Author Info (TikTok) */}
+                  {/* Author Info */}
                   {result.author && (
                     <div className="mt-3 flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                      {result.author.avatar && (
+                      {typeof result.author === 'object' && result.author.avatar && (
                         <img
                           src={result.author.avatar}
                           alt={result.author.nickname || 'Author'}
@@ -633,9 +661,11 @@ export default function DownloaderClient() {
                       )}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900 truncate">
-                          {result.author.nickname || result.author.unique_id}
+                          {typeof result.author === 'string'
+                            ? result.author
+                            : result.author.nickname || result.author.unique_id || 'Tác giả'}
                         </p>
-                        {result.author.unique_id && (
+                        {typeof result.author === 'object' && result.author.unique_id && (
                           <p className="text-xs text-slate-500 truncate">
                             @{result.author.unique_id}
                           </p>
@@ -660,10 +690,10 @@ export default function DownloaderClient() {
 
               {/* Details & Download Options */}
               <div className="flex-1 space-y-5">
-                {result.title && (
+                {displayTitle && (
                   <div>
                     <h4 className="text-base sm:text-lg font-semibold text-slate-900 line-clamp-3 leading-snug">
-                      {result.title}
+                      {displayTitle}
                     </h4>
                   </div>
                 )}
@@ -687,7 +717,7 @@ export default function DownloaderClient() {
 
                         const encodedDownloadUrl = `/api/proxy-download?url=${encodeURIComponent(
                           media.url
-                        )}&filename=${encodeURIComponent(`${safeTitle}${suffix}${extension}`)}`;
+                        )}&filename=${encodeURIComponent(`${safeFilename}${suffix}${extension}`)}`;
 
                         return (
                           <div
@@ -866,7 +896,7 @@ export default function DownloaderClient() {
             <a
               href={`/api/proxy-download?url=${encodeURIComponent(
                 imageMedias[lightboxIndex].url
-              )}&filename=${encodeURIComponent(`${safeTitle}-anh-${lightboxIndex + 1}.jpg`)}`}
+              )}&filename=${encodeURIComponent(`${safeFilename}-anh-${lightboxIndex + 1}.jpg`)}`}
               download
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-purple-500/25 active:scale-[0.98] transition-all"
             >
