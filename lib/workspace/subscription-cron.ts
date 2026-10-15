@@ -108,3 +108,58 @@ export async function processExpiringSubscriptions() {
     };
   }
 }
+
+export interface SubscriptionAlertResult {
+  daysRemaining: number;
+  isGracePeriod: boolean;
+  graceDaysRemaining: number;
+  alertLevel: 'NONE' | 'WARNING' | 'URGENT' | 'GRACE';
+  alertMessage: string;
+  isExpired: boolean;
+}
+
+export function computeSubscriptionAlert(params: {
+  plan: string;
+  subscriptionStatus: string;
+  planExpiresAt: Date | string | null;
+  gracePeriodEndsAt?: Date | string | null;
+  now?: Date;
+}): SubscriptionAlertResult {
+  const now = params.now || new Date();
+  const expiresAt = params.planExpiresAt ? new Date(params.planExpiresAt) : null;
+  const daysRemaining = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 3600 * 24))) : 0;
+  
+  const isGracePeriod = params.subscriptionStatus === 'GRACE_PERIOD';
+  let graceDaysRemaining = 0;
+  if (params.gracePeriodEndsAt) {
+    graceDaysRemaining = Math.max(0, Math.ceil((new Date(params.gracePeriodEndsAt).getTime() - now.getTime()) / (1000 * 3600 * 24)));
+  }
+
+  const isExpired = params.subscriptionStatus === 'EXPIRED' || (expiresAt !== null && expiresAt < now && !isGracePeriod && params.plan === 'FREE');
+
+  let alertLevel: 'NONE' | 'WARNING' | 'URGENT' | 'GRACE' = 'NONE';
+  let alertMessage = '';
+
+  if (params.plan !== 'FREE') {
+    if (isGracePeriod) {
+      alertLevel = 'GRACE';
+      alertMessage = `Gói dịch vụ đã hết hạn! Bạn đang trong ${graceDaysRemaining} ngày ân hạn trước khi hệ thống chuyển về gói Miễn Phí.`;
+    } else if (daysRemaining <= 1) {
+      alertLevel = 'URGENT';
+      alertMessage = `Gói dịch vụ của bạn sắp hết hạn trong ngày hôm nay! Vui lòng gia hạn để không bị gián đoạn.`;
+    } else if (daysRemaining <= 7) {
+      alertLevel = 'WARNING';
+      alertMessage = `Gói dịch vụ còn ${daysRemaining} ngày nữa sẽ hết hạn. Gia hạn ngay để duy trì hạn mức!`;
+    }
+  }
+
+  return {
+    daysRemaining,
+    isGracePeriod,
+    graceDaysRemaining,
+    alertLevel,
+    alertMessage,
+    isExpired,
+  };
+}
+

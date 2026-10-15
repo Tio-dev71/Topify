@@ -67,3 +67,39 @@ export async function generateUniquePaymentCode(): Promise<string> {
 
   return code;
 }
+
+export const PRICING_TABLE = {
+  PRO: 499000,
+  ENTERPRISE: 1990000,
+};
+
+export const CYCLE_DISCOUNTS = {
+  1: 0,
+  6: 10,
+  12: 20,
+};
+
+// Aliases for testing & convenient usage
+export function calculateOrderAmount(plan: SubscriptionPlan, durationMonths: number = 1) {
+  const result = calculatePlanPricing(plan, durationMonths);
+  return {
+    ...result,
+    finalAmount: result.amount,
+  };
+}
+
+export function generateSePayCode(): string {
+  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+  return `TPF${randomSuffix}`;
+}
+
+export function getVietQRUrl(amount: number, description: string): string {
+  const cfg = getSepayConfig();
+  return generateVietQrUrl({
+    bankId: cfg.bankId,
+    accountNo: cfg.accountNo,
+    amount,
+    description,
+  });
+}
+
