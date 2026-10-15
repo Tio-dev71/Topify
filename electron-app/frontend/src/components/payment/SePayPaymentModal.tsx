@@ -55,8 +55,8 @@ export default function SePayPaymentModal({
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [completedExpiresAt, setCompletedExpiresAt] = useState<string | null>(null);
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(900); // 15 mins
-  const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Sync initial plan
   useEffect(() => {
