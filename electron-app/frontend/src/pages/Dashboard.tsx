@@ -10,6 +10,7 @@ import {
   Zap,
   ArrowRight,
   PlayCircle,
+  Bot,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -41,7 +42,7 @@ export default function Dashboard() {
   const [hasConnections, setHasConnections] = useState(true);
 
   // Parse user from local storage
-  const userData = localStorage.getItem('topify_user');
+  const userData = localStorage.getItem('topify_user') || localStorage.getItem('user');
   let user = null;
   try {
     user = userData ? JSON.parse(userData) : null;
@@ -188,6 +189,41 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Admin AI Personas Management Section — Only for Admin */}
+      {isAdmin && (
+        <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white rounded-2xl shadow-xs border border-blue-100 p-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                <Bot className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[17px] font-semibold text-gray-900">
+                    Bảng Điều Khiển Vai Trò Trợ Lý AI (AI Personas)
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-700 font-semibold border border-blue-200">
+                    Dành cho Admin
+                  </span>
+                </div>
+                <p className="text-[14px] text-gray-600 mt-1 max-w-2xl leading-relaxed">
+                  Thiết lập và nạp sẵn Prompt đào tạo cho các vai trò trợ lý (Chuyên gia Content, Telesales chốt đơn, Pháp lý TMĐT...). Người dùng chỉ cần chọn vai trò để sử dụng nhanh chóng và hiệu quả.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <Link
+                to="/ai?manage_personas=true"
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl inline-flex items-center justify-center gap-2 text-[14px] font-medium py-2.5 px-4 transition-colors shadow-xs w-full md:w-auto whitespace-nowrap"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Thêm & Quản lý vai trò
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CTA Button */}
       <Link

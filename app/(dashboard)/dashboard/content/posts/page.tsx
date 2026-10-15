@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Eye, Edit, Trash2, LayoutGrid, RefreshCcw, Video, CalendarDays, MoreHorizontal, X, Copy, Check, ExternalLink } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Trash2, LayoutGrid, RefreshCcw, Video, CalendarDays, MoreHorizontal, X, Copy, Check, ExternalLink, Repeat } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +21,8 @@ type Post = {
   videoAsset?: { originalFileName: string; storageUrl: string };
   hashtags?: string | null;
   firstComment?: string | null;
+  isEvergreen?: boolean;
+  recycleCount?: number;
 };
 
 function safeFormatDate(
@@ -65,7 +67,10 @@ export default function PostsPage() {
 
   const fetchPosts = async (silent = false) => {
     try {
-      const res = await fetch(`/api/posts?search=${search}&status=${statusFilter === 'ALL' ? '' : statusFilter}`);
+      const isEvergreen = statusFilter === 'EVERGREEN';
+      const statusQuery = isEvergreen || statusFilter === 'ALL' ? '' : statusFilter;
+      const evergreenQuery = isEvergreen ? '&isEvergreen=true' : '';
+      const res = await fetch(`/api/posts?search=${search}&status=${statusQuery}${evergreenQuery}`);
       if (res.ok) {
         const data = await res.json();
         setPosts(data.posts || []);
@@ -181,6 +186,25 @@ export default function PostsPage() {
       toast.error('Lỗi kết nối khi xóa bài viết');
     }
   };
+ 
+  const handleToggleEvergreen = async (post: Post) => {
+    try {
+      const newStatus = !post.isEvergreen;
+      const res = await fetch(`/api/content/posts/${post.id}/evergreen`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isEvergreen: newStatus }),
+      });
+      if (res.ok) {
+        toast.success(newStatus ? 'Đã thêm vào kho Evergreen' : 'Đã bỏ khỏi kho Evergreen');
+        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, isEvergreen: newStatus } : p));
+      } else {
+        toast.error('Không thể cập nhật trạng thái');
+      }
+    } catch {
+      toast.error('Lỗi kết nối');
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const baseClasses = "px-3 py-1.5 rounded-full text-[13px] font-medium flex items-center gap-1.5 border backdrop-blur-md";
@@ -199,6 +223,7 @@ export default function PostsPage() {
 
   const tabs = [
     { id: 'ALL', label: 'Tất cả bài viết' },
+    { id: 'EVERGREEN', label: '🌲 Evergreen' },
     { id: 'DRAFT', label: 'Bản nháp' },
     { id: 'PENDING_REVIEW', label: 'Chờ duyệt' },
     { id: 'SCHEDULED', label: 'Đã lên lịch' },
@@ -363,6 +388,11 @@ export default function PostsPage() {
                           {post.title}
                         </h3>
                         {getStatusBadge(post.status)}
+                        {post.isEvergreen && (
+                          <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shadow-2xs">
+                            <Repeat className="w-3 h-3" /> Evergreen
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 mb-3">
                         {post.caption || 'Không có nội dung mô tả'}
@@ -408,6 +438,17 @@ export default function PostsPage() {
                           title="Xem chi tiết"
                         >
                           <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleToggleEvergreen(post)}
+                          className={`p-2.5 rounded-xl border transition-all ${
+                            post.isEvergreen 
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-600'
+                              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 hover:text-emerald-500 hover:border-emerald-500/30'
+                          }`}
+                          title={post.isEvergreen ? "Bỏ khỏi kho Evergreen" : "Đánh dấu Evergreen"}
+                        >
+                          <Repeat className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleOpenEdit(post)}

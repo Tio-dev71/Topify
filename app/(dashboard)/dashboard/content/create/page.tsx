@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Video, CheckCircle2, ChevronRight, Upload, Calendar, Wand2, CheckSquare, Sparkles, Smartphone, Play, Image as ImageIcon, Heart, MessageCircle, Share2, MoreHorizontal } from 'lucide-react';
+import { Video, CheckCircle2, ChevronRight, Upload, Calendar, Wand2, CheckSquare, Sparkles, Smartphone, Play, Image as ImageIcon, Heart, MessageCircle, Share2, MoreHorizontal, Repeat, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DuplicateWarningCard, type DuplicateCheckResult } from '@/components/content/duplicate-warning-card';
 
 type VideoAsset = {
   id: string;
@@ -56,6 +57,45 @@ export default function CreatePostPage() {
   });
   
   const isChecklistComplete = checklist.policy && checklist.quality && checklist.tags;
+
+  // Duplicate Detection & Evergreen states (F082 & F083)
+  const [duplicateResult, setDuplicateResult] = useState<DuplicateCheckResult | null>(null);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [isEvergreen, setIsEvergreen] = useState(false);
+  const [recycleIntervalDays, setRecycleIntervalDays] = useState(30);
+
+  // Debounced duplicate content check
+  useEffect(() => {
+    if (!caption && !title && !selectedVideoId) {
+      setDuplicateResult(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsCheckingDuplicate(true);
+      try {
+        const res = await fetch('/api/content/duplicate-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            caption,
+            videoAssetId: selectedVideoId,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDuplicateResult(data);
+        }
+      } catch (err) {
+        console.error('Duplicate check error:', err);
+      } finally {
+        setIsCheckingDuplicate(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [title, caption, selectedVideoId]);
   
   // Media picker state
   const [videos, setVideos] = useState<VideoAsset[]>([]);
@@ -171,6 +211,17 @@ export default function CreatePostPage() {
       scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
     }
 
+    if (duplicateResult && duplicateResult.riskLevel === 'HIGH') {
+      const confirmMsg = `⚠️ CẢNH BÁO TRÙNG LẶP CAO (${duplicateResult.maxSimilarity}%):\n${
+        duplicateResult.isMediaDuplicate
+          ? 'Video này đã được xuất bản trong một bài viết khác trong Workspace.'
+          : 'Nội dung bài viết trùng khớp nhiều với bài cũ.'
+      }\n\nMạng xã hội có thể bóp tương tác hoặc phạt spam. Bạn có chắc chắn vẫn muốn tiếp tục xuất bản không?`;
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/posts', {
@@ -184,7 +235,9 @@ export default function CreatePostPage() {
           videoAssetId: selectedVideoId,
           platforms,
           publishMode,
-          scheduledAt
+          scheduledAt,
+          isEvergreen,
+          recycleIntervalDays,
         }),
       });
 
@@ -201,16 +254,32 @@ export default function CreatePostPage() {
     }
   };
 
-  const handleSpinContent = () => {
+  const handleSpinContent = async () => {
     if (!caption) {
       alert("Vui lòng nhập nội dung gốc để tạo biến thể.");
       return;
     }
     setIsSpinning(true);
-    setTimeout(() => {
-      setCaption(prev => prev + "\n\n(Đã được tối ưu bởi AI ✨)");
+    try {
+      const res = await fetch('/api/content/spin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: caption, count: 1 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.variants && data.variants.length > 0) {
+          setCaption(data.variants[0]);
+        }
+      } else {
+        // Fallback simple rewrite
+        setCaption(prev => prev + " ✨");
+      }
+    } catch (err) {
+      console.error('Spin error:', err);
+    } finally {
       setIsSpinning(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -283,6 +352,16 @@ export default function CreatePostPage() {
                   className="w-full px-5 py-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/30 focus:border-[#5B3DF5]/50 transition-all text-sm resize-none placeholder:text-gray-400 dark:placeholder:text-gray-600 shadow-inner"
                   placeholder="Viết gì đó thật thu hút..."
                 />
+
+                {/* Duplicate Content Detection Alert (F082) */}
+                <div className="mt-2">
+                  <DuplicateWarningCard
+                    result={duplicateResult}
+                    loading={isCheckingDuplicate}
+                    onSpinCaption={handleSpinContent}
+                    isSpinning={isSpinning}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -525,6 +604,60 @@ export default function CreatePostPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
+
+            {/* Evergreen & Recycle Settings (F083) */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-3xl p-7 shadow-sm hover:shadow-xl transition-all duration-300 space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500/10 rounded-2xl text-emerald-500">
+                    <Repeat className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 dark:text-white">Nội dung Evergreen</h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Lưu vào kho & đề xuất tái bản định kỳ</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isEvergreen}
+                    onChange={(e) => setIsEvergreen(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+
+              {isEvergreen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="pt-3 border-t border-gray-100 dark:border-gray-700/50 space-y-2"
+                >
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-500" />
+                    Chu kỳ đề xuất tái bản (sau khi xuất bản):
+                  </label>
+                  <select
+                    value={recycleIntervalDays}
+                    onChange={(e) => setRecycleIntervalDays(Number(e.target.value))}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  >
+                    <option value={15}>Mỗi 15 ngày</option>
+                    <option value={30}>Mỗi 30 ngày (Khuyên dùng)</option>
+                    <option value={45}>Mỗi 45 ngày</option>
+                    <option value={60}>Mỗi 60 ngày</option>
+                    <option value={90}>Mỗi 90 ngày (Hàng quý)</option>
+                  </select>
+                </motion.div>
+              )}
             </motion.div>
 
             {/* Pre-publish Checklist */}

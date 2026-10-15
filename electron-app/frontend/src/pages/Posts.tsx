@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Edit3,
   AlignLeft,
+  Repeat,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,6 +38,8 @@ interface PostItem {
   firstComment?: string | null;
   hashtags?: string | null;
   status: string;
+  isEvergreen?: boolean;
+  recycleIntervalDays?: number;
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
@@ -379,6 +382,12 @@ export default function Posts() {
                             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100" title={post.firstComment}>
                               <MessageSquare className="w-3 h-3 text-amber-600 flex-shrink-0" />
                               <span>Cmt</span>
+                            </span>
+                          )}
+                          {post.isEvergreen && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200" title={`Chu kỳ tái đăng: ${post.recycleIntervalDays || 30} ngày`}>
+                              <Repeat className="w-3 h-3 text-emerald-700" />
+                              <span>Evergreen ({post.recycleIntervalDays || 30}d)</span>
                             </span>
                           )}
                         </div>

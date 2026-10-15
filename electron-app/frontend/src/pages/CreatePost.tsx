@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   Upload,
   Film,
@@ -15,10 +15,18 @@ import {
   MessageSquare,
   Copy,
   AlertTriangle,
+  Repeat,
+  Sparkles,
+  Wand2,
+  Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import { PLATFORM_CONFIG, safeFormatDate } from '../lib/utils';
+import { DuplicateWarningCard, type DuplicateCheckResult } from '../components/DuplicateWarningCard';
+import { ContentScoreCard, type ContentScoreData } from '../components/ContentScoreCard';
+import { SpinModal, type SpinVariantItem } from '../components/SpinModal';
+import { AiWriterModal } from '../components/AiWriterModal';
 
 type Platform = keyof typeof PLATFORM_CONFIG;
 type PublishMode = 'now' | 'schedule';
@@ -105,6 +113,243 @@ export default function CreatePost() {
   const [scheduledAt, setScheduledAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});
+
+  // Evergreen state (F083)
+  const [isEvergreen, setIsEvergreen] = useState(false);
+  const [recycleIntervalDays, setRecycleIntervalDays] = useState(30);
+
+  // Duplicate Check state per video ID (F082)
+  const [duplicateResults, setDuplicateResults] = useState<Record<string, DuplicateCheckResult | null>>({});
+  const [checkingDuplicates, setCheckingDuplicates] = useState<Record<string, boolean>>({});
+  const [spinningCaption, setSpinningCaption] = useState<Record<string, boolean>>({});
+
+  // AI Content Score state per video ID (F084)
+  const [scoreResults, setScoreResults] = useState<Record<string, ContentScoreData | null>>({});
+  const [scoringContent, setScoringContent] = useState<Record<string, boolean>>({});
+
+  // F015 & F016: Spin Modal & AI Writer Modal state
+  const location = useLocation();
+  const [spinModalOpen, setSpinModalOpen] = useState(false);
+  const [aiWriterModalOpen, setAiWriterModalOpen] = useState(false);
+  const [activeVideoForModal, setActiveVideoForModal] = useState<UploadedVideo | null>(null);
+
+  // Listen for navigation state from ContentStudio
+  useEffect(() => {
+    const locState = location.state as { prefilledTitle?: string; prefilledCaption?: string } | null;
+    if (locState?.prefilledTitle || locState?.prefilledCaption) {
+      if (videos.length === 0) {
+        const draft: UploadedVideo = {
+          id: `draft_${Date.now()}`,
+          originalFileName: 'Ban_thao_Content_Studio.mp4',
+          titleFromFileName: locState.prefilledTitle || 'Bài viết mới',
+          storageUrl: '',
+          size: 1024 * 500,
+          mimeType: 'video/mp4',
+          title: locState.prefilledTitle || '',
+          caption: locState.prefilledCaption || '',
+          firstComment: '',
+          hashtags: '#Topify #ContentStudio',
+        };
+        setVideos([draft]);
+      } else {
+        updateVideoField(videos[0].id, 'title', locState.prefilledTitle || videos[0].title);
+        updateVideoField(videos[0].id, 'caption', locState.prefilledCaption || videos[0].caption);
+      }
+      toast.success('Đã áp dụng nội dung từ Content Studio!');
+    }
+  }, [location.state]);
+
+  const openAiWriterModal = (video?: UploadedVideo) => {
+    setActiveVideoForModal(video || (videos.length > 0 ? videos[0] : null));
+    setAiWriterModalOpen(true);
+  };
+
+  const openSpinModal = (video?: UploadedVideo) => {
+    setActiveVideoForModal(video || (videos.length > 0 ? videos[0] : null));
+    setSpinModalOpen(true);
+  };
+
+  const handleApplyAiContent = (content: { title: string; caption: string; hashtags?: string }) => {
+    if (activeVideoForModal) {
+      updateVideoField(activeVideoForModal.id, 'title', content.title);
+      updateVideoField(activeVideoForModal.id, 'caption', content.caption);
+      if (content.hashtags) {
+        updateVideoField(activeVideoForModal.id, 'hashtags', content.hashtags);
+      }
+    } else if (videos.length > 0) {
+      updateVideoField(videos[0].id, 'title', content.title);
+      updateVideoField(videos[0].id, 'caption', content.caption);
+      if (content.hashtags) {
+        updateVideoField(videos[0].id, 'hashtags', content.hashtags);
+      }
+    } else {
+      const draft: UploadedVideo = {
+        id: `draft_${Date.now()}`,
+        originalFileName: 'Ban_thao_AI.mp4',
+        titleFromFileName: content.title || 'Bài viết AI',
+        storageUrl: '',
+        size: 1024 * 500,
+        mimeType: 'video/mp4',
+        title: content.title,
+        caption: content.caption,
+        firstComment: '',
+        hashtags: content.hashtags || '',
+      };
+      setVideos([draft]);
+    }
+  };
+
+  const handleApplySpinVariant = (caption: string, title?: string) => {
+    const targetVideo = activeVideoForModal || (videos.length > 0 ? videos[0] : null);
+    if (targetVideo) {
+      updateVideoField(targetVideo.id, 'caption', caption);
+      if (title) updateVideoField(targetVideo.id, 'title', title);
+    } else {
+      const draft: UploadedVideo = {
+        id: `draft_${Date.now()}`,
+        originalFileName: 'Ban_thao_Spin.mp4',
+        titleFromFileName: title || 'Bài viết Spin',
+        storageUrl: '',
+        size: 1024 * 500,
+        mimeType: 'video/mp4',
+        title: title || 'Biến thể bài viết',
+        caption: caption,
+        firstComment: '',
+        hashtags: '#Topify #SpinVariant',
+      };
+      setVideos([draft]);
+    }
+  };
+
+  const handleDistributeSpinVariants = (variants: SpinVariantItem[]) => {
+    if (videos.length === 0) return;
+    setVideos((prev) =>
+      prev.map((v, idx) => {
+        const variant = variants[idx % variants.length];
+        return {
+          ...v,
+          caption: variant.caption,
+          title: variant.title || v.title,
+        };
+      })
+    );
+  };
+
+  // F108: Listen for transfer from Social Search
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const captionParam = searchParams.get('caption');
+    const tagsParam = searchParams.get('tags');
+    const sourceParam = searchParams.get('source');
+
+    if (captionParam && videos.length === 0) {
+      const newDraftVideo: UploadedVideo = {
+        id: `draft_${Date.now()}`,
+        originalFileName: `Y_tuong_tu_${sourceParam || 'Social_Search'}.mp4`,
+        titleFromFileName: `Ý tưởng từ ${sourceParam || 'Xu hướng MXH'}`,
+        storageUrl: '',
+        size: 1024 * 500,
+        mimeType: 'video/mp4',
+        title: `Ý tưởng từ ${sourceParam || 'Xu hướng MXH'}`,
+        caption: decodeURIComponent(captionParam),
+        firstComment: '',
+        hashtags: tagsParam ? decodeURIComponent(tagsParam) : '',
+      };
+      setVideos([newDraftVideo]);
+      toast.success('Đã nạp ý tưởng nội dung từ Social Search vào bài viết!');
+    }
+  }, [searchParams]);
+
+  const handleAnalyzeContentScore = async (video: UploadedVideo) => {
+    if (!video.caption?.trim() && !video.title?.trim()) {
+      toast.error('Vui lòng nhập nội dung mô tả hoặc tiêu đề trước khi chấm điểm');
+      return;
+    }
+
+    setScoringContent((prev) => ({ ...prev, [video.id]: true }));
+    try {
+      const res = await api.post('/content/ai-score', {
+        title: video.title || video.titleFromFileName || '',
+        caption: video.caption || '',
+        platform: platforms[0] || 'TIKTOK_VIDEO',
+      });
+
+      if (res?.data?.data) {
+        setScoreResults((prev) => ({ ...prev, [video.id]: res.data.data }));
+        toast.success(`Chấm điểm hoàn tất: ${res.data.data.overallScore}/100 điểm!`);
+      }
+    } catch (err: any) {
+      console.error('Failed to analyze score', err);
+      toast.error(err?.response?.data?.error || 'Không thể chấm điểm nội dung lúc này');
+    } finally {
+      setScoringContent((prev) => ({ ...prev, [video.id]: false }));
+    }
+  };
+
+  const handleApplySuggestedCaption = (video: UploadedVideo, newCaption: string) => {
+    updateVideoField(video.id, 'caption', newCaption);
+    toast.success('Đã áp dụng bản caption tối ưu hóa của AI!');
+  };
+
+  // Debounced duplicate content scanner
+  useEffect(() => {
+    if (videos.length === 0) return;
+
+    const timer = setTimeout(async () => {
+      for (const v of videos) {
+        if (!v.title && !v.caption && !v.id) continue;
+
+        setCheckingDuplicates((prev) => ({ ...prev, [v.id]: true }));
+        try {
+          const res = await api.post('/content/duplicate-check', {
+            title: v.title || v.titleFromFileName || '',
+            caption: v.caption || '',
+            videoAssetId: v.id,
+          });
+          setDuplicateResults((prev) => ({ ...prev, [v.id]: res.data }));
+        } catch (err) {
+          console.error('Failed duplicate check for video', v.id, err);
+        } finally {
+          setCheckingDuplicates((prev) => ({ ...prev, [v.id]: false }));
+        }
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [videos]);
+
+  const handleSpinCaption = async (video: UploadedVideo) => {
+    setSpinningCaption((prev) => ({ ...prev, [video.id]: true }));
+    try {
+      const res = await api
+        .post('/ai/spin-caption', {
+          title: video.title,
+          caption: video.caption,
+        })
+        .catch(() => null);
+
+      if (res?.data?.newCaption) {
+        updateVideoField(video.id, 'caption', res.data.newCaption);
+        toast.success('Đã viết lại caption thành công với AI!');
+      } else {
+        const original = video.caption || video.title;
+        const hooks = [
+          '🔥 Bạn đã biết điều này chưa? ',
+          '💡 Bí quyết cực hay không thể bỏ lỡ: ',
+          '✨ Chia sẻ hữu ích hôm nay dành cho bạn: ',
+          '🚀 Khám phá ngay mẹo đỉnh cao này: ',
+        ];
+        const randomHook = hooks[Math.floor(Math.random() * hooks.length)];
+        const newText = original ? `${randomHook}${original.replace(/^[🔥💡✨🚀]\s*/, '')}` : randomHook;
+        updateVideoField(video.id, 'caption', newText);
+        toast.success('Đã làm mới nội dung Caption!');
+      }
+    } catch {
+      toast.error('Không thể làm mới caption');
+    } finally {
+      setSpinningCaption((prev) => ({ ...prev, [video.id]: false }));
+    }
+  };
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -344,6 +589,8 @@ export default function CreatePost() {
           platforms,
           publishMode,
           scheduledAt: payloadScheduledAt,
+          isEvergreen,
+          recycleIntervalDays: isEvergreen ? Number(recycleIntervalDays) : undefined,
         });
 
         if (res.status === 200 || res.status === 201) {
@@ -377,6 +624,45 @@ export default function CreatePost() {
           <p className="page-subtitle text-[15px] text-gray-500 mt-1">
             Thiết lập tiêu đề, hashtag, bình luận đầu và hẹn giờ tự động xuất bản đa nền tảng
           </p>
+        </div>
+      </div>
+
+      {/* Content Studio AI Toolbar (M2: F015 & F016) */}
+      <div className="bg-gradient-to-r from-purple-50/80 via-indigo-50/80 to-blue-50/80 border border-purple-200/60 rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-gray-900">Content Studio AI Toolbar</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                M2 • F015 & F016
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Tự động viết kịch bản đa ngành hàng hoặc spin biến thể caption chống thuật toán spam
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => openAiWriterModal()}
+            className="px-4 py-2 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 hover:shadow-xs"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            Trợ Lý AI Viết Bài (F016)
+          </button>
+          <button
+            type="button"
+            onClick={() => openSpinModal()}
+            className="px-4 py-2 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 hover:shadow-xs"
+          >
+            <Repeat className="w-3.5 h-3.5 text-purple-600" />
+            Spin Biến Thể Caption (F015)
+          </button>
         </div>
       </div>
 
@@ -557,10 +843,30 @@ export default function CreatePost() {
 
                     {/* 2. Nội dung / Mô tả (Caption) */}
                     <div>
-                      <label className="block text-[13px] font-bold text-gray-800 mb-1.5 flex items-center gap-1.5">
-                        <AlignLeft className="w-4 h-4 text-purple-600" />
-                        Nội dung mô tả (Caption)
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[13px] font-bold text-gray-800 flex items-center gap-1.5">
+                          <AlignLeft className="w-4 h-4 text-purple-600" />
+                          Nội dung mô tả (Caption)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openAiWriterModal(v)}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all flex items-center gap-1 shadow-2xs"
+                          >
+                            <Sparkles className="w-3 h-3 text-blue-600" />
+                            Trợ lý AI (F016)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openSpinModal(v)}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-all flex items-center gap-1 shadow-2xs"
+                          >
+                            <Repeat className="w-3 h-3 text-purple-600" />
+                            Spin biến thể (F015)
+                          </button>
+                        </div>
+                      </div>
                       <textarea
                         value={v.caption}
                         onChange={(e) => updateVideoField(v.id, 'caption', e.target.value)}
@@ -568,6 +874,27 @@ export default function CreatePost() {
                         placeholder="Nhập nội dung chia sẻ, kêu gọi hành động cho video..."
                         rows={3}
                       />
+
+                      {/* Duplicate Warning Card (F082) */}
+                      <div className="pt-2">
+                        <DuplicateWarningCard
+                          result={duplicateResults[v.id] || null}
+                          loading={!!checkingDuplicates[v.id]}
+                          onSpinCaption={() => handleSpinCaption(v)}
+                          isSpinning={!!spinningCaption[v.id]}
+                        />
+                      </div>
+
+                      {/* AI Content Score Card (F084) */}
+                      <div className="pt-2">
+                        <ContentScoreCard
+                          scoreData={scoreResults[v.id] || null}
+                          loading={!!scoringContent[v.id]}
+                          onAnalyze={() => handleAnalyzeContentScore(v)}
+                          onApplySuggested={(newCap) => handleApplySuggestedCaption(v, newCap)}
+                          canAnalyze={Boolean(v.caption?.trim() || v.title?.trim())}
+                        />
+                      </div>
                     </div>
 
                     {/* 3. Hashtags & 4. Bình luận đầu tiên */}
@@ -770,6 +1097,75 @@ export default function CreatePost() {
               </div>
             )}
 
+            {/* 3. Tùy chọn Tái đăng (Evergreen Content - F083) */}
+            <div className="p-6 rounded-2xl border-2 border-emerald-100 bg-emerald-50/30 space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-600 text-white mt-0.5 shadow-sm">
+                    <Repeat className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
+                      Nội dung Evergreen (Tái đăng định kỳ)
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                        Mới
+                      </span>
+                    </h3>
+                    <p className="text-[13px] text-gray-600 mt-0.5">
+                      Đánh dấu video này là nội dung giá trị lâu dài. Hệ thống sẽ tự động lên lịch đăng lại sau một khoảng thời gian mà không làm mất bài cũ.
+                    </p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                  <input
+                    type="checkbox"
+                    checked={isEvergreen}
+                    onChange={(e) => setIsEvergreen(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              {isEvergreen && (
+                <div className="pt-3 border-t border-emerald-200/60 animate-fade-in space-y-3">
+                  <label className="block text-[14px] font-bold text-gray-900">
+                    Chu kỳ tái xuất bản (ngày):
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[15, 30, 45, 60, 90].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setRecycleIntervalDays(days)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          recycleIntervalDays === days
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white border border-gray-200 text-gray-700 hover:border-emerald-300'
+                        }`}
+                      >
+                        {days} ngày
+                      </button>
+                    ))}
+                    <div className="flex items-center gap-1.5 ml-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={recycleIntervalDays}
+                        onChange={(e) => setRecycleIntervalDays(Math.max(1, parseInt(e.target.value) || 30))}
+                        className="input-apple text-xs w-20 py-1.5 px-2 bg-white border border-gray-200"
+                      />
+                      <span className="text-xs text-gray-500 font-medium">ngày</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-emerald-800">
+                    💡 Sau {recycleIntervalDays} ngày kể từ lần xuất bản gần nhất, bài viết này sẽ xuất hiện trong danh sách "Cần tái đăng" để bạn kiểm tra hoặc tự động đăng lại.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Submit Button */}
             <div className="pt-4 space-y-3">
               {platforms.some(p => !connectedProviders[PLATFORM_PROVIDER_MAP[p]]) && (
@@ -811,6 +1207,25 @@ export default function CreatePost() {
           </div>
         )}
       </form>
+
+      {/* F015 Spin Modal */}
+      <SpinModal
+        isOpen={spinModalOpen}
+        onClose={() => setSpinModalOpen(false)}
+        initialCaption={activeVideoForModal?.caption || videos[0]?.caption || ''}
+        initialTitle={activeVideoForModal?.title || videos[0]?.title || ''}
+        onApplyVariant={handleApplySpinVariant}
+        onDistributeToAllVideos={handleDistributeSpinVariants}
+        totalVideosCount={videos.length}
+      />
+
+      {/* F016 AI Writer Modal */}
+      <AiWriterModal
+        isOpen={aiWriterModalOpen}
+        onClose={() => setAiWriterModalOpen(false)}
+        initialTopic={activeVideoForModal?.title || videos[0]?.title || ''}
+        onApplyContent={handleApplyAiContent}
+      />
     </div>
   );
 }

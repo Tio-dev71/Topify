@@ -1,4 +1,11 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@source ".";
+@source "../index.html";
+@source not "../node_modules";
+@source not "../../node_modules";
+@source not "../../dist";
 
 /* ──────────────────────────────────────────────
    Topify Design System — Purple/Indigo
@@ -67,7 +74,8 @@
   border-color: var(--color-border);
 }
 
-html, body {
+html,
+body {
   font-family: var(--font-sans);
   background-color: var(--color-background);
   color: var(--color-foreground);

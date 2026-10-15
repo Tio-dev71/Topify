@@ -42,6 +42,7 @@ import {
   Link2,
   Brain,
   ShieldCheck,
+  Repeat,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -55,6 +56,7 @@ const navigation: any[] = [
 const contentNavigation = [
   { key: 'sidebar.posts', href: '/dashboard/content/posts', icon: FileText },
   { key: 'sidebar.calendar', href: '/dashboard/content/calendar', icon: Calendar },
+  { key: 'sidebar.evergreen', href: '/dashboard/content/evergreen', icon: Repeat },
   { key: 'sidebar.media_library', href: '/dashboard/content/media', icon: ImageIcon },
   { key: 'sidebar.templates', href: '/dashboard/content/templates', icon: LayoutTemplate },
   { key: 'sidebar.pillars', href: '/dashboard/content/pillars', icon: Layers },

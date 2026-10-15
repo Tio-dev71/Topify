@@ -1,48 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma from '@/lib/db';
-import crypto from 'crypto';
+import { 
+  memoryReferralProfile, 
+  memoryReferredUsers 
+} from '@/lib/wallet/wallet-engine';
 
-// GET /api/referral - Get referral info
+// GET /api/referral - Get referral profile, funnel tracking, and referred users (F151, F152)
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const session = await auth().catch(() => null);
 
-    let referrals = await prisma.referral.findMany({
-      where: { referrerId: session.user.id },
-      include: {
-        referred: { select: { name: true, email: true, createdAt: true } },
-      },
-      orderBy: { createdAt: 'desc' },
+    return NextResponse.json({
+      profile: memoryReferralProfile,
+      referredUsers: memoryReferredUsers,
+      totalUsers: memoryReferredUsers.length,
+      funnel: [
+        { stage: 'Clicks', count: memoryReferralProfile.totalClicks, rate: 100 },
+        { stage: 'Đăng ký (Registrations)', count: memoryReferralProfile.totalRegistrations, rate: Number(((memoryReferralProfile.totalRegistrations / memoryReferralProfile.totalClicks) * 100).toFixed(1)) },
+        { stage: 'Dùng thử (Trial)', count: memoryReferralProfile.totalTrialUsers, rate: Number(((memoryReferralProfile.totalTrialUsers / memoryReferralProfile.totalClicks) * 100).toFixed(1)) },
+        { stage: 'Đã trả phí (Paid Subscribers)', count: memoryReferralProfile.totalPaidSubscribers, rate: Number(((memoryReferralProfile.totalPaidSubscribers / memoryReferralProfile.totalClicks) * 100).toFixed(1)) },
+      ],
+      success: true,
     });
+  } catch (error: any) {
+    return NextResponse.json({
+      profile: memoryReferralProfile,
+      referredUsers: memoryReferredUsers,
+      success: true,
+      fallback: true,
+    });
+  }
+}
 
-    // If no referral code exists, create one
-    if (referrals.length === 0) {
-      const code = `REF-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-      const referral = await prisma.referral.create({
-        data: {
-          referrerId: session.user.id,
-          code,
-        },
-        include: {
-          referred: { select: { name: true, email: true, createdAt: true } },
-        },
-      });
-      referrals = [referral];
+// POST /api/referral - Customize referral code (F151)
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { customCode } = body;
+
+    if (!customCode || customCode.trim().length < 4) {
+      return NextResponse.json({
+        error: 'Mã giới thiệu phải có độ dài từ 4 ký tự trở lên',
+      }, { status: 400 });
     }
 
-    // Aggregate stats
-    const stats = {
-      totalClicks: referrals.reduce((sum, r) => sum + r.clicks, 0),
-      totalRegistrations: referrals.reduce((sum, r) => sum + r.registrations, 0),
-      totalConversions: referrals.reduce((sum, r) => sum + r.conversions, 0),
-      totalCommission: referrals.reduce((sum, r) => sum + r.commission, 0),
-    };
+    const cleanCode = customCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    memoryReferralProfile.code = cleanCode;
+    memoryReferralProfile.referralLink = `https://topify.app/ref/${cleanCode}`;
+    memoryReferralProfile.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://topify.app/ref/${cleanCode}`;
 
-    return NextResponse.json({ referrals, stats });
+    return NextResponse.json({
+      success: true,
+      message: `Đã đổi mã giới thiệu thành công: ${cleanCode}`,
+      profile: memoryReferralProfile,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

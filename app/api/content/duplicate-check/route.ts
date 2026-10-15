@@ -2,7 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 
-// POST /api/content/duplicate-check - Check for duplicate content
+export const dynamic = 'force-dynamic';
+
+/**
+ * Tokenize and generate N-grams (unigrams + bigrams + trigrams)
+ */
+function extractNgrams(text: string): Set<string> {
+  const clean = text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const words = clean.split(' ').filter(w => w.length > 1);
+  const ngrams = new Set<string>();
+
+  // Unigrams
+  for (const word of words) {
+    ngrams.add(word);
+  }
+
+  // Bigrams (weighted capture for context)
+  for (let i = 0; i < words.length - 1; i++) {
+    ngrams.add(`${words[i]}_${words[i + 1]}`);
+  }
+
+  // Trigrams (capture full phrases)
+  for (let i = 0; i < words.length - 2; i++) {
+    ngrams.add(`${words[i]}_${words[i + 1]}_${words[i + 2]}`);
+  }
+
+  return ngrams;
+}
+
+/**
+ * Calculate Jaccard similarity between two ngram sets
+ */
+function calculateJaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersectionSize = 0;
+  for (const item of setA) {
+    if (setB.has(item)) {
+      intersectionSize++;
+    }
+  }
+  const unionSize = setA.size + setB.size - intersectionSize;
+  return unionSize > 0 ? intersectionSize / unionSize : 0;
+}
+
+// POST /api/content/duplicate-check - Check for duplicate content (text & media)
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -11,50 +59,154 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { caption, threshold = 0.7 } = body;
+    const {
+      caption = '',
+      title = '',
+      videoAssetId,
+      mediaUrls = [],
+      currentPostId,
+      threshold = 0.35, // 35% threshold to start catching similar content
+    } = body;
 
-    if (!caption || caption.length < 10) {
-      return NextResponse.json({ error: 'Caption must be at least 10 characters' }, { status: 400 });
+    const trimmedCaption = (caption || '').trim();
+    const trimmedTitle = (title || '').trim();
+    const combinedInputText = `${trimmedTitle} ${trimmedCaption}`.trim();
+
+    // Check if there is enough content or media to check
+    if (combinedInputText.length < 5 && !videoAssetId && (!mediaUrls || mediaUrls.length === 0)) {
+      return NextResponse.json({
+        hasDuplicates: false,
+        maxSimilarity: 0,
+        riskLevel: 'SAFE',
+        isMediaDuplicate: false,
+        matches: [],
+        checkedCount: 0,
+      });
     }
 
     const workspaceId = (session.user as any).workspaceId;
+    const where: any = {};
+    if (workspaceId) {
+      where.workspaceId = workspaceId;
+    } else {
+      where.createdById = session.user.id;
+    }
 
-    // Get recent posts in workspace
-    const recentPosts = await prisma.post.findMany({
-      where: { workspaceId },
-      select: { id: true, title: true, caption: true, createdAt: true },
+    // Exclude current post if editing
+    if (currentPostId) {
+      where.id = { not: currentPostId };
+    }
+
+    // Fetch up to 300 recent posts in the workspace
+    const candidatePosts = await prisma.post.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        caption: true,
+        videoAssetId: true,
+        status: true,
+        createdAt: true,
+        publishedAt: true,
+        media: {
+          select: { url: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: 300,
     });
 
-    // Simple similarity check using word overlap (Jaccard similarity)
-    const inputWords = new Set(caption.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2));
-    
-    const duplicates = recentPosts
-      .filter(post => post.caption)
-      .map(post => {
-        const postWords = new Set(post.caption!.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2));
-        const intersection = new Set(Array.from(inputWords as Set<string>).filter((x: string) => postWords.has(x)));
-        const union = new Set([...Array.from(inputWords as Set<string>), ...Array.from(postWords as Set<string>)]);
-        const similarity = union.size > 0 ? intersection.size / union.size : 0;
-        
-        return {
+    const inputNgrams = extractNgrams(combinedInputText);
+    const normalizedMediaUrls = new Set((mediaUrls || []).map((u: string) => u.trim()));
+
+    let maxSimilarity = 0;
+    let isMediaDuplicate = false;
+
+    const matches: Array<{
+      postId: string;
+      title: string;
+      captionSnippet: string;
+      similarity: number;
+      isMediaMatch: boolean;
+      status: string;
+      createdAt: Date;
+      publishedAt: Date | null;
+    }> = [];
+
+    for (const post of candidatePosts) {
+      let mediaMatched = false;
+
+      // 1. Check video asset matching
+      if (videoAssetId && post.videoAssetId && post.videoAssetId === videoAssetId) {
+        mediaMatched = true;
+        isMediaDuplicate = true;
+      }
+
+      // 2. Check image / media URLs matching
+      if (!mediaMatched && normalizedMediaUrls.size > 0 && post.media.length > 0) {
+        const postMediaUrls = post.media.map(m => m.url.trim());
+        for (const pUrl of postMediaUrls) {
+          if (normalizedMediaUrls.has(pUrl)) {
+            mediaMatched = true;
+            isMediaDuplicate = true;
+            break;
+          }
+        }
+      }
+
+      // 3. Check text similarity
+      const postText = `${post.title || ''} ${post.caption || ''}`.trim();
+      let textSim = 0;
+      if (inputNgrams.size > 0 && postText.length > 0) {
+        const postNgrams = extractNgrams(postText);
+        textSim = calculateJaccardSimilarity(inputNgrams, postNgrams);
+      }
+
+      const simPercentage = Math.round(textSim * 100);
+
+      // If media matches, give a high similarity floor (e.g., 90%)
+      const finalSimScore = mediaMatched ? Math.max(simPercentage, 90) : simPercentage;
+
+      if (finalSimScore > maxSimilarity) {
+        maxSimilarity = finalSimScore;
+      }
+
+      if (finalSimScore >= Math.round(threshold * 100) || mediaMatched) {
+        matches.push({
           postId: post.id,
           title: post.title,
-          similarity: Math.round(similarity * 100),
+          captionSnippet: post.caption ? (post.caption.length > 120 ? post.caption.slice(0, 120) + '...' : post.caption) : '',
+          similarity: finalSimScore,
+          isMediaMatch: mediaMatched,
+          status: post.status,
           createdAt: post.createdAt,
-        };
-      })
-      .filter(d => d.similarity >= threshold * 100)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 10);
+          publishedAt: post.publishedAt,
+        });
+      }
+    }
+
+    // Sort matches by similarity desc
+    matches.sort((a, b) => b.similarity - a.similarity);
+    const topMatches = matches.slice(0, 5);
+
+    // Determine riskLevel
+    let riskLevel: 'SAFE' | 'MODERATE' | 'HIGH' = 'SAFE';
+    if (maxSimilarity >= 75 || isMediaDuplicate) {
+      riskLevel = 'HIGH';
+    } else if (maxSimilarity >= 40) {
+      riskLevel = 'MODERATE';
+    }
 
     return NextResponse.json({
-      hasDuplicates: duplicates.length > 0,
-      duplicates,
-      checkedCount: recentPosts.length,
+      hasDuplicates: topMatches.length > 0,
+      maxSimilarity,
+      riskLevel,
+      isMediaDuplicate,
+      matches: topMatches,
+      checkedCount: candidatePosts.length,
     });
   } catch (error: any) {
+    console.error('❌ [DUPLICATE-CHECK-API] Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

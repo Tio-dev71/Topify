@@ -241,8 +241,13 @@ async function processKeywordScraperJob(_job: Job) {
           const externalId = (item.id || item.post_id || '').toString();
           if (!externalId) continue;
 
-          const content = item.text || item.content || item.description || item.message || null;
-          const mediaUrl = item.video_url || item.image_url || item.media || item.video || item.image || null;
+          const rawMedia = item.video_url || item.image_url || item.media || item.video || item.image || null;
+          let mediaUrl: string | null = null;
+          if (typeof rawMedia === 'string') {
+            mediaUrl = rawMedia;
+          } else if (rawMedia && typeof rawMedia === 'object') {
+            mediaUrl = (rawMedia as any).uri || (rawMedia as any).url || (rawMedia as any).src || (Array.isArray(rawMedia) ? ((rawMedia[0]?.uri || rawMedia[0]?.url || null)) : null) || null;
+          }
           const likesCount = parseInt(item.likes || item.reactions || item.reactions_count || '0', 10);
           const commentsCount = parseInt(item.comments || item.comments_count || '0', 10);
           const sharesCount = parseInt(item.shares || item.reshare_count || '0', 10);

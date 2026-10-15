@@ -27,6 +27,8 @@ const createPostSchema = z.object({
   ])).min(1),
   publishMode: z.enum(['now', 'schedule', 'request_approval']),
   scheduledAt: z.string().nullable().optional(),
+  isEvergreen: z.boolean().optional(),
+  recycleIntervalDays: z.number().optional(),
 });
 
 // GET /api/posts - List posts
@@ -51,6 +53,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
     const startDate = url.searchParams.get('startDate');
     const endDate = url.searchParams.get('endDate');
+    const isEvergreenParam = url.searchParams.get('isEvergreen');
 
     const where: any = {};
 
@@ -74,6 +77,10 @@ export async function GET(req: NextRequest) {
 
     if (status) {
       where.status = status;
+    }
+
+    if (isEvergreenParam === 'true') {
+      where.isEvergreen = true;
     }
     
     if (startDate && endDate) {
@@ -135,7 +142,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt } = parsed.data;
+    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isEvergreen, recycleIntervalDays } = parsed.data;
 
     // Verify video asset exists and belongs to workspace
     const videoAsset = await prisma.videoAsset.findUnique({
@@ -216,6 +223,8 @@ export async function POST(req: NextRequest) {
         workspaceId: (session.user as any).workspaceId,
         status: publishMode === 'request_approval' ? 'PENDING_REVIEW' : publishMode === 'now' ? 'PUBLISHING' : 'SCHEDULED',
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        isEvergreen: !!isEvergreen,
+        recycleIntervalDays: recycleIntervalDays || 30,
         platforms: {
           create: platforms.map((platform) => ({
             platform,

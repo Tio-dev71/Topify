@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import ErrorBoundary from '../ErrorBoundary';
 
 export default function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isWidePage = location.pathname.startsWith('/inbox') || location.pathname.startsWith('/ai-studio');
 
   useEffect(() => {
     const token = localStorage.getItem('topify_token');
@@ -19,7 +21,7 @@ export default function Layout() {
       <Sidebar />
       {/* Main content area */}
       <main className="lg:pl-[260px] transition-all duration-300">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-20 lg:pt-8">
+        <div className={`${isWidePage ? 'max-w-[1680px] px-3 sm:px-5 lg:px-6 py-4 pt-16 lg:pt-5' : 'max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8 pt-20 lg:pt-8'} mx-auto transition-all`}>
           <ErrorBoundary
             fallback={(error, reset) => (
               <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm text-center space-y-5 max-w-lg mx-auto my-12">

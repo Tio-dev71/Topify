@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"next dev\" \"npm run worker\"",
+    "dev:web": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

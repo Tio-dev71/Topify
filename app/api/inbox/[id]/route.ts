@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 
-// GET /api/inbox/[id] - Get conversation with messages
+export const dynamic = 'force-dynamic';
+
+// GET /api/inbox/[id] - Get conversation with messages, notes, and customer link
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
@@ -17,16 +19,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { id, workspaceId },
       include: {
         messages: { orderBy: { createdAt: 'asc' } },
-        assignedTo: { select: { name: true, email: true, image: true } },
+        assignedTo: { select: { id: true, name: true, email: true, image: true } },
         notes: {
-          include: { createdBy: { select: { name: true } } },
+          include: { createdBy: { select: { id: true, name: true, image: true, email: true } } },
           orderBy: { createdAt: 'desc' },
         },
       },
     });
 
     if (!conversation) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
     // Mark messages as read
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-// PUT /api/inbox/[id] - Update conversation (assign, label, status)
+// PUT /api/inbox/[id] - Update conversation (status, SLA, assign, spam, labels)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
@@ -58,16 +60,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     if (!existing) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+    }
+
+    const updateData: any = {};
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.assignedToId !== undefined) updateData.assignedToId = body.assignedToId || null;
+    if (body.labels !== undefined) updateData.labels = body.labels;
+    if (body.isSpam !== undefined) {
+      updateData.isSpam = Boolean(body.isSpam);
+      if (body.isSpam) {
+        updateData.slaDeadline = null; // Clear SLA if spam
+      }
+    }
+    if (body.slaDeadline !== undefined) {
+      updateData.slaDeadline = body.slaDeadline ? new Date(body.slaDeadline) : null;
+    }
+
+    // If status is changed to RESOLVED or CLOSED, clear SLA deadline
+    if (body.status === 'RESOLVED' || body.status === 'CLOSED') {
+      updateData.slaDeadline = null;
     }
 
     const conversation = await prisma.conversation.update({
       where: { id },
-      data: {
-        status: body.status,
-        assignedToId: body.assignedToId,
-        labels: body.labels,
-        isSpam: body.isSpam,
+      data: updateData,
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true } },
       },
     });
 
