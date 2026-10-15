@@ -10,6 +10,16 @@ export async function POST(req: Request) {
     }
 
     // SePay Webhook Payload format: https://docs.sepay.vn/
+    // Kiểm tra API Key nếu có cấu hình trong biến môi trường SEPAY_API_KEY
+    const configuredApiKey = process.env.SEPAY_API_KEY;
+    if (configuredApiKey) {
+      const authHeader = req.headers.get('authorization') || req.headers.get('x-api-key') || '';
+      const cleanHeader = authHeader.replace(/^Apikey\s+/i, '').trim();
+      if (cleanHeader !== configuredApiKey && !authHeader.includes(configuredApiKey)) {
+        console.warn('[SEPAY_WEBHOOK_UNAUTHORIZED]', { authHeader });
+        return NextResponse.json({ success: false, error: 'Unauthorized: Sai hoặc thiếu API Key' }, { status: 401 });
+      }
+    }
     const { 
       gateway, 
       transactionDate, 
