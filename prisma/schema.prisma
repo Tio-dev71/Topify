@@ -50,6 +50,14 @@ model Workspace {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   plan             SubscriptionPlan  @default(FREE)
+  // F062: Quản lý cước & gia hạn SePay
+  planExpiresAt       DateTime?
+  subscriptionStatus  SubscriptionStatus @default(ACTIVE)
+  gracePeriodEndsAt   DateTime?
+  lastRenewedAt       DateTime?
+  autoRenewReminder   Boolean            @default(true)
+  paymentOrders       PaymentOrder[]
+  invoices            Invoice[]
   alertSettings    AlertSetting[]
   allowedEmails    AllowedEmail[]
   ChannelGroup     ChannelGroup[]
@@ -144,6 +152,7 @@ model User {
   wallet                Wallet?
   referralsMade         Referral[]         @relation("ReferralReferrer")
   referredBy            Referral[]         @relation("ReferralReferred")
+  paymentOrders         PaymentOrder[]
 }
 
 model AllowedEmail {
@@ -239,11 +248,20 @@ model Post {
   versions     PostVersion[]
   logs         PublishLog[]
 
+  // Evergreen & Recycle (F083)
+  isEvergreen         Boolean        @default(false)
+  recycleIntervalDays Int            @default(30)
+  lastRecycledAt      DateTime?
+  recycleCount        Int            @default(0)
+  originalPostId      String?
+
   @@index([createdById])
   @@index([workspaceId])
   @@index([status])
   @@index([scheduledAt])
   @@index([postType])
+  @@index([workspaceId, isEvergreen])
+  @@index([isEvergreen, lastRecycledAt])
 }
 
 model PostPlatform {
@@ -1025,6 +1043,59 @@ model CalendarNote {
 }
 
 // ============================================
+// Phase 15: Payment & Auto-Renewal (F062)
+// ============================================
+
+model PaymentOrder {
+  id                 String           @id @default(cuid())
+  code               String           @unique
+  workspaceId        String
+  userId             String
+  plan               SubscriptionPlan
+  durationMonths     Int
+  originalAmount     Float
+  discountPercent    Int              @default(0)
+  amount             Float
+  status             PaymentStatus    @default(PENDING)
+  sepayTransactionId String?
+  gateway            String           @default("SEPAY")
+  bankId             String?
+  accountNumber      String?
+  paidAt             DateTime?
+  expiresAt          DateTime
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  workspace          Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoice            Invoice?
+
+  @@index([code])
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
+  workspaceId    String
+  orderId        String?       @unique
+  planName       String
+  amount         Float
+  periodStart    DateTime
+  periodEnd      DateTime
+  paymentMethod  String        @default("SePay / VietQR")
+  status         InvoiceStatus @default(PAID)
+  paidAt         DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+
+  workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  order          PaymentOrder? @relation(fields: [orderId], references: [id])
+
+  @@index([workspaceId])
+}
+
+// ============================================
 // Enums
 // ============================================
 
@@ -1032,6 +1103,26 @@ enum SubscriptionPlan {
   FREE
   PRO
   ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  GRACE_PERIOD
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  PAID
+  PENDING
+  FAILED
 }
 
 enum Role {
