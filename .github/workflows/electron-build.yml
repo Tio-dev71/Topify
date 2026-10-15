@@ -14,6 +14,7 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
 
@@ -24,11 +25,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Update to your desired Node version
+          node-version: '22'
 
       - name: Install Frontend Dependencies
         working-directory: electron-app/frontend
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Frontend
         working-directory: electron-app/frontend
@@ -36,7 +37,7 @@ jobs:
 
       - name: Install Electron App Dependencies
         working-directory: electron-app
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Electron App
         working-directory: electron-app
@@ -48,7 +49,7 @@ jobs:
         with:
           name: windows-app
           path: electron-app/dist/*.exe
-          retention-days: 1
+          retention-days: 7
 
       - name: Upload Mac Artifact
         if: matrix.os == 'macos-latest'
@@ -56,10 +57,10 @@ jobs:
         with:
           name: mac-app
           path: electron-app/dist/*.dmg
-          retention-days: 1
+          retention-days: 7
 
   deploy:
-    name: Deploy to VPS
+    name: Deploy to VPS & GitHub Release
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -77,6 +78,7 @@ jobs:
 
       - name: Copy files to VPS via SCP
         uses: appleboy/scp-action@v0.1.7
+        continue-on-error: true
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -84,3 +86,12 @@ jobs:
           source: "./downloads/*"
           target: "/var/www/downloads"
           strip_components: 1
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./downloads/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
