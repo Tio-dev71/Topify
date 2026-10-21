@@ -22,9 +22,11 @@ import {
   Share2,
   UserCheck,
   PanelRight,
+  Bot,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
+import ConnectChannelsModal from '../components/inbox/ConnectChannelsModal';
 
 // Types
 export type ConversationStatus = 'NEW' | 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED';
@@ -109,6 +111,24 @@ export default function Inbox() {
   const [tabFilter, setTabFilter] = useState<'ALL' | 'NEW' | 'PENDING' | 'RESOLVED' | 'SLA_BREACHED' | 'SPAM'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({ unread: 0, newCount: 0, spam: 0, breached: 0 });
+  const [showConnectModal, setShowConnectModal] = useState(false);
+
+  const getPlatformBadge = (plt: string) => {
+    const p = (plt || '').toUpperCase();
+    if (p.includes('TELEGRAM')) {
+      return { label: 'Telegram', cls: 'bg-sky-50 text-sky-700 border-sky-200' };
+    }
+    if (p.includes('INSTAGRAM')) {
+      return { label: 'Instagram', cls: 'bg-pink-50 text-pink-700 border-pink-200' };
+    }
+    if (p.includes('ZALO')) {
+      return { label: 'Zalo OA', cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
+    }
+    if (p.includes('TIKTOK')) {
+      return { label: 'TikTok', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
+    }
+    return { label: 'Messenger', cls: 'bg-blue-50 text-blue-700 border-blue-200' };
+  };
 
   // Chat Composer state
   const [replyMode, setReplyMode] = useState<'REPLY' | 'NOTE'>('REPLY');
@@ -460,15 +480,25 @@ export default function Inbox() {
                 <span className="text-[10px] text-gray-500 font-medium">M3. Inbox Omnichannel</span>
               </div>
             </div>
-            <button
-              onClick={handleSeedDemo}
-              disabled={seeding}
-              className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/60 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              title="Tạo hội thoại mẫu để test"
-            >
-              <RefreshCw className={`w-3 h-3 ${seeding ? 'animate-spin' : ''}`} />
-              <span>Nạp mẫu test</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setShowConnectModal(true)}
+                className="text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                title="Kết nối Telegram Bot, Meta, Zalo"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Kết nối MXH</span>
+              </button>
+              <button
+                onClick={handleSeedDemo}
+                disabled={seeding}
+                className="text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/60 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                title="Tạo hội thoại mẫu để test"
+              >
+                <RefreshCw className={`w-3 h-3 ${seeding ? 'animate-spin' : ''}`} />
+                <span>Nạp mẫu test</span>
+              </button>
+            </div>
           </div>
 
           {/* Search box */}
@@ -587,8 +617,8 @@ export default function Inbox() {
                           <h4 className="text-xs font-semibold text-gray-900 truncate">
                             {c.contactName || 'Khách vãng lai'}
                           </h4>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-600 uppercase font-mono">
-                            {c.platform.replace('_POST', '').replace('_VIDEO', '')}
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-semibold ${getPlatformBadge(c.platform).cls}`}>
+                            {getPlatformBadge(c.platform).label}
                           </span>
                         </div>
                       </div>
@@ -653,8 +683,8 @@ export default function Inbox() {
                     <h3 className="text-sm font-bold text-gray-900">
                       {activeConv.contactName}
                     </h3>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-semibold border border-blue-100">
-                      {activeConv.platform}
+                    <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${getPlatformBadge(activeConv.platform).cls}`}>
+                      {getPlatformBadge(activeConv.platform).label}
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 font-medium">
@@ -1049,6 +1079,13 @@ export default function Inbox() {
           </div>
         </div>
       )}
+
+      {/* Social Channel Connect Modal */}
+      <ConnectChannelsModal
+        isOpen={showConnectModal}
+        onClose={() => setShowConnectModal(false)}
+        onSuccess={() => fetchConversations()}
+      />
     </div>
   );
 }
