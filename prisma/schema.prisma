@@ -177,6 +177,10 @@ model SocialAccount {
   pageId              String?
   instagramBusinessId String?
   youtubeChannelId    String?
+  telegramBotToken    String?
+  telegramBotUsername String?
+  zaloOaId            String?
+  webhookSecret       String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   workspaceId         String?
@@ -184,6 +188,7 @@ model SocialAccount {
   user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace           Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   channelGroups       ChannelGroup[]      @relation("ChannelGroupToSocialAccount")
+  conversations       Conversation[]
 
   @@unique([userId, provider])
   @@unique([workspaceId, provider])
@@ -663,6 +668,7 @@ model Conversation {
   platform        Platform
   contactName     String?
   contactAvatar   String?
+  contactPhone    String?
   contactId       String? // link to Customer
   status          ConversationStatus @default(NEW)
   assignedToId    String?
@@ -676,6 +682,7 @@ model Conversation {
   updatedAt       DateTime           @updatedAt
   assignedTo      User?              @relation("ConversationAssignee", fields: [assignedToId], references: [id])
   workspace       Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount?     @relation(fields: [socialAccountId], references: [id])
   messages        Message[]
   notes           ConversationNote[]
 
@@ -683,6 +690,7 @@ model Conversation {
   @@index([status])
   @@index([assignedToId])
   @@index([lastMessageAt])
+  @@index([externalId])
 }
 
 model Message {
@@ -691,7 +699,9 @@ model Message {
   direction      MessageDirection
   content        String?
   mediaUrl       String?
+  mediaType      MediaType?
   senderName     String?
+  senderAvatar   String?
   externalId     String? // ID from social platform
   isRead         Boolean          @default(false)
   createdAt      DateTime         @default(now())
@@ -699,6 +709,7 @@ model Message {
 
   @@index([conversationId])
   @@index([isRead])
+  @@index([externalId])
 }
 
 model ConversationNote {
@@ -1137,6 +1148,7 @@ enum SocialProvider {
   GOOGLE_DRIVE
   TIKTOK
   ZALO
+  TELEGRAM
 }
 
 enum SocialAccountStatus {
@@ -1187,6 +1199,11 @@ enum Platform {
   INSTAGRAM_CAROUSEL
   INSTAGRAM_STORY
   ZALO_ARTICLE
+  FACEBOOK_MESSENGER
+  INSTAGRAM_DM
+  TELEGRAM
+  ZALO_CHAT
+  TIKTOK_DM
 }
 
 enum PlatformStatus {
