@@ -62,7 +62,7 @@ async function processTokenMonitorJob(_job: Job) {
     
     // Attempt refresh if refresh token or method exists
     try {
-      if (acc.provider === 'YOUTUBE' || acc.provider === 'GOOGLE' || acc.provider === 'GOOGLE_DRIVE') {
+      if (acc.provider === 'YOUTUBE' || acc.provider === 'GOOGLE_DRIVE') {
         if (!acc.refreshToken) {
           if (acc.expiresAt && acc.expiresAt < new Date()) {
             await prisma.socialAccount.update({
@@ -241,6 +241,7 @@ async function processKeywordScraperJob(_job: Job) {
           const externalId = (item.id || item.post_id || '').toString();
           if (!externalId) continue;
 
+          const content = item.message || item.text || item.content || item.caption || '';
           const rawMedia = item.video_url || item.image_url || item.media || item.video || item.image || null;
           let mediaUrl: string | null = null;
           if (typeof rawMedia === 'string') {

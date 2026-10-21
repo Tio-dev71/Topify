@@ -1336,6 +1336,25 @@ Sau khi lần lượt hoàn thành các module, bạn chỉ cần mở App Elect
 | **TC-F170-03** | Thêm địa chỉ IP tin cậy (IP Whitelisting) | 1. Nhập IP `203.113.152.8` và nhãn *"Chi nhánh Cần Thơ"*.<br>2. Bấm "Thêm IP". | IP + Nhãn. | • Địa chỉ IP mới xuất hiện trong danh sách IP tin cậy.<br>• Hiển thị Toast: *"Đã thêm IP tin cậy thành công!"*. | [ ] |
 | **TC-F170-04** | Xóa địa chỉ IP khỏi danh sách tin cậy | 1. Bấm icon thùng rác bên cạnh một IP tin cậy. | Click Delete IP. | • IP đó bị loại bỏ khỏi danh sách tin cậy ngay lập tức.<br>• Hiển thị Toast thông báo xác nhận. | [ ] |
 
+---
+
+## [F171] - Omnichannel Messaging Backend & Connectors (Hộp Thư Hợp Nhất Đa Kênh)
+
+* **Mục tiêu:** Kết nối trực tiếp backend với các mạng xã hội (Telegram Bot, Meta Messenger/Instagram DM, Zalo OA), tự động gộp tin nhắn vào Hộp thư hợp nhất, tự sinh Lead khách hàng trên CRM và hỗ trợ nhân viên phản hồi 2 chiều tức thì.
+* **Môi trường test:** Electron App (Trang Hộp thư `/inbox` & Modal Kết Nối MXH) & Backend API (`/api/webhooks/telegram`, `/api/webhooks/meta`, `/api/webhooks/zalo`, `/api/social/telegram/connect`, `/api/inbox/[id]/reply`).
+
+### 📋 Bảng Test Cases F171
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F171-01** | Kết nối Telegram Bot 1-Click & Tự Động Kích Hoạt Webhook | 1. Mở `/inbox` $\rightarrow$ Bấm nút "Kết nối MXH" trên thanh tiêu đề.<br>2. Nhập Telegram Bot Token (VD: lấy từ @BotFather).<br>3. Bấm "Kiểm tra & Kết nối Bot". | Bot Token hợp lệ. | • Hệ thống gọi `getMe` xác thực bot username.<br>• Tự động đăng ký Webhook URL của Topify với Telegram API.<br>• Hiển thị thông báo kết nối thành công và lưu SocialAccount vào database. | [x] |
+| **TC-F171-02** | Tiếp nhận tin nhắn Telegram Webhook & Tự tạo Khách hàng CRM | 1. Gửi webhook payload tin nhắn văn bản từ Telegram tới `/api/webhooks/telegram`. | Webhook payload Telegram Update. | • Tự động giải mã sender, message content và file attachment.<br>• Khởi tạo hoặc cập nhật `Conversation` với nền tảng `TELEGRAM`.<br>• Tự động tạo bản ghi `Customer` mới trong CRM với nhãn `#telegram` và nguồn `TELEGRAM`. | [x] |
+| **TC-F171-03** | Xác thực Meta Webhook GET Challenge & Tiếp nhận Messenger/Instagram | 1. Meta gửi request GET xác thực tới `/api/webhooks/meta` kèm `hub.challenge`.<br>2. Meta gửi webhook POST sự kiện nhắn tin từ Fanpage hoặc Instagram. | `hub.verify_token` + Webhook POST payload. | • GET trả về `hub.challenge` với mã HTTP 200.<br>• POST kiểm tra HMAC SHA-256 signature, trích xuất tin nhắn và đưa vào Inbox với nền tảng `FACEBOOK_MESSENGER` hoặc `INSTAGRAM_DM`. | [x] |
+| **TC-F171-04** | Tiếp nhận sự kiện Zalo OA Webhook | 1. Zalo gửi sự kiện `user_send_text` tới `/api/webhooks/zalo`. | Webhook payload Zalo OA. | • Chuyển đổi ID người gửi Zalo, text/ảnh sang format chuẩn `UnifiedInboundMessage`.<br>• Lưu hội thoại `ZALO_CHAT` và hiển thị trên giao diện Inbox. | [x] |
+| **TC-F171-05** | Phản hồi tin nhắn 2 chiều từ Topify UI (Outbound Dispatcher) | 1. Nhân viên chọn hội thoại Telegram/Meta/Zalo tại `/inbox`.<br>2. Gõ câu trả lời và bấm "Gửi". | API POST `/api/inbox/[id]/reply`. | • Hệ thống xác định kênh đích qua `conversation.platform`.<br>• Outbound Dispatcher gửi tin qua API tương ứng (Telegram `sendMessage`, Meta Graph API `/me/messages`, Zalo `oa/message/cs`).<br>• Cập nhật tin nhắn trong cơ sở dữ liệu với `externalId` gửi đi. | [x] |
+| **TC-F171-06** | Phân loại huy hiệu nền tảng trực quan trên giao diện Inbox | 1. Quan sát danh sách hội thoại tại `/inbox`. | Hội thoại từ các kênh khác nhau. | • Telegram hiển thị badge Sky kèm icon MessageCircle/Send.<br>• Messenger hiển thị badge Blue.<br>• Instagram hiển thị badge Pink/Rose.<br>• Zalo hiển thị badge Cyan. | [x] |
+
+
 
 
 

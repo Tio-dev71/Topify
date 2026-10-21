@@ -26,15 +26,15 @@
 **Interfaces:**
 - Produces: Updated Prisma Client with `Platform` chat enums (`FACEBOOK_MESSENGER`, `INSTAGRAM_DM`, `TELEGRAM`, `ZALO_CHAT`, `TIKTOK_DM`), `SocialProvider.TELEGRAM`, fields on `SocialAccount`, `Conversation`, and `Message`.
 
-- [ ] **Step 1: Update `prisma/schema.prisma`**
+- [x] **Step 1: Update `prisma/schema.prisma`**
   - Add chat values to `enum Platform`.
   - Add `TELEGRAM` to `enum SocialProvider`.
   - Add `telegramBotToken`, `telegramBotUsername`, `zaloOaId`, `webhookSecret` to `model SocialAccount`.
   - Add `contactPhone`, `contactAvatar`, `socialAccountId` to `model Conversation`.
   - Add `externalId`, `mediaType`, `senderAvatar` to `model Message`.
-- [ ] **Step 2: Generate Prisma Client & Push to Database**
+- [x] **Step 2: Generate Prisma Client & Push to Database**
   - Run `npx prisma db push` and `npx prisma generate`.
-- [ ] **Step 3: Commit Task 1**
+- [x] **Step 3: Commit Task 1**
 
 ---
 
@@ -48,14 +48,14 @@
 **Interfaces:**
 - Produces: `ingestInboundMessage(payload: UnifiedInboundMessage)` returning `{ conversation, message, customer, isDuplicate }`.
 
-- [ ] **Step 1: Define `UnifiedInboundMessage` in `lib/inbox/types.ts`**
-- [ ] **Step 2: Implement `ingestInboundMessage` in `lib/inbox/ingestion.ts`**
+- [x] **Step 1: Define `UnifiedInboundMessage` in `lib/inbox/types.ts`**
+- [x] **Step 2: Implement `ingestInboundMessage` in `lib/inbox/ingestion.ts`**
   - Check deduplication by `messageExternalId`.
   - Find or create `Conversation` by `externalId`.
   - Auto-create or link `Customer` with `#<platform>` tag and avatar.
   - Calculate SLA deadline (default 15m) and save `Message` (INBOUND).
-- [ ] **Step 3: Write and run unit test in `lib/inbox/__tests__/ingestion.test.ts`**
-- [ ] **Step 4: Commit Task 2**
+- [x] **Step 3: Write and run unit test in `lib/inbox/__tests__/ingestion.test.ts`**
+- [x] **Step 4: Commit Task 2**
 
 ---
 
@@ -70,14 +70,14 @@
 **Interfaces:**
 - Produces: `parseMetaWebhook(body)`, `parseTelegramUpdate(body)`, `parseZaloWebhook(body)` returning `UnifiedInboundMessage[]`.
 
-- [ ] **Step 1: Implement `lib/inbox/adapters/meta.ts`**
+- [x] **Step 1: Implement `lib/inbox/adapters/meta.ts`**
   - Parse Facebook Messenger & Instagram DM messages and attachments.
-- [ ] **Step 2: Implement `lib/inbox/adapters/telegram.ts`**
+- [x] **Step 2: Implement `lib/inbox/adapters/telegram.ts`**
   - Parse Telegram Update object (`message.text`, `message.photo`, `message.document`, `message.contact`).
-- [ ] **Step 3: Implement `lib/inbox/adapters/zalo.ts`**
+- [x] **Step 3: Implement `lib/inbox/adapters/zalo.ts`**
   - Parse Zalo OA Webhook (`user_send_text`, `user_send_image`).
-- [ ] **Step 4: Write adapter unit tests and verify parsing**
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 4: Write adapter unit tests and verify parsing**
+- [x] **Step 5: Commit Task 3**
 
 ---
 
@@ -93,15 +93,15 @@
 **Interfaces:**
 - Produces: Public HTTP webhook routes receiving real-time events and feeding into `ingestInboundMessage`.
 
-- [ ] **Step 1: Implement `app/api/webhooks/meta/route.ts`**
+- [x] **Step 1: Implement `app/api/webhooks/meta/route.ts`**
   - Support GET verification (`hub.challenge`) and POST event ingestion with HMAC validation.
-- [ ] **Step 2: Implement `app/api/webhooks/telegram/route.ts`**
+- [x] **Step 2: Implement `app/api/webhooks/telegram/route.ts`**
   - Support POST update ingestion with secret token verification.
-- [ ] **Step 3: Implement `app/api/webhooks/zalo/route.ts`**
+- [x] **Step 3: Implement `app/api/webhooks/zalo/route.ts`**
   - Support POST event ingestion for Zalo OA.
-- [ ] **Step 4: Implement 1-Click Telegram connect & webhook setup endpoint**
+- [x] **Step 4: Implement 1-Click Telegram connect & webhook setup endpoint**
   - Validate bot token via `https://api.telegram.org/bot<TOKEN>/getMe`, save to `SocialAccount`, and call `setWebhook`.
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ---
 
@@ -114,12 +114,12 @@
 **Interfaces:**
 - Produces: `dispatchReply(conversationId, content, mediaUrl)` sending actual API calls to Meta Graph API, Telegram Bot API, or Zalo Open API.
 
-- [ ] **Step 1: Implement `lib/inbox/dispatcher.ts`**
+- [x] **Step 1: Implement `lib/inbox/dispatcher.ts`**
   - Send Telegram message via `sendMessage`.
   - Send Meta Messenger message via `POST /v20.0/me/messages`.
   - Send Zalo message via `POST oa/message/cs`.
-- [ ] **Step 2: Integrate `dispatcher.dispatchReply` into `app/api/inbox/[id]/reply/route.ts`**
-- [ ] **Step 3: Commit Task 5**
+- [x] **Step 2: Integrate `dispatcher.dispatchReply` into `app/api/inbox/[id]/reply/route.ts`**
+- [x] **Step 3: Commit Task 5**
 
 ---
 
@@ -130,10 +130,10 @@
 - Modify: `electron-app/frontend/src/pages/Settings.tsx`
 - Modify: `electron-app/frontend/src/components/layout/Sidebar.tsx`
 
-- [ ] **Step 1: Update `Inbox.tsx` to display Telegram, Messenger, Zalo, Instagram badges & icons**
-- [ ] **Step 2: Add Telegram Bot connection modal in `Settings.tsx`**
+- [x] **Step 1: Update `Inbox.tsx` to display Telegram, Messenger, Zalo, Instagram badges & icons**
+- [x] **Step 2: Add Telegram Bot connection modal in `Settings.tsx`**
   - Input Bot Token, auto-verify bot name and set up webhook in 1 click.
-- [ ] **Step 3: Commit Task 6**
+- [x] **Step 3: Commit Task 6**
 
 ---
 
@@ -142,7 +142,7 @@
 **Files:**
 - Test scripts & build validation
 
-- [ ] **Step 1: Run end-to-end simulation script sending mock Telegram & Meta webhooks**
-- [ ] **Step 2: Verify `Conversation`, `Message`, and `Customer` records in database**
-- [ ] **Step 3: Test Next.js and Electron frontend build (`npm run build`)**
-- [ ] **Step 4: Commit Task 7 and report results to user**
+- [x] **Step 1: Run end-to-end simulation script sending mock Telegram & Meta webhooks**
+- [x] **Step 2: Verify `Conversation`, `Message`, and `Customer` records in database**
+- [x] **Step 3: Test Next.js and Electron frontend build (`npm run build`)**
+- [x] **Step 4: Commit Task 7 and report results to user**

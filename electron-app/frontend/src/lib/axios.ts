@@ -39,7 +39,10 @@ api.interceptors.response.use(
 );
 
 export const getApiBaseUrl = () => {
-  return import.meta.env.DEV ? 'http://localhost:3000' : BASE_URL;
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return BASE_URL;
 };
 
 export default api;

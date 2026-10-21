@@ -151,13 +151,13 @@ export async function ingestInboundMessage(payload: UnifiedInboundMessage): Prom
         if (!customer) {
           customer = await prisma.customer.create({
             data: {
-              workspaceId,
+              ...(workspaceId ? { workspaceId } : {}),
               name: senderName || `Khách ${platform}`,
               phone: senderPhone,
               avatar: senderAvatar,
+              source: platform,
               tags: `Mới, #${platform.toLowerCase()}`,
-              leadScore: 50,
-              pipelineStage: 'LEAD',
+              notes: `Tự động tạo từ tin nhắn đến của kênh ${platform}`,
             },
           });
         }
