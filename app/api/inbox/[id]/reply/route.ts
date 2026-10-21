@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { dispatchReply } from '@/lib/inbox/dispatcher';
 
 // POST /api/inbox/[id]/reply - Send reply in conversation
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -27,7 +28,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
-    // Create the outbound message
+    // 1. Actually send via platform API (Telegram Bot, Meta Graph API, Zalo OA)
+    const dispatchRes = await dispatchReply(id, content, mediaUrl);
+
+    // 2. Create the outbound message
     const message = await prisma.message.create({
       data: {
         conversationId: id,
@@ -35,10 +39,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         content,
         mediaUrl,
         senderName: (session.user as any).name || session.user.email || 'Staff',
+        externalId: dispatchRes.platformMessageId,
       },
     });
 
-    // Update conversation
+    // 3. Update conversation status
     await prisma.conversation.update({
       where: { id },
       data: {
@@ -47,10 +52,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
 
-    // TODO: Actually send via platform API (Graph API, TikTok API, etc.)
-    // This would dispatch to the appropriate platform sender
-
-    return NextResponse.json({ message });
+    return NextResponse.json({
+      message,
+      dispatch: dispatchRes,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
