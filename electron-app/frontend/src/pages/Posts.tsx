@@ -17,10 +17,12 @@ import {
   Edit3,
   AlignLeft,
   Repeat,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../lib/axios';
+import { ImportPostsModal } from '../components/content-studio/ImportPostsModal';
 import { 
   STATUS_CONFIG, 
   PLATFORM_CONFIG, 
@@ -77,6 +79,7 @@ export default function Posts() {
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
   const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   useEffect(() => {
     fetchPosts();
@@ -180,15 +183,28 @@ export default function Posts() {
               Tất cả video của bạn trên đa nền tảng, được tổng hợp tại một giao diện trung tâm thanh lịch.
             </p>
           </div>
-          <Link 
-            to="/create" 
-            className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 text-sm font-semibold text-white transition-all duration-300 bg-gray-900 rounded-2xl hover:bg-black shadow-[0_8px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.2)] hover:-translate-y-0.5"
-          >
-            <div className="p-1.5 bg-white/20 rounded-lg">
-              <Film className="w-4 h-4 transition-transform group-hover:scale-110" />
-            </div>
-            Tạo bài đăng mới
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsImportModalOpen(true)}
+              className="group relative inline-flex items-center justify-center gap-2.5 px-6 py-4 text-sm font-semibold text-gray-800 transition-all duration-300 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow hover:-translate-y-0.5"
+            >
+              <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:scale-110 transition-transform">
+                <FileSpreadsheet className="w-4 h-4" />
+              </div>
+              Import từ Excel / Drive (F019)
+            </button>
+
+            <Link 
+              to="/create" 
+              className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 text-sm font-semibold text-white transition-all duration-300 bg-gray-900 rounded-2xl hover:bg-black shadow-[0_8px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.2)] hover:-translate-y-0.5"
+            >
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Film className="w-4 h-4 transition-transform group-hover:scale-110" />
+              </div>
+              Tạo bài đăng mới
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -640,6 +656,13 @@ export default function Posts() {
           </div>
         </div>
       )}
+
+      {/* F019: Import Posts Modal */}
+      <ImportPostsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => fetchPosts()}
+      />
     </motion.div>
   );
 }

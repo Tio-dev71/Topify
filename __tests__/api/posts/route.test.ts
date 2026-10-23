@@ -227,5 +227,30 @@ describe('Posts API Route', () => {
       expect(res.status).toBe(201);
       expect(schedulePublish).toHaveBeenCalledWith('post-1', expect.any(Date));
     });
+
+    it('creates post and schedules publish if mode is random_window (F022)', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-1', workspaceId: 'ws-1' } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'META' } as any]);
+      
+      const mockPost = { id: 'post-random-1', status: 'SCHEDULED' };
+      vi.mocked(prisma.post.create).mockResolvedValue(mockPost as any);
+
+      const req = new NextRequest('http://localhost/api/posts', { 
+        method: 'POST', 
+        body: JSON.stringify({
+          title: 'Test Random Window Post',
+          videoAssetId: 'video-1',
+          platforms: ['FACEBOOK_REELS'],
+          publishMode: 'random_window',
+          randomWindowStart: '2026-10-25T09:00:00.000Z',
+          randomWindowEnd: '2026-10-25T11:30:00.000Z',
+        }) 
+      });
+      const res = await POST(req);
+      
+      expect(res.status).toBe(201);
+      expect(schedulePublish).toHaveBeenCalledWith('post-random-1', expect.any(Date));
+    });
   });
 });

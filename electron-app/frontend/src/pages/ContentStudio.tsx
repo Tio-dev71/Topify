@@ -22,11 +22,15 @@ import {
   Edit3,
   RotateCcw,
   Plus,
+  FileSpreadsheet,
+  UploadCloud,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import { SpinModal, type SpinVariantItem } from '../components/SpinModal';
 import { AiWriterModal } from '../components/AiWriterModal';
+import { ImportPostsModal } from '../components/content-studio/ImportPostsModal';
 
 const INDUSTRIES = [
   { id: 'FASHION', label: 'Thời trang & Phụ kiện', icon: '👗', desc: 'OOTD, mixmatch, phong cách sành điệu' },
@@ -65,7 +69,8 @@ const FORMATS = [
 
 export default function ContentStudio() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'ai_writer' | 'spin_tool' | 'templates'>('ai_writer');
+  const [activeTab, setActiveTab] = useState<'ai_writer' | 'spin_tool' | 'templates' | 'import_posts'>('ai_writer');
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // AI Writer State (F016)
   const [industry, setIndustry] = useState('FASHION');
@@ -245,6 +250,18 @@ export default function ContentStudio() {
             >
               <BookOpen className="w-3.5 h-3.5" />
               Công Thức Copywriting Kinh Điển
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('import_posts')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'import_posts'
+                  ? 'bg-white text-purple-900 shadow-md'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Import Excel / Google Drive (F019)
             </button>
           </div>
         </div>
@@ -990,6 +1007,89 @@ export default function ContentStudio() {
           </div>
         </div>
       )}
+
+      {/* TAB 4: IMPORT POSTS FROM EXCEL / DRIVE (F019) */}
+      {activeTab === 'import_posts' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Hero Banner */}
+          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white p-8 sm:p-10 shadow-xl">
+            <div className="absolute top-0 right-0 -mt-16 -mr-16 w-80 h-80 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="relative max-w-2xl space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold tracking-wide uppercase">
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Tính Năng Mới &bull; Đặc Tả F019
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white leading-tight">
+                Import Bài Viết Hàng Loạt Từ Excel &amp; Google Drive
+              </h2>
+              <p className="text-emerald-100/90 text-sm leading-relaxed">
+                Tiết kiệm 90% thời gian lên bài. Dễ dàng nạp hàng trăm bài viết từ file bảng tính .xlsx, .csv hoặc liên kết Google Sheets trực tiếp, tự động nhận diện khung giờ lên lịch và phân phối đa kênh TikTok, Facebook, Instagram, YouTube.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-4 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="px-6 py-3.5 bg-white text-emerald-900 hover:bg-emerald-50 rounded-2xl font-bold text-sm shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 hover:-translate-y-0.5"
+                >
+                  <UploadCloud className="w-4 h-4 text-emerald-600" />
+                  Mở Trình Import &amp; Xem Trước Dữ Liệu
+                </button>
+
+                <a
+                  href="/api/content-studio/import/template"
+                  download="Mau_Import_Bai_Viet_Topify.xlsx"
+                  className="px-5 py-3.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-2xl font-bold text-sm transition-all duration-200 flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Tải File Mẫu Chuẩn (.xlsx)
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Step Workflow Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-sm">
+                01
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Chuẩn Bị File Dữ Liệu</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Tải file Excel mẫu hoặc dùng Google Sheets có sẵn. Điền các cột Tiêu đề, Caption, Bình luận đầu, Hashtag, Kênh đăng và Thời gian lên lịch.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-black text-sm">
+                02
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Xem Trước &amp; Sửa Trực Tiếp</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Hệ thống tự động kiểm tra định dạng dữ liệu, cảnh báo lỗi thiếu tiêu đề, cho phép bạn nhấp đúp để chỉnh sửa trực tiếp từng ô trước khi lưu.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-black text-sm">
+                03
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Lên Lịch Tự Động Đa Kênh</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Bài viết có ngày giờ sẽ tự động đưa vào hàng đợi lên lịch (SCHEDULED); bài viết không có ngày giờ sẽ lưu dạng bản nháp (DRAFT) để biên tập sau.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* F019: Import Posts Modal */}
+      <ImportPostsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => navigate('/posts')}
+      />
     </div>
   );
 }

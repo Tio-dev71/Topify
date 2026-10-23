@@ -110,11 +110,65 @@ interface ChannelBenchmarkItem {
   dealsGenerated: number;
 }
 
+// F050 Period Comparison Interfaces
+interface MetricGrowth {
+  current: number;
+  prior: number;
+  difference: number;
+  growthRate: number;
+  isPositive: boolean;
+}
+
+interface PeriodTrajectoryPoint {
+  index: number;
+  dateLabel: string;
+  currentDate: string;
+  priorDate: string;
+  currentViews: number;
+  priorViews: number;
+  currentReach: number;
+  priorReach: number;
+  currentEngagements: number;
+  priorEngagements: number;
+  currentLeads: number;
+  priorLeads: number;
+}
+
+interface PeriodComparisonData {
+  timeframe: string;
+  comparisonType: 'prior_period' | 'same_period_last_year';
+  currentPeriodLabel: string;
+  priorPeriodLabel: string;
+  metrics: {
+    views: MetricGrowth;
+    reach: MetricGrowth;
+    engagements: MetricGrowth;
+    likes: MetricGrowth;
+    comments: MetricGrowth;
+    shares: MetricGrowth;
+    clicks: MetricGrowth;
+    leads: MetricGrowth;
+    wonDeals: MetricGrowth;
+    revenue: MetricGrowth;
+    spent: MetricGrowth;
+    roi: MetricGrowth;
+    avgScore: MetricGrowth;
+  };
+  trajectory: PeriodTrajectoryPoint[];
+}
+
 export default function Analytics() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'content' | 'roi_funnel' | 'ai_benchmark'>('content');
   const [loading, setLoading] = useState(false);
   const [timeframe, setTimeframe] = useState('30d');
+
+  // F050: Period Comparison State
+  const [compareWithPrior, setCompareWithPrior] = useState(false);
+  const [comparisonType, setComparisonType] = useState<'prior_period' | 'same_period_last_year'>('prior_period');
+  const [periodComparison, setPeriodComparison] = useState<PeriodComparisonData | null>(null);
+  const [chartMetric, setChartMetric] = useState<'views' | 'reach' | 'engagements' | 'leads'>('views');
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   // Content Scores State (F103)
   const [posts, setPosts] = useState<PostMetric[]>([]);
@@ -187,11 +241,28 @@ export default function Analytics() {
         setChannels(benchRes.data.channels || []);
         setPillars(benchRes.data.pillars || []);
       }
+
+      // 5. Fetch Period Comparison (F050)
+      const periodRes = await api.get(`/analytics/period-comparison?timeframe=${timeframe}&comparison=${comparisonType}${seed ? '&seed=true' : ''}`);
+      if (periodRes.data.success) {
+        setPeriodComparison(periodRes.data.data);
+      }
     } catch (err: any) {
       console.error('Error fetching analytics:', err);
       toast.error('Không thể tải đầy đủ số liệu báo cáo');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPeriodComparison = async (seed = false) => {
+    try {
+      const res = await api.get(`/analytics/period-comparison?timeframe=${timeframe}&comparison=${comparisonType}${seed ? '&seed=true' : ''}`);
+      if (res.data.success) {
+        setPeriodComparison(res.data.data);
+      }
+    } catch (err) {
+      console.warn('Could not load period comparison data:', err);
     }
   };
 
@@ -236,6 +307,16 @@ export default function Analytics() {
     fetchData();
   }, [platformFilter, tierFilter]);
 
+  useEffect(() => {
+    fetchPeriodComparison();
+  }, [timeframe, comparisonType]);
+
+  const formatCompactNumber = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+    return Math.round(num).toString();
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
   };
@@ -265,6 +346,282 @@ export default function Analytics() {
     );
   };
 
+  const renderDualLineChart = () => {
+    if (!periodComparison || !periodComparison.trajectory || periodComparison.trajectory.length === 0) {
+      return null;
+    }
+
+    const data = periodComparison.trajectory;
+    const svgWidth = 800;
+    const svgHeight = 280;
+    const padding = { top: 30, right: 35, bottom: 45, left: 60 };
+    const chartW = svgWidth - padding.left - padding.right;
+    const chartH = svgHeight - padding.top - padding.bottom;
+
+    const getMetricVal = (item: PeriodTrajectoryPoint, isCurrent: boolean) => {
+      switch (chartMetric) {
+        case 'views': return isCurrent ? item.currentViews : item.priorViews;
+        case 'reach': return isCurrent ? item.currentReach : item.priorReach;
+        case 'engagements': return isCurrent ? item.currentEngagements : item.priorEngagements;
+        case 'leads': return isCurrent ? item.currentLeads : item.priorLeads;
+      }
+    };
+
+    const currentVals = data.map((d) => getMetricVal(d, true));
+    const priorVals = data.map((d) => getMetricVal(d, false));
+    const maxVal = Math.max(...currentVals, ...priorVals, 10) * 1.15;
+
+    const getX = (index: number) => padding.left + (index / (data.length - 1)) * chartW;
+    const getY = (val: number) => padding.top + chartH - (val / maxVal) * chartH;
+
+    const currentPoints = data.map((d, i) => ({ x: getX(i), y: getY(getMetricVal(d, true)) }));
+    const priorPoints = data.map((d, i) => ({ x: getX(i), y: getY(getMetricVal(d, false)) }));
+
+    const currentPathD = currentPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const priorPathD = priorPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const currentAreaD = `${currentPathD} L ${currentPoints[currentPoints.length - 1].x.toFixed(1)} ${padding.top + chartH} L ${currentPoints[0].x.toFixed(1)} ${padding.top + chartH} Z`;
+
+    const gridLinesCount = 4;
+    const yTicks = Array.from({ length: gridLinesCount + 1 }).map((_, i) => {
+      const val = (maxVal / gridLinesCount) * (gridLinesCount - i);
+      const y = padding.top + (i / gridLinesCount) * chartH;
+      return { val, y };
+    });
+
+    const activeGrowthMetric = periodComparison.metrics[chartMetric];
+    const hoveredPoint = hoveredPointIndex !== null ? data[hoveredPointIndex] : null;
+
+    return (
+      <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-6 space-y-6 animate-fade-in">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold border border-indigo-200 mb-1.5">
+              <Layers className="w-3 h-3 text-indigo-600" />
+              Đặc Tả F050 &bull; Biểu Đồ So Sánh Kỳ Đối Ứng
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              Xu Hướng Hiệu Suất Kỳ Này vs Kỳ Trước
+              {activeGrowthMetric && (
+                <span
+                  className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold border ${
+                    activeGrowthMetric.isPositive
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}
+                >
+                  {activeGrowthMetric.isPositive ? (
+                    <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5 text-rose-600" />
+                  )}
+                  {activeGrowthMetric.isPositive ? `+${activeGrowthMetric.growthRate}%` : `${activeGrowthMetric.growthRate}%`} so với kỳ trước
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Đường nét liền xanh thể hiện kỳ này ({periodComparison.currentPeriodLabel}), đường nét đứt xám thể hiện kỳ trước ({periodComparison.priorPeriodLabel}).
+            </p>
+          </div>
+
+          {/* Metric Switcher */}
+          <div className="flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60 self-start md:self-auto">
+            {[
+              { id: 'views', label: 'Lượt xem (Views)' },
+              { id: 'reach', label: 'Tiếp cận (Reach)' },
+              { id: 'engagements', label: 'Tương tác' },
+              { id: 'leads', label: 'Leads CRM' },
+            ].map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setChartMetric(m.id as any)}
+                className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-all ${
+                  chartMetric === m.id
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* SVG Chart Canvas */}
+        <div className="relative w-full overflow-hidden">
+          <svg
+            viewBox="0 0 800 280"
+            className="w-full h-64 select-none"
+            onMouseLeave={() => setHoveredPointIndex(null)}
+          >
+            <defs>
+              <linearGradient id="currentLineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#2563EB" stopOpacity="0.20" />
+                <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+
+            {/* Horizontal Grid lines */}
+            {yTicks.map((tick, i) => (
+              <g key={i}>
+                <line
+                  x1={padding.left}
+                  y1={tick.y}
+                  x2={svgWidth - padding.right}
+                  y2={tick.y}
+                  stroke="#F1F5F9"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+                <text
+                  x={padding.left - 10}
+                  y={tick.y + 4}
+                  textAnchor="end"
+                  fontSize="10"
+                  fontWeight="500"
+                  fill="#94A3B8"
+                >
+                  {formatCompactNumber(tick.val)}
+                </text>
+              </g>
+            ))}
+
+            {/* Area under curve for Current Period */}
+            <path d={currentAreaD} fill="url(#currentLineGrad)" />
+
+            {/* Prior Period Line: Dashed Slate */}
+            <path
+              d={priorPathD}
+              fill="none"
+              stroke="#94A3B8"
+              strokeWidth="2.5"
+              strokeDasharray="6 6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* Current Period Line: Solid Vibrant Blue */}
+            <path
+              d={currentPathD}
+              fill="none"
+              stroke="#2563EB"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* X-axis labels */}
+            {data.map((d, i) => (
+              <g key={i}>
+                <text
+                  x={getX(i)}
+                  y={svgHeight - 12}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fontWeight="500"
+                  fill={hoveredPointIndex === i ? '#1E293B' : '#94A3B8'}
+                >
+                  {d.currentDate}
+                </text>
+              </g>
+            ))}
+
+            {/* Interactive hover points & verticals */}
+            {data.map((d, i) => {
+              const currPt = currentPoints[i];
+              const priorPt = priorPoints[i];
+              const isHovered = hoveredPointIndex === i;
+
+              return (
+                <g key={i}>
+                  <rect
+                    x={getX(i) - chartW / (data.length - 1) / 2}
+                    y={padding.top}
+                    width={chartW / (data.length - 1)}
+                    height={chartH + padding.bottom}
+                    fill="transparent"
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredPointIndex(i)}
+                  />
+
+                  {isHovered && (
+                    <line
+                      x1={currPt.x}
+                      y1={padding.top}
+                      x2={currPt.x}
+                      y2={padding.top + chartH}
+                      stroke="#CBD5E1"
+                      strokeWidth="1.5"
+                      strokeDasharray="3 3"
+                    />
+                  )}
+
+                  {/* Prior Dot */}
+                  <circle
+                    cx={priorPt.x}
+                    cy={priorPt.y}
+                    r={isHovered ? 5.5 : 3.5}
+                    fill="#FFFFFF"
+                    stroke="#94A3B8"
+                    strokeWidth="2"
+                  />
+
+                  {/* Current Dot */}
+                  <circle
+                    cx={currPt.x}
+                    cy={currPt.y}
+                    r={isHovered ? 6 : 4}
+                    fill="#2563EB"
+                    stroke="#FFFFFF"
+                    strokeWidth="2"
+                  />
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* Legend and Hover Details Bar */}
+          <div className="flex flex-wrap items-center justify-between pt-3 border-t border-gray-100 text-xs gap-3">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-0.5 bg-blue-600 rounded-full" />
+                <span className="font-semibold text-gray-800">
+                  Kỳ này ({periodComparison.currentPeriodLabel}) &bull; <span className="text-blue-600">Nét liền</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-0.5 border-t-2 border-dashed border-gray-400" />
+                <span className="font-medium text-gray-500">
+                  Kỳ trước ({periodComparison.priorPeriodLabel}) &bull; <span className="text-gray-600">Nét đứt</span>
+                </span>
+              </div>
+            </div>
+
+            {hoveredPoint && (
+              <div className="text-xs font-semibold flex items-center gap-2 bg-indigo-50/90 px-3 py-1.5 rounded-xl text-indigo-950 border border-indigo-200">
+                <span>{hoveredPoint.currentDate} vs {hoveredPoint.priorDate}:</span>
+                <span className="text-blue-700 font-bold">{getMetricVal(hoveredPoint, true).toLocaleString()}</span>
+                <span className="text-gray-400">vs</span>
+                <span className="text-gray-600 font-medium">{getMetricVal(hoveredPoint, false).toLocaleString()}</span>
+                {(() => {
+                  const currV = getMetricVal(hoveredPoint, true);
+                  const priorV = getMetricVal(hoveredPoint, false);
+                  const rate = priorV > 0 ? Math.round(((currV - priorV) / priorV) * 1000) / 10 : 0;
+                  const isPos = rate >= 0;
+                  return (
+                    <span className={`px-1.5 py-0.5 rounded font-bold ${isPos ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                      {isPos ? `+${rate}%` : `${rate}%`}
+                    </span>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Top Header */}
@@ -274,7 +631,7 @@ export default function Analytics() {
             Báo Cáo & Phân Tích Đa Kênh
           </h1>
           <p className="text-gray-500 mt-1 text-[14px]">
-            Chuẩn hóa hiệu quả nội dung (F103), đo lường ROI chiến dịch (F104), phễu chuyển đổi (F105) & AI Insight (F106)
+            Chuẩn hóa hiệu quả nội dung (F103), đo lường ROI chiến dịch (F104), phễu chuyển đổi (F105) &amp; AI Insight (F106)
           </p>
         </div>
 
@@ -297,6 +654,106 @@ export default function Analytics() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+      </div>
+
+      {/* Date Picker & F050 Period Comparison Toolbar */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 p-4 shadow-xs space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {/* Timeframe Presets */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mr-1">
+              <Calendar className="w-4 h-4 text-gray-400" />
+              <span>Khoảng thời gian:</span>
+            </div>
+            {[
+              { id: '7d', label: '7 ngày qua' },
+              { id: '30d', label: '30 ngày qua' },
+              { id: '90d', label: 'Quý này (90 ngày)' },
+              { id: 'this_month', label: 'Tháng này' },
+            ].map((tf) => (
+              <button
+                key={tf.id}
+                type="button"
+                onClick={() => setTimeframe(tf.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  timeframe === tf.id
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-gray-100/80 text-gray-700 hover:bg-gray-200/80'
+                }`}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
+
+          {/* F050 Compare Checkbox */}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none px-3.5 py-2 rounded-xl border transition-all duration-200 bg-indigo-50/70 border-indigo-200 hover:bg-indigo-100/60 text-indigo-900">
+              <input
+                type="checkbox"
+                id="f050-compare-checkbox"
+                checked={compareWithPrior}
+                onChange={(e) => setCompareWithPrior(e.target.checked)}
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-indigo-300 cursor-pointer"
+              />
+              <span className="text-xs font-bold flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                So sánh với kỳ trước (F050)
+              </span>
+            </label>
+
+            {compareWithPrior && (
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setComparisonType('prior_period')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    comparisonType === 'prior_period'
+                      ? 'bg-white text-indigo-900 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Kỳ trước (MoM / WoW)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setComparisonType('same_period_last_year')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    comparisonType === 'same_period_last_year'
+                      ? 'bg-white text-indigo-900 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Cùng kỳ năm ngoái (YoY)
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Active Comparison Status Banner */}
+        {compareWithPrior && periodComparison && (
+          <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between text-xs text-gray-600 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-semibold text-gray-800">Chế độ so sánh F050 đang bật:</span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold border border-blue-200">
+                <span className="inline-block w-2.5 h-0.5 bg-blue-600 rounded-full" />
+                Kỳ này: {periodComparison.currentPeriodLabel}
+              </span>
+              <span className="text-gray-400 font-medium">&bull; so với &bull;</span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 font-bold border border-gray-300">
+                <span className="inline-block w-2.5 h-0.5 border-t border-dashed border-gray-600" />
+                Kỳ trước: {periodComparison.priorPeriodLabel}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 text-[11px] text-gray-500 font-medium">
+              <Clock className="w-3.5 h-3.5 text-gray-400" />
+              Tự động lùi mốc thời gian đối ứng tương đương
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation Tabs */}
@@ -322,7 +779,7 @@ export default function Analytics() {
           }`}
         >
           <TrendingUp className="w-4 h-4" />
-          [F104 & F105] ROI Chiến Dịch & Phễu Chuyển Đổi
+          [F104 &amp; F105] ROI Chiến Dịch &amp; Phễu Chuyển Đổi
         </button>
 
         <button
@@ -337,7 +794,7 @@ export default function Analytics() {
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          [F106 & F107] AI Insights & Benchmark Nội Bộ
+          [F106 &amp; F107] AI Insights &amp; Benchmark Nội Bộ
         </button>
       </div>
 
@@ -346,44 +803,169 @@ export default function Analytics() {
       {/* ========================================================================= */}
       {activeTab === 'content' && (
         <div className="space-y-6">
+          {/* F050 Dual-Line Period Comparison Chart */}
+          {compareWithPrior && renderDualLineChart()}
+
           {/* Summary Stat Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-3">
-                <BarChart3 className="w-5 h-5 text-blue-600" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                </div>
+                {compareWithPrior && periodComparison && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold border ${
+                      periodComparison.metrics.views.isPositive
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {periodComparison.metrics.views.isPositive ? (
+                      <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                    ) : (
+                      <ArrowDownRight className="w-3 h-3 text-rose-600" />
+                    )}
+                    {periodComparison.metrics.views.isPositive
+                      ? `+${periodComparison.metrics.views.growthRate}%`
+                      : `${periodComparison.metrics.views.growthRate}%`}
+                  </span>
+                )}
               </div>
-              <p className="text-[28px] font-semibold tracking-tight text-gray-900">{contentStats.totalPosts}</p>
-              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">Tổng bài phân tích</p>
-              <p className="text-[11px] text-gray-400 mt-1">Đã đồng bộ trên đa kênh</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center mb-3">
-                <TrendingUp className="w-5 h-5 text-indigo-600" />
-              </div>
-              <p className="text-[28px] font-semibold tracking-tight text-indigo-600">{contentStats.avgScore}/100</p>
-              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">Điểm TB Chuẩn Hóa</p>
-              <p className="text-[11px] text-emerald-600 flex items-center gap-0.5 mt-1 font-medium">
-                <ArrowUpRight className="w-3 h-3" /> +4.2đ so với tuần trước
+              <p className="text-[28px] font-semibold tracking-tight text-gray-900">
+                {compareWithPrior && periodComparison
+                  ? periodComparison.metrics.views.current.toLocaleString()
+                  : contentStats.totalPosts}
+              </p>
+              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">
+                {compareWithPrior ? 'Lượt xem Video (Views)' : 'Tổng bài phân tích'}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1">
+                {compareWithPrior && periodComparison
+                  ? `Kỳ trước: ${periodComparison.metrics.views.prior.toLocaleString()}`
+                  : 'Đã đồng bộ trên đa kênh'}
               </p>
             </div>
 
             <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-3">
-                <Flame className="w-5 h-5 text-amber-500" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-indigo-600" />
+                </div>
+                {compareWithPrior && periodComparison && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold border ${
+                      periodComparison.metrics.reach.isPositive
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {periodComparison.metrics.reach.isPositive ? (
+                      <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                    ) : (
+                      <ArrowDownRight className="w-3 h-3 text-rose-600" />
+                    )}
+                    {periodComparison.metrics.reach.isPositive
+                      ? `+${periodComparison.metrics.reach.growthRate}%`
+                      : `${periodComparison.metrics.reach.growthRate}%`}
+                  </span>
+                )}
               </div>
-              <p className="text-[28px] font-semibold tracking-tight text-amber-600">{contentStats.viralCount} bài</p>
-              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">Bài viết Viral 🏆</p>
-              <p className="text-[11px] text-gray-400 mt-1">Điểm &gt;= 85 (Ưu tiên Evergreen)</p>
+              <p className="text-[28px] font-semibold tracking-tight text-indigo-600">
+                {compareWithPrior && periodComparison
+                  ? periodComparison.metrics.reach.current.toLocaleString()
+                  : `${contentStats.avgScore}/100`}
+              </p>
+              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">
+                {compareWithPrior ? 'Lượt tiếp cận (Reach)' : 'Điểm TB Chuẩn Hóa'}
+              </p>
+              <p className="text-[11px] text-emerald-600 flex items-center gap-0.5 mt-1 font-medium">
+                {compareWithPrior && periodComparison ? (
+                  `Kỳ trước: ${periodComparison.metrics.reach.prior.toLocaleString()}`
+                ) : (
+                  <>
+                    <ArrowUpRight className="w-3 h-3" /> +4.2đ so với tuần trước
+                  </>
+                )}
+              </p>
             </div>
 
             <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center mb-3">
-                <AlertTriangle className="w-5 h-5 text-rose-500" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <Flame className="w-5 h-5 text-amber-500" />
+                </div>
+                {compareWithPrior && periodComparison && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold border ${
+                      periodComparison.metrics.engagements.isPositive
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {periodComparison.metrics.engagements.isPositive ? (
+                      <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                    ) : (
+                      <ArrowDownRight className="w-3 h-3 text-rose-600" />
+                    )}
+                    {periodComparison.metrics.engagements.isPositive
+                      ? `+${periodComparison.metrics.engagements.growthRate}%`
+                      : `${periodComparison.metrics.engagements.growthRate}%`}
+                  </span>
+                )}
               </div>
-              <p className="text-[28px] font-semibold tracking-tight text-rose-600">{contentStats.underperformingCount} bài</p>
-              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">Cần Tối Ưu Hook/CTA</p>
-              <p className="text-[11px] text-gray-400 mt-1">Điểm hiệu quả &lt; 60</p>
+              <p className="text-[28px] font-semibold tracking-tight text-amber-600">
+                {compareWithPrior && periodComparison
+                  ? periodComparison.metrics.engagements.current.toLocaleString()
+                  : `${contentStats.viralCount} bài`}
+              </p>
+              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">
+                {compareWithPrior ? 'Tương tác Đa kênh' : 'Bài viết Viral 🏆'}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1">
+                {compareWithPrior && periodComparison
+                  ? `Kỳ trước: ${periodComparison.metrics.engagements.prior.toLocaleString()}`
+                  : 'Điểm >= 85 (Ưu tiên Evergreen)'}
+              </p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-rose-500" />
+                </div>
+                {compareWithPrior && periodComparison && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-bold border ${
+                      periodComparison.metrics.leads.isPositive
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    {periodComparison.metrics.leads.isPositive ? (
+                      <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                    ) : (
+                      <ArrowDownRight className="w-3 h-3 text-rose-600" />
+                    )}
+                    {periodComparison.metrics.leads.isPositive
+                      ? `+${periodComparison.metrics.leads.growthRate}%`
+                      : `${periodComparison.metrics.leads.growthRate}%`}
+                  </span>
+                )}
+              </div>
+              <p className="text-[28px] font-semibold tracking-tight text-rose-600">
+                {compareWithPrior && periodComparison
+                  ? `${periodComparison.metrics.leads.current} Leads`
+                  : `${contentStats.underperformingCount} bài`}
+              </p>
+              <p className="text-[13px] text-gray-500 mt-0.5 font-medium">
+                {compareWithPrior ? 'Khách Tiềm Năng (Leads)' : 'Cần Tối Ưu Hook/CTA'}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1">
+                {compareWithPrior && periodComparison
+                  ? `Kỳ trước: ${periodComparison.metrics.leads.prior} Leads`
+                  : 'Điểm hiệu quả < 60'}
+              </p>
             </div>
           </div>
 

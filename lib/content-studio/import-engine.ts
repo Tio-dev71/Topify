@@ -1,0 +1,383 @@
+import * as XLSX from 'xlsx';
+
+export interface ParsedImportRow {
+  rowNumber: number;
+  title: string;
+  caption: string;
+  firstComment: string;
+  hashtags: string;
+  platforms: string[];
+  scheduledAt: string | null;
+  mediaUrl: string;
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ImportParseResult {
+  success: boolean;
+  source: 'EXCEL' | 'CSV' | 'GOOGLE_SHEETS';
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  warningRows: number;
+  rows: ParsedImportRow[];
+  error?: string;
+}
+
+const VALID_PLATFORMS = [
+  'FACEBOOK_REELS',
+  'FACEBOOK_POST',
+  'INSTAGRAM_REELS',
+  'INSTAGRAM_CAROUSEL',
+  'INSTAGRAM_STORY',
+  'YOUTUBE_SHORTS',
+  'TIKTOK_VIDEO',
+  'ZALO_POST',
+  'ZALO_ARTICLE',
+];
+
+const HEADER_ALIASES = {
+  title: ['tiêu đề', 'tieu de', 'title', 'tiêu đề bài viết', 'tieu de bai viet', 'tên bài viết', 'ten bai viet', 'headline', 'name'],
+  caption: ['nội dung', 'noi dung', 'caption', 'mô tả', 'mo ta', 'content', 'description', 'bài viết', 'bai viet', 'body'],
+  firstComment: ['bình luận đầu', 'binh luan dau', 'first comment', 'comment đầu', 'comment dau', 'bình luận', 'binh luan', 'comment'],
+  hashtags: ['hashtags', 'hashtag', 'thẻ', 'the', 'tag', 'tags', 'bộ hashtag'],
+  platforms: ['nền tảng', 'nen tang', 'platform', 'platforms', 'kênh', 'kenh', 'mạng xã hội', 'mang xa hoi'],
+  scheduledAt: ['thời gian lên lịch', 'thoi gian len lich', 'thời gian đăng', 'thoi gian dang', 'scheduled at', 'scheduled time', 'ngày đăng', 'ngay dang', 'thời gian', 'thoi gian', 'time', 'schedule'],
+  mediaUrl: ['đường dẫn media', 'duong dan media', 'media url', 'media', 'video url', 'video', 'ảnh', 'anh', 'image url', 'link video', 'link media', 'tệp media'],
+};
+
+function normalizeKey(rawKey: string): string {
+  const clean = String(rawKey || '').trim().toLowerCase().replace(/[\t\r\n]+/g, ' ');
+  for (const [standardKey, aliases] of Object.entries(HEADER_ALIASES)) {
+    if (aliases.some(alias => clean === alias || clean.startsWith(alias) || clean.includes(alias))) {
+      return standardKey;
+    }
+  }
+  return clean;
+}
+
+function parsePlatformList(raw: string | undefined | null): string[] {
+  if (!raw) return ['FACEBOOK_REELS'];
+  const text = String(raw).toUpperCase().replace(/[;/|]/g, ',');
+  const parts = text.split(',').map(s => s.trim()).filter(Boolean);
+  const matched: string[] = [];
+
+  for (const part of parts) {
+    if (VALID_PLATFORMS.includes(part)) {
+      matched.push(part);
+      continue;
+    }
+    // Fuzzy matching aliases
+    if (part.includes('TIKTOK')) matched.push('TIKTOK_VIDEO');
+    else if (part.includes('YOUTUBE') || part.includes('SHORTS')) matched.push('YOUTUBE_SHORTS');
+    else if (part.includes('INSTAGRAM') || part.includes('INSTA')) matched.push('INSTAGRAM_REELS');
+    else if (part.includes('ZALO')) matched.push('ZALO_POST');
+    else if (part.includes('FACEBOOK') || part.includes('FB')) matched.push('FACEBOOK_REELS');
+  }
+
+  const unique = Array.from(new Set(matched));
+  return unique.length > 0 ? unique : ['FACEBOOK_REELS'];
+}
+
+function parseScheduleDateTime(val: any): { iso: string | null; warning?: string } {
+  if (!val) return { iso: null };
+
+  // Handle Excel serial date numbers
+  if (typeof val === 'number') {
+    try {
+      const dateObj = new Date((val - 25569) * 86400 * 1000);
+      if (!isNaN(dateObj.getTime())) {
+        if (dateObj.getTime() <= Date.now()) {
+          return { iso: null, warning: 'Thời gian đã qua trong quá khứ -> chuyển thành Bản Thảo (Draft)' };
+        }
+        return { iso: dateObj.toISOString() };
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  const str = String(val).trim();
+  if (!str) return { iso: null };
+
+  // Common Vietnamese/International formats:
+  // "25/10/2026 19:30" or "25-10-2026 19:30"
+  const vnMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (vnMatch) {
+    const day = parseInt(vnMatch[1], 10);
+    const month = parseInt(vnMatch[2], 10) - 1;
+    const year = parseInt(vnMatch[3], 10);
+    const hour = vnMatch[4] ? parseInt(vnMatch[4], 10) : 9;
+    const min = vnMatch[5] ? parseInt(vnMatch[5], 10) : 0;
+    const dateObj = new Date(year, month, day, hour, min, 0);
+    if (!isNaN(dateObj.getTime())) {
+      if (dateObj.getTime() <= Date.now()) {
+        return { iso: null, warning: 'Thời gian đã qua trong quá khứ -> chuyển thành Bản Thảo (Draft)' };
+      }
+      return { iso: dateObj.toISOString() };
+    }
+  }
+
+  // ISO / Standard JS Date parsing
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    if (parsed.getTime() <= Date.now()) {
+      return { iso: null, warning: 'Thời gian đã qua trong quá khứ -> chuyển thành Bản Thảo (Draft)' };
+    }
+    return { iso: parsed.toISOString() };
+  }
+
+  return { iso: null, warning: `Định dạng ngày giờ "${str}" chưa chuẩn -> chuyển thành Bản Thảo (Draft)` };
+}
+
+/**
+ * Parse an Excel or CSV buffer into structured, validated post rows
+ */
+export function parseExcelOrCsvBuffer(buffer: Buffer, source: 'EXCEL' | 'CSV' = 'EXCEL'): ImportParseResult {
+  try {
+    const workbook = source === 'CSV'
+      ? XLSX.read(buffer.toString('utf-8'), { type: 'string' })
+      : XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      return {
+        success: false,
+        source,
+        totalRows: 0,
+        validRows: 0,
+        invalidRows: 0,
+        warningRows: 0,
+        rows: [],
+        error: 'Tệp không chứa bảng tính (sheet) nào.',
+      };
+    }
+
+    const worksheet = workbook.Sheets[sheetName];
+    const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+
+    if (!rawRows || rawRows.length === 0) {
+      return {
+        success: false,
+        source,
+        totalRows: 0,
+        validRows: 0,
+        invalidRows: 0,
+        warningRows: 0,
+        rows: [],
+        error: 'Tệp rỗng hoặc không có dữ liệu hàng bài viết.',
+      };
+    }
+
+    const rows: ParsedImportRow[] = [];
+    let validRows = 0;
+    let invalidRows = 0;
+    let warningRows = 0;
+
+    rawRows.forEach((rawRow, index) => {
+      const normalizedRow: Record<string, any> = {};
+      for (const [key, val] of Object.entries(rawRow)) {
+        normalizedRow[normalizeKey(key)] = val;
+      }
+
+      const title = String(normalizedRow.title || '').trim();
+      const caption = String(normalizedRow.caption || '').trim();
+      const firstComment = String(normalizedRow.firstComment || '').trim();
+      const hashtags = String(normalizedRow.hashtags || '').trim();
+      const mediaUrl = String(normalizedRow.mediaUrl || '').trim();
+
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      if (!title) {
+        errors.push('Thiếu tiêu đề bài viết (Bắt buộc).');
+      }
+
+      if (!caption) {
+        warnings.push('Chưa có nội dung mô tả (Caption).');
+      }
+
+      const platforms = parsePlatformList(normalizedRow.platforms);
+      if (!normalizedRow.platforms) {
+        warnings.push('Chưa chỉ định nền tảng -> Mặc định chọn FACEBOOK_REELS.');
+      }
+
+      const { iso: scheduledAt, warning: dateWarning } = parseScheduleDateTime(normalizedRow.scheduledAt);
+      if (dateWarning) {
+        warnings.push(dateWarning);
+      } else if (!scheduledAt) {
+        warnings.push('Không có lịch hẹn -> Bài viết sẽ lưu dưới dạng Bản Thảo (Draft).');
+      }
+
+      const isValid = errors.length === 0;
+      if (isValid) validRows++;
+      else invalidRows++;
+      if (warnings.length > 0) warningRows++;
+
+      rows.push({
+        rowNumber: index + 1,
+        title,
+        caption,
+        firstComment,
+        hashtags,
+        platforms,
+        scheduledAt,
+        mediaUrl,
+        isValid,
+        errors,
+        warnings,
+      });
+    });
+
+    return {
+      success: true,
+      source,
+      totalRows: rows.length,
+      validRows,
+      invalidRows,
+      warningRows,
+      rows,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      source,
+      totalRows: 0,
+      validRows: 0,
+      invalidRows: 0,
+      warningRows: 0,
+      rows: [],
+      error: `Lỗi đọc tệp bảng tính: ${err.message}`,
+    };
+  }
+}
+
+/**
+ * Fetch public Google Sheets export CSV and parse
+ */
+export async function fetchAndParseGoogleSheet(sheetUrl: string): Promise<ImportParseResult> {
+  try {
+    let cleanUrl = String(sheetUrl || '').trim();
+    if (!cleanUrl) {
+      return {
+        success: false,
+        source: 'GOOGLE_SHEETS',
+        totalRows: 0,
+        validRows: 0,
+        invalidRows: 0,
+        warningRows: 0,
+        rows: [],
+        error: 'Vui lòng nhập đường dẫn Google Sheets hợp lệ.',
+      };
+    }
+
+    let csvExportUrl = cleanUrl;
+    const match = cleanUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      const sheetId = match[1];
+      csvExportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+    } else if (cleanUrl.includes('/pub') && !cleanUrl.includes('output=csv')) {
+      csvExportUrl = cleanUrl.includes('?') ? `${cleanUrl}&output=csv` : `${cleanUrl}?output=csv`;
+    }
+
+    const response = await fetch(csvExportUrl, {
+      headers: {
+        'User-Agent': 'Topify-Automation-Importer/1.0',
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        source: 'GOOGLE_SHEETS',
+        totalRows: 0,
+        validRows: 0,
+        invalidRows: 0,
+        warningRows: 0,
+        rows: [],
+        error: `Không thể tải dữ liệu từ Google Sheets (HTTP ${response.status}). Vui lòng đảm bảo bạn đã bật quyền chia sẻ "Bất kỳ ai có liên kết đều có thể xem".`,
+      };
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return parseExcelOrCsvBuffer(buffer, 'CSV');
+  } catch (err: any) {
+    return {
+      success: false,
+      source: 'GOOGLE_SHEETS',
+      totalRows: 0,
+      validRows: 0,
+      invalidRows: 0,
+      warningRows: 0,
+      rows: [],
+      error: `Lỗi kết nối Google Sheets: ${err.message}. Hãy kiểm tra kết nối mạng và quyền chia sẻ tệp.`,
+    };
+  }
+}
+
+/**
+ * Generate standard sample template in Excel format
+ */
+export function generateSampleExcelTemplate(): Buffer {
+  const headers = [
+    'Tiêu đề',
+    'Nội dung (Caption)',
+    'Bình luận đầu (First Comment)',
+    'Hashtags',
+    'Nền tảng',
+    'Thời gian lên lịch (YYYY-MM-DD HH:mm)',
+    'Đường dẫn Media',
+  ];
+
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const tomorrowStr = `${tomorrow.toISOString().slice(0, 10)} 19:30`;
+
+  const sampleData = [
+    [
+      'Top 3 bí quyết xây kênh TikTok triệu view 2026',
+      'Kịch bản chi tiết 3 bước giữ chân người xem trong 3 giây đầu tiên. Áp dụng ngay để nhân 5 lần lượng chuyển đổi!',
+      'Đừng quên lưu lại video và bình luận nhận checklist miễn phí nhé cả nhà!',
+      '#topify #tiktoktips #videomarketing #automation',
+      'TIKTOK_VIDEO, FACEBOOK_REELS',
+      tomorrowStr,
+      'https://storage.topify.vn/samples/sample_reel_1.mp4',
+    ],
+    [
+      'Chiến lược tối ưu kịch bản video ngắn cho F&B',
+      'Review góc quay và bố cục món ăn chuẩn viral. Đầy đủ phân cảnh hook, thân bài và kêu gọi hành động CTA rõ ràng.',
+      'Inbox fanpage hoặc liên hệ hotline 1900-xxxx để nhận ưu đãi bàn đặt!',
+      '#fb #foodreview #marketing #viralreels',
+      'FACEBOOK_REELS, INSTAGRAM_REELS',
+      `${tomorrow.toISOString().slice(0, 10)} 12:00`,
+      '',
+    ],
+    [
+      'Bí mật tăng tương tác tự nhiên không tốn tiền ads',
+      'Cách đặt câu hỏi kích thích thảo luận và tận dụng tính năng Spin biến thể để tránh trùng lặp nội dung đa kênh.',
+      'Dùng thử Topify Automation hoàn toàn miễn phí ngay hôm nay!',
+      '#topify #marketingstrategy #growthhacks',
+      'TIKTOK_VIDEO, YOUTUBE_SHORTS',
+      '',
+      '',
+    ],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 35 }, // Title
+    { wch: 50 }, // Caption
+    { wch: 35 }, // First Comment
+    { wch: 30 }, // Hashtags
+    { wch: 25 }, // Platforms
+    { wch: 30 }, // Scheduled At
+    { wch: 40 }, // Media URL
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Mau_Import_Bai_Viet');
+
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}

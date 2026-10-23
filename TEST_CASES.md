@@ -11,6 +11,9 @@
 | :--- | :--- | :--- | :--- | :--- | :---: |
 | **[F015](#f015---spin-nội-dung--spintax-parser-tự-sinh-biến-thể-caption-chống-trùng-lặp--spam)** | M2. Content Studio | Spin Nội Dung & Spintax Parser | Tự động sinh 3-8 biến thể caption, đo lường % Uniqueness, bung Spintax {A\|B\|C} | Hỗ trợ Spin & AI | ✅ Đã sẵn sàng test |
 | **[F016](#f016---trợ-lý-ai-viết-caption--kịch-bản-theo-ngành-hàng--tone-giọng)** | M2. Content Studio | AI Writer by Industry & Tone | Viết caption/kịch bản TikTok 10 ngành hàng, 6 tone giọng, xem trước Storyboard | 🤖 9router | ✅ Đã sẵn sàng test |
+| **[F019](#f019---import-bài-từ-google-drive--excel)** | M2. Content Studio | Import từ Excel / Google Drive | Nhập bài hàng loạt từ .xlsx, .csv, Google Drive, preview & inline edit, lên lịch tự động | Không dùng | ✅ Đã sẵn sàng test |
+| **[F022](#f022---đăng-ngẫu-nhiên-giờ-trong-khung-random-time-window)** | M2. Content Studio | Đăng ngẫu nhiên giờ trong khung | Random Time Window, 4 preset khung giờ vàng, live preview, rải lịch video | Không dùng | ✅ Đã sẵn sàng test |
+| **[F050](#f050---so-sánh-hiệu-suất-theo-khoảng-thời-gian-period-comparison)** | M5. Analytics | So sánh hiệu suất theo khoảng thời gian | Checkbox so sánh kỳ trước (MoM / WoW / YoY), % tăng trưởng, biểu đồ 2 đường nét liền/đứt | Analytics Engine | ✅ Đã sẵn sàng test |
 | **[F082](#f082---duplicate-content-detection-kiểm-tra-trùng-lặp-nội-dung)** | M2. Content Studio | Duplicate Content Detection | Phát hiện trùng lặp tiêu đề, caption, media | Hỗ trợ Spin | ✅ Đã sẵn sàng test |
 | **[F083](#f083---evergreen-content--auto-recycle-nội-dung-bất-hủ--tái-đăng)** | M2. Content Studio | Evergreen Content & Auto-Recycle | Quản lý bài viết bất hủ & Tái bản định kỳ | Hỗ trợ Spin | ✅ Đã sẵn sàng test |
 | **[F084](#f084---ai-content-score-chấm-điểm-nội-dung-chuẩn-viral)** | M2. Content Studio | AI Content Score | Chấm điểm Hook, độ rõ CTA, Brand Voice, Nền tảng | 🤖 9router | ✅ Đã sẵn sàng test |
@@ -1355,6 +1358,57 @@ Sau khi lần lượt hoàn thành các module, bạn chỉ cần mở App Elect
 | **TC-F171-04** | Tiếp nhận sự kiện Zalo OA Webhook | 1. Zalo gửi sự kiện `user_send_text` tới `/api/webhooks/zalo`. | Webhook payload Zalo OA. | • Chuyển đổi ID người gửi Zalo, text/ảnh sang format chuẩn `UnifiedInboundMessage`.<br>• Lưu hội thoại `ZALO_CHAT` và hiển thị trên giao diện Inbox. | [x] |
 | **TC-F171-05** | Phản hồi tin nhắn 2 chiều từ Topify UI (Outbound Dispatcher) | 1. Nhân viên chọn hội thoại Telegram/Meta/Zalo tại `/inbox`.<br>2. Gõ câu trả lời và bấm "Gửi". | API POST `/api/inbox/[id]/reply`. | • Hệ thống xác định kênh đích qua `conversation.platform`.<br>• Outbound Dispatcher gửi tin qua API tương ứng (Telegram `sendMessage`, Meta Graph API `/me/messages`, Zalo `oa/message/cs`).<br>• Cập nhật tin nhắn trong cơ sở dữ liệu với `externalId` gửi đi. | [x] |
 | **TC-F171-06** | Phân loại huy hiệu nền tảng trực quan trên giao diện Inbox | 1. Quan sát danh sách hội thoại tại `/inbox`. | Hội thoại từ các kênh khác nhau. | • Telegram hiển thị badge Sky kèm icon MessageCircle/Send.<br>• Messenger hiển thị badge Blue.<br>• Instagram hiển thị badge Pink/Rose.<br>• Zalo hiển thị badge Cyan. | [x] |
+
+---
+
+## [F022] - Đăng Ngẫu Nhiên Giờ Trong Khung (Random Time Window Publishing)
+
+* **Mục tiêu:** Cung cấp chế độ lên lịch xuất bản ngẫu nhiên trong khoảng thời gian (Start Time - End Time) hoặc chọn theo 4 khung giờ vàng được cấu hình sẵn (Sáng, Trưa, Chiều, Tối). Khi người dùng đăng nhiều video, hệ thống tự động rải đều hoặc xáo trộn ngẫu nhiên để chống hành vi spam/bot của thuật toán mạng xã hội.
+* **Môi trường test:** Electron Desktop App (`/create`) & Backend API (`POST /api/posts`).
+
+### 📋 Bảng Test Cases F022
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F022-01** | Hiển thị 3 chế độ đăng bài và 4 khung giờ vàng preset | 1. Mở trang `/create`.<br>2. Quan sát khu vực "Thời điểm xuất bản". | Giao diện `/create`. | • Hiển thị 3 card lựa chọn: "Đăng ngay", "Lên lịch cố định" và "Đăng ngẫu nhiên trong khung".<br>• Khi chọn "Đăng ngẫu nhiên", hiển thị 4 khung giờ vàng (Sáng 08:30-11:30, Trưa 12:00-13:45, Chiều 16:00-18:00, Tối 19:30-22:30) và tuỳ chọn Tùy chỉnh. | [x] |
+| **TC-F022-02** | Chọn khung giờ vàng preset và xem thời điểm dự kiến | 1. Chọn preset "Tối 19:30 - 22:30". | Preset "Tối". | • Start Time điền `19:30`, End Time điền `22:30`.<br>• Khung Xem trước hiển thị thời điểm đăng ngẫu nhiên nằm chuẩn trong khoảng 19:30 đến 22:30. | [x] |
+| **TC-F022-03** | Chức năng "Random lại" xáo trộn thời điểm khác | 1. Bấm nút "🎲 Random lại". | Click event. | • Hệ thống sinh ra một mốc thời gian ngẫu nhiên khác nhưng vẫn nằm chính xác trong khoảng `[randomWindowStart, randomWindowEnd]`. | [x] |
+| **TC-F022-04** | Thiết lập Start Time sau End Time (Validation) | 1. Nhập Start Time `20:00`, End Time `18:00`. | Start > End. | • Giao diện báo lỗi validation màu đỏ: "Giờ bắt đầu phải nhỏ hơn giờ kết thúc".<br>• Không thể submit form. | [x] |
+| **TC-F022-05** | Lưu bài viết thành công với trạng thái SCHEDULED | 1. Chọn video hợp lệ, chọn kênh và khung giờ random.<br>2. Bấm "Lên lịch ngẫu nhiên". | Payload `publishMode: 'random_window'`. | • Backend API trả về mã 200/201 `success: true`.<br>• Bài viết được lưu với trạng thái `SCHEDULED` và trường `scheduledAt` nhận mốc thời gian ngẫu nhiên đã tính. | [x] |
+
+---
+
+## [F019] - Import Bài Viết Hàng Loạt Từ Google Drive / Excel
+
+* **Mục tiêu:** Cho phép người sáng tạo và doanh nghiệp nhập hàng loạt hàng chục, hàng trăm bài viết từ file bảng tính Excel (`.xlsx`, `.xls`), file `.csv` hoặc liên kết trực tiếp Google Sheets. Giao diện cung cấp bảng xem trước tương tác (Preview Table) cho phép chỉnh sửa trực tiếp từng ô và tạo hàng loạt bài viết dạng `DRAFT` hoặc `SCHEDULED`.
+* **Môi trường test:** Electron Desktop App (`/posts`, `/content-studio` Tab 4) & Backend API (`/api/content-studio/import/*`).
+
+### 📋 Bảng Test Cases F019
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F019-01** | Mở trình Import từ Quản lý bài viết và Content Studio | 1. Tại `/posts`, bấm nút "Import từ Excel / Drive (F019)".<br>2. Tại `/content-studio`, chuyển sang tab "Import Excel / Google Drive (F019)". | Click button. | • Hiển thị Modal/Workspace Import với 2 tab: "Tải file Excel / CSV" và "Liên kết Google Sheets".<br>• Có nút "Tải file mẫu Excel" tải file `Mau_Import_Bai_Viet_Topify.xlsx`. | [x] |
+| **TC-F019-02** | Upload file Excel/CSV chuẩn và xem bảng phân tích dữ liệu | 1. Kéo thả file Excel chứa danh sách bài viết vào khu vực upload.<br>2. Bấm "Phân Tích Dữ Liệu Tệp". | File Excel/CSV. | • Bảng xem trước hiển thị danh sách dòng với các cột: Hàng, Tiêu đề, Caption, Hashtags, Kênh đăng, Lịch hẹn.<br>• Huy hiệu đếm số dòng hợp lệ, cảnh báo hoặc lỗi. | [x] |
+| **TC-F019-03** | Chỉnh sửa trực tiếp (Inline Edit) tại bảng Preview | 1. Nhấp đúp vào ô Tiêu đề hoặc Caption của một dòng.<br>2. Sửa nội dung câu chữ và bấm ra ngoài hoặc nhấn Enter. | Sửa nội dung ô. | • Giá trị được cập nhật trực tiếp trong bảng xem trước.<br>• Trạng thái hợp lệ của dòng được tự động tính toán lại. | [x] |
+| **TC-F019-04** | Nhập bài qua liên kết Google Sheets trực tiếp | 1. Chọn tab "Liên kết Google Sheets".<br>2. Dán link Google Sheets công khai.<br>3. Bấm "Nạp Dữ Liệu Từ Google Sheets". | URL Google Sheets. | • Hệ thống tự động chuyển đổi link sang CSV export và trích xuất dữ liệu.<br>• Hiển thị toàn bộ dữ liệu lên bảng xem trước. | [x] |
+| **TC-F019-05** | Lưu hàng loạt bài viết vào Database & Enqueue lịch | 1. Chọn các dòng hợp lệ cần nhập.<br>2. Bấm "Nhập & Lưu X bài viết". | Request `/api/content-studio/import/save`. | • Bài viết có ngày giờ hợp lệ được lưu trạng thái `SCHEDULED`; bài viết không có ngày được lưu `DRAFT`.<br>• Hiển thị Toast thông báo thành công và danh sách `/posts` tự động làm mới. | [x] |
+
+---
+
+## [F050] - So Sánh Hiệu Suất Theo Khoảng Thời Gian (Period Comparison: MoM / YoY)
+
+* **Mục tiêu:** Cung cấp tính năng so sánh hiệu suất kỳ này với kỳ đối ứng trước đó (MoM, WoW, QoQ, YoY). Giao diện hiển thị checkbox kích hoạt tại Date Range Toolbar, biểu đồ trực quan hóa 2 đường nét liền (kỳ này) và nét đứt (kỳ trước), kèm các huy hiệu tăng trưởng tỷ lệ % (`🟩 +%` / `🟥 -%`).
+* **Môi trường test:** Electron Desktop App (`/analytics`) & Backend API (`GET /api/analytics/period-comparison`).
+
+### 📋 Bảng Test Cases F050
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F050-01** | Hiển thị Checkbox "So sánh với kỳ trước (F050)" tại Date Toolbar | 1. Mở `/analytics`.<br>2. Quan sát thanh công cụ bộ lọc thời gian. | Giao diện `/analytics`. | • Hiển thị 4 preset khoảng thời gian: "7 ngày qua", "30 ngày qua", "Quý này (90 ngày)", "Tháng này".<br>• Hiển thị checkbox "So sánh với kỳ trước (F050)". | [x] |
+| **TC-F050-02** | Kích hoạt checkbox và tự động tính toán mốc thời gian kỳ trước | 1. Tích chọn checkbox "So sánh với kỳ trước".<br>2. Đổi qua lại giữa các mốc 7 ngày, 30 ngày, Tháng này. | Toggle checkbox. | • Hiển thị Banner trạng thái đối chiếu thời gian tương đương (VD: chọn 7 ngày $\rightarrow$ Kỳ trước: 7 ngày trước đó WoW; chọn 30 ngày $\rightarrow$ Kỳ trước: 30 ngày trước đó MoM).<br>• Cho phép chuyển đổi giữa "Kỳ trước (MoM/WoW)" và "Cùng kỳ năm ngoái (YoY)". | [x] |
+| **TC-F050-03** | Thẻ chỉ số KPI hiển thị huy hiệu % tăng trưởng trực quan | 1. Quan sát 4 thẻ KPI (Lượt xem, Tiếp cận, Tương tác, Leads CRM). | Chế độ so sánh đang bật. | • Mỗi thẻ hiển thị giá trị kỳ này kèm huy hiệu tăng trưởng `🟩 +%` (xanh nếu tăng) hoặc `🟥 -%` (đỏ nếu giảm).<br>• Dòng phụ chú ghi rõ số liệu kỳ đối ứng trước đó để so sánh. | [x] |
+| **TC-F050-04** | Biểu đồ trực quan hóa 2 đường nét liền và nét đứt chồng lên nhau | 1. Quan sát biểu đồ xu hướng hiệu suất.<br>2. Hover chuột vào các điểm dữ liệu trên biểu đồ. | Chế độ so sánh đang bật. | • Biểu đồ hiển thị 2 đường: Đường nét liền xanh dương = Kỳ này, Đường nét đứt xám = Kỳ trước.<br>• Có các tab chuyển đổi thước đo: Lượt xem, Tiếp cận, Tương tác, Leads CRM.<br>• Tooltip khi hover hiển thị chi tiết giá trị cả 2 kỳ và % chênh lệch tương ứng. | [x] |
+
 
 
 

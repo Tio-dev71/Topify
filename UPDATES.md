@@ -14,6 +14,44 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Triển Khai Hoàn Chỉnh Bộ 3 Tính Năng: F022, F019 & F050
+
+### 1. Phân hệ M2. Content Studio:
+- **[F022] Đăng ngẫu nhiên giờ trong khung (Random Time Window Publishing):**
+  - Bổ sung chế độ đăng bài `random_window` trên trang Tạo bài viết (`/create`) bên cạnh 2 chế độ `now` và `schedule`.
+  - Cung cấp 4 khung giờ vàng chuẩn (Golden Hour Presets):
+    - *Sáng:* 08:30 – 11:30 (Khung giờ bắt đầu ngày mới, tương tác văn phòng)
+    - *Trưa:* 12:00 – 13:45 (Giờ nghỉ trưa lướt TikTok/Reels)
+    - *Chiều:* 16:00 – 18:00 (Giờ tan tầm, xem video giải trí)
+    - *Tối:* 19:30 – 22:30 (Khung giờ vàng đỉnh cao nhất trong ngày)
+    - *Tùy chỉnh:* Tự do chọn mốc Start Time và End Time bất kỳ.
+  - Tích hợp tính năng "🎲 Random lại" để xáo trộn tức thì thời điểm xuất bản dự kiến.
+  - Hỗ trợ phân bổ thời gian ngẫu nhiên khác nhau cho từng video khi đăng danh sách nhiều video.
+  - **Tệp thay đổi:** `electron-app/frontend/src/pages/CreatePost.tsx`, `app/api/posts/route.ts`, `__tests__/api/posts/route.test.ts`.
+
+- **[F019] Import bài viết hàng loạt từ Excel / CSV & Google Drive:**
+  - Cho phép người dùng tải lên tệp bảng tính `.xlsx`, `.xls`, `.csv` hoặc kết nối trực tiếp URL Google Sheets.
+  - Tự động nhận diện và chuẩn hóa tên cột tiếng Việt/tiếng Anh linh hoạt (`Tiêu đề bài viết`, `Nội dung`, `Bình luận đầu`, `Hashtags`, `Kênh đăng`, `Thời gian lên lịch`, `Link media`).
+  - Giao diện bảng xem trước dữ liệu tương tác (Interactive Data Table) với tính năng nhấp đúp chỉnh sửa trực tiếp từng ô (Inline Edit), xóa dòng, đếm số dòng hợp lệ và cảnh báo.
+  - Nút tải tệp Excel mẫu chuẩn `/api/content-studio/import/template` (`Mau_Import_Bai_Viet_Topify.xlsx`).
+  - Tự động phân loại bài viết có lịch hẹn thành `SCHEDULED` (đưa vào hàng đợi xuất bản) và bài viết không có lịch thành `DRAFT`.
+  - Tích hợp nút bấm trực tiếp tại Quản lý bài viết (`/posts`) và Tab 4 tại Content Studio (`/content-studio`).
+  - **Tệp thay đổi:** `lib/content-studio/import-engine.ts`, `app/api/content-studio/import/*`, `electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx`, `electron-app/frontend/src/pages/ContentStudio.tsx`, `electron-app/frontend/src/pages/Posts.tsx`, `__tests__/api/content-studio/import.test.ts`.
+
+### 2. Phân hệ M5. Analytics:
+- **[F050] So sánh hiệu suất theo khoảng thời gian (Period Comparison: MoM / YoY):**
+  - Bổ sung thanh công cụ Date Picker Toolbar với các khoảng thời gian: `7 ngày qua`, `30 ngày qua`, `Quý này (90 ngày)`, `Tháng này`.
+  - Checkbox toggle `[x] So sánh với kỳ trước (F050)`: khi kích hoạt, hệ thống tự động lùi mốc thời gian đối ứng tương đương (ví dụ: 7 ngày $\rightarrow$ 7 ngày trước đó WoW; 30 ngày $\rightarrow$ 30 ngày trước đó MoM; hoặc YoY cùng kỳ năm ngoái).
+  - Biểu đồ xu hướng hiệu suất 2 đường trực quan hóa bằng SVG tương tác:
+    - **Đường nét liền xanh dương (`#2563EB`):** Thể hiện kỳ hiện tại kèm vùng gradient bên dưới.
+    - **Đường nét đứt xám (`#94A3B8`, `strokeDasharray="6 6"`):** Thể hiện kỳ đối ứng trước đó.
+    - Bộ chuyển đổi thước đo: Lượt xem video (Views), Lượt tiếp cận (Reach), Tương tác đa kênh (Engagements), Khách tiềm năng (Leads CRM).
+    - Tooltip tương tác hiển thị chi tiết số liệu so sánh song song cả 2 kỳ và % tăng trưởng.
+  - Các thẻ chỉ số KPI hiển thị huy hiệu tăng trưởng tỷ lệ % trực quan: `🟩 +%` (xanh nếu tăng) hoặc `🟥 -%` (đỏ nếu giảm).
+  - **Tệp thay đổi:** `lib/analytics/engine.ts`, `app/api/analytics/period-comparison/route.ts`, `electron-app/frontend/src/pages/Analytics.tsx`, `__tests__/api/analytics/period-comparison.test.ts`.
+
+---
+
 ## 🚀 [2026-10-14] — Triển Khai Toàn Diện Phân Hệ M2: Content Studio (F015 & F016)
 
 ### 1. Chi Tiết Tính Năng Phân Hệ M2. Content Studio (F015 & F016)

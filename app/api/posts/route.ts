@@ -25,8 +25,11 @@ const createPostSchema = z.object({
     'ZALO_POST',
     'ZALO_ARTICLE'
   ])).min(1),
-  publishMode: z.enum(['now', 'schedule', 'request_approval']),
+  publishMode: z.enum(['now', 'schedule', 'request_approval', 'random_window']),
   scheduledAt: z.string().nullable().optional(),
+  isRandomWindow: z.boolean().optional(),
+  randomWindowStart: z.string().nullable().optional(),
+  randomWindowEnd: z.string().nullable().optional(),
   isEvergreen: z.boolean().optional(),
   recycleIntervalDays: z.number().optional(),
 });
@@ -142,7 +145,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isEvergreen, recycleIntervalDays } = parsed.data;
+    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isRandomWindow, randomWindowStart, randomWindowEnd, isEvergreen, recycleIntervalDays } = parsed.data;
+
+    let finalScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+
+    if (publishMode === 'random_window') {
+      if (randomWindowStart && randomWindowEnd) {
+        const start = new Date(randomWindowStart).getTime();
+        const end = new Date(randomWindowEnd).getTime();
+        if (end <= start) {
+          return NextResponse.json(
+            { error: 'Khung giờ đăng ngẫu nhiên không hợp lệ: Giờ kết thúc phải sau giờ bắt đầu.' },
+            { status: 400 }
+          );
+        }
+        if (!finalScheduledAt || finalScheduledAt.getTime() < start || finalScheduledAt.getTime() > end) {
+          const randomMs = start + Math.floor(Math.random() * (end - start));
+          finalScheduledAt = new Date(randomMs);
+        }
+      } else if (!finalScheduledAt) {
+        return NextResponse.json(
+          { error: 'Vui lòng cung cấp khung thời gian đăng ngẫu nhiên (F022).' },
+          { status: 400 }
+        );
+      }
+    }
 
     // Guard against draft or placeholder video assets
     if (!videoAssetId || videoAssetId.startsWith('draft_')) {
@@ -230,7 +257,7 @@ export async function POST(req: NextRequest) {
         createdById: session.user.id,
         workspaceId: (session.user as any).workspaceId,
         status: publishMode === 'request_approval' ? 'PENDING_REVIEW' : publishMode === 'now' ? 'PUBLISHING' : 'SCHEDULED',
-        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        scheduledAt: finalScheduledAt,
         isEvergreen: !!isEvergreen,
         recycleIntervalDays: recycleIntervalDays || 30,
         platforms: {
@@ -249,9 +276,9 @@ export async function POST(req: NextRequest) {
       // Enqueue job if not requesting approval
       if (publishMode === 'now') {
         await enqueuePublish(post.id);
-      } else if (publishMode === 'schedule' && scheduledAt) {
-        await schedulePublish(post.id, new Date(scheduledAt));
-        if (new Date(scheduledAt) <= new Date()) {
+      } else if ((publishMode === 'schedule' || publishMode === 'random_window') && finalScheduledAt) {
+        await schedulePublish(post.id, finalScheduledAt);
+        if (finalScheduledAt <= new Date()) {
           checkAndPublishDuePosts().catch(console.error);
         }
       }
