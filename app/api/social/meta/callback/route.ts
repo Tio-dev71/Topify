@@ -179,18 +179,66 @@ export async function GET(req: NextRequest) {
 
     if (isDesktopClient) {
       return new NextResponse(
-        `<html>
-          <head><meta charset="utf-8" /><title>Kết nối thành công</title></head>
-          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f9fafb;">
-            <div style="max-width: 480px; margin: 0 auto; background: white; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-              <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
-              <h2 style="color: #10B981; margin: 0 0 10px;">Kết nối Meta thành công!</h2>
-              <p style="color: #374151; font-weight: 500;">Tài khoản: <strong>${accountDisplayName}</strong></p>
-              ${page ? `<p style="color: #059669; font-size: 13px;">Fanpage: ${page.name}</p>` : '<p style="color: #D97706; font-size: 13px;">Lưu ý: Chưa tìm thấy Fanpage nào được cấp quyền. Bạn có thể cấp quyền Fanpage trong cài đặt Facebook.</p>'}
-              <p style="color: #6B7280; font-size: 14px; margin-top: 16px;">Bạn có thể đóng tab trình duyệt này và quay lại ứng dụng Topify.</p>
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Topify - Kết nối Meta thành công</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 40px 20px; background: #f9fafb; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+              .card { max-width: 480px; width: 100%; margin: 0 auto; background: white; padding: 36px 32px; border-radius: 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); border: 1px solid #F3F4F6; box-sizing: border-box; }
+              .badge { width: 64px; height: 64px; background: #ECFDF5; color: #10B981; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 16px; border: 1px solid #D1FAE5; }
+              h2 { color: #111827; margin: 0 0 10px; font-size: 22px; font-weight: 700; }
+              .btn { display: inline-flex; align-items: center; justify-content: center; background: #1877F2; color: white; font-weight: 600; padding: 14px 28px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 15px; width: 100%; transition: all 0.2s; box-shadow: 0 4px 12px rgba(24,119,242,0.25); box-sizing: border-box; }
+              .btn:hover { background: #166FE5; }
+              .note { font-size: 13px; color: #6B7280; margin-top: 14px; line-height: 1.4; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">✓</div>
+              <h2>Kết nối Meta thành công!</h2>
+              <p style="color: #374151; font-weight: 500; margin-bottom: 8px;">Tài khoản: <strong>${accountDisplayName}</strong></p>
+              ${page ? `<p style="color: #059669; font-size: 13px; margin-top: 0;">Fanpage: ${page.name}</p>` : '<p style="color: #D97706; font-size: 13px; margin-top: 0;">Lưu ý: Chưa tìm thấy Fanpage nào được cấp quyền. Bạn có thể cấp quyền Fanpage trong cài đặt Facebook.</p>'}
+              <div style="margin-top: 24px;">
+                <button id="actionBtn" class="btn" onclick="returnToApp()">Đóng trang & Quay lại Topify</button>
+                <p id="noteText" class="note">Cửa sổ sẽ tự động chuyển về Topify Automation sau vài giây...</p>
+              </div>
             </div>
             <script>
-              setTimeout(() => { window.close(); }, 2000);
+              var hasTriggered = false;
+              function returnToApp() {
+                if (hasTriggered) return;
+                hasTriggered = true;
+
+                var btn = document.getElementById('actionBtn');
+                var note = document.getElementById('noteText');
+                if (btn) {
+                  btn.innerHTML = '<span style="margin-right:6px">✓</span> Đang quay lại Topify Automation...';
+                  btn.style.background = '#10B981';
+                }
+                if (note) {
+                  note.innerHTML = 'Đã kích hoạt ứng dụng Topify Automation! Bạn có thể đóng tab này thủ công.';
+                  note.style.color = '#059669';
+                }
+
+                try {
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'OAUTH_SUCCESS', provider: 'META' }, '*');
+                  }
+                } catch(e) {}
+
+                try {
+                  window.location.href = 'topify://oauth-success?provider=META';
+                } catch(e) {}
+
+                setTimeout(function() {
+                  try { window.open('', '_self', ''); window.close(); } catch(e) {}
+                }, 500);
+              }
+
+              setTimeout(function() { returnToApp(); }, 1200);
             </script>
           </body>
         </html>`,

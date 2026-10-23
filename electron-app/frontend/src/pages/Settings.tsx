@@ -130,25 +130,53 @@ export default function Settings() {
     fetchQuotaAndBilling();
     fetchExportManifest();
 
-    const handleOAuthComplete = () => {
+    let lastToastTime = 0;
+    const showSuccessToast = (providerName: string) => {
+      const now = Date.now();
+      if (now - lastToastTime > 3000) {
+        lastToastTime = now;
+        toast.success(`Kết nối ${providerName || 'tài khoản'} thành công!`);
+      }
+    };
+
+    const handleOAuthComplete = (e?: any) => {
+      const provider = e?.detail?.provider;
+      if (provider) {
+        showSuccessToast(provider);
+      }
       fetchSettings();
     };
 
     const handleWindowMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OAUTH_SUCCESS') {
-        toast.success(`Kết nối tài khoản ${event.data.provider || ''} thành công!`);
+        showSuccessToast(event.data.provider || '');
         fetchSettings();
       }
     };
 
+    const handleFocus = () => {
+      fetchSettings();
+    };
+
     window.addEventListener('oauth-complete', handleOAuthComplete);
     window.addEventListener('message', handleWindowMessage);
-    window.addEventListener('focus', handleOAuthComplete);
+    window.addEventListener('focus', handleFocus);
+
+    let unsubDeepLink: (() => void) | undefined;
+    if ((window as any).electron?.onDeepLink) {
+      unsubDeepLink = (window as any).electron.onDeepLink((data: any) => {
+        if (data?.provider) {
+          showSuccessToast(data.provider);
+        }
+        fetchSettings();
+      });
+    }
 
     return () => {
       window.removeEventListener('oauth-complete', handleOAuthComplete);
       window.removeEventListener('message', handleWindowMessage);
-      window.removeEventListener('focus', handleOAuthComplete);
+      window.removeEventListener('focus', handleFocus);
+      if (unsubDeepLink) unsubDeepLink();
     };
   }, []);
 
@@ -298,11 +326,12 @@ export default function Settings() {
     const pollInterval = setInterval(() => {
       pollCount++;
       fetchSettings();
-      if (pollCount > 15) clearInterval(pollInterval);
+      if (pollCount > 60) clearInterval(pollInterval);
     }, 2000);
 
-    if ((provider === 'YOUTUBE' || provider === 'META') && (window as any).electron?.openExternal) {
-      toast.info(`Đang mở trình duyệt để xác thực ${provider === 'YOUTUBE' ? 'Google / YouTube' : 'Meta'} an toàn...`);
+    if ((window as any).electron?.openExternal) {
+      const providerLabel = provider === 'YOUTUBE' ? 'Google / YouTube' : provider;
+      toast.info(`Đang mở trình duyệt để xác thực ${providerLabel} an toàn...`);
       (window as any).electron.openExternal(fullUrl);
       return;
     }

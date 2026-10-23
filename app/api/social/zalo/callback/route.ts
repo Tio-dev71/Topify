@@ -27,23 +27,65 @@ export async function GET(req: NextRequest) {
     const renderDesktopHtml = (msg: string, isError: boolean, detail?: string) => {
       const color = isError ? '#EF4444' : '#10B981';
       return new NextResponse(
-        `<html>
-          <head><meta charset="utf-8" /><title>${isError ? 'Lỗi kết nối' : 'Kết nối thành công'}</title></head>
-          <body style="font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f9fafb;">
-            <div style="max-width: 480px; margin: 0 auto; background: white; padding: 32px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-              <div style="font-size: 48px; margin-bottom: 12px;">${isError ? '❌' : '✅'}</div>
-              <h2 style="color: ${color}; margin-bottom: 8px;">${msg}</h2>
-              ${detail ? `<p style="color: #6B7280; font-size: 13px; line-height: 1.5; margin-bottom: 20px;">${detail}</p>` : ''}
-              <p style="color: #4B5563; font-size: 14px;">Bạn có thể đóng cửa sổ này và quay lại ứng dụng.</p>
-              <button onclick="window.close()" style="margin-top: 16px; background: #0068FF; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500;">Đóng cửa sổ</button>
+        `<!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>${isError ? 'Lỗi kết nối Zalo' : 'Kết nối Zalo thành công'}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 40px 20px; background: #f9fafb; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+              .card { max-width: 480px; width: 100%; margin: 0 auto; background: white; padding: 36px 32px; border-radius: 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); border: 1px solid #F3F4F6; box-sizing: border-box; }
+              .badge { width: 64px; height: 64px; background: ${isError ? '#FEE2E2' : '#ECFDF5'}; color: ${color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 16px; border: 1px solid ${isError ? '#FECACA' : '#D1FAE5'}; }
+              h2 { color: #111827; margin: 0 0 10px; font-size: 22px; font-weight: 700; }
+              .btn { display: inline-flex; align-items: center; justify-content: center; background: #0068FF; color: white; font-weight: 600; padding: 14px 28px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 15px; width: 100%; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,104,255,0.25); box-sizing: border-box; }
+              .btn:hover { background: #0056D6; }
+              .note { font-size: 13px; color: #6B7280; margin-top: 14px; line-height: 1.4; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">${isError ? '✕' : '✓'}</div>
+              <h2>${msg}</h2>
+              ${detail ? `<p style="color: #6B7280; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">${detail}</p>` : ''}
+              <div style="margin-top: 24px;">
+                <button id="actionBtn" class="btn" onclick="returnToApp()">${isError ? 'Đóng & Quay lại Topify' : 'Đóng trang & Quay lại Topify'}</button>
+                <p id="noteText" class="note">${isError ? 'Nhấn để quay lại ứng dụng.' : 'Cửa sổ sẽ tự động chuyển về Topify Automation sau vài giây...'}</p>
+              </div>
             </div>
             <script>
-              try {
-                if (window.opener) {
-                  window.opener.postMessage({ type: '${isError ? 'OAUTH_ERROR' : 'OAUTH_SUCCESS'}', provider: 'ZALO', error: ${JSON.stringify(msg)} }, '*');
+              var hasTriggered = false;
+              function returnToApp() {
+                if (hasTriggered) return;
+                hasTriggered = true;
+
+                var btn = document.getElementById('actionBtn');
+                var note = document.getElementById('noteText');
+                if (btn && !${isError}) {
+                  btn.innerHTML = '<span style="margin-right:6px">✓</span> Đang quay lại Topify Automation...';
+                  btn.style.background = '#10B981';
                 }
-              } catch(e) {}
-              ${!isError ? 'setTimeout(() => { window.close(); }, 2000);' : ''}
+                if (note && !${isError}) {
+                  note.innerHTML = 'Đã kích hoạt ứng dụng Topify Automation! Bạn có thể đóng tab này thủ công.';
+                  note.style.color = '#059669';
+                }
+
+                try {
+                  if (window.opener) {
+                    window.opener.postMessage({ type: '${isError ? 'OAUTH_ERROR' : 'OAUTH_SUCCESS'}', provider: 'ZALO', error: ${JSON.stringify(msg)} }, '*');
+                  }
+                } catch(e) {}
+
+                try {
+                  window.location.href = 'topify://${isError ? 'oauth-error' : 'oauth-success'}?provider=ZALO';
+                } catch(e) {}
+
+                setTimeout(function() {
+                  try { window.open('', '_self', ''); window.close(); } catch(e) {}
+                }, 500);
+              }
+
+              ${!isError ? 'setTimeout(function() { returnToApp(); }, 1200);' : ''}
             </script>
           </body>
         </html>`,

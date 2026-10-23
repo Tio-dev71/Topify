@@ -36,8 +36,18 @@ export async function GET(req: NextRequest) {
               <div class="badge">✕</div>
               <h2>Kết nối thất bại</h2>
               <p>${msg}</p>
-              <button class="btn" onclick="window.close()">Đóng cửa sổ này</button>
+              <button id="errBtn" class="btn" onclick="returnToAppError()">Đóng & Quay lại Topify</button>
             </div>
+            <script>
+              function returnToAppError() {
+                try {
+                  window.location.href = 'topify://oauth-error?provider=GOOGLE&error=' + encodeURIComponent(${JSON.stringify(msg)});
+                } catch(e) {}
+                setTimeout(function() {
+                  try { window.open('', '_self', ''); window.close(); } catch(e) {}
+                }, 400);
+              }
+            </script>
           </body>
         </html>`,
         { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }
@@ -89,7 +99,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/login', baseUrl));
     }
 
-    if (!workspaceId) {
+    if (!workspaceId && prisma.user) {
       const dbUser = await prisma.user.findUnique({
         where: { id: userId },
         select: { workspaceId: true }
@@ -230,20 +240,22 @@ export async function GET(req: NextRequest) {
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Topify - Kết nối YouTube thành công</title>
+            <title>Topify - Kết nối ${provider === 'YOUTUBE' ? 'YouTube' : 'Google Drive'} thành công</title>
             <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8F9FA; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; color: #111827; }
-              .card { background: white; border-radius: 24px; padding: 40px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #F3F4F6; }
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #F8F9FA; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; color: #111827; }
+              .card { background: white; border-radius: 24px; padding: 40px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #F3F4F6; box-sizing: border-box; }
               .badge { width: 64px; height: 64px; background: #ECFDF5; color: #10B981; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 20px; border: 1px solid #D1FAE5; }
               h2 { margin: 0 0 12px; color: #111827; font-size: 22px; font-weight: 700; }
               p { margin: 0 0 16px; color: #4B5563; font-size: 14px; line-height: 1.5; }
               .account-box { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 14px; padding: 14px 18px; margin: 16px 0 24px; text-align: left; }
               .account-label { font-size: 12px; color: #6B7280; margin-bottom: 4px; font-weight: 500; }
-              .account-val { font-size: 15px; color: #111827; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+              .account-val { font-size: 15px; color: #111827; font-weight: 600; display: flex; align-items: center; gap: 8px; word-break: break-all; }
               .channel-id { font-family: monospace; font-size: 12px; background: #E5E7EB; padding: 2px 6px; border-radius: 6px; color: #374151; }
-              .btn { display: inline-flex; align-items: center; justify-content: center; background: #5B3DF5; color: white; font-weight: 600; padding: 12px 28px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 14px; width: 100%; transition: all 0.2s; box-shadow: 0 2px 4px rgba(91,61,245,0.2); }
-              .btn:hover { background: #4A2DE0; }
-              .note { font-size: 12px; color: #9CA3AF; margin-top: 14px; }
+              .btn { display: inline-flex; align-items: center; justify-content: center; background: #5B3DF5; color: white; font-weight: 600; padding: 14px 28px; border-radius: 14px; text-decoration: none; cursor: pointer; border: none; font-size: 15px; width: 100%; transition: all 0.25s ease; box-shadow: 0 4px 12px rgba(91,61,245,0.25); box-sizing: border-box; }
+              .btn:hover { background: #4A2DE0; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(91,61,245,0.3); }
+              .btn:active { transform: translateY(0); }
+              .note { font-size: 13px; color: #6B7280; margin-top: 14px; line-height: 1.4; transition: color 0.2s; }
+              .manual-link { display: inline-block; margin-top: 12px; color: #5B3DF5; font-size: 13px; text-decoration: underline; font-weight: 500; cursor: pointer; }
             </style>
           </head>
           <body>
@@ -259,18 +271,60 @@ export async function GET(req: NextRequest) {
                 </div>
               </div>
               ${!youtubeChannelId && provider === 'YOUTUBE' ? '<p style="color: #D97706; font-size: 13px; text-align: left; background: #FFFBEB; padding: 10px; border-radius: 10px; margin-bottom: 16px;">⚠️ Lưu ý: Chưa tìm thấy kênh YouTube mặc định trên tài khoản này. Bạn có thể vào studio.youtube.com để tạo kênh nếu cần đăng video.</p>' : ''}
-              <button class="btn" onclick="window.close()">Đóng trang & Quay lại Topify</button>
-              <p class="note">Cửa sổ sẽ tự động đóng sau vài giây...</p>
+              <button id="actionBtn" class="btn" onclick="returnToApp()">Đóng trang & Quay lại Topify</button>
+              <p id="noteText" class="note">Cửa sổ sẽ tự động chuyển về Topify Automation sau vài giây...</p>
+              <a id="deepLinkFallback" href="topify://oauth-success?provider=${encodeURIComponent(provider)}" class="manual-link" style="display:none;" onclick="returnToApp()">Bấm vào đây nếu Topify Automation chưa tự mở</a>
             </div>
             <script>
-              try {
-                if (window.opener) {
-                  window.opener.postMessage({ type: 'OAUTH_SUCCESS', provider: '${provider}' }, '*');
+              var hasTriggered = false;
+              function returnToApp() {
+                if (hasTriggered) return;
+                hasTriggered = true;
+
+                var btn = document.getElementById('actionBtn');
+                var note = document.getElementById('noteText');
+                var fallback = document.getElementById('deepLinkFallback');
+
+                if (btn) {
+                  btn.innerHTML = '<span style="margin-right:6px">✓</span> Đang quay lại Topify Automation...';
+                  btn.style.background = '#10B981';
+                  btn.style.boxShadow = '0 4px 12px rgba(16,185,129,0.3)';
                 }
-              } catch(e) {}
-              setTimeout(() => {
-                try { window.close(); } catch(e) {}
-              }, 4000);
+
+                if (note) {
+                  note.innerHTML = 'Đã kích hoạt ứng dụng Topify Automation! Nếu trình duyệt không tự đóng tab này do chính sách bảo mật, bạn có thể đóng tab thủ công.';
+                  note.style.color = '#059669';
+                }
+
+                if (fallback) {
+                  fallback.style.display = 'inline-block';
+                }
+
+                // 1. Gửi message nếu mở qua window.open popup
+                try {
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'OAUTH_SUCCESS', provider: '${provider}' }, '*');
+                  }
+                } catch (e) {}
+
+                // 2. Kích hoạt deep-link protocol mở app desktop
+                try {
+                  window.location.href = 'topify://oauth-success?provider=${encodeURIComponent(provider)}';
+                } catch (e) {}
+
+                // 3. Cố gắng đóng tab (trình duyệt có thể cho phép hoặc chặn tuỳ ngữ cảnh)
+                setTimeout(function() {
+                  try {
+                    window.open('', '_self', '');
+                    window.close();
+                  } catch (e) {}
+                }, 500);
+              }
+
+              // Tự động kích hoạt sau 1.2s để người dùng thấy thông báo thành công
+              setTimeout(function() {
+                returnToApp();
+              }, 1200);
             </script>
           </body>
         </html>`,
@@ -285,19 +339,22 @@ export async function GET(req: NextRequest) {
     console.error('Google callback error:', error);
     const stateParam = new URL(req.url).searchParams.get('state') || '';
     if (stateParam.includes('youtube_') || stateParam.includes('google_drive_')) {
+      const isYoutube = stateParam.includes('youtube_');
+      const errProvider = isYoutube ? 'YOUTUBE' : 'GOOGLE_DRIVE';
       return new NextResponse(
         `<!DOCTYPE html>
         <html>
           <head>
             <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
             <title>Topify - Lỗi kết nối Google</title>
             <style>
               body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8F9FA; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; color: #111827; }
               .card { background: white; border-radius: 20px; padding: 40px; max-width: 480px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #E5E7EB; }
               .badge { width: 64px; height: 64px; background: #FEE2E2; color: #EF4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 20px; }
               h2 { margin: 0 0 10px; color: #111827; font-size: 20px; font-weight: 700; }
-              p { margin: 0 0 20px; color: #4B5563; font-size: 14px; }
-              .btn { display: inline-block; background: #111827; color: white; font-weight: 600; padding: 10px 24px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 14px; }
+              p { margin: 0 0 20px; color: #4B5563; font-size: 14px; line-height: 1.5; }
+              .btn { display: inline-block; background: #111827; color: white; font-weight: 600; padding: 12px 24px; border-radius: 12px; text-decoration: none; cursor: pointer; border: none; font-size: 14px; width: 100%; }
             </style>
           </head>
           <body>
@@ -305,8 +362,18 @@ export async function GET(req: NextRequest) {
               <div class="badge">✕</div>
               <h2>Lỗi kết nối Google</h2>
               <p>Đã xảy ra sự cố trong quá trình liên kết tài khoản. Vui lòng đóng cửa sổ và thử lại.</p>
-              <button class="btn" onclick="window.close()">Đóng cửa sổ này</button>
+              <button id="errBtn" class="btn" onclick="returnToAppError()">Đóng & Quay lại Topify</button>
             </div>
+            <script>
+              function returnToAppError() {
+                try {
+                  window.location.href = 'topify://oauth-error?provider=${errProvider}&error=google_callback_error';
+                } catch(e) {}
+                setTimeout(function() {
+                  try { window.open('', '_self', ''); window.close(); } catch(e) {}
+                }, 400);
+              }
+            </script>
           </body>
         </html>`,
         { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 400 }

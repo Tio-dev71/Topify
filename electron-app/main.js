@@ -6,7 +6,90 @@ const { execSync } = require('child_process');
 const { runPlaywrightLogin, activeBrowsers, latestScreenshots } = require('./playwright-runner');
 const { startAutomationTask, stopTask, getRunningTasks } = require('./automation-runner');
 
+// Đăng ký custom protocol topify:// cho desktop deep linking (OAuth callback, etc.)
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('topify', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('topify');
+}
+
 let mainWindow;
+let pendingDeepLink = null;
+
+function dispatchDeepLink(rawUrl) {
+  console.log('[Electron DeepLink] Dispatching URL:', rawUrl);
+  if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.startsWith('topify://')) return;
+
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  }
+
+  let provider = '';
+  let status = 'success';
+  try {
+    const urlObj = new URL(rawUrl);
+    provider = urlObj.searchParams.get('provider') || '';
+    if (rawUrl.includes('oauth-error')) {
+      status = 'error';
+    }
+  } catch (e) {
+    console.warn('[Electron DeepLink] URL parse error:', e);
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('deep-link', { url: rawUrl, provider, status });
+    mainWindow.webContents.executeJavaScript(`
+      try {
+        window.dispatchEvent(new CustomEvent('oauth-complete', { 
+          detail: { provider: ${JSON.stringify(provider)}, status: ${JSON.stringify(status)}, url: ${JSON.stringify(rawUrl)} } 
+        }));
+      } catch (err) {}
+    `).catch(() => {});
+  }
+}
+
+function handleDeepLink(rawUrl) {
+  console.log('[Electron DeepLink] Received URL:', rawUrl);
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) {
+    pendingDeepLink = rawUrl;
+    return;
+  }
+  dispatchDeepLink(rawUrl);
+}
+
+// Single instance lock để xử lý deep-link trên Windows / Linux khi app đã mở
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+    const deepLinkUrl = commandLine.find(arg => arg.startsWith('topify://'));
+    if (deepLinkUrl) {
+      handleDeepLink(deepLinkUrl);
+    }
+  });
+
+  // macOS open-url
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+    handleDeepLink(url);
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -119,6 +202,14 @@ function createWindow() {
       }
     });
   });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (pendingDeepLink) {
+      const urlToProcess = pendingDeepLink;
+      pendingDeepLink = null;
+      setTimeout(() => dispatchDeepLink(urlToProcess), 600);
+    }
+  });
 }
 
 app.whenReady().then(() => {
@@ -126,6 +217,14 @@ app.whenReady().then(() => {
   app.userAgentFallback = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
   createWindow();
+
+  // Windows: Xử lý deep link nếu app được mở lần đầu bằng protocol topify://
+  if (process.platform === 'win32') {
+    const startUrl = process.argv.find(arg => arg.startsWith('topify://'));
+    if (startUrl) {
+      handleDeepLink(startUrl);
+    }
+  }
 
   // Background Scheduler: Tự động kiểm tra và kích hoạt đăng các bài viết đã đến giờ hẹn
   const triggerScheduledPosts = () => {

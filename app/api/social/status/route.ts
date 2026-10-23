@@ -41,7 +41,7 @@ export async function GET() {
     const connections: any[] = [];
 
     for (const account of socialAccounts) {
-      const isConnectedStatus = account.status === 'CONNECTED' || account.status === 'active';
+      const isConnectedStatus = (account.status as string) === 'CONNECTED' || (account.status as string) === 'active';
       const isExpiredTime = account.expiresAt ? new Date(account.expiresAt).getTime() < Date.now() : false;
 
       if (isConnectedStatus && !isExpiredTime) {
@@ -58,7 +58,7 @@ export async function GET() {
         });
 
         // Also expose GOOGLE as YOUTUBE if applicable
-        if (account.provider === 'GOOGLE') {
+        if ((account.provider as string) === 'GOOGLE') {
           connections.push({
             id: account.id,
             provider: 'YOUTUBE',
@@ -71,7 +71,7 @@ export async function GET() {
             connected: true,
           });
         }
-      } else if (account.refreshToken && (account.provider === 'GOOGLE' || account.provider === 'YOUTUBE')) {
+      } else if (account.refreshToken && ((account.provider as string) === 'GOOGLE' || account.provider === 'YOUTUBE')) {
         // Attempt on-the-fly token refresh if expired but has refresh token
         try {
           const { getValidAccessToken } = await import('@/lib/publishers/googleAuth');
