@@ -65,7 +65,16 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
     - Cấu hình lại tên khách hàng với `truncate whitespace-nowrap` kèm `title` tooltip đầy đủ trên hover, giữ vững 1 dòng duy nhất.
     - Tối ưu nhóm nút thao tác bên phải với padding gọn gàng, icon chuẩn xác, ngăn ngừa co cụt hoặc tràn viền (`shrink-0`).
     - Cân đối độ rộng Cột 1 và Cột 3 sang kích thước đáp ứng (`w-64 lg:w-72`), giải phóng thêm không gian hiển thị cho khung chat trung tâm.
-  - **Tệp thay đổi:** `electron-app/frontend/src/pages/Inbox.tsx`, `TEST_CASES.md` (`TC-F085-07`).
+### 5. Phân hệ M4. Customer & Lead CRM:
+- **[Fix UI/UX] Khắc phục tình trạng cụm nút Header bị ngắt dòng và thanh tab lọc bị ép méo (`/crm`):**
+  - **Vấn đề đã khắc phục:**
+    1) Cụm nút thao tác ở góc phải header ("Nạp mẫu test F100/F101", "Quét trùng (0)", "Thêm khách hàng") thiếu thuộc tính `whitespace-nowrap shrink-0` và định chuẩn chiều cao, dẫn đến tình trạng chữ bị rớt xuống 2-3 dòng, kích thước nút không đồng đều và mất thẩm mỹ khi cửa sổ thu hẹp hoặc mở sidebar.
+    2) Thanh tab lọc (`Tất cả (2)`, `HOT Leads (0)`, `WARM Leads ⚡`, `COLD Leads ❄️`, `Nghi trùng lặp`) đặt chung dòng với ô tìm kiếm & dropdown sắp xếp mà không có ràng buộc thu nhỏ (`shrink-0`), khiến ô tìm kiếm và sắp xếp chiếm trọn diện tích, ép tab `Tất cả (2)` thành hình tròn rớt 3 dòng, tab `HOT Leads` rớt dòng, và tab `WARM` bị che khuất chỉ còn ký tự 'W'.
+  - **Giải pháp:**
+    - Header: Đồng bộ toàn bộ 3 nút với chiều cao chuẩn `h-9` (36px), áp dụng `whitespace-nowrap shrink-0`, căn giữa theo chiều dọc và bo góc đồng nhất `rounded-xl`.
+    - Filter Bar: Tối ưu thanh tab với `overflow-x-auto no-scrollbar min-w-0 py-0.5`, thêm `whitespace-nowrap shrink-0 inline-flex items-center gap-1.5` cho từng nút tab với chiều cao `h-8`.
+    - Tách biệt bố cục linh hoạt giữa dải tab lọc và khối tìm kiếm/sắp xếp (`flex-col xl:flex-row`), đảm bảo trên màn hình máy tính phổ thông dải tab luôn hiển thị trọn vẹn 1 dòng rõ ràng, không bao giờ bị cắt chữ hay méo nút.
+  - **Tệp thay đổi:** `electron-app/frontend/src/pages/Customers.tsx`, `TEST_CASES.md` (`TC-F100-06`).
 
 ---
 

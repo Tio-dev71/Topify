@@ -314,34 +314,34 @@ export default function Customers() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
           <button
             onClick={handleSeedDemo}
             disabled={seeding}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-2xs"
+            className="h-9 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-2xs"
             title="Nạp 5 khách hàng mẫu để kiểm thử Lead Scoring & Quét trùng"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${seeding ? 'animate-spin text-indigo-500' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${seeding ? 'animate-spin text-indigo-500' : ''}`} />
             <span>Nạp mẫu test F100/F101</span>
           </button>
 
           <button
             onClick={handleOpenMergeScanner}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all shadow-2xs ${
+            className={`h-9 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all shadow-2xs ${
               stats.duplicateGroupsCount > 0
                 ? 'bg-amber-500 hover:bg-amber-600 text-white animate-bounce-subtle'
                 : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
             }`}
           >
-            <GitMerge className="w-3.5 h-3.5" />
+            <GitMerge className="w-3.5 h-3.5 shrink-0" />
             <span>Quét trùng ({stats.duplicateGroupsCount})</span>
           </button>
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs hover:shadow-indigo-500/20 active:scale-95 transition-all"
+            className="h-9 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs hover:shadow-indigo-500/20 active:scale-95 transition-all"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span>Thêm khách hàng</span>
           </button>
         </div>
@@ -425,83 +425,83 @@ export default function Customers() {
       {/* ────────────────────────────────────────────────────────────────────────
           FILTER & SEARCH BAR
           ──────────────────────────────────────────────────────────────────────── */}
-      <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         {/* Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-medium">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-medium min-w-0 py-0.5">
           <button
             onClick={() => setTempFilter('ALL')}
-            className={`px-3.5 py-1.5 rounded-xl transition-colors ${
+            className={`h-8 px-3.5 py-1.5 rounded-xl transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
               tempFilter === 'ALL'
                 ? 'bg-blue-600 text-white font-semibold shadow-2xs'
-                : 'text-gray-600 hover:bg-gray-100'
+                : 'text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
           >
-            Tất cả ({stats.total})
+            <span>Tất cả ({stats.total})</span>
           </button>
           <button
             onClick={() => setTempFilter('HOT')}
-            className={`px-3.5 py-1.5 rounded-xl transition-colors flex items-center gap-1 ${
+            className={`h-8 px-3.5 py-1.5 rounded-xl transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
               tempFilter === 'HOT'
                 ? 'bg-rose-600 text-white font-semibold shadow-2xs'
-                : 'text-rose-600 hover:bg-rose-50'
+                : 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
             }`}
           >
-            <Flame className="w-3.5 h-3.5" />
+            <Flame className="w-3.5 h-3.5 shrink-0 fill-current" />
             <span>HOT Leads ({stats.hotCount})</span>
           </button>
           <button
             onClick={() => setTempFilter('WARM')}
-            className={`px-3.5 py-1.5 rounded-xl transition-colors flex items-center gap-1 ${
+            className={`h-8 px-3.5 py-1.5 rounded-xl transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
               tempFilter === 'WARM'
                 ? 'bg-amber-600 text-white font-semibold shadow-2xs'
-                : 'text-amber-600 hover:bg-amber-50'
+                : 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
             }`}
           >
-            <Zap className="w-3.5 h-3.5" />
-            <span>WARM ({stats.warmCount})</span>
+            <Zap className="w-3.5 h-3.5 shrink-0" />
+            <span>WARM Leads ({stats.warmCount})</span>
           </button>
           <button
             onClick={() => setTempFilter('COLD')}
-            className={`px-3.5 py-1.5 rounded-xl transition-colors flex items-center gap-1 ${
+            className={`h-8 px-3.5 py-1.5 rounded-xl transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
               tempFilter === 'COLD'
-                ? 'bg-gray-700 text-white font-semibold shadow-2xs'
-                : 'text-gray-500 hover:bg-gray-100'
+                ? 'bg-slate-700 text-white font-semibold shadow-2xs'
+                : 'text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
           >
-            <Snowflake className="w-3.5 h-3.5" />
-            <span>COLD ({stats.coldCount})</span>
+            <Snowflake className="w-3.5 h-3.5 shrink-0" />
+            <span>COLD Leads ({stats.coldCount})</span>
           </button>
           <button
             onClick={() => setTempFilter('DUPLICATES')}
-            className={`px-3.5 py-1.5 rounded-xl transition-colors flex items-center gap-1 ${
+            className={`h-8 px-3.5 py-1.5 rounded-xl transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
               tempFilter === 'DUPLICATES'
                 ? 'bg-purple-600 text-white font-semibold shadow-2xs'
-                : 'text-purple-700 hover:bg-purple-50'
+                : 'text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30'
             }`}
           >
-            <GitMerge className="w-3.5 h-3.5" />
-            <span>Nghi trùng lặp</span>
+            <GitMerge className="w-3.5 h-3.5 shrink-0" />
+            <span>Nghi trùng lặp ({stats.duplicateGroupsCount})</span>
           </button>
         </div>
 
         {/* Search & Sort */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400" />
+        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+          <div className="relative flex-1 sm:w-64 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-gray-400 shrink-0" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && fetchCustomers()}
               placeholder="Tìm theo tên, SĐT, email..."
-              className="w-full pl-8 pr-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-800 placeholder-gray-400 transition-all"
+              className="w-full pl-8 pr-3 py-2 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-gray-800 dark:text-gray-100 placeholder-gray-400 transition-all h-9"
             />
           </div>
 
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="text-xs px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            className="text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-200 cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shrink-0 h-9"
           >
             <option value="leadScore">Sắp xếp: Điểm tiềm năng cao nhất</option>
             <option value="createdAt">Sắp xếp: Mới nhất</option>
