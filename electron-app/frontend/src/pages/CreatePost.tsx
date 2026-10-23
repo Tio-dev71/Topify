@@ -53,6 +53,7 @@ interface UploadedVideo {
   duration?: number | null;
   width?: number | null;
   height?: number | null;
+  isDraft?: boolean;
   // User editable
   title: string;
   caption: string;
@@ -106,6 +107,19 @@ export default function CreatePost() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videos, setVideos] = useState<UploadedVideo[]>([]);
+  const [replacingDraftId, setReplacingDraftId] = useState<string | null>(null);
+  const [draftReminderModalOpen, setDraftReminderModalOpen] = useState(false);
+  const [targetDraftForModal, setTargetDraftForModal] = useState<UploadedVideo | null>(null);
+
+  const handleTriggerReplaceDraft = (draftId?: string) => {
+    if (draftId) {
+      setReplacingDraftId(draftId);
+    } else {
+      const firstDraft = videos.find(v => v.isDraft || v.id.startsWith('draft_') || !v.storageUrl);
+      setReplacingDraftId(firstDraft ? firstDraft.id : null);
+    }
+    fileInputRef.current?.click();
+  };
 
   // Global Form state
   const [platforms, setPlatforms] = useState<Platform[]>([]);
@@ -140,11 +154,12 @@ export default function CreatePost() {
       if (videos.length === 0) {
         const draft: UploadedVideo = {
           id: `draft_${Date.now()}`,
-          originalFileName: 'Ban_thao_Content_Studio.mp4',
-          titleFromFileName: locState.prefilledTitle || 'Bài viết mới',
+          originalFileName: 'Bản thảo kịch bản AI (Chưa gắn video)',
+          titleFromFileName: locState.prefilledTitle || 'Bản thảo kịch bản AI',
           storageUrl: '',
-          size: 1024 * 500,
+          size: 0,
           mimeType: 'video/mp4',
+          isDraft: true,
           title: locState.prefilledTitle || '',
           caption: locState.prefilledCaption || '',
           firstComment: '',
@@ -158,7 +173,7 @@ export default function CreatePost() {
           updateVideoField(videos[0].id, 'hashtags', locState.prefilledHashtags);
         }
       }
-      toast.success('Đã áp dụng nội dung từ Content Studio!');
+      toast.success('Đã áp dụng nội dung từ Content Studio! Vui lòng tải video thực tế để xuất bản.');
     }
   }, [location.state]);
 
@@ -188,17 +203,19 @@ export default function CreatePost() {
     } else {
       const draft: UploadedVideo = {
         id: `draft_${Date.now()}`,
-        originalFileName: 'Ban_thao_AI.mp4',
-        titleFromFileName: content.title || 'Bài viết AI',
+        originalFileName: 'Bản thảo kịch bản AI (Chưa gắn video)',
+        titleFromFileName: content.title || 'Bản thảo kịch bản AI',
         storageUrl: '',
-        size: 1024 * 500,
+        size: 0,
         mimeType: 'video/mp4',
+        isDraft: true,
         title: content.title,
         caption: content.caption,
         firstComment: '',
         hashtags: content.hashtags || '',
       };
       setVideos([draft]);
+      toast.success('Đã nạp kịch bản AI vào bản thảo! Vui lòng tải video thực tế để xuất bản.');
     }
   };
 
@@ -210,17 +227,19 @@ export default function CreatePost() {
     } else {
       const draft: UploadedVideo = {
         id: `draft_${Date.now()}`,
-        originalFileName: 'Ban_thao_Spin.mp4',
-        titleFromFileName: title || 'Bài viết Spin',
+        originalFileName: 'Bản thảo Spin (Chưa gắn video)',
+        titleFromFileName: title || 'Bản thảo Spin',
         storageUrl: '',
-        size: 1024 * 500,
+        size: 0,
         mimeType: 'video/mp4',
+        isDraft: true,
         title: title || 'Biến thể bài viết',
         caption: caption,
         firstComment: '',
         hashtags: '#Topify #SpinVariant',
       };
       setVideos([draft]);
+      toast.success('Đã áp dụng biến thể Spin! Vui lòng tải video thực tế để xuất bản.');
     }
   };
 
@@ -248,18 +267,19 @@ export default function CreatePost() {
     if (captionParam && videos.length === 0) {
       const newDraftVideo: UploadedVideo = {
         id: `draft_${Date.now()}`,
-        originalFileName: `Y_tuong_tu_${sourceParam || 'Social_Search'}.mp4`,
+        originalFileName: `Bản thảo từ ${sourceParam || 'Xu hướng MXH'} (Chưa gắn video)`,
         titleFromFileName: `Ý tưởng từ ${sourceParam || 'Xu hướng MXH'}`,
         storageUrl: '',
-        size: 1024 * 500,
+        size: 0,
         mimeType: 'video/mp4',
+        isDraft: true,
         title: `Ý tưởng từ ${sourceParam || 'Xu hướng MXH'}`,
         caption: decodeURIComponent(captionParam),
         firstComment: '',
         hashtags: tagsParam ? decodeURIComponent(tagsParam) : '',
       };
       setVideos([newDraftVideo]);
-      toast.success('Đã nạp ý tưởng nội dung từ Social Search vào bài viết!');
+      toast.success('Đã nạp ý tưởng nội dung từ Social Search! Vui lòng tải video thực tế để xuất bản.');
     }
   }, [searchParams]);
 
@@ -301,6 +321,7 @@ export default function CreatePost() {
     const timer = setTimeout(async () => {
       for (const v of videos) {
         if (!v.title && !v.caption && !v.id) continue;
+        if (v.isDraft || v.id.startsWith('draft_') || !v.storageUrl) continue;
 
         setCheckingDuplicates((prev) => ({ ...prev, [v.id]: true }));
         try {
@@ -411,6 +432,7 @@ export default function CreatePost() {
 
     setUploading(true);
     let successCount = 0;
+    let replacedCount = 0;
 
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i];
@@ -431,19 +453,51 @@ export default function CreatePost() {
 
         if (res.status === 200 || res.status === 201) {
           const result = res.data;
-          setVideos((prev) => [
-            ...prev,
-            {
-              ...result,
-              duration: meta.duration || result.duration || 0,
-              width: meta.width || 0,
-              height: meta.height || 0,
-              title: result.titleFromFileName || file.name.replace(/\.[^/.]+$/, ''),
-              caption: '',
-              firstComment: '',
-              hashtags: '#Shorts #Trending',
-            },
-          ]);
+          setVideos((prev) => {
+            const targetIdx = replacingDraftId
+              ? prev.findIndex(v => v.id === replacingDraftId)
+              : prev.findIndex(v => v.isDraft || v.id.startsWith('draft_') || !v.storageUrl);
+
+            if (targetIdx !== -1) {
+              replacedCount++;
+              const draft = prev[targetIdx];
+              const updated = [...prev];
+              updated[targetIdx] = {
+                ...draft,
+                ...result,
+                id: result.id,
+                originalFileName: result.originalFileName || file.name,
+                titleFromFileName: result.titleFromFileName || file.name.replace(/\.[^/.]+$/, ''),
+                storageUrl: result.storageUrl,
+                size: result.size || file.size,
+                mimeType: result.mimeType || file.type,
+                duration: meta.duration || result.duration || 0,
+                width: meta.width || 0,
+                height: meta.height || 0,
+                title: draft.title || result.titleFromFileName || file.name.replace(/\.[^/.]+$/, ''),
+                caption: draft.caption || '',
+                firstComment: draft.firstComment || '',
+                hashtags: draft.hashtags || '#Shorts #Trending',
+                isDraft: false,
+              };
+              return updated;
+            }
+
+            return [
+              ...prev,
+              {
+                ...result,
+                duration: meta.duration || result.duration || 0,
+                width: meta.width || 0,
+                height: meta.height || 0,
+                title: result.titleFromFileName || file.name.replace(/\.[^/.]+$/, ''),
+                caption: '',
+                firstComment: '',
+                hashtags: '#Shorts #Trending',
+                isDraft: false,
+              },
+            ];
+          });
           successCount++;
         }
       } catch (error: any) {
@@ -451,14 +505,19 @@ export default function CreatePost() {
       }
     }
 
+    setReplacingDraftId(null);
     setUploadProgress(100);
     setTimeout(() => {
       setUploading(false);
       setUploadProgress(0);
-      if (successCount > 0) toast.success(`Đã tải lên ${successCount} video`);
+      if (replacedCount > 0) {
+        toast.success(`Đã thay thế bản thảo AI bằng video thực tế thành công!`);
+      } else if (successCount > 0) {
+        toast.success(`Đã tải lên ${successCount} video`);
+      }
     }, 500);
 
-  }, []);
+  }, [replacingDraftId]);
 
   // Drag & drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -507,6 +566,7 @@ export default function CreatePost() {
   const removeVideo = (id: string) => {
     setVideos(prev => prev.filter(v => v.id !== id));
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (replacingDraftId === id) setReplacingDraftId(null);
   };
 
   const updateVideoField = (id: string, field: keyof UploadedVideo, value: string) => {
@@ -540,6 +600,15 @@ export default function CreatePost() {
       toast.error('Vui lòng tải lên ít nhất 1 video.');
       return;
     }
+
+    const unattachedDrafts = videos.filter(v => v.isDraft || v.id.startsWith('draft_') || !v.storageUrl);
+    if (unattachedDrafts.length > 0) {
+      setTargetDraftForModal(unattachedDrafts[0]);
+      setDraftReminderModalOpen(true);
+      toast.warning('Vui lòng chọn video thực tế để thay thế bản thảo AI trước khi đăng!');
+      return;
+    }
+
     if (platforms.length === 0) {
       toast.error('Vui lòng chọn ít nhất 1 nền tảng.');
       return;
@@ -675,6 +744,8 @@ export default function CreatePost() {
           className={`relative overflow-hidden border-2 border-dashed rounded-3xl p-10 text-center transition-all duration-300 cursor-pointer ${
             dragOver 
               ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] scale-[1.01] shadow-xl shadow-[var(--color-primary-soft)]' 
+              : videos.some(v => v.isDraft || !v.storageUrl)
+              ? 'border-amber-300 bg-amber-50/40 hover:border-amber-400 hover:bg-amber-50/70 shadow-sm'
               : 'border-gray-200 bg-white hover:border-[var(--color-primary)] hover:bg-gray-50/70 hover:shadow-md'
           }`}
           onDragOver={handleDragOver}
@@ -709,6 +780,20 @@ export default function CreatePost() {
                 />
               </div>
             </div>
+          ) : videos.some(v => v.isDraft || !v.storageUrl) ? (
+            <div className="space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-100 flex items-center justify-center shadow-sm border border-amber-200">
+                <Upload className="w-8 h-8 text-amber-600 animate-bounce" />
+              </div>
+              <div>
+                <p className="text-[16px] font-bold text-gray-900">
+                  Kéo thả video vào đây hoặc <span className="text-amber-600 hover:underline">chọn tệp từ máy</span>
+                </p>
+                <p className="text-[13px] text-amber-800 mt-1 font-medium">
+                  Tệp video tải lên sẽ tự động được gắn vào bản thảo kịch bản AI bên dưới (giữ nguyên tiêu đề & caption)
+                </p>
+              </div>
+            </div>
           ) : (
             <div className="space-y-4">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50/80 flex items-center justify-center shadow-sm border border-indigo-100/50">
@@ -734,8 +819,14 @@ export default function CreatePost() {
                 <Film className="w-5 h-5 text-[var(--color-primary)]" />
                 Nội dung chi tiết bài viết
                 <span className="bg-indigo-100 text-indigo-700 font-bold px-2.5 py-0.5 rounded-full text-[12px]">
-                  {videos.length} video
+                  {videos.length} bài viết
                 </span>
+                {videos.some(v => v.isDraft || !v.storageUrl) && (
+                  <span className="bg-amber-100 text-amber-800 font-bold px-2.5 py-0.5 rounded-full text-[11px] flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-amber-600" />
+                    Chờ gắn video ({videos.filter(v => v.isDraft || !v.storageUrl).length})
+                  </span>
+                )}
               </h3>
               {videos.length > 1 && (
                 <button
@@ -751,45 +842,116 @@ export default function CreatePost() {
             </div>
 
             <div className="grid gap-6">
-              {videos.map((v, idx) => (
-                <div key={v.id} className="bg-white rounded-3xl border border-black/[0.06] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-6 relative group transition-all hover:shadow-[0_12px_40px_rgb(0,0,0,0.06)]">
+              {videos.map((v, idx) => {
+                const isDraftItem = v.isDraft || v.id.startsWith('draft_') || !v.storageUrl;
+                return (
+                <div key={v.id} className={`bg-white rounded-3xl border ${isDraftItem ? 'border-amber-200 ring-1 ring-amber-100 shadow-[0_8px_30px_rgb(245,158,11,0.06)]' : 'border-black/[0.06] shadow-[0_8px_30px_rgb(0,0,0,0.03)]'} p-6 space-y-6 relative group transition-all hover:shadow-[0_12px_40px_rgb(0,0,0,0.06)]`}>
                   {/* Remove Button */}
                   <button
                     type="button"
                     onClick={() => removeVideo(v.id)}
-                    className="absolute top-5 right-5 p-2 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                    title="Xoá video này"
+                    className="absolute top-5 right-5 p-2 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm cursor-pointer z-10"
+                    title="Xoá bài viết này"
                   >
                     <X className="w-4 h-4" />
                   </button>
 
+                  {/* Draft Warning Banner */}
+                  {isDraftItem && (
+                    <div className="p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 shadow-2xs">
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-[13px] text-amber-950">
+                            Bản thảo kịch bản AI • Chưa có tệp video thực tế
+                          </p>
+                          <p className="text-amber-700 text-[12px] mt-0.5">
+                            Tiêu đề và caption đã được nạp từ AI. Bạn cần chọn tệp video thực tế để thay thế trước khi xuất bản.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerReplaceDraft(v.id)}
+                        className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        Tải video thay thế
+                      </button>
+                    </div>
+                  )}
+
                   {/* Video Media Info Bar */}
                   <div className="flex items-center gap-4 pr-10">
-                    <div className="w-20 h-20 rounded-2xl bg-black flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md ring-1 ring-black/5 relative">
-                      <video src={v.storageUrl} className="w-full h-full object-cover" muted />
-                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none">
-                        <Film className="w-6 h-6 text-white/80" />
+                    {isDraftItem ? (
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerReplaceDraft(v.id)}
+                        className="w-20 h-20 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/50 hover:bg-amber-100/50 flex flex-col items-center justify-center flex-shrink-0 transition-all group/btn cursor-pointer shadow-inner"
+                        title="Nhấp để tải lên video cho bản thảo này"
+                      >
+                        <Upload className="w-6 h-6 text-amber-600 group-hover/btn:scale-110 transition-transform" />
+                        <span className="text-[10px] font-bold text-amber-700 mt-1">Gắn video</span>
+                      </button>
+                    ) : (
+                      <div className="w-20 h-20 rounded-2xl bg-black flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md ring-1 ring-black/5 relative">
+                        <video src={v.storageUrl} className="w-full h-full object-cover" muted />
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none">
+                          <Film className="w-6 h-6 text-white/80" />
+                        </div>
                       </div>
-                    </div>
+                    )}
+
                     <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold text-gray-900 truncate">
-                        Video #{idx + 1}: {v.originalFileName}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[14px] font-bold text-gray-900 truncate">
+                          {isDraftItem ? `Bản thảo #${idx + 1}: ${v.title || v.originalFileName}` : `Video #${idx + 1}: ${v.originalFileName}`}
+                        </p>
+                        {isDraftItem ? (
+                          <span className="bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-md text-[11px] shrink-0 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> Bản thảo AI
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerReplaceDraft(v.id)}
+                            className="text-[11px] text-gray-400 hover:text-blue-600 underline font-medium cursor-pointer"
+                          >
+                            Thay video khác
+                          </button>
+                        )}
+                      </div>
+
                       <div className="text-[12px] text-gray-500 mt-1 flex flex-wrap items-center gap-2">
-                        <span className="bg-gray-100 px-2 py-0.5 rounded-md font-medium text-gray-600">
-                          {(v.mimeType || 'video/mp4').split('/')[1].toUpperCase()}
-                        </span>
-                        <span>{formatFileSize(v.size)}</span>
-                        {v.duration ? (
-                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-medium">
-                            {v.duration}s
-                          </span>
-                        ) : null}
-                        {v.width && v.height ? (
-                          <span className={`px-2 py-0.5 rounded-md font-medium ${v.width > v.height ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700'}`}>
-                            {v.width}x{v.height} ({v.width > v.height ? 'Ngang 16:9' : 'Dọc 9:16'})
-                          </span>
-                        ) : null}
+                        {isDraftItem ? (
+                          <>
+                            <span className="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-md">
+                              Chưa có file video
+                            </span>
+                            <span className="text-gray-400 text-xs">
+                              (Hỗ trợ MP4, MOV, WebM - Tối đa 2GB)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="bg-gray-100 px-2 py-0.5 rounded-md font-medium text-gray-600">
+                              {(v.mimeType || 'video/mp4').split('/')[1].toUpperCase()}
+                            </span>
+                            <span>{formatFileSize(v.size)}</span>
+                            {v.duration ? (
+                              <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-medium">
+                                {v.duration}s
+                              </span>
+                            ) : null}
+                            {v.width && v.height ? (
+                              <span className={`px-2 py-0.5 rounded-md font-medium ${v.width > v.height ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700'}`}>
+                                {v.width}x{v.height} ({v.width > v.height ? 'Ngang 16:9' : 'Dọc 9:16'})
+                              </span>
+                            ) : null}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -949,7 +1111,8 @@ export default function CreatePost() {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
         )}
@@ -1171,6 +1334,28 @@ export default function CreatePost() {
 
             {/* Submit Button */}
             <div className="pt-4 space-y-3">
+              {videos.some(v => v.isDraft || v.id.startsWith('draft_') || !v.storageUrl) && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-[13px] flex flex-wrap items-center justify-between gap-3 animate-fade-in shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" />
+                    <div>
+                      <p className="font-bold text-amber-950">Chưa gắn video thực tế vào bản thảo AI</p>
+                      <p className="text-amber-700 text-xs mt-0.5">
+                        Bạn cần chọn video thực tế từ máy tính để thay thế bản thảo trước khi tiến hành xuất bản.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerReplaceDraft()}
+                    className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    Chọn video ngay
+                  </button>
+                </div>
+              )}
+
               {platforms.some(p => !connectedProviders[PLATFORM_PROVIDER_MAP[p]]) && (
                 <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-600 text-[13px] font-semibold flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
@@ -1187,12 +1372,17 @@ export default function CreatePost() {
               <button
                 type="submit"
                 disabled={submitting || platforms.length === 0 || platforms.some(p => !connectedProviders[PLATFORM_PROVIDER_MAP[p]])}
-                className="btn-primary w-full py-4 text-[16px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-2.5 shrink-0 shadow-md hover:shadow-lg transition-all rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary w-full py-4 text-[16px] font-bold whitespace-nowrap inline-flex items-center justify-center gap-2.5 shrink-0 shadow-md hover:shadow-lg transition-all rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {submitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     {publishMode === 'now' ? 'Đang gửi yêu cầu đăng...' : 'Đang thiết lập lịch hẹn...'}
+                  </>
+                ) : videos.some(v => v.isDraft || v.id.startsWith('draft_') || !v.storageUrl) ? (
+                  <>
+                    <Upload className="w-5 h-5" />
+                    Vui lòng chọn video thực tế để đăng bài
                   </>
                 ) : publishMode === 'now' ? (
                   <>
@@ -1229,6 +1419,62 @@ export default function CreatePost() {
         initialTopic={activeVideoForModal?.title || videos[0]?.title || ''}
         onApplyContent={handleApplyAiContent}
       />
+
+      {/* Draft Video Required Modal */}
+      {draftReminderModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-scale-in">
+            <div className="flex items-start justify-between">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shadow-sm">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setDraftReminderModalOpen(false)}
+                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-gray-900">
+                Vui lòng chọn video thực tế
+              </h3>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Bài viết đang sử dụng bản thảo kịch bản AI:
+                <span className="font-semibold text-gray-900 block mt-1.5 bg-amber-50/80 p-3 rounded-2xl border border-amber-200/80 truncate">
+                  {targetDraftForModal?.title || targetDraftForModal?.titleFromFileName || 'Bản thảo kịch bản AI'}
+                </span>
+              </p>
+              <p className="text-xs text-gray-500 leading-relaxed pt-1">
+                Topify đã nạp sẵn toàn bộ Tiêu đề, Caption và Hashtags tối ưu bởi AI. Để đăng lên các nền tảng (Facebook, TikTok, YouTube, Instagram), bạn cần đính kèm tệp video thực tế (MP4, MOV, WebM).
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftReminderModalOpen(false);
+                  handleTriggerReplaceDraft(targetDraftForModal?.id);
+                }}
+                className="btn-primary w-full py-3.5 text-sm font-bold flex items-center justify-center gap-2 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer"
+              >
+                <Upload className="w-4 h-4" />
+                Chọn video từ máy tính ngay
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftReminderModalOpen(false)}
+                className="w-full py-2.5 text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Đóng và tiếp tục chỉnh sửa nội dung
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

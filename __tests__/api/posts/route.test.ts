@@ -120,6 +120,24 @@ describe('Posts API Route', () => {
       expect(res.status).toBe(400);
     });
 
+    it('returns 400 if video asset is a draft placeholder', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+
+      const req = new NextRequest('http://localhost/api/posts', { 
+        method: 'POST', 
+        body: JSON.stringify({
+          title: 'Test AI Draft',
+          videoAssetId: 'draft_1792078349216',
+          platforms: ['FACEBOOK_REELS'],
+          publishMode: 'now'
+        }) 
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toContain('bản thảo AI');
+    });
+
     it('returns 404 if video asset not found', async () => {
       vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
       vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue(null);

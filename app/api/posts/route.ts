@@ -144,6 +144,14 @@ export async function POST(req: NextRequest) {
 
     const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isEvergreen, recycleIntervalDays } = parsed.data;
 
+    // Guard against draft or placeholder video assets
+    if (!videoAssetId || videoAssetId.startsWith('draft_')) {
+      return NextResponse.json(
+        { error: 'Bài viết đang ở dạng bản thảo AI. Vui lòng tải lên tệp video thực tế trước khi xuất bản.' },
+        { status: 400 }
+      );
+    }
+
     // Verify video asset exists and belongs to workspace
     const videoAsset = await prisma.videoAsset.findUnique({
       where: { id: videoAssetId },
