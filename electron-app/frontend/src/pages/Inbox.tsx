@@ -465,7 +465,7 @@ export default function Inbox() {
       {/* ────────────────────────────────────────────────────────────────────────
           CỘT 1: DANH SÁCH HỘI THOẠI & BỘ LỌC SLA / STATUS
           ──────────────────────────────────────────────────────────────────────── */}
-      <div className="w-72 sm:w-80 shrink-0 flex flex-col border-r border-gray-100 bg-gray-50/50">
+      <div className="w-64 lg:w-72 shrink-0 flex flex-col border-r border-gray-100 bg-gray-50/50">
         {/* Header */}
         <div className="p-3.5 border-b border-gray-100 bg-white space-y-2.5">
           <div className="flex items-center justify-between">
@@ -673,21 +673,24 @@ export default function Inbox() {
         {activeConv ? (
           <>
             {/* Chat Header */}
-            <div className="p-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+            <div className="p-3 border-b border-gray-100 flex items-center justify-between gap-2.5 bg-white shrink-0 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
                   {activeConv.contactName?.charAt(0) || 'K'}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-gray-900">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <h3 
+                      className="text-sm font-bold text-gray-900 truncate whitespace-nowrap"
+                      title={activeConv.contactName || ''}
+                    >
                       {activeConv.contactName}
                     </h3>
-                    <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${getPlatformBadge(activeConv.platform).cls}`}>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${getPlatformBadge(activeConv.platform).cls}`}>
                       {getPlatformBadge(activeConv.platform).label}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500 font-medium">
+                  <p className="text-[11px] text-gray-500 font-medium truncate whitespace-nowrap">
                     SLA Phản hồi: {getSlaDisplay(activeConv.slaDeadline, activeConv.status).text}
                   </p>
                 </div>
@@ -698,7 +701,8 @@ export default function Inbox() {
                 <select
                   value={activeConv.status}
                   onChange={(e) => handleStatusChange(e.target.value as ConversationStatus)}
-                  className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white text-gray-700 cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="text-xs font-semibold px-2 py-1.5 rounded-xl border border-gray-200 bg-white text-gray-700 cursor-pointer focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shrink-0"
+                  title="Thay đổi trạng thái hội thoại"
                 >
                   <option value="NEW">Mới (NEW)</option>
                   <option value="OPEN">Đang xử lý (OPEN)</option>
@@ -710,29 +714,31 @@ export default function Inbox() {
                 <button
                   type="button"
                   onClick={() => handleToggleSpam(!activeConv.isSpam)}
-                  className={`text-xs px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-colors cursor-pointer ${
+                  className={`text-xs p-1.5 sm:px-2 sm:py-1.5 rounded-xl border flex items-center gap-1 transition-colors cursor-pointer shrink-0 ${
                     activeConv.isSpam
                       ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 font-semibold'
                       : 'border-gray-200 text-gray-500 hover:text-rose-600 hover:border-rose-300'
                   }`}
                   title={activeConv.isSpam ? 'Bỏ đánh dấu Spam' : 'Chuyển vào Spam / Blacklist'}
+                  aria-label="Spam"
                 >
                   <ShieldAlert className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{activeConv.isSpam ? 'Bỏ Spam' : 'Spam'}</span>
+                  <span className="hidden lg:inline">{activeConv.isSpam ? 'Bỏ Spam' : 'Spam'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowRightPanel((prev) => !prev)}
-                  className={`text-xs px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  className={`text-xs p-1.5 sm:px-2 sm:py-1.5 rounded-xl border flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
                     showRightPanel
                       ? 'bg-blue-50 text-blue-700 border-blue-200 font-medium'
                       : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                   }`}
                   title={showRightPanel ? 'Thu gọn panel Hồ sơ & AI' : 'Mở rộng panel Hồ sơ & AI'}
+                  aria-label="Hồ sơ & AI"
                 >
                   <PanelRight className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Hồ sơ & AI</span>
+                  <span className="hidden xl:inline">Hồ sơ & AI</span>
                 </button>
               </div>
             </div>
@@ -943,7 +949,7 @@ export default function Inbox() {
           CỘT 3: HỒ SƠ KHÁCH, AI SUMMARY (F088) & LEAD DETECTION (F089)
           ──────────────────────────────────────────────────────────────────────── */}
       {activeConv && showRightPanel && (
-        <div className="w-72 sm:w-80 shrink-0 flex flex-col border-l border-gray-100 bg-gray-50/40 overflow-y-auto p-4 space-y-4">
+        <div className="w-64 lg:w-72 shrink-0 flex flex-col border-l border-gray-100 bg-gray-50/40 overflow-y-auto p-4 space-y-4">
           {/* Customer Profile Card */}
           <div className="p-4 rounded-2xl bg-white border border-gray-200/80 shadow-xs space-y-2.5">
             <div className="flex items-center gap-2.5">

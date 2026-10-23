@@ -200,6 +200,7 @@ Hệ thống thiết kế một lớp Adapter chuẩn hóa duy nhất (`lib/ai/9
 | **TC-F085-04** | Cảnh báo SLA sắp hết hạn (SLA Warning) | 1. Hội thoại còn dưới 5 phút đến hạn `slaDeadline` mà nhân viên chưa phản hồi. | Thời gian còn < 5 phút | • Hiển thị đồng hồ đếm ngược màu **Vàng nhấp nháy**: *"Còn 4m"*. | [ ] |
 | **TC-F085-05** | Cảnh báo SLA quá hạn (SLA Breached) | 1. Thời gian hiện tại vượt quá `slaDeadline`. | Đã quá hạn | • Đồng hồ chuyển sang màu **Đỏ rực**: *"Quá hạn 12m"*.<br>• Hội thoại được đẩy lên nhóm ưu tiên hàng đầu trong bộ lọc SLA. | [ ] |
 | **TC-F085-06** | Bộ lọc hội thoại theo Trạng thái & SLA | 1. Bấm vào thanh lọc trên Inbox: chọn xem riêng các bài `NEW`, `OPEN`, `PENDING`, `RESOLVED`, hoặc `QUÁ HẠN SLA`. | Chọn filter tab | • Danh sách chỉ hiển thị đúng các hội thoại thỏa mãn điều kiện lọc. | [ ] |
+| **TC-F085-07** | Hiển thị Header khung hội thoại khi mở 3 cột | 1. Mở Inbox với đầy đủ 3 cột (Danh sách, Khung chat, Panel Hồ sơ & AI).<br>2. Chọn hội thoại có tên khách dài (vd: "Trần Thị Mai Linh"). | Chế độ xem 3 cột | • Tên khách hiển thị trên 1 dòng duy nhất, nếu hẹp thì cắt gọn bằng "…" kèm tooltip khi hover.<br>• Badge kênh, dropdown trạng thái, nút Spam và nút mở panel nằm thẳng hàng, không bị tràn hay cắt ở mép phải. | [ ] |
 
 ---
 

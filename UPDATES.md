@@ -58,6 +58,15 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
     - Di chuyển bộ nút chuyển đổi Kanban / Danh sách vào bên phải thanh bộ lọc (Filter Bar) của Bảng công việc một cách trực quan, khoa học theo chuẩn trải nghiệm người dùng hiện đại.
   - **Tệp thay đổi:** `electron-app/frontend/src/pages/Tasks.tsx`, `TEST_CASES.md` (`TC-F130-03`).
 
+### 4. Phân hệ M3. Unified Inbox:
+- **[Fix UI/UX] Sửa lỗi vỡ layout Header khung hội thoại khi hiển thị 3 cột (`/inbox`):**
+  - **Vấn đề đã khắc phục:** Khi mở đồng thời 3 cột (Danh sách, Khung chat, Panel Hồ sơ & AI), khung chat ở giữa bị co hẹp. Tiêu đề khách hàng thiếu thuộc tính `truncate` và `whitespace-nowrap` khiến tên khách dài ("Trần Thị Mai Linh") bị ép rớt thành 4 dòng (mỗi chữ 1 dòng), làm header phình cao bất thường. Đồng thời, nhóm nút bên phải bị đẩy tràn ra khỏi mép khung, làm nút mở panel AI bị cắt cụt.
+  - **Giải pháp:**
+    - Cấu hình lại tên khách hàng với `truncate whitespace-nowrap` kèm `title` tooltip đầy đủ trên hover, giữ vững 1 dòng duy nhất.
+    - Tối ưu nhóm nút thao tác bên phải với padding gọn gàng, icon chuẩn xác, ngăn ngừa co cụt hoặc tràn viền (`shrink-0`).
+    - Cân đối độ rộng Cột 1 và Cột 3 sang kích thước đáp ứng (`w-64 lg:w-72`), giải phóng thêm không gian hiển thị cho khung chat trung tâm.
+  - **Tệp thay đổi:** `electron-app/frontend/src/pages/Inbox.tsx`, `TEST_CASES.md` (`TC-F085-07`).
+
 ---
 
 ## 🚀 [2026-10-14] — Triển Khai Toàn Diện Phân Hệ M2: Content Studio (F015 & F016)
