@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { generatePeriodComparison, calculateContentPerformanceScore, PostPerformanceMetrics } from '@/lib/analytics/engine';
+import { generatePeriodComparison, calculateContentPerformanceScore, getDeterministicMetrics, PostPerformanceMetrics } from '@/lib/analytics/engine';
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,15 +23,10 @@ export async function GET(request: NextRequest) {
 
         if (dbPosts.length > 0) {
           posts = dbPosts.map((p) => {
-            const rawMetrics = {
-              reach: 12000,
-              views: 14500,
-              likes: 950,
-              comments: 110,
-              shares: 140,
-              clicks: 320,
-              conversions: 6,
-            };
+            const rawMetrics = getDeterministicMetrics({
+              id: p.id,
+              title: p.title || 'Bài viết',
+            });
             const scores = calculateContentPerformanceScore(rawMetrics);
             return {
               id: p.id,

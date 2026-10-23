@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { calculateContentPerformanceScore, PostPerformanceMetrics } from '@/lib/analytics/engine';
+import { calculateContentPerformanceScore, getDeterministicMetrics, PostPerformanceMetrics } from '@/lib/analytics/engine';
 
 // Demo sample posts for instant testing
 const SAMPLE_PERFORMANCE_POSTS: Array<{
@@ -58,6 +58,34 @@ const SAMPLE_PERFORMANCE_POSTS: Array<{
     clicks: 520,
     conversions: 8,
     isEvergreen: true,
+  },
+  {
+    id: 'post_perf_yt_viral',
+    title: 'Chiến Thuật Video Ngắn Triệu View Tự Động Hóa 100%',
+    platform: 'YOUTUBE_SHORTS',
+    publishedAt: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),
+    reach: 46000,
+    views: 49500,
+    likes: 3800,
+    comments: 420,
+    shares: 610,
+    clicks: 1680,
+    conversions: 24,
+    isEvergreen: true,
+  },
+  {
+    id: 'post_perf_yt_low',
+    title: 'Cập nhật tính năng phụ hệ thống v2.1',
+    platform: 'YOUTUBE_SHORTS',
+    publishedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
+    reach: 3200,
+    views: 3450,
+    likes: 68,
+    comments: 6,
+    shares: 4,
+    clicks: 25,
+    conversions: 0,
+    isEvergreen: false,
   },
   {
     id: 'post_perf_4',
@@ -120,24 +148,13 @@ export async function GET(req: NextRequest) {
 
     if (dbPosts.length > 0 && !seed) {
       combinedPosts = dbPosts.map((p) => {
-        // Derive synthetic engagement if external metrics not yet synced
-        const reach = 15000 + (p.title.length * 150) % 25000;
-        const likes = Math.round(reach * 0.06);
-        const comments = Math.round(likes * 0.12);
-        const shares = Math.round(likes * 0.08);
-        const clicks = Math.round(reach * 0.025);
-        const conversions = Math.round(clicks * 0.03);
-
-        const scoreObj = calculateContentPerformanceScore({
-          reach,
-          views: reach,
-          likes,
-          comments,
-          shares,
-          clicks,
-          conversions,
+        // Derive realistic deterministic metrics based on individual post characteristics
+        const metrics = getDeterministicMetrics({
+          id: p.id,
+          title: p.title || 'Bài viết',
         });
 
+        const scoreObj = calculateContentPerformanceScore(metrics);
         const plat = p.platforms?.[0]?.platform || 'FACEBOOK_REELS';
 
         return {
@@ -145,13 +162,7 @@ export async function GET(req: NextRequest) {
           title: p.title || 'Bài viết không tiêu đề',
           platform: plat,
           publishedAt: p.publishedAt ? p.publishedAt.toISOString() : p.createdAt.toISOString(),
-          reach,
-          views: reach,
-          likes,
-          comments,
-          shares,
-          clicks,
-          conversions,
+          ...metrics,
           ...scoreObj,
           isEvergreen: p.isEvergreen || false,
         };

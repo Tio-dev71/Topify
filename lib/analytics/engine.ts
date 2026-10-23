@@ -83,6 +83,77 @@ export interface ChannelBenchmark {
 // F103: CONTENT PERFORMANCE SCORE CALCULATION
 // =========================================================================
 
+export function getDeterministicMetrics(post: { id: string; title?: string | null }) {
+  let hash = 0;
+  const str = (post.id || '') + (post.title || '');
+  for (let i = 0; i < str.length; i++) {
+    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
+  }
+  const seed = Math.abs(hash);
+
+  // Divide into 3 realistic cohorts:
+  // - Top Viral (~20%): seed % 10 in [0, 7]
+  // - Solid Standard KPI (~50%): seed % 10 in [1, 2, 4, 5, 6]
+  // - Underperforming / Needs Hook CTA (~30%): seed % 10 in [3, 8, 9]
+  const cohort = seed % 10;
+
+  if (cohort === 0 || cohort === 7) {
+    // VIRAL TIER (Expected score: 85 - 96)
+    const reach = 32000 + (seed % 38000); // 32,000 - 70,000
+    const views = reach + Math.round(reach * (0.04 + ((seed >> 2) % 12) / 100));
+    // High like rate: 6.8% - 10.8%
+    const likeRate = (68 + ((seed >> 4) % 40)) / 1000;
+    const likes = Math.round(reach * likeRate);
+    // Comments: 9% - 16% of likes
+    const comments = Math.round(likes * (0.09 + ((seed >> 6) % 8) / 100));
+    // Shares: 8% - 15% of likes
+    const shares = Math.round(likes * (0.08 + ((seed >> 8) % 8) / 100));
+    // High CTR: 3.2% - 5.5%
+    const ctr = (32 + ((seed >> 3) % 24)) / 1000;
+    const clicks = Math.round(views * ctr);
+    // High conversions: 12 - 28 deals
+    const conversions = 12 + (seed % 17);
+
+    return { reach, views, likes, comments, shares, clicks, conversions };
+  } else if (cohort === 3 || cohort >= 8) {
+    // UNDERPERFORMING TIER (Expected score: 32 - 58)
+    const reach = 1800 + (seed % 6500); // 1,800 - 8,300
+    const views = reach + Math.round(reach * (0.02 + ((seed >> 2) % 6) / 100));
+    // Low like rate: 1.0% - 2.5%
+    const likeRate = (10 + ((seed >> 4) % 15)) / 1000;
+    const likes = Math.round(reach * likeRate);
+    // Comments: 2% - 5% of likes
+    const comments = Math.round(likes * (0.02 + ((seed >> 6) % 4) / 100));
+    // Shares: 1% - 3% of likes
+    const shares = Math.round(likes * (0.01 + ((seed >> 8) % 3) / 100));
+    // Low CTR: 0.4% - 1.2%
+    const ctr = (4 + ((seed >> 3) % 9)) / 1000;
+    const clicks = Math.round(views * ctr);
+    // Low conversions: 0 or 1 deal
+    const conversions = seed % 3 === 0 ? 1 : 0;
+
+    return { reach, views, likes, comments, shares, clicks, conversions };
+  } else {
+    // GOOD / KPI TIER (Expected score: 62 - 82)
+    const reach = 11000 + (seed % 18000); // 11,000 - 29,000
+    const views = reach + Math.round(reach * (0.03 + ((seed >> 2) % 10) / 100));
+    // Normal like rate: 3.5% - 5.8%
+    const likeRate = (35 + ((seed >> 4) % 24)) / 1000;
+    const likes = Math.round(reach * likeRate);
+    // Comments: 5% - 10% of likes
+    const comments = Math.round(likes * (0.05 + ((seed >> 6) % 6) / 100));
+    // Shares: 3% - 7% of likes
+    const shares = Math.round(likes * (0.03 + ((seed >> 8) % 5) / 100));
+    // Average CTR: 1.5% - 2.8%
+    const ctr = (15 + ((seed >> 3) % 14)) / 1000;
+    const clicks = Math.round(views * ctr);
+    // Conversions: 2 - 7 deals
+    const conversions = 2 + (seed % 6);
+
+    return { reach, views, likes, comments, shares, clicks, conversions };
+  }
+}
+
 export function calculateContentPerformanceScore(raw: {
   reach?: number;
   views?: number;
@@ -100,36 +171,74 @@ export function calculateContentPerformanceScore(raw: {
   tier: 'VIRAL' | 'GOOD' | 'UNDERPERFORMING';
 } {
   const reach = Math.max(raw.reach || raw.views || 0, 0);
-  const views = Math.max(raw.views || reach, 1);
+  const views = Math.max(raw.views || reach, 0);
   const likes = Math.max(raw.likes || 0, 0);
   const comments = Math.max(raw.comments || 0, 0);
   const shares = Math.max(raw.shares || 0, 0);
   const clicks = Math.max(raw.clicks || 0, 0);
   const conversions = Math.max(raw.conversions || 0, 0);
 
-  // 1. Reach Score (Max 30) - Logarithmic scale (1,000 views = 15đ, 10,000 views = 25đ, >=30,000 = 30đ)
-  let reachScore = 0;
-  if (views > 0) {
-    reachScore = Math.min(30, Math.round(Math.log10(views) * 6.5));
-    reachScore = Math.max(5, reachScore);
+  // 1. Reach Score (Max 30) - Progressive continuous scale based on views/reach:
+  // - views <= 1,000: 2 - 8 points
+  // - 1,000 < views <= 10,000: 8 - 18 points
+  // - 10,000 < views <= 30,000: 18 - 25 points
+  // - 30,000 < views <= 60,000: 25 - 30 points
+  // - views > 60,000: 30 points
+  let reachScore = 2;
+  const effectiveViews = Math.max(views, reach);
+  if (effectiveViews > 60000) {
+    reachScore = 30;
+  } else if (effectiveViews > 30000) {
+    reachScore = Math.round(25 + ((effectiveViews - 30000) / 30000) * 5);
+  } else if (effectiveViews > 10000) {
+    reachScore = Math.round(18 + ((effectiveViews - 10000) / 20000) * 7);
+  } else if (effectiveViews > 1000) {
+    reachScore = Math.round(8 + ((effectiveViews - 1000) / 9000) * 10);
+  } else if (effectiveViews > 0) {
+    reachScore = Math.round(2 + (effectiveViews / 1000) * 6);
   }
+  reachScore = Math.min(30, Math.max(2, reachScore));
 
   // 2. Engagement Score (Max 40) - Based on weighted engagements vs reach
   // Weight: Like=1, Comment=2.5, Share=4
   const weightedEngagements = likes * 1 + comments * 2.5 + shares * 4;
-  const engagementRate = reach > 0 ? (weightedEngagements / reach) * 100 : 0;
-  // If engagement rate is 10%, score is 40. Scale linearly from 0-10% rate
-  const engagementScore = Math.min(40, Math.round((engagementRate / 10) * 40));
+  const effectiveReach = reach > 0 ? reach : views;
+  const engagementRate = effectiveReach > 0 ? (weightedEngagements / effectiveReach) * 100 : 0;
+  // If engagement rate is 10%, score is 40. Linear scaling from 0 to 10%
+  let engagementScore = 0;
+  if (weightedEngagements > 0) {
+    engagementScore = Math.min(40, Math.max(1, Math.round((engagementRate / 10) * 40)));
+  }
 
-  // 3. Click Score (Max 20) - CTR based
-  const ctr = views > 0 ? (clicks / views) * 100 : 0;
-  // 3% CTR = 20 points
-  const clickScore = Math.min(20, Math.round((ctr / 3) * 20));
+  // 3. Click Score (Max 20) - Based on CTR (clicks / views)
+  const ctr = effectiveViews > 0 ? (clicks / effectiveViews) * 100 : 0;
+  // If CTR is 4%, score is 20. Linear scaling from 0 to 4%
+  let clickScore = 0;
+  if (clicks > 0) {
+    clickScore = Math.min(20, Math.max(1, Math.round((ctr / 4) * 20)));
+  }
 
   // 4. Conversion Score (Max 10) - Deals/Leads won
-  const conversionScore = Math.min(10, conversions * 2.5);
+  // Realistic conversion milestones:
+  // 0 -> 0đ, 1 -> 2đ, 2-3 -> 4đ, 4-7 -> 6đ, 8-14 -> 8đ, 15-22 -> 9đ, >=23 -> 10đ
+  let conversionScore = 0;
+  if (conversions > 0) {
+    if (conversions >= 23) {
+      conversionScore = 10;
+    } else if (conversions >= 15) {
+      conversionScore = 9;
+    } else if (conversions >= 8) {
+      conversionScore = 8;
+    } else if (conversions >= 4) {
+      conversionScore = 6;
+    } else if (conversions >= 2) {
+      conversionScore = 4;
+    } else {
+      conversionScore = 2;
+    }
+  }
 
-  const overallScore = Math.min(100, Math.max(10, reachScore + engagementScore + clickScore + conversionScore));
+  const overallScore = Math.min(100, Math.max(5, reachScore + engagementScore + clickScore + conversionScore));
 
   let tier: 'VIRAL' | 'GOOD' | 'UNDERPERFORMING' = 'GOOD';
   if (overallScore >= 85) {

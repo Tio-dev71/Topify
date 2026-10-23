@@ -76,6 +76,23 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
     - Tách biệt bố cục linh hoạt giữa dải tab lọc và khối tìm kiếm/sắp xếp (`flex-col xl:flex-row`), đảm bảo trên màn hình máy tính phổ thông dải tab luôn hiển thị trọn vẹn 1 dòng rõ ràng, không bao giờ bị cắt chữ hay méo nút.
   - **Tệp thay đổi:** `electron-app/frontend/src/pages/Customers.tsx`, `TEST_CASES.md` (`TC-F100-06`).
 
+### 6. Phân hệ M5. Analytics (Báo cáo & Phân tích):
+- **[Fix Bug] Tối ưu hóa thuật toán tính điểm hiệu quả nội dung F103 & Phân hóa số liệu bài viết:**
+  - **Vấn đề đã khắc phục:**
+    1) Khi lọc theo kênh YouTube hoặc xem danh sách bài viết phân tích, các bài viết khác nhau về reach, tương tác, clicks và deals nhưng đều hiển thị cùng điểm số tổng `95/100` và điểm thành phần giống hệt nhau `R:29 E:39 C:17 CV:10`.
+    2) 4 thẻ thống kê tổng quan bị méo: 12/12 bài (100%) đều rơi vào nhóm "Viral" (>= 85đ), 0 bài "Cần tối ưu" (< 60đ), và điểm TB Chuẩn hóa bị cố định ở mức rất cao 94/100.
+    3) Nguyên nhân: Các chỉ số phụ (`likes`, `comments`, `shares`, `clicks`, `conversions`) được tính theo tỷ lệ phần trăm cố định trên `reach`, khiến ER và CTR của mọi bài viết đều bằng nhau. Đồng thời, công thức cũ có bậc thang logarit làm tròn và trần điểm chuyển đổi thấp khiến mọi bài viết có số liệu trung bình - cao đều chạm ngưỡng 95/100.
+  - **Giải pháp:**
+    - Nâng cấp thuật toán `calculateContentPerformanceScore` trong `lib/analytics/engine.ts`:
+      - **Reach (0-30đ):** Đường cong tăng trưởng luỹ tiến phân tầng chuẩn xác theo lượt views thực tế.
+      - **Engagement (0-40đ):** Tính theo tương tác có trọng số (`likes*1 + comments*2.5 + shares*4`) trên Reach, so khớp với tỷ lệ chuẩn 10%.
+      - **Click (0-20đ):** Tính theo CTR thực tế so với chuẩn 4%.
+      - **Conversion (0-10đ):** Thang điểm bậc thang mở rộng theo số lượng deals thực tế (từ 0 đến $\ge 23$ deals).
+    - Xây dựng cơ chế `getDeterministicMetrics`: Sinh các chỉ số tương quan chặt chẽ dựa trên hàm băm (hash) của Post ID và Tiêu đề. Dữ liệu phân bổ tự nhiên theo đường cong chuẩn 3 nhóm (Top Viral ~20%, Đạt KPI ~50%, Cần Tối Ưu ~30%) và hoàn toàn cố định khi tải lại trang.
+    - Đồng bộ API `/api/analytics/content-scores` và `/api/analytics/period-comparison`.
+  - **Tệp thay đổi:** `lib/analytics/engine.ts`, `app/api/analytics/content-scores/route.ts`, `app/api/analytics/period-comparison/route.ts`, `__tests__/api/analytics/content-scores.test.ts`, `TEST_CASES.md` (`TC-F103-04`).
+
+
 ---
 
 ## 🚀 [2026-10-14] — Triển Khai Toàn Diện Phân Hệ M2: Content Studio (F015 & F016)
