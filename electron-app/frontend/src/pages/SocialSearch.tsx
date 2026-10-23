@@ -86,7 +86,7 @@ export default function SocialSearch() {
       YOUTUBE: 'bg-red-50 text-red-700 border-red-200',
     };
     return (
-      <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${colors[plt] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider shrink-0 ${colors[plt] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
         {plt}
       </span>
     );
@@ -208,27 +208,37 @@ export default function SocialSearch() {
             >
               <div className="space-y-3">
                 {/* Author & Platform Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     {item.authorAvatar ? (
-                      <img src={item.authorAvatar} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+                      <img
+                        src={item.authorAvatar}
+                        alt=""
+                        className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0 shadow-2xs"
+                      />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold border border-blue-100">
+                      <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold border border-blue-100 shrink-0 shadow-2xs">
                         {item.author.slice(0, 1)}
                       </div>
                     )}
-                    <div>
-                      <div className="font-semibold text-gray-900 text-xs line-clamp-1">{item.author}</div>
-                      <div className="text-[11px] text-gray-400">
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="font-semibold text-gray-900 text-xs truncate"
+                        title={item.author}
+                      >
+                        {item.author}
+                      </div>
+                      <div className="text-[11px] text-gray-400 whitespace-nowrap mt-0.5">
                         {new Date(item.postedAt).toLocaleDateString('vi-VN')}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  {/* Badges column: Stacked to prevent horizontal squeeze on author & date */}
+                  <div className="flex flex-col items-end gap-1 shrink-0">
                     {getPlatformBadge(item.platform)}
-                    <span className="flex items-center gap-0.5 text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      <Flame className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shadow-2xs">
+                      <Flame className="w-3 h-3 text-amber-500 shrink-0" />
                       {item.viralScore}đ
                     </span>
                   </div>

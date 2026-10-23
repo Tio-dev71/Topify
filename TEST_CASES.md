@@ -417,6 +417,8 @@ Hệ thống thiết kế một lớp Adapter chuẩn hóa duy nhất (`lib/ai/9
 | **TC-F108-02** | Phát hiện tín hiệu hỏi mua (BUYING_INTENT) | 1. Quan sát các bài viết có gắn nhãn xanh lá: **"Tín Hiệu Nhu Cầu Mua Hàng Cao"**. | Bài viết có từ khóa mua sắm | • Hiển thị mô tả tín hiệu (ví dụ: *"Hơn 1,200 bình luận hỏi shop ở đâu, còn size M không"*). | [ ] |
 | **TC-F108-03** | 1-Click chuyển ý tưởng sang Content Studio | 1. Tại bài viết viral bất kỳ, bấm nút **"1-Click Chuyển Ý Tưởng Sang Content Studio"**. | Click chuyển ý tưởng | • Hệ thống tự động chuyển hướng sang màn hình `/create`.<br>• Bản thảo bài viết được điền sẵn nội dung mô tả, tiêu đề và hashtag từ bài viral để người dùng chỉnh sửa và đăng ngay. | [ ] |
 | **TC-F108-04** | Bộ lọc nền tảng và sắc thái | 1. Lọc theo kênh TikTok, Facebook...<br>2. Lọc theo sắc thái: Hỏi mua, Khen ngợi, Thảo luận. | Chọn filter | • Danh sách cập nhật tức thì, hiển thị đúng các bài viết thỏa mãn điều kiện. | [ ] |
+| **TC-F108-05** | Bố cục Header Card tín hiệu: Hiển thị trọn vẹn Tên tác giả, Ngày đăng và Badges | 1. Mở menu **"Thám tử xu hướng (MXH)"**.<br>2. Để mặc định bộ lọc hoặc tìm kiếm bài viết bất kỳ.<br>3. Quan sát phần đầu các card kết quả (Avatar, Tên tác giả, Ngày đăng, Badge nền tảng, Badge điểm viral). | Card kết quả tìm kiếm | • Tên tác giả và ngày đăng hiển thị rõ ràng, đầy đủ; không bị badge đè hay che mất.<br>• Badge nền tảng và badge điểm viral được bố trí ngăn nắp ở góc phải, căn chỉnh theo 2 hàng hài hòa với tên và ngày.<br>• Tên tác giả dài được cắt gọn bằng "..." kèm tooltip hiển thị toàn bộ tên khi rê chuột, ngày đăng hiển thị trọn vẹn 100%. | [x] |
+
 
 ---
 

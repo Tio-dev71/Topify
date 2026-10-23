@@ -92,6 +92,22 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
     - Đồng bộ API `/api/analytics/content-scores` và `/api/analytics/period-comparison`.
   - **Tệp thay đổi:** `lib/analytics/engine.ts`, `app/api/analytics/content-scores/route.ts`, `app/api/analytics/period-comparison/route.ts`, `__tests__/api/analytics/content-scores.test.ts`, `TEST_CASES.md` (`TC-F103-04`).
 
+### 7. Phân hệ M6. Intelligence (Thám tử xu hướng MXH - F108):
+- **[Fix UI/UX] Khắc phục lỗi đè layout Header Card tín hiệu (Tên tác giả, Ngày đăng và Badges):**
+  - **Vấn đề đã khắc phục:**
+    - Trên màn hình Thám tử xu hướng (`/intelligence/social-search`), ở bố cục lưới 3 cột, Avatar, Tên tác giả, Ngày đăng cùng Badge nền tảng (`TIKTOK`, `INSTAGRAM`, v.v.) và Badge điểm (`🔥 98đ`) bị đặt chung trên 1 hàng ngang duy nhất.
+    - Cụm 2 badge chiếm tới 120-135px chiều ngang, khiến phần thông tin tác giả bị ép nghẽn vào một khoảng hẹp dưới 50px.
+    - Hậu quả: Tên tác giả bị cắt cụt chỉ còn 4 chữ cái (ví dụ: *"Thời..."*, *"Trang T"*, *"Cộng"*), ngày đăng bị ép méo thành *"20/10/…"* và cụm badge nằm đè sát mép chữ gây vỡ thẩm mỹ nghiêm trọng.
+  - **Giải pháp:**
+    - Tái cấu trúc Header của Card thành bố cục đối xứng 2 hàng thanh lịch:
+      - **Bên trái (Cột Tác giả):** Avatar bo tròn chuẩn `w-9 h-9`, kết hợp vùng text tác giả có `min-w-0 flex-1`. Hàng trên là Tên tác giả với `font-semibold text-xs truncate` kèm thuộc tính `title` tooltip đầy đủ khi rê chuột; hàng dưới là Ngày đăng với `text-[11px] text-gray-400 whitespace-nowrap` hiển thị trọn vẹn 100%.
+      - **Bên phải (Cột Badges):** Xếp dọc theo chiều cao (`flex flex-col items-end gap-1 shrink-0`):
+        - Hàng trên: Badge Nền tảng (`TIKTOK`, `INSTAGRAM`, `FACEBOOK`, `YOUTUBE`) được tinh chỉnh bo tròn `text-[10px] font-bold px-2 py-0.5 tracking-wider uppercase shrink-0`.
+        - Hàng dưới: Badge Điểm Viral (`🔥 98đ`) nhỏ gọn `text-[11px] font-bold px-2 py-0.5`.
+    - Tiết kiệm hơn 65px bề ngang, giải phóng diện tích cho Tên tác giả hiển thị rộng rãi, rõ ràng và Ngày đăng hoàn toàn không bị cắt chữ hay đè lấn.
+  - **Tệp thay đổi:** `electron-app/frontend/src/pages/SocialSearch.tsx`, `TEST_CASES.md` (`TC-F108-05`).
+
+
 
 ---
 
