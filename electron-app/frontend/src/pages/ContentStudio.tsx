@@ -19,6 +19,9 @@ import {
   CheckCircle2,
   Wand2,
   Zap,
+  Edit3,
+  RotateCcw,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -74,7 +77,9 @@ export default function ContentStudio() {
   const [keyBenefits, setKeyBenefits] = useState('');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
+  const [originalAiResult, setOriginalAiResult] = useState<any>(null);
   const [copiedAi, setCopiedAi] = useState(false);
+  const [newHashtagInput, setNewHashtagInput] = useState('');
 
   // Spin Content State (F015)
   const [spinInput, setSpinInput] = useState('');
@@ -121,6 +126,7 @@ export default function ContentStudio() {
 
       if (res.data?.success && res.data?.data) {
         setAiResult(res.data.data);
+        setOriginalAiResult(JSON.parse(JSON.stringify(res.data.data)));
         toast.success('Topify AI đã sinh nội dung thành công!');
       } else {
         throw new Error('Lỗi phản hồi dữ liệu');
@@ -175,12 +181,13 @@ export default function ContentStudio() {
     }
   };
 
-  const handleApplyToCreatePost = (title: string, caption: string) => {
+  const handleApplyToCreatePost = (title: string, caption: string, hashtags?: string[]) => {
     // Navigate to CreatePost with state or search params
     navigate('/create', {
       state: {
         prefilledTitle: title,
         prefilledCaption: caption,
+        prefilledHashtags: hashtags && hashtags.length > 0 ? hashtags.join(' ') : undefined,
       },
     });
     toast.success('Đã chuyển nội dung sang màn hình Tạo Bài Viết!');
@@ -440,13 +447,33 @@ export default function ContentStudio() {
 
               {aiResult && (
                 <div className="flex items-center gap-2">
+                  {originalAiResult &&
+                    (originalAiResult.title !== aiResult.title ||
+                      originalAiResult.caption !== aiResult.caption ||
+                      JSON.stringify(originalAiResult.hashtags) !== JSON.stringify(aiResult.hashtags)) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAiResult(JSON.parse(JSON.stringify(originalAiResult)));
+                          toast.info('Đã khôi phục bản thảo gốc do AI sinh!');
+                        }}
+                        className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold rounded-xl border border-purple-200 flex items-center gap-1 transition-all shadow-2xs"
+                        title="Khôi phục lại tiêu đề và caption ban đầu do AI gợi ý"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Khôi phục gốc</span>
+                      </button>
+                    )}
+
                   <button
                     type="button"
                     onClick={() => {
-                      const full = `${aiResult.title}\n\n${aiResult.caption}\n\n${(aiResult.hashtags || []).join(' ')}`;
+                      const full = `${aiResult.title}\n\n${aiResult.caption}${
+                        aiResult.hashtags && aiResult.hashtags.length > 0 ? `\n\n${aiResult.hashtags.join(' ')}` : ''
+                      }`;
                       navigator.clipboard.writeText(full);
                       setCopiedAi(true);
-                      toast.success('Đã sao chép nội dung!');
+                      toast.success('Đã sao chép nội dung đã chỉnh sửa!');
                       setTimeout(() => setCopiedAi(false), 2000);
                     }}
                     className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-xl border border-gray-200 flex items-center gap-1 transition-all"
@@ -457,7 +484,7 @@ export default function ContentStudio() {
 
                   <button
                     type="button"
-                    onClick={() => handleApplyToCreatePost(aiResult.title, aiResult.caption)}
+                    onClick={() => handleApplyToCreatePost(aiResult.title, aiResult.caption, aiResult.hashtags)}
                     className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 hover:shadow-md transition-all"
                   >
                     Đăng ngay (/create)
@@ -486,79 +513,197 @@ export default function ContentStudio() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Title */}
-                  <div className="p-4 bg-purple-50/40 rounded-2xl border border-purple-100 space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
-                      Tiêu đề Viral (Headline)
-                    </span>
-                    <h4 className="text-base font-bold text-gray-900">{aiResult.title}</h4>
+                  {/* Title (Editable Textarea) */}
+                  <div className="p-4 bg-purple-50/40 rounded-2xl border border-purple-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                        <Edit3 className="w-3 h-3 text-purple-600" />
+                        Tiêu đề Viral (Headline) • Có thể chỉnh sửa trực tiếp
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-medium">
+                        {aiResult.title?.length || 0} ký tự
+                      </span>
+                    </div>
+                    <textarea
+                      value={aiResult.title || ''}
+                      onChange={(e) => setAiResult((prev: any) => ({ ...prev, title: e.target.value }))}
+                      rows={2}
+                      className="w-full p-2.5 text-sm sm:text-base font-bold text-gray-900 bg-white/90 hover:bg-white focus:bg-white border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-200 focus:border-purple-500 transition-all resize-y leading-snug shadow-2xs"
+                      placeholder="Nhập hoặc chỉnh sửa tiêu đề viral..."
+                    />
                   </div>
 
-                  {/* Scenes if video script */}
+                  {/* Scenes if video script (Editable) */}
                   {aiResult.scenes && aiResult.scenes.length > 0 && (
                     <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100 space-y-3">
                       <div className="flex items-center justify-between text-xs font-bold text-indigo-950">
                         <span className="flex items-center gap-1.5">
                           <Film className="w-4 h-4 text-indigo-600" />
-                          Kịch bản phân cảnh video ({aiResult.scenes.length} cảnh)
+                          Kịch bản phân cảnh video ({aiResult.scenes.length} cảnh) • Có thể sửa
                         </span>
                         <span className="text-[10px] bg-indigo-200/60 text-indigo-800 px-2 py-0.5 rounded-full font-bold">
                           Khung hình dọc 9:16
                         </span>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-2.5">
                         {aiResult.scenes.map((sc: any, idx: number) => (
-                          <div key={idx} className="p-3 bg-white rounded-xl border border-indigo-100 text-xs space-y-1">
+                          <div key={idx} className="p-3 bg-white rounded-xl border border-indigo-100 text-xs space-y-2">
                             <div className="flex items-center justify-between font-bold text-indigo-700 text-[11px]">
                               <span>
                                 #{idx + 1} ({sc.timeSlot}) - {sc.phase}
                               </span>
                               <span className="text-gray-400 font-normal">{sc.cameraAngle}</span>
                             </div>
-                            <p className="text-gray-600 text-[11px]">
-                              <strong>Hình ảnh:</strong> {sc.visualCue}
-                            </p>
-                            <p className="text-gray-900 text-xs bg-indigo-50/50 p-2 rounded-lg font-medium">
-                              🗣️ "{sc.voiceover}"
-                            </p>
-                            <p className="text-amber-700 text-[11px]">
-                              🔤 Text hiển thị: <strong>{sc.onscreenText}</strong>
-                            </p>
+                            <div>
+                              <label className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider block mb-0.5">
+                                Chỉ dẫn hình ảnh (Visual Cue):
+                              </label>
+                              <input
+                                type="text"
+                                value={sc.visualCue || ''}
+                                onChange={(e) => {
+                                  const updated = [...aiResult.scenes];
+                                  updated[idx] = { ...updated[idx], visualCue: e.target.value };
+                                  setAiResult((prev: any) => ({ ...prev, scenes: updated }));
+                                }}
+                                className="w-full px-2.5 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-all"
+                                placeholder="Mô tả hình ảnh cho cảnh..."
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-indigo-900 font-semibold uppercase tracking-wider block mb-0.5">
+                                🗣️ Lời thoại lồng tiếng (Voiceover):
+                              </label>
+                              <textarea
+                                value={sc.voiceover || ''}
+                                onChange={(e) => {
+                                  const updated = [...aiResult.scenes];
+                                  updated[idx] = { ...updated[idx], voiceover: e.target.value };
+                                  setAiResult((prev: any) => ({ ...prev, scenes: updated }));
+                                }}
+                                rows={2}
+                                className="w-full p-2 text-xs font-medium text-gray-900 bg-indigo-50/50 border border-indigo-200 rounded-lg focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100 transition-all resize-y"
+                                placeholder="Lời thoại hoặc âm thanh..."
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-amber-700 font-semibold uppercase tracking-wider block mb-0.5">
+                                🔤 Chữ hiển thị trên video:
+                              </label>
+                              <input
+                                type="text"
+                                value={sc.onscreenText || ''}
+                                onChange={(e) => {
+                                  const updated = [...aiResult.scenes];
+                                  updated[idx] = { ...updated[idx], onscreenText: e.target.value };
+                                  setAiResult((prev: any) => ({ ...prev, scenes: updated }));
+                                }}
+                                className="w-full px-2.5 py-1 text-xs font-bold text-amber-800 bg-amber-50/40 border border-amber-200 rounded-lg focus:bg-white focus:border-amber-400 focus:ring-1 focus:ring-amber-100 transition-all"
+                                placeholder="Chữ/Sticker trên màn hình..."
+                              />
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Caption */}
+                  {/* Caption (Editable Textarea) */}
                   <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-200 space-y-2">
                     <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-gray-600">
-                      <span>Nội dung Caption chi tiết</span>
+                      <span className="flex items-center gap-1.5 text-purple-700 font-bold">
+                        <Edit3 className="w-3.5 h-3.5 text-purple-600" />
+                        Nội dung Caption chi tiết (Click để gõ chỉnh sửa)
+                      </span>
                       <span className="text-gray-400 font-normal">
-                        {aiResult.caption?.length} ký tự • ~{aiResult.estimatedReadTimeSec}s đọc
+                        {aiResult.caption?.length || 0} ký tự • ~{aiResult.estimatedReadTimeSec || Math.max(5, Math.round((aiResult.caption?.length || 0) / 15))}s đọc
                       </span>
                     </div>
-                    <p className="text-xs text-gray-800 leading-relaxed whitespace-pre-line font-sans">
-                      {aiResult.caption}
-                    </p>
+                    <textarea
+                      value={aiResult.caption || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAiResult((prev: any) => ({
+                          ...prev,
+                          caption: val,
+                          estimatedReadTimeSec: Math.max(5, Math.round(val.length / 15)),
+                        }));
+                      }}
+                      rows={10}
+                      className="w-full p-3.5 text-xs text-gray-800 leading-relaxed font-sans bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-200 focus:border-purple-500 transition-all resize-y shadow-2xs"
+                      placeholder="Nhập hoặc chỉnh sửa trực tiếp nội dung caption chi tiết..."
+                    />
                   </div>
 
-                  {/* Hashtags & Posting Time */}
+                  {/* Hashtags & Posting Time (Interactive) */}
                   <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
-                      <Hash className="w-3.5 h-3.5 text-emerald-600" />
-                      Hashtags Đề Xuất
+                    <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                      <span className="flex items-center gap-1.5">
+                        <Hash className="w-3.5 h-3.5 text-emerald-600" />
+                        Hashtags Đề Xuất
+                      </span>
+                      <span className="text-[10px] text-emerald-600 font-normal">
+                        (Click tag để xóa hoặc thêm tag mới)
+                      </span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1.5 items-center">
                       {(aiResult.hashtags || []).map((t: string, i: number) => (
                         <span
                           key={i}
-                          className="bg-white px-2 py-0.5 rounded-lg border border-emerald-200 text-emerald-800 text-[11px] font-medium"
+                          className="bg-white px-2 py-0.5 rounded-lg border border-emerald-200 text-emerald-800 text-[11px] font-medium flex items-center gap-1 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-colors cursor-pointer group"
+                          title="Nhấp để xóa hashtag này"
+                          onClick={() => {
+                            const nextTags = (aiResult.hashtags || []).filter((_: any, idx: number) => idx !== i);
+                            setAiResult((prev: any) => ({ ...prev, hashtags: nextTags }));
+                          }}
                         >
                           {t}
+                          <span className="text-emerald-400 group-hover:text-rose-500 text-xs font-bold">×</span>
                         </span>
                       ))}
+                      <div className="inline-flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={newHashtagInput}
+                          onChange={(e) => setNewHashtagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault();
+                              let tag = newHashtagInput.trim();
+                              if (tag) {
+                                if (!tag.startsWith('#')) tag = `#${tag}`;
+                                const current = aiResult.hashtags || [];
+                                if (!current.includes(tag)) {
+                                  setAiResult((prev: any) => ({ ...prev, hashtags: [...current, tag] }));
+                                }
+                                setNewHashtagInput('');
+                              }
+                            }
+                          }}
+                          placeholder="+ Thêm hashtag..."
+                          className="px-2 py-0.5 text-[11px] bg-white border border-emerald-200 rounded-lg text-emerald-900 placeholder:text-emerald-400 focus:outline-hidden focus:border-emerald-500 w-28"
+                        />
+                        {newHashtagInput.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              let tag = newHashtagInput.trim();
+                              if (tag) {
+                                if (!tag.startsWith('#')) tag = `#${tag}`;
+                                const current = aiResult.hashtags || [];
+                                if (!current.includes(tag)) {
+                                  setAiResult((prev: any) => ({ ...prev, hashtags: [...current, tag] }));
+                                }
+                                setNewHashtagInput('');
+                              }
+                            }}
+                            className="p-1 bg-emerald-600 text-white rounded-md text-[10px] hover:bg-emerald-700"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="text-[11px] text-emerald-700 flex items-center gap-1 pt-1">
                       <Clock className="w-3 h-3" />

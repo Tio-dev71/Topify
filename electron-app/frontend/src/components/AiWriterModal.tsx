@@ -14,6 +14,9 @@ import {
   Loader2,
   ChevronRight,
   Target,
+  Edit3,
+  RotateCcw,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -80,7 +83,9 @@ export function AiWriterModal({
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [originalResult, setOriginalResult] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [newHashtagInput, setNewHashtagInput] = useState('');
 
   if (!isOpen) return null;
 
@@ -104,6 +109,7 @@ export function AiWriterModal({
 
       if (res.data?.success && res.data?.data) {
         setResult(res.data.data);
+        setOriginalResult(JSON.parse(JSON.stringify(res.data.data)));
         toast.success('AI đã hoàn thành nội dung bài viết!');
       } else {
         throw new Error('Không nhận được dữ liệu phản hồi');
@@ -117,10 +123,12 @@ export function AiWriterModal({
 
   const handleCopy = () => {
     if (!result) return;
-    const fullText = `${result.title}\n\n${result.caption}\n\n${(result.hashtags || []).join(' ')}`;
+    const fullText = `${result.title}\n\n${result.caption}${
+      result.hashtags && result.hashtags.length > 0 ? `\n\n${result.hashtags.join(' ')}` : ''
+    }`;
     navigator.clipboard.writeText(fullText);
     setCopied(true);
-    toast.success('Đã sao chép toàn bộ nội dung!');
+    toast.success('Đã sao chép nội dung đã chỉnh sửa!');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -338,6 +346,24 @@ export function AiWriterModal({
 
               {result && (
                 <div className="flex items-center gap-2">
+                  {originalResult &&
+                    (originalResult.title !== result.title ||
+                      originalResult.caption !== result.caption ||
+                      JSON.stringify(originalResult.hashtags) !== JSON.stringify(result.hashtags)) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResult(JSON.parse(JSON.stringify(originalResult)));
+                          toast.info('Đã khôi phục bản thảo gốc do AI sinh!');
+                        }}
+                        className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 border border-blue-200"
+                        title="Khôi phục lại tiêu đề và caption ban đầu do AI gợi ý"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Khôi phục</span>
+                      </button>
+                    )}
+
                   <button
                     type="button"
                     onClick={handleCopy}
@@ -378,32 +404,44 @@ export function AiWriterModal({
                 </div>
               ) : (
                 <div className="space-y-4 animate-fade-in">
-                  {/* Title Preview */}
-                  <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
-                      Tiêu đề thu hút (Title)
-                    </span>
-                    <h5 className="text-sm font-bold text-gray-900 leading-snug">{result.title}</h5>
+                  {/* Title Preview (Editable) */}
+                  <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
+                        <Edit3 className="w-3 h-3 text-blue-500" />
+                        Tiêu đề thu hút (Title) • Có thể sửa trực tiếp
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-medium">
+                        {result.title?.length || 0} ký tự
+                      </span>
+                    </div>
+                    <textarea
+                      value={result.title || ''}
+                      onChange={(e) => setResult((prev: any) => ({ ...prev, title: e.target.value }))}
+                      rows={2}
+                      className="w-full p-2.5 text-sm font-bold text-gray-900 bg-blue-50/20 border border-blue-200/80 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all resize-y leading-snug"
+                      placeholder="Nhập hoặc chỉnh sửa tiêu đề..."
+                    />
                   </div>
 
-                  {/* Script Scenes if Video */}
+                  {/* Script Scenes if Video (Editable) */}
                   {result.scenes && result.scenes.length > 0 && (
                     <div className="bg-white p-4 rounded-2xl border border-indigo-200/80 shadow-2xs space-y-3">
                       <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
                         <span className="flex items-center gap-1.5">
                           <Film className="w-4 h-4 text-indigo-600" />
-                          Phân Cảnh Kịch Bản Video ({result.scenes.length} cảnh)
+                          Phân Cảnh Kịch Bản Video ({result.scenes.length} cảnh) • Có thể sửa
                         </span>
-                        <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
                           Chuẩn TikTok 30s
                         </span>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-2.5">
                         {result.scenes.map((scene: any, idx: number) => (
                           <div
                             key={idx}
-                            className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 text-xs space-y-1.5"
+                            className="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 text-xs space-y-2"
                           >
                             <div className="flex items-center justify-between font-bold text-[11px] text-indigo-800">
                               <span>
@@ -411,49 +449,152 @@ export function AiWriterModal({
                               </span>
                               <span className="text-gray-500 font-normal">{scene.cameraAngle}</span>
                             </div>
-                            <p className="text-gray-700 text-[11px]">
-                              <strong>Hình ảnh:</strong> {scene.visualCue}
-                            </p>
-                            <p className="text-indigo-950 text-[12px] font-medium bg-white/70 p-2 rounded-lg">
-                              🗣️ "{scene.voiceover}"
-                            </p>
-                            <p className="text-[10px] text-amber-700">
-                              🔤 Chữ trên màn hình: <strong>{scene.onscreenText}</strong>
-                            </p>
+                            <div>
+                              <label className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider block mb-0.5">
+                                Hình ảnh (Visual Cue):
+                              </label>
+                              <input
+                                type="text"
+                                value={scene.visualCue || ''}
+                                onChange={(e) => {
+                                  const updated = [...result.scenes];
+                                  updated[idx] = { ...updated[idx], visualCue: e.target.value };
+                                  setResult((prev: any) => ({ ...prev, scenes: updated }));
+                                }}
+                                className="w-full px-2.5 py-1 text-xs bg-white border border-gray-200 rounded-lg focus:border-indigo-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-indigo-900 font-semibold uppercase tracking-wider block mb-0.5">
+                                🗣️ Lời thoại (Voiceover):
+                              </label>
+                              <textarea
+                                value={scene.voiceover || ''}
+                                onChange={(e) => {
+                                  const updated = [...result.scenes];
+                                  updated[idx] = { ...updated[idx], voiceover: e.target.value };
+                                  setResult((prev: any) => ({ ...prev, scenes: updated }));
+                                }}
+                                rows={2}
+                                className="w-full p-2 text-xs font-medium text-gray-900 bg-white border border-indigo-200 rounded-lg focus:border-indigo-500 resize-y"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-amber-700 font-semibold uppercase tracking-wider block mb-0.5">
+                                🔤 Chữ trên màn hình:
+                              </label>
+                              <input
+                                type="text"
+                                value={scene.onscreenText || ''}
+                                onChange={(e) => {
+                                  const updated = [...result.scenes];
+                                  updated[idx] = { ...updated[idx], onscreenText: e.target.value };
+                                  setResult((prev: any) => ({ ...prev, scenes: updated }));
+                                }}
+                                className="w-full px-2.5 py-1 text-xs font-bold text-amber-800 bg-amber-50/40 border border-amber-200 rounded-lg focus:bg-white focus:border-amber-400"
+                              />
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Caption Preview */}
+                  {/* Caption Preview (Editable) */}
                   <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-2xs space-y-2">
                     <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-purple-600">
-                      <span>Nội dung mô tả (Caption hoàn chỉnh)</span>
+                      <span className="flex items-center gap-1.5">
+                        <Edit3 className="w-3.5 h-3.5" />
+                        Nội dung mô tả (Caption chi tiết) • Click để sửa
+                      </span>
                       <span className="text-gray-400 font-normal">
-                        {result.caption?.length || 0} ký tự • ~{result.estimatedReadTimeSec || 30}s đọc
+                        {result.caption?.length || 0} ký tự • ~{result.estimatedReadTimeSec || Math.max(5, Math.round((result.caption?.length || 0) / 15))}s đọc
                       </span>
                     </div>
-                    <p className="text-xs text-gray-800 leading-relaxed whitespace-pre-line bg-gray-50/50 p-3 rounded-xl border border-gray-100 font-sans">
-                      {result.caption}
-                    </p>
+                    <textarea
+                      value={result.caption || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setResult((prev: any) => ({
+                          ...prev,
+                          caption: val,
+                          estimatedReadTimeSec: Math.max(5, Math.round(val.length / 15)),
+                        }));
+                      }}
+                      rows={8}
+                      className="w-full p-3 text-xs text-gray-800 leading-relaxed font-sans bg-gray-50/50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-100 focus:border-purple-500 transition-all resize-y"
+                      placeholder="Nhập hoặc chỉnh sửa caption chi tiết..."
+                    />
                   </div>
 
-                  {/* Hashtags & Meta Info */}
+                  {/* Hashtags & Meta Info (Interactive) */}
                   <div className="bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-100 text-xs space-y-2">
-                    <div className="flex items-center gap-1.5 font-bold text-emerald-900">
-                      <Hash className="w-3.5 h-3.5 text-emerald-600" />
-                      Bộ Hashtags Đề Xuất
+                    <div className="flex items-center justify-between font-bold text-emerald-900">
+                      <span className="flex items-center gap-1.5">
+                        <Hash className="w-3.5 h-3.5 text-emerald-600" />
+                        Bộ Hashtags Đề Xuất
+                      </span>
+                      <span className="text-[10px] text-emerald-600 font-normal">
+                        (Click tag để xóa hoặc thêm tag)
+                      </span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1.5 items-center">
                       {(result.hashtags || []).map((tag: string, i: number) => (
                         <span
                           key={i}
-                          className="bg-white px-2 py-0.5 rounded-lg border border-emerald-200 text-emerald-800 text-[11px] font-medium"
+                          className="bg-white px-2 py-0.5 rounded-lg border border-emerald-200 text-emerald-800 text-[11px] font-medium flex items-center gap-1 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 transition-colors cursor-pointer group"
+                          title="Nhấp để xóa hashtag này"
+                          onClick={() => {
+                            const nextTags = (result.hashtags || []).filter((_: any, idx: number) => idx !== i);
+                            setResult((prev: any) => ({ ...prev, hashtags: nextTags }));
+                          }}
                         >
                           {tag}
+                          <span className="text-emerald-400 group-hover:text-rose-500 text-xs font-bold">×</span>
                         </span>
                       ))}
+                      <div className="inline-flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={newHashtagInput}
+                          onChange={(e) => setNewHashtagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault();
+                              let tag = newHashtagInput.trim();
+                              if (tag) {
+                                if (!tag.startsWith('#')) tag = `#${tag}`;
+                                const current = result.hashtags || [];
+                                if (!current.includes(tag)) {
+                                  setResult((prev: any) => ({ ...prev, hashtags: [...current, tag] }));
+                                }
+                                setNewHashtagInput('');
+                              }
+                            }
+                          }}
+                          placeholder="+ Thêm hashtag..."
+                          className="px-2 py-0.5 text-[11px] bg-white border border-emerald-200 rounded-lg text-emerald-900 placeholder:text-emerald-400 focus:outline-hidden focus:border-emerald-500 w-28"
+                        />
+                        {newHashtagInput.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              let tag = newHashtagInput.trim();
+                              if (tag) {
+                                if (!tag.startsWith('#')) tag = `#${tag}`;
+                                const current = result.hashtags || [];
+                                if (!current.includes(tag)) {
+                                  setResult((prev: any) => ({ ...prev, hashtags: [...current, tag] }));
+                                }
+                                setNewHashtagInput('');
+                              }
+                            }}
+                            className="p-1 bg-emerald-600 text-white rounded-md text-[10px] hover:bg-emerald-700"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 pt-1">
                       <Clock className="w-3 h-3" />

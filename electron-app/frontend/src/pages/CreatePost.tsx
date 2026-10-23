@@ -135,8 +135,8 @@ export default function CreatePost() {
 
   // Listen for navigation state from ContentStudio
   useEffect(() => {
-    const locState = location.state as { prefilledTitle?: string; prefilledCaption?: string } | null;
-    if (locState?.prefilledTitle || locState?.prefilledCaption) {
+    const locState = location.state as { prefilledTitle?: string; prefilledCaption?: string; prefilledHashtags?: string } | null;
+    if (locState?.prefilledTitle || locState?.prefilledCaption || locState?.prefilledHashtags) {
       if (videos.length === 0) {
         const draft: UploadedVideo = {
           id: `draft_${Date.now()}`,
@@ -148,12 +148,15 @@ export default function CreatePost() {
           title: locState.prefilledTitle || '',
           caption: locState.prefilledCaption || '',
           firstComment: '',
-          hashtags: '#Topify #ContentStudio',
+          hashtags: locState.prefilledHashtags || '#Topify #ContentStudio',
         };
         setVideos([draft]);
       } else {
         updateVideoField(videos[0].id, 'title', locState.prefilledTitle || videos[0].title);
         updateVideoField(videos[0].id, 'caption', locState.prefilledCaption || videos[0].caption);
+        if (locState.prefilledHashtags) {
+          updateVideoField(videos[0].id, 'hashtags', locState.prefilledHashtags);
+        }
       }
       toast.success('Đã áp dụng nội dung từ Content Studio!');
     }
