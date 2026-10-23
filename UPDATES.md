@@ -50,6 +50,14 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
   - Các thẻ chỉ số KPI hiển thị huy hiệu tăng trưởng tỷ lệ % trực quan: `🟩 +%` (xanh nếu tăng) hoặc `🟥 -%` (đỏ nếu giảm).
   - **Tệp thay đổi:** `lib/analytics/engine.ts`, `app/api/analytics/period-comparison/route.ts`, `electron-app/frontend/src/pages/Analytics.tsx`, `__tests__/api/analytics/period-comparison.test.ts`.
 
+### 3. Phân hệ M9. Work & Task:
+- **[Fix UI/UX] Ổn định vị trí và kích thước thanh Navigation Tabs (`/tasks`):**
+  - **Vấn đề đã khắc phục:** Trước đây, nút chuyển chế độ "Kanban / Danh sách" đặt chung hàng với các tab ở tab "Bảng công việc", gây chật chội làm tiêu đề tab "Thư viện Mẫu quy trình (F130)" và badge "4 mẫu" bị bẻ thành 2 dòng. Khi chuyển sang tab F130 hoặc F131, nút này biến mất khiến thanh tab đổi chiều cao và giật vị trí sang trái, làm con trỏ chuột bị lệch khỏi vị trí tab vừa bấm.
+  - **Giải pháp:**
+    - Tách biệt hoàn toàn thanh Navigation Tabs thành hàng chuyên dụng, áp dụng `whitespace-nowrap shrink-0` đảm bảo không bao giờ bị ngắt dòng hoặc thay đổi kích thước/chiều cao trên mọi độ phân giải.
+    - Di chuyển bộ nút chuyển đổi Kanban / Danh sách vào bên phải thanh bộ lọc (Filter Bar) của Bảng công việc một cách trực quan, khoa học theo chuẩn trải nghiệm người dùng hiện đại.
+  - **Tệp thay đổi:** `electron-app/frontend/src/pages/Tasks.tsx`, `TEST_CASES.md` (`TC-F130-03`).
+
 ---
 
 ## 🚀 [2026-10-14] — Triển Khai Toàn Diện Phân Hệ M2: Content Studio (F015 & F016)

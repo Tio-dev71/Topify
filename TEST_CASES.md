@@ -803,6 +803,7 @@ Sau khi lần lượt hoàn thành các module, bạn chỉ cần mở App Elect
 | :--- | :--- | :--- | :--- | :--- | :---: |
 | **TC-F130-01** | Xem danh sách 4 mẫu quy trình doanh nghiệp | 1. Mở `/tasks` $\rightarrow$ Chuyển sang tab "Thư viện Mẫu quy trình". | Tab Mẫu quy trình. | • Hiển thị đủ 4 mẫu: Video Content (6 bước), CSKH (5 bước), Campaign Launch (6 bước), Onboarding (5 bước).<br>• Hiển thị số ngày dự kiến và phân vai từng bước. | [ ] |
 | **TC-F130-02** | Áp dụng 1-click mẫu quy trình Sản xuất Video | 1. Bấm nút "Áp dụng quy trình (1-Click)" trên thẻ Sản xuất Video Content. | Mẫu `tpl_content_video`. | • Tự động chuyển về Tab Bảng công việc.<br>• Tự động tạo task mới kèm 6 checklist subtasks.<br>• Modal chi tiết task mở lên sẵn sàng thực hiện. | [ ] |
+| **TC-F130-03** | Thanh tab giữ nguyên vị trí và kích thước khi chuyển tab | 1. Click qua lại giữa "Bảng công việc", "Thư viện Mẫu quy trình (F130)", "Năng suất & Khối lượng (F131)". | Thao tác chuyển tab liên tục. | • Vị trí và kích thước các tab giữ cố định, không bị ngắt dòng hay nhảy pixel.<br>• Nút chuyển Kanban/Danh sách nằm cố định trong thanh lọc của Bảng công việc.<br>• Con trỏ chuột giữ nguyên trên tab vừa bấm. | [ ] |
 
 ---
 

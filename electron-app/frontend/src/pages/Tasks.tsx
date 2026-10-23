@@ -741,79 +741,50 @@ export default function Tasks() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center justify-between border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-6">
+      <div className="flex items-center border-b border-[var(--color-border)] overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-6 shrink-0">
           <button
             onClick={() => setActiveTab('board')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
               activeTab === 'board'
-                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                ? 'border-[var(--color-primary)] text-[var(--color-primary)] font-semibold'
                 : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
             }`}
           >
-            <CheckSquare className="w-4 h-4" />
-            <span>Bảng công việc (Tasks & Kanban)</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-[var(--color-muted)] text-[var(--color-foreground)]">
+            <CheckSquare className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">Bảng công việc (Tasks & Kanban)</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-[var(--color-muted)] text-[var(--color-foreground)] whitespace-nowrap">
               {tasks.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('templates')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
               activeTab === 'templates'
-                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                ? 'border-[var(--color-primary)] text-[var(--color-primary)] font-semibold'
                 : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
             }`}
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Thư viện Mẫu quy trình (F130)</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-purple-500/10 text-purple-400">
+            <Sparkles className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">Thư viện Mẫu quy trình (F130)</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-purple-500/10 text-purple-400 whitespace-nowrap">
               4 mẫu
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('productivity')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 whitespace-nowrap transition-all ${
               activeTab === 'productivity'
-                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                ? 'border-[var(--color-primary)] text-[var(--color-primary)] font-semibold'
                 : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
             }`}
           >
-            <TrendingUp className="w-4 h-4" />
-            <span>Năng suất & Khối lượng (F131)</span>
+            <TrendingUp className="w-4 h-4 shrink-0" />
+            <span className="whitespace-nowrap">Năng suất & Khối lượng (F131)</span>
           </button>
         </div>
-
-        {activeTab === 'board' && (
-          <div className="flex items-center gap-1 pb-2">
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`p-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all ${
-                viewMode === 'kanban'
-                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/30 font-semibold'
-                  : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
-              }`}
-              title="Kanban Board"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Kanban</span>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all ${
-                viewMode === 'list'
-                  ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)] border-[var(--color-primary)]/30 font-semibold'
-                  : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)]'
-              }`}
-              title="Danh sách bảng"
-            >
-              <List className="w-3.5 h-3.5" />
-              <span>Danh sách</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ==================================================================== */}
@@ -879,6 +850,36 @@ export default function Tasks() {
                 <AlertCircle className="w-3.5 h-3.5" />
                 <span>Chỉ việc trễ hạn</span>
               </button>
+
+              <div className="h-5 w-[1px] bg-[var(--color-border)] mx-1 hidden sm:block" />
+
+              {/* View Mode Switcher (Kanban / Danh sách) */}
+              <div className="flex items-center p-0.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]">
+                <button
+                  onClick={() => setViewMode('kanban')}
+                  className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all ${
+                    viewMode === 'kanban'
+                      ? 'bg-[var(--color-primary)] text-white font-semibold shadow-xs'
+                      : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+                  }`}
+                  title="Kanban Board"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Kanban</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1.5 transition-all ${
+                    viewMode === 'list'
+                      ? 'bg-[var(--color-primary)] text-white font-semibold shadow-xs'
+                      : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+                  }`}
+                  title="Danh sách bảng"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Danh sách</span>
+                </button>
+              </div>
             </div>
           </div>
 
