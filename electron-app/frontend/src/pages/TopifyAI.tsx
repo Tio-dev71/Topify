@@ -789,37 +789,39 @@ export default function TopifyAI() {
       {/* TAB 1: AI CHAT ASSISTANT (F156) */}
       {/* ========================================================================= */}
       {activeTab === 'chat' && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-250px)]">
+        <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-230px)] min-h-[580px]">
           {/* Left: Chat Sessions & Persona */}
-          <div className="lg:col-span-1 bg-white border border-gray-200 rounded-2xl p-4 flex flex-col justify-between overflow-hidden shadow-sm">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-blue-600" />
-                  Phiên Trò Chuyện
+          <div className="w-full lg:w-80 xl:w-[340px] shrink-0 bg-white border border-gray-200 rounded-2xl p-4 flex flex-col justify-between overflow-hidden shadow-xs">
+            <div className="flex flex-col min-h-0 flex-1">
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 whitespace-nowrap">
+                  <MessageSquare className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Phiên Trò Chuyện</span>
                 </h3>
                 <button
                   onClick={handleOpenCreateSessionModal}
                   disabled={loading}
-                  className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm flex items-center gap-1.5 text-xs font-semibold"
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap shrink-0 active:scale-95 cursor-pointer"
                   title="Tạo phiên mới kèm Prompt nạp"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Mới</span>
+                  <span>+ Mới</span>
                 </button>
               </div>
 
               {/* Persona selector for current chat / quick switch */}
               <div className="mb-4">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs text-gray-600 font-semibold">Vai trò Trợ lý (Persona):</label>
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <label className="text-xs text-gray-700 font-semibold whitespace-nowrap">
+                    Vai trò Trợ lý (Persona):
+                  </label>
                   {isAdmin && (
                     <button
                       onClick={handleOpenPersonaManager}
-                      className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 hover:underline"
+                      className="text-[11px] text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 hover:underline whitespace-nowrap shrink-0"
                       title="Bảng điều khiển Quản lý vai trò (Dành riêng cho Admin)"
                     >
-                      <Settings className="w-3 h-3" />
+                      <Settings className="w-3 h-3 shrink-0" />
                       <span>Quản lý vai trò (Admin)</span>
                     </button>
                   )}
@@ -827,7 +829,7 @@ export default function TopifyAI() {
                 <select
                   value={selectedPersona}
                   onChange={(e: any) => handleSelectPersonaQuick(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium cursor-pointer shadow-2xs"
                 >
                   {personas.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -838,7 +840,7 @@ export default function TopifyAI() {
               </div>
 
               {/* Session list */}
-              <div className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-450px)] pr-1">
+              <div className="space-y-1.5 overflow-y-auto flex-1 pr-1 min-h-0">
                 {sessions.map((sess) => {
                   const isCur = sess.id === currentSessionId;
                   return (
@@ -847,22 +849,25 @@ export default function TopifyAI() {
                       onClick={() => handleSelectSession(sess)}
                       className={`group flex items-center justify-between p-2.5 rounded-xl text-xs cursor-pointer transition-all ${
                         isCur
-                           ? 'bg-blue-50 border border-blue-200 text-blue-900 font-semibold'
+                          ? 'bg-blue-50/90 border border-blue-200 text-blue-900 font-semibold shadow-2xs'
                           : 'bg-gray-50/70 hover:bg-gray-100 border border-transparent text-gray-700'
                       }`}
+                      title={sess.title}
                     >
-                      <div className="truncate mr-2">
-                        <p className="truncate font-medium">{sess.title}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] text-gray-400">{new Date(sess.updatedAt).toLocaleTimeString()}</span>
+                      <div className="min-w-0 flex-1 mr-2">
+                        <p className="truncate font-medium text-xs text-gray-900">{sess.title}</p>
+                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-400">
+                          <span className="shrink-0 whitespace-nowrap">
+                            {new Date(sess.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
                           {sess.personaName && (
-                            <span className="text-[10px] text-blue-600 truncate max-w-[110px]">• {sess.personaName}</span>
+                            <span className="text-blue-600 font-medium truncate">• {sess.personaName}</span>
                           )}
                         </div>
                       </div>
                       <button
                         onClick={(e) => handleDeleteSession(sess.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-red-500 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-all shrink-0"
                         title="Xóa phiên"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -874,57 +879,63 @@ export default function TopifyAI() {
             </div>
 
             {/* Persona Quick Indicator */}
-            <div className="pt-3 border-t border-gray-100 text-[11px] text-gray-500 flex items-center justify-between">
-              <div className="truncate mr-2">
-                <span>Đang trò chuyện cùng: </span>
-                <span className="text-blue-600 font-semibold">
-                  {currentPersonaObj ? `${currentPersonaObj.emoji} ${currentPersonaObj.name}` : selectedPersona}
-                </span>
-              </div>
+            <div className="pt-3 mt-3 border-t border-gray-100 text-[11px] flex items-center gap-1.5 min-w-0">
+              <span className="text-gray-400 shrink-0 whitespace-nowrap">Đang trò chuyện cùng:</span>
+              <span
+                className="text-blue-600 font-semibold truncate"
+                title={currentPersonaObj ? `${currentPersonaObj.emoji} ${currentPersonaObj.name}` : selectedPersona}
+              >
+                {currentPersonaObj ? `${currentPersonaObj.emoji} ${currentPersonaObj.name}` : selectedPersona}
+              </span>
             </div>
           </div>
 
           {/* Right: Messages Area */}
-          <div className="lg:col-span-3 bg-white border border-gray-200 rounded-2xl flex flex-col justify-between overflow-hidden shadow-sm">
+          <div className="flex-1 min-w-0 bg-white border border-gray-200 rounded-2xl flex flex-col justify-between overflow-hidden shadow-xs">
             {/* Chat Panel Header */}
-            <div className="px-5 py-3 border-b border-gray-200 bg-gray-50/60 flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
+            <div className="px-5 py-3 border-b border-gray-200 bg-gray-50/70 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base shrink-0 shadow-2xs">
                   {currentPersonaObj?.emoji || '🤖'}
                 </div>
-                <div className="min-w-0">
-                  <h4 className="text-xs font-semibold text-gray-900 truncate">
+                <div className="min-w-0 flex-1">
+                  <h4
+                    className="text-sm font-semibold text-gray-900 truncate"
+                    title={currentSession?.title || 'Phiên trò chuyện Topify AI'}
+                  >
                     {currentSession?.title || 'Phiên trò chuyện Topify AI'}
                   </h4>
-                  <p className="text-[11px] text-gray-500 truncate flex items-center gap-1.5 mt-0.5">
-                    <span>Vai trò: <strong className="text-blue-600 font-medium">{currentSession?.personaName || currentPersonaObj?.name || 'Trợ lý AI'}</strong></span>
+                  <div className="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5 min-w-0">
+                    <span className="truncate">
+                      Vai trò: <strong className="text-blue-600 font-semibold">{currentSession?.personaName || currentPersonaObj?.name || 'Trợ lý AI'}</strong>
+                    </span>
                     {currentSession?.systemPrompt && (
-                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">
-                        ✓ Đã nạp Prompt đào tạo
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200/80 shrink-0 whitespace-nowrap">
+                        ✓ Đã nạp Prompt
                       </span>
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 ml-2">
                 {currentSession?.systemPrompt && (
                   <button
                     onClick={() => setShowPromptViewerModal(true)}
-                    className="px-2.5 py-1 text-xs rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1.5 shadow-2xs transition-colors font-medium"
+                    className="px-3 py-1.5 text-xs rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1.5 shadow-2xs transition-colors font-medium hover:border-gray-300"
                     title="Xem nội dung prompt đào tạo của phiên này"
                   >
                     <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Xem Prompt nạp</span>
+                    <span className="whitespace-nowrap">Xem Prompt nạp</span>
                   </button>
                 )}
                 <button
                   onClick={handleOpenCreateSessionModal}
-                  className="px-2.5 py-1 text-xs rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 shadow-2xs transition-colors font-medium"
+                  className="px-3 py-1.5 text-xs rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-2xs transition-colors font-semibold"
                   title="Khởi tạo phiên mới"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Phiên mới</span>
+                  <span className="whitespace-nowrap">Phiên mới</span>
                 </button>
               </div>
             </div>
