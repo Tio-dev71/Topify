@@ -14,6 +14,38 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Khắc Phục Lỗi Giao Diện Thẻ Kịch Bản Tự Động Hóa (Automation Rule Cards Layout & Overflow)
+
+### Phân hệ M11. Tự Động Hóa (Automation):
+- **[F141 - F143] Sửa lỗi vỡ layout card kịch bản, mã ID và công tắc tràn viền, nhãn bị xuống dòng:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    1. **Mã ID và Công tắc tràn mép card:** Mã định danh ID dạng CUID (`#cmvjmep3o001trk2g6d6of746`, dài 26 ký tự) được đặt chung hàng với badge loại trigger và công tắc bật/tắt (Switch) mà không có giới hạn độ rộng hay `truncate`, chiếm toàn bộ chiều ngang và đẩy công tắc tràn hẳn ra ngoài mép phải của card, đè lên viền card.
+    2. **Badge 'Comment MXH' bị rớt thành 2 dòng:** Thiếu `whitespace-nowrap shrink-0`, bị khối nội dung bên cạnh chèn ép khiến chữ 'Comment' và 'MXH' gãy dòng.
+    3. **Các nhãn quy trình bị xuống dòng và dính chữ:** `Kích hoạt khi:` bị ngắt thành 'Kích hoạt' / 'khi:', `Điều kiện:` bị ngắt thành 'Điều' / 'kiện:' do thiếu `shrink-0 whitespace-nowrap`, đồng thời dính sát giá trị bên cạnh (`NEW_COMMENT`, `keyword contains …`).
+    4. **Dòng footer 'Đã chạy: 0 lượt' bị gãy dòng:** Chữ 'lượt' bị đẩy xuống dòng thứ 2 do card bị ép hẹp và thiếu bảo vệ không bẻ dòng.
+    5. **Tỷ lệ hiển thị lưới không cân đối:** Lưới chia 3 cột cố định (`lg:grid-cols-3`) ngay cả khi chỉ có 1 card, làm card bị ép thành 1 dải hẹp (~270px) trong khi 2/3 không gian lưới bên phải để trống.
+  - **Giải pháp xử lý toàn diện:**
+    1. **Tối ưu hóa Header Card & Mã ID:**
+       - Rút gọn hiển thị mã ID dài dạng `#cmvjmep...f746` (`id.length > 14 ? id.slice(0, 7)...id.slice(-4)`), đi kèm tooltip `title="Mã kịch bản: #${rule.id}"` hiển thị đầy đủ khi hover.
+       - Tách công tắc Switch sang vùng riêng biệt cố định bên phải (`shrink-0 pt-0.5`), đảm bảo luôn nằm gọn gàng bên trong viền card.
+       - Thêm `whitespace-nowrap shrink-0` cho tất cả badge nguồn kích hoạt (`Comment MXH`, `Tin nhắn Inbox`, `Lead CRM`, v.v.).
+       - Bổ sung `truncate` và `title` cho tên kịch bản để tự động cắt gọn an toàn khi tên dài.
+    2. **Bảo vệ toàn bộ Nhãn và Giá trị Quy trình (Workflow Visualization):**
+       - Thêm `shrink-0 whitespace-nowrap text-[11px]` cho các nhãn `Kích hoạt khi:` và `Điều kiện:` để tuyệt đối không bị trình duyệt bẻ dòng.
+       - Đóng gói giá trị trigger và chuỗi điều kiện vào pill nền trắng thanh lịch có viền xám nhẹ (`bg-white border border-gray-200/80 rounded-md`), áp dụng `truncate max-w-[160px]` kèm tooltip đầy đủ.
+       - Nhãn `Hành động ({n}):` và các chip hành động (`MESSAGE`, `TAG`, `LEAD`, v.v.) được bổ sung `whitespace-nowrap shadow-xs`.
+    3. **Chuẩn hóa Footer và Nút Thao tác:**
+       - Áp dụng `whitespace-nowrap shrink-0` cho dòng `Đã chạy: X lượt`.
+       - Nâng cấp giao diện nút `Test`, `Chỉnh sửa`, `Xóa` với border rõ nét, icon sắc sảo và hiệu ứng hover tinh tế.
+    4. **Điều chỉnh Hệ thống Lưới (Responsive Grid):**
+       - Chuyển từ `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4` sang `grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5`, giúp các thẻ kịch bản có độ rộng thoáng (~420px) trên màn hình tiêu chuẩn, giao diện chuyên nghiệp và không bị trống trải.
+  - **Kiểm thử tự động:**
+    - Tạo mới test suite `__tests__/api/automations/rules.test.ts` kiểm tra: rút gọn ID, bảo toàn cấu trúc Rule, engine đánh giá điều kiện (contains, starts_with, in), engine thực thi hành động (MESSAGE, TAG, LEAD, TASK) và kiểm tra thư viện template (8/8 tests passed).
+    - Build thành công `electron-app/frontend` (Vite) và Next.js production.
+  - **Tệp thay đổi:** `electron-app/frontend/src/components/automation/WorkflowRulesTab.tsx`, `__tests__/api/automations/rules.test.ts`, `TEST_CASES.md`, `UPDATES.md`.
+
+---
+
 ## 🚀 [2026-10-24] — Khắc Phục Lỗi Giao Diện Thẻ Chiến Dịch (Campaign Cards) & Chuẩn Hóa Dữ Liệu Lên Kế Hoạch (Planning Data)
 
 ### Phân hệ M10. Chiến dịch (Campaigns):

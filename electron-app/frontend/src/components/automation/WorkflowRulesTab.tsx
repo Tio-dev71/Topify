@@ -133,17 +133,41 @@ export function WorkflowRulesTab({
   const getTriggerBadge = (type: string) => {
     switch (type) {
       case 'COMMENT':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200"><MessageSquare className="w-3 h-3" /> Comment MXH</span>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap shrink-0">
+            <MessageSquare className="w-3 h-3 shrink-0" /> Comment MXH
+          </span>
+        );
       case 'MESSAGE':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"><MessageSquare className="w-3 h-3" /> Tin nhắn Inbox</span>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap shrink-0">
+            <MessageSquare className="w-3 h-3 shrink-0" /> Tin nhắn Inbox
+          </span>
+        );
       case 'LEAD':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200"><Users className="w-3 h-3" /> Lead CRM</span>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap shrink-0">
+            <Users className="w-3 h-3 shrink-0" /> Lead CRM
+          </span>
+        );
       case 'TIME':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"><Clock className="w-3 h-3" /> Lịch trình Cron</span>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap shrink-0">
+            <Clock className="w-3 h-3 shrink-0" /> Lịch trình Cron
+          </span>
+        );
       case 'WEBHOOK':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"><Globe className="w-3 h-3" /> Inbound Webhook</span>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap shrink-0">
+            <Globe className="w-3 h-3 shrink-0" /> Inbound Webhook
+          </span>
+        );
       default:
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{type}</span>;
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 whitespace-nowrap shrink-0">
+            {type}
+          </span>
+        );
     }
   };
 
@@ -287,37 +311,46 @@ export function WorkflowRulesTab({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredRules.map(rule => (
             <div 
               key={rule.id}
-              className={`p-5 rounded-2xl bg-white border transition-all flex flex-col justify-between ${
+              className={`p-5 rounded-2xl bg-white border transition-all flex flex-col justify-between min-w-0 ${
                 rule.isActive 
                   ? 'border-gray-200 hover:border-purple-300 shadow-sm hover:shadow-md' 
                   : 'border-gray-100 bg-gray-50/50 opacity-75'
               }`}
             >
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 {/* Header & Toggle */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {getTriggerBadge(rule.trigger?.type)}
-                      <span className="text-[11px] font-mono text-gray-400">#{rule.id}</span>
+                      <span 
+                        className="text-[10px] font-mono text-gray-400 bg-gray-100/80 px-1.5 py-0.5 rounded border border-gray-200/60 shrink-0 whitespace-nowrap cursor-default"
+                        title={`Mã kịch bản: #${rule.id}`}
+                      >
+                        #{rule.id.length > 14 ? `${rule.id.slice(0, 7)}...${rule.id.slice(-4)}` : rule.id}
+                      </span>
                     </div>
-                    <h3 className="text-sm font-bold text-gray-900 leading-snug line-clamp-1">{rule.name}</h3>
+                    <h3 className="text-sm font-bold text-gray-900 leading-snug truncate" title={rule.name}>
+                      {rule.name}
+                    </h3>
                   </div>
 
                   {/* Switch Active */}
-                  <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                    <input 
-                      type="checkbox" 
-                      checked={rule.isActive} 
-                      onChange={() => toggleRuleActive(rule)}
-                      className="sr-only peer" 
-                    />
-                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
-                  </label>
+                  <div className="shrink-0 pt-0.5">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={rule.isActive} 
+                        onChange={() => toggleRuleActive(rule)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                    </label>
+                  </div>
                 </div>
 
                 {rule.description && (
@@ -325,42 +358,48 @@ export function WorkflowRulesTab({
                 )}
 
                 {/* Workflow Visualization */}
-                <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 space-y-2 text-xs">
+                <div className="p-3.5 rounded-xl bg-gray-50/90 border border-gray-100 space-y-2.5 text-xs">
                   {/* Step 1: Trigger */}
-                  <div className="flex items-center justify-between text-gray-600">
-                    <span className="font-semibold text-gray-700 flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      Kích hoạt khi:
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-gray-700 flex items-center gap-1.5 shrink-0 whitespace-nowrap text-[11px]">
+                      <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>Kích hoạt khi:</span>
                     </span>
-                    <span className="text-gray-500 font-medium">
+                    <span 
+                      className="text-gray-700 font-semibold text-[11px] px-2 py-0.5 rounded-md bg-white border border-gray-200/80 truncate max-w-[160px]"
+                      title={rule.trigger?.config?.event || rule.trigger?.type}
+                    >
                       {rule.trigger?.config?.event || rule.trigger?.type}
                     </span>
                   </div>
 
                   {/* Step 2: Conditions */}
                   {rule.conditions && rule.conditions.length > 0 && (
-                    <div className="flex items-start justify-between text-gray-600 pt-1 border-t border-gray-100">
-                      <span className="font-semibold text-gray-700 flex items-center gap-1.5">
-                        <ArrowRight className="w-3 h-3 text-gray-400" />
-                        Điều kiện:
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                      <span className="font-semibold text-gray-700 flex items-center gap-1.5 shrink-0 whitespace-nowrap text-[11px]">
+                        <ArrowRight className="w-3 h-3 text-gray-400 shrink-0" />
+                        <span>Điều kiện:</span>
                       </span>
-                      <span className="text-gray-500 font-mono text-[11px] truncate max-w-[150px]">
+                      <span 
+                        className="text-gray-600 font-mono text-[11px] px-2 py-0.5 rounded-md bg-white border border-gray-200/80 truncate max-w-[160px] text-right"
+                        title={rule.conditions.map(c => `${c.field} ${c.operator} "${c.value}"`).join(', ')}
+                      >
                         {rule.conditions.map(c => `${c.field} ${c.operator} "${c.value}"`).join(', ')}
                       </span>
                     </div>
                   )}
 
                   {/* Step 3: Actions */}
-                  <div className="pt-1 border-t border-gray-100">
-                    <div className="font-semibold text-gray-700 flex items-center gap-1.5 mb-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                      Hành động ({rule.actions?.length || 0}):
+                  <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                    <div className="font-semibold text-gray-700 flex items-center gap-1.5 whitespace-nowrap text-[11px]">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Hành động ({rule.actions?.length || 0}):</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {(rule.actions || []).map((act, idx) => (
-                        <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-gray-200 text-[11px] font-medium text-gray-700">
+                        <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-gray-200 text-[11px] font-medium text-gray-700 whitespace-nowrap shadow-xs">
                           {getActionIcon(act.type)}
-                          {act.type}
+                          <span>{act.type}</span>
                         </span>
                       ))}
                     </div>
@@ -369,26 +408,26 @@ export function WorkflowRulesTab({
               </div>
 
               {/* Footer */}
-              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-                <div className="text-[11px] text-gray-400">
+              <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                <div className="text-[11px] text-gray-400 whitespace-nowrap shrink-0">
                   Đã chạy: <span className="font-bold text-gray-700">{rule.executionCount || 0}</span> lượt
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => handleTestTrigger(rule)}
                     disabled={testingRuleId === rule.id}
                     title="Chạy thử nghiệm kịch bản với payload mẫu"
-                    className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium"
+                    className="px-2.5 py-1 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold border border-gray-200/60 hover:border-purple-200 bg-white"
                   >
-                    <Play className={`w-3.5 h-3.5 ${testingRuleId === rule.id ? 'animate-spin' : ''}`} />
-                    Test
+                    <Play className={`w-3.5 h-3.5 text-purple-600 fill-purple-600/20 ${testingRuleId === rule.id ? 'animate-spin' : ''}`} />
+                    <span>Test</span>
                   </button>
 
                   <button
                     onClick={() => onEditRule(rule)}
                     title="Chỉnh sửa kịch bản"
-                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200/60 hover:border-blue-200 bg-white"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                   </button>
@@ -396,7 +435,7 @@ export function WorkflowRulesTab({
                   <button
                     onClick={() => deleteRule(rule.id, rule.name)}
                     title="Xóa kịch bản"
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200/60 hover:border-red-200 bg-white"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
