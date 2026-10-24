@@ -77,9 +77,9 @@ export default function WalletEarnings() {
     fetchFraudAlerts();
   }, []);
 
-  const fetchWalletData = async () => {
+  const fetchWalletData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await api.get('/wallet');
       if (res.data) {
         setWallet(res.data.wallet);
@@ -93,9 +93,9 @@ export default function WalletEarnings() {
       }
     } catch (e) {
       console.error(e);
-      toast.error('Không thể tải thông tin ví');
+      if (!silent) toast.error('Không thể tải thông tin ví');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -220,8 +220,28 @@ export default function WalletEarnings() {
       const res = await api.post('/wallet/tasks', { taskId: task.id });
       if (res.data?.success) {
         toast.success(res.data.message);
+
+        // 1. Cập nhật ngay lập tức số dư ví
+        if (res.data.wallet) {
+          setWallet(res.data.wallet);
+        } else {
+          setWallet((prev: any) => ({
+            ...prev,
+            availableBalance: (prev?.availableBalance || 0) + (res.data.rewardAmount || task.rewardAmount),
+          }));
+        }
+
+        // 2. Thêm ngay giao dịch thưởng vào đầu danh sách sổ cái
+        if (res.data.transaction) {
+          setTransactions((prev: any[]) => [res.data.transaction, ...prev]);
+        }
+
+        // 3. Đánh dấu nhiệm vụ đã nhận thưởng trên card
+        setEarningTasks((prev: any[]) => prev.map((t: any) => t.id === task.id ? { ...t, isClaimed: true } : t));
+
+        // 4. Đồng bộ lại dữ liệu ngầm từ server
         fetchTasks();
-        fetchWalletData();
+        fetchWalletData(true);
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Không thể nhận thưởng');

@@ -12,6 +12,33 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-24] — Sửa Lỗi Số Dư Ví Không Tăng Sau Khi Nhận Thưởng Nhiệm Vụ (F150)
+
+### Phân hệ M12. Ví Doanh Thu & Tiếp Thị Liên Kết (Wallet & Earnings - F150):
+- **[F150] Đồng bộ hoàn chỉnh số dư Ví và Sổ cái giao dịch khi Nhận Thưởng:**
+  - **Vấn đề ghi nhận từ Tester:**
+    - Người dùng ở nhiệm vụ đã hoàn thành 100% (ví dụ: *"Giới thiệu 3 chủ shop dùng thử Topify"*, +200,000 VND), bấm *"Nhận thưởng"*.
+    - Hệ thống hiện Toast báo thành công, nhiệm vụ chuyển sang *"Đã nhận thưởng"*, nhưng khi quay lại tab *"Ví & Rút Tiền (F146, F148)"*, *"Số Dư Khả Dụng"* vẫn giữ nguyên không tăng và không thấy giao dịch trong tab *"Lịch Sử Giao Dịch (F147)"*.
+  - **Nguyên nhân gốc rễ:**
+    1. Khi người dùng đăng nhập trong Desktop/Web App (có Bearer JWT token), route `GET /api/wallet` lấy số dư từ database `prisma.wallet` theo `userId`.
+    2. Route `POST /api/wallet/tasks` trước đó chỉ tăng số dư trong biến in-memory `memoryWallet` mà hoàn toàn **không thực hiện cập nhật `prisma.wallet` (`balance: { increment: task.rewardAmount }`)** và **không tạo bản ghi `prisma.walletTransaction`**.
+    3. Sau khi nhận thưởng, frontend gọi `fetchWalletData()` $\rightarrow$ gọi `GET /api/wallet` $\rightarrow$ API đọc từ database vẫn là số dư cũ chưa được cộng tiền, dẫn đến số dư bị đè lại như cũ.
+  - **Giải pháp xử lý triệt để:**
+    1. **Tích hợp Prisma & Auth vào `POST /api/wallet/tasks`:**
+       - Tự động nhận diện tài khoản người dùng đăng nhập qua JWT/Session (`auth()`).
+       - Thực hiện giao dịch nguyên tử (`prisma.$transaction`):
+         - Tăng số dư khả dụng trong cơ sở dữ liệu: `prisma.wallet.update({ data: { balance: { increment: task.rewardAmount } } })`.
+         - Tạo ngay bản ghi giao dịch biến động số dư: `prisma.walletTransaction.create({ data: { type: 'EARNING', amount: task.rewardAmount, referenceId: task.id } })`.
+       - Đồng bộ song song bộ nhớ `memoryWallet` và `memoryTransactions` để đảm bảo hoạt động trơn tru trong mọi môi trường.
+       - Trả về đối tượng `wallet` với số dư mới nhất và đối tượng `transaction` chi tiết trong payload phản hồi.
+    2. **Đồng bộ hóa tức thì trên Frontend (`WalletEarnings.tsx`):**
+       - Tại `handleClaimTask`: Ngay khi nhận được phản hồi thành công từ server, lập tức cập nhật state `setWallet(res.data.wallet)` và chèn `res.data.transaction` vào danh sách giao dịch, sau đó gọi ngầm `fetchWalletData(true)` để đồng bộ toàn vẹn.
+       - Khi người dùng chuyển qua lại giữa các tab (Tab 4 $\rightarrow$ Tab 1 hoặc Tab 2), số dư khả dụng tăng ngay lập tức đúng +200,000 VND và giao dịch hiển thị rõ ràng tại Sổ cái với nhãn `EARNING`.
+    3. **Bổ sung Kiểm thử Tự động:**
+       - Thêm test case `should claim task_003 (+200,000 VND) and reflect directly in GET /api/wallet balance and transactions` trong `__tests__/api/wallet/wallet.test.ts`. Toàn bộ 16/16 test case đều pass 100%.
+
+---
+
 ## 🚀 [2026-10-24] — Sửa Lỗi Hiển Thị Trạng Thái Nhiệm Vụ Quá Hạn & Kích Hoạt Nhận Thưởng Tab Nhiệm Vụ Kiếm Thưởng (F150)
 
 ### Phân hệ M12. Ví Doanh Thu & Tiếp Thị Liên Kết (Wallet & Earnings - F150):

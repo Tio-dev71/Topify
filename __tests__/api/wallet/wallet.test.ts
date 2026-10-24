@@ -215,6 +215,41 @@ describe('Wallet & Referral Growth Engine (M12 & M13: F146 - F155)', () => {
       expect(repeatRes.status).toBe(400);
       expect(repeatData.error).toContain('đã được nhận thưởng');
     });
+
+    it('should claim task_003 (+200,000 VND) and reflect directly in GET /api/wallet balance and transactions', async () => {
+      const { POST } = await import('@/app/api/wallet/tasks/route');
+      const { GET: getWallet } = await import('@/app/api/wallet/route');
+
+      // Get initial wallet balance via GET /api/wallet
+      const initialWalletRes = await getWallet({} as any);
+      const initialWalletData = await initialWalletRes.json();
+      const initialBalance = initialWalletData.wallet.availableBalance;
+
+      // Claim task_003
+      const req = {
+        json: async () => ({ taskId: 'task_003' }),
+      } as any;
+
+      const claimRes = await POST(req);
+      const claimData = await claimRes.json();
+
+      expect(claimRes.status).toBe(200);
+      expect(claimData.success).toBe(true);
+      expect(claimData.rewardAmount).toBe(200000);
+      expect(claimData.wallet.availableBalance).toBe(initialBalance + 200000);
+      expect(claimData.transaction).toBeDefined();
+      expect(claimData.transaction.amount).toBe(200000);
+
+      // Verify subsequent GET /api/wallet returns updated balance and transaction
+      const updatedWalletRes = await getWallet({} as any);
+      const updatedWalletData = await updatedWalletRes.json();
+
+      expect(updatedWalletData.wallet.availableBalance).toBe(initialBalance + 200000);
+      const foundTx = updatedWalletData.transactions.find((tx: any) => tx.referenceId === 'task_003');
+      expect(foundTx).toBeDefined();
+      expect(foundTx.amount).toBe(200000);
+      expect(foundTx.type).toBe('EARNING');
+    });
   });
 });
 

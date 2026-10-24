@@ -32,7 +32,26 @@ export async function GET(req: NextRequest) {
 
         if (!dbWallet) {
           dbWallet = await prisma.wallet.create({
-            data: { userId },
+            data: { 
+              userId,
+              balance: memoryWallet.availableBalance,
+              pending: memoryWallet.pendingBalance,
+              withdrawn: memoryWallet.totalWithdrawn,
+            },
+            include: {
+              transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
+              withdrawals: { orderBy: { createdAt: 'desc' }, take: 10 },
+            },
+          });
+        } else if (dbWallet.balance === 0 && (!dbWallet.transactions || dbWallet.transactions.length === 0) && (!dbWallet.withdrawals || dbWallet.withdrawals.length === 0)) {
+          // Initialize balance if wallet was empty
+          dbWallet = await prisma.wallet.update({
+            where: { id: dbWallet.id },
+            data: {
+              balance: memoryWallet.availableBalance,
+              pending: memoryWallet.pendingBalance,
+              withdrawn: memoryWallet.totalWithdrawn,
+            },
             include: {
               transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
               withdrawals: { orderBy: { createdAt: 'desc' }, take: 10 },
@@ -49,8 +68,20 @@ export async function GET(req: NextRequest) {
           currency: 'VND',
           updatedAt: new Date().toISOString(),
         };
-        transactions = dbWallet.transactions;
-        withdrawals = dbWallet.withdrawals;
+
+        const dbTxs = (dbWallet.transactions || []).map((tx: any) => ({
+          id: tx.id,
+          walletId: tx.walletId,
+          type: (tx.type || 'EARNING').toUpperCase(),
+          amount: tx.amount,
+          description: tx.description || 'Giao dịch ví',
+          referenceId: tx.referenceId,
+          status: 'COMPLETED',
+          createdAt: tx.createdAt instanceof Date ? tx.createdAt.toISOString() : tx.createdAt,
+        }));
+
+        transactions = dbTxs.length > 0 ? dbTxs : memoryTransactions;
+        withdrawals = dbWallet.withdrawals && dbWallet.withdrawals.length > 0 ? dbWallet.withdrawals : memoryWithdrawals;
       } catch (dbErr) {
         // Fallback to memory store
       }
