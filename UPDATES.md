@@ -14,6 +14,35 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Tối Ưu AI Content Score (F084): Nhận Diện Caption Vô Nghĩa & Lược Bỏ Brand Voice Khi Chưa Cấu Hình
+
+### Phân hệ M2. Content Studio:
+- **[F084] Khắc phục chấm điểm sai lệch cho caption vô nghĩa & lược bỏ Brand Voice khi không sử dụng:**
+  - **Vấn đề tồn tại:**
+    - Khi người dùng nhập chuỗi ký tự vô nghĩa (vd: `dsfsdfdsf`, bàn phím ngẫu nhiên, spam ký tự), hệ thống trước đây vẫn cho điểm cao bất thường (59/100, Hook 60%, Brand Voice 80%) do:
+      1. Baseline điểm khởi điểm của heuristic engine quá cao (Hook 50, Brand Voice 70).
+      2. Tiêu đề file video kỹ thuật (vd: `[SPECIAL CLIP] BTS (방탄소년단) 'Life Goes On' (in the -mp4_(360p)`) bị nối chung vào caption, số độ phân giải `360` làm tăng điểm Hook và độ dài file làm tăng điểm Brand Voice.
+      3. Logic fallback `"Nội dung súc tích, đi thẳng vào vấn đề chính."` tự động chèn vào mục "Điểm mạnh đã đạt" khi không tìm thấy từ khóa, gây ra nhận xét sai sự thật đối với chuỗi vô nghĩa.
+      4. Mặc định luôn tính và hiển thị cột Brand Voice (80%) ngay cả khi người dùng không truyền hoặc không cấu hình Brand Voice.
+  - **Giải pháp xử lý:**
+    - **Nhận diện chuỗi vô nghĩa / spam (`isMeaninglessOrGibberish`):**
+      - Tích hợp bộ phát hiện ngôn ngữ tự nhiên: kiểm tra chuỗi rỗng, chuỗi quá ngắn (< 5 ký tự), lặp ký tự liên tiếp (`aaa`, `...`), chuỗi thuần số/ký tự đặc biệt, kiểm tra tỷ lệ nguyên âm (vowel ratio) tiếng Việt và tiếng Anh, phát hiện chùm phụ âm bất thường (>= 5 phụ âm liên tiếp) và mô hình âm tiết lặp ngẫu nhiên.
+      - Khi phát hiện caption vô nghĩa: trả về điểm rất thấp ngay lập tức (Tổng điểm <= 15/100, Hook <= 10%, CTA <= 5%, Chuẩn nền tảng <= 10%).
+      - Xóa bỏ triệt để mọi nhận xét khen ngợi sai sự thật (`strengths: []`), đưa ra khuyến nghị cảnh báo nội dung vô nghĩa và hướng dẫn viết lại Hook, CTA, hashtag chuẩn.
+    - **Làm sạch tiêu đề file video (`cleanVideoTitle`):**
+      - Tự động bóc tách các thẻ đuôi định dạng và thông số downloader kỹ thuật (`.mp4`, `(in the -mp4_(360p))`, `[SPECIAL CLIP]`, `[OFFICIAL MV]`) để lấy tên tác phẩm/chủ đề sạch (vd: `BTS (방탄소년단) 'Life Goes On'`), từ đó tạo ra bản caption gợi ý chất lượng cao, đúng ngữ cảnh video.
+    - **Lược bỏ hoàn toàn trụ cột Brand Voice khi không cấu hình:**
+      - Nếu `brandVoice` không được cung cấp (hoặc rỗng), hệ thống hoàn toàn loại bỏ `brandVoiceScore` và `brandVoiceAnalysis`.
+      - Điểm tổng hợp được chuẩn hóa tự động theo 3 trụ cột còn lại: Hook (45%), CTA (30%), Chuẩn nền tảng (25%) (tổng = 100%).
+      - Score Card trên giao diện (`ContentScoreCard.tsx`) tự động chuyển layout sang 3 cột (`grid-cols-1 sm:grid-cols-3`), phụ đề hiển thị *"Chấm điểm Hook 3s, CTA & Nền tảng"*.
+      - Mục "Điểm mạnh đã đạt" khi không có điểm mạnh nào sẽ hiển thị dòng trạng thái trung thực: *"Chưa ghi nhận điểm mạnh nổi bật. Vui lòng tối ưu theo khuyến nghị bên cạnh."* thay vì khen sai.
+  - **Kiểm thử:**
+    - Bộ 9 unit tests tự động tại `__tests__/api/content/ai-score.test.ts` (9/9 passed).
+    - Build thành công cả frontend Electron Desktop App và Next.js Backend.
+  - **Tệp thay đổi:** `lib/ai/9router.ts`, `electron-app/frontend/src/components/ContentScoreCard.tsx`, `__tests__/api/content/ai-score.test.ts`, `TEST_CASES.md`, `UPDATES.md`.
+
+---
+
 ## 🚀 [2026-10-24] — Khắc Phục Lỗi Spin Biến Thể F015 & Tích Hợp Popup Modal Hoàn Chỉnh
 
 ### Phân hệ M2. Content Studio:

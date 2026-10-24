@@ -6,11 +6,11 @@ export interface ContentScoreData {
   overallScore: number;
   hookScore: number;
   ctaScore: number;
-  brandVoiceScore: number;
+  brandVoiceScore?: number | null;
   platformFitScore: number;
   hookAnalysis: string;
   ctaAnalysis: string;
-  brandVoiceAnalysis: string;
+  brandVoiceAnalysis?: string | null;
   platformFitAnalysis: string;
   strengths: string[];
   improvements: string[];
@@ -66,6 +66,7 @@ export function ContentScoreCard({
   };
 
   const theme = scoreData ? getScoreTheme(scoreData.overallScore) : null;
+  const hasBrandVoice = scoreData?.brandVoiceScore !== undefined && scoreData?.brandVoiceScore !== null;
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-md overflow-hidden shadow-xs">
@@ -87,7 +88,9 @@ export function ContentScoreCard({
               )}
             </div>
             <p className="text-[11px] text-slate-500">
-              Chấm điểm Hook 3s, CTA, Brand Voice & Nền tảng
+              {hasBrandVoice
+                ? 'Chấm điểm Hook 3s, CTA, Brand Voice & Nền tảng'
+                : 'Chấm điểm Hook 3s, CTA & Nền tảng'}
             </p>
           </div>
         </div>
@@ -154,8 +157,8 @@ export function ContentScoreCard({
             </button>
           </div>
 
-          {/* 4 Pillars Progress Bars */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+          {/* Pillars Progress Bars (3 pillars if no brand voice, 4 pillars if configured) */}
+          <div className={`grid gap-2.5 pt-1 ${hasBrandVoice ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
             {/* Pillar 1: Hook */}
             <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
               <div className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">
@@ -184,19 +187,21 @@ export function ContentScoreCard({
               </div>
             </div>
 
-            {/* Pillar 3: Brand Voice */}
-            <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                <span>🎭 Brand Voice</span>
-                <span className="font-bold">{scoreData.brandVoiceScore}%</span>
+            {/* Pillar 3: Brand Voice (only if brand voice was provided) */}
+            {hasBrandVoice && (
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  <span>🎭 Brand Voice</span>
+                  <span className="font-bold">{scoreData.brandVoiceScore}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                    style={{ width: `${scoreData.brandVoiceScore}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                  style={{ width: `${scoreData.brandVoiceScore}%` }}
-                />
-              </div>
-            </div>
+            )}
 
             {/* Pillar 4: Platform Fit */}
             <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
@@ -231,14 +236,20 @@ export function ContentScoreCard({
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span>Điểm mạnh đã đạt:</span>
                     </div>
-                    <ul className="space-y-1 text-slate-600 dark:text-slate-400">
-                      {scoreData.strengths.map((item, idx) => (
-                        <li key={idx} className="flex items-start gap-1.5">
-                          <span className="text-emerald-500">•</span>
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {scoreData.strengths && scoreData.strengths.length > 0 ? (
+                      <ul className="space-y-1 text-slate-600 dark:text-slate-400">
+                        {scoreData.strengths.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <span className="text-emerald-500">•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-slate-500 dark:text-slate-400 italic">
+                        Chưa ghi nhận điểm mạnh nổi bật. Vui lòng tối ưu theo khuyến nghị bên cạnh.
+                      </p>
+                    )}
                   </div>
 
                   {/* Improvements */}
