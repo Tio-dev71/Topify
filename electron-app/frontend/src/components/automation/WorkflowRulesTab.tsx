@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/axios';
 import { toast } from 'sonner';
+import { TestResultModal, type TestResultData } from './TestResultModal';
 
 export interface AutomationRule {
   id: string;
@@ -50,6 +51,7 @@ interface WorkflowRulesTabProps {
   onOpenTemplatesModal: () => void;
   onEditRule: (rule: AutomationRule) => void;
   onRefreshLogs: () => void;
+  onNavigateToLogs?: () => void;
 }
 
 export function WorkflowRulesTab({
@@ -57,12 +59,15 @@ export function WorkflowRulesTab({
   onOpenTemplatesModal,
   onEditRule,
   onRefreshLogs,
+  onNavigateToLogs,
 }: WorkflowRulesTabProps) {
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTrigger, setFilterTrigger] = useState('ALL');
   const [testingRuleId, setTestingRuleId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<TestResultData | null>(null);
+  const [isReRunningAutoMatch, setIsReRunningAutoMatch] = useState(false);
 
   useEffect(() => {
     fetchRules();
@@ -110,7 +115,17 @@ export function WorkflowRulesTab({
       setTestingRuleId(rule.id);
       const res = await api.post('/automations/trigger-test', { ruleId: rule.id });
       if (res.data?.success) {
-        toast.success(res.data.message || 'Kịch bản chạy thử thành công!');
+        setTestResult(res.data);
+        if (res.data.status === 'SUCCESS') {
+          toast.success(res.data.message || `Kịch bản "${rule.name}" đã kích hoạt thành công!`);
+          setRules(prev => prev.map(r => r.id === rule.id ? { ...r, executionCount: (r.executionCount || 0) + 1 } : r));
+        } else {
+          // Warning toast for SKIPPED status - never show green success checkmark!
+          toast.warning(
+            `Kịch bản "${rule.name}" đã bỏ qua (Không thỏa điều kiện). Đã mở bảng chẩn đoán chi tiết.`,
+            { duration: 5000 }
+          );
+        }
         fetchRules();
         onRefreshLogs();
       } else {
@@ -120,6 +135,32 @@ export function WorkflowRulesTab({
       toast.error(e.response?.data?.error || 'Lỗi khi chạy thử kịch bản');
     } finally {
       setTestingRuleId(null);
+    }
+  };
+
+  const handleRunAutoMatchTest = async () => {
+    if (!testResult?.diagnostic?.ruleId) return;
+    try {
+      setIsReRunningAutoMatch(true);
+      const res = await api.post('/automations/trigger-test', { 
+        ruleId: testResult.diagnostic.ruleId,
+        autoMatch: true 
+      });
+      if (res.data?.success) {
+        setTestResult(res.data);
+        if (res.data.status === 'SUCCESS') {
+          toast.success(`Đã chạy thử thành công với dữ liệu khớp 100%! Đã kích hoạt hành động.`);
+          setRules(prev => prev.map(r => r.id === testResult.diagnostic.ruleId ? { ...r, executionCount: (r.executionCount || 0) + 1 } : r));
+          fetchRules();
+          onRefreshLogs();
+        } else {
+          toast.warning(res.data.message || 'Kịch bản vẫn bị bỏ qua');
+        }
+      }
+    } catch (e: any) {
+      toast.error('Lỗi khi chạy thử tự động');
+    } finally {
+      setIsReRunningAutoMatch(false);
     }
   };
 
@@ -244,9 +285,9 @@ export function WorkflowRulesTab({
       </div>
 
       {/* Control Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-        <div className="flex items-center gap-2 flex-1">
-          <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-2 flex-1 flex-wrap min-w-0">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -260,7 +301,7 @@ export function WorkflowRulesTab({
           <select
             value={filterTrigger}
             onChange={e => setFilterTrigger(e.target.value)}
-            className="text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 shrink-0"
           >
             <option value="ALL">Tất cả nguồn kích hoạt</option>
             <option value="COMMENT">Comment mạng xã hội</option>
@@ -271,21 +312,21 @@ export function WorkflowRulesTab({
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             onClick={onOpenTemplatesModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors whitespace-nowrap shrink-0"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            Mẫu Kịch Bản (Templates)
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Mẫu Kịch Bản (Templates)</span>
           </button>
 
           <button
             onClick={onOpenCreateModal}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow transition-all whitespace-nowrap shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            Tạo Kịch Bản Mới
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Tạo Kịch Bản Mới</span>
           </button>
         </div>
       </div>
@@ -445,6 +486,21 @@ export function WorkflowRulesTab({
           ))}
         </div>
       )}
+
+      {/* Test Result Diagnostic Modal */}
+      <TestResultModal
+        isOpen={!!testResult}
+        onClose={() => setTestResult(null)}
+        result={testResult}
+        onRunAutoMatchTest={handleRunAutoMatchTest}
+        isReRunning={isReRunningAutoMatch}
+        onViewLogs={() => {
+          setTestResult(null);
+          if (onNavigateToLogs) {
+            onNavigateToLogs();
+          }
+        }}
+      />
     </div>
   );
 }

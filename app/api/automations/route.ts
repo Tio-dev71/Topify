@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
       } else {
         automations = await prisma.automationRule.findMany({
           take: 50,
+          include: { _count: { select: { logs: true } } },
           orderBy: { createdAt: 'desc' },
         });
       }
@@ -29,13 +30,22 @@ export async function GET(req: NextRequest) {
       automations = [];
     }
 
-    if (!automations || automations.length === 0) {
-      automations = memoryAutomationRules;
-    }
+    const sourceRules = (!automations || automations.length === 0) 
+      ? memoryAutomationRules 
+      : automations;
 
-    return NextResponse.json({ automations, success: true });
+    const formattedAutomations = sourceRules.map((rule: any) => ({
+      ...rule,
+      executionCount: rule._count?.logs ?? rule.executionCount ?? 0,
+    }));
+
+    return NextResponse.json({ automations: formattedAutomations, success: true });
   } catch (error: any) {
-    return NextResponse.json({ automations: memoryAutomationRules, success: true, fallback: true });
+    const formattedFallback = memoryAutomationRules.map(r => ({
+      ...r,
+      executionCount: r.executionCount || 0,
+    }));
+    return NextResponse.json({ automations: formattedFallback, success: true, fallback: true });
   }
 }
 

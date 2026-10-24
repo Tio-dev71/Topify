@@ -14,6 +14,50 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Tối Ưu Chạy Thử Kịch Bản (Test Trigger Diagnostics) & Khắc Phục Tràn Header Trang Tự Động Hóa
+
+### Phân hệ M11. Tự Động Hóa (Automation Flow):
+- **[F141 - F144] Hoàn thiện trải nghiệm Chạy Thử Kịch Bản (Test Trigger) và sửa lỗi tràn Header:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    1. **Thông báo Test Trigger không rõ mục đích, hiển thị sai dạng Thành công khi bị Bỏ qua:** Khi bấm nút "Test" trên card kịch bản, hệ thống hiển thị Toast màu xanh lá có dấu tick với nội dung: `Kịch bản 'Test Trigger' đã bỏ qua (Không thỏa điều kiện)`. Thông báo này gây hiểu lầm là đã kích hoạt thành công (dù thực tế bị bỏ qua), không nêu rõ mục đích của tính năng Test, không cho biết dữ liệu mẫu đã đưa vào là gì, điều kiện nào không thỏa và cách để kích hoạt thành công.
+    2. **Chỉ số 'Tổng lượt kích hoạt' vẫn là 0:** Dữ liệu kịch bản lấy từ cơ sở dữ liệu Prisma không map trường đếm log `_count.logs` vào `executionCount`, đồng thời route `trigger-test` trước đây không lưu log vào bảng `AutomationRuleLog` trên Prisma khi kích hoạt thành công, khiến số lượt chạy bị kẹt ở mức 0.
+    3. **Bộ đánh giá điều kiện không hỗ trợ danh sách từ khóa phân tách bằng dấu phẩy:** Các mẫu kịch bản thường cấu hình `value: 'giá, bao nhiêu, ib'` nhưng engine trước đây kiểm tra chuỗi nguyên khối `text.includes('giá, bao nhiêu, ib')` thay vì tách từng từ khóa, dẫn đến câu test mẫu luôn bị đánh giá trượt.
+    4. **Tràn Header trang Tự động hóa:** Container header sử dụng `sm:flex-row` (kích hoạt từ 640px) trong khi tổng chiều rộng tiêu đề, badge `M11 Core` và 2 nút hành động ("Mẫu Quy Trình (1-Click)", "Tạo Kịch Bản Mới") vượt quá 850px. Trên các màn hình laptop và cửa sổ Electron có sidebar, nút "Tạo Kịch Bản Mới" bị ép ra sát mép phải và cắt cụt thành `"Tạo Kịch…"`, đồng thời badge `M11 Core` bị chèn đè lên khu vực các nút bấm.
+  - **Giải pháp xử lý toàn diện:**
+    1. **Tái cấu trúc Header trang Tự Động Hóa (`Automation.tsx`):**
+       - Chuyển điểm ngắt flex từ `sm:flex-row` sang `xl:flex-row items-start xl:items-center justify-between gap-4`.
+       - Khối tiêu đề bên trái: Đặt trong `min-w-0 flex-1`, tiêu đề và badge `M11 Core` nằm trong hàng `flex-wrap gap-2.5` với `shrink-0 whitespace-nowrap`, không bao giờ bị đè lấn sang khu vực nút.
+       - Khối nút hành động bên phải: Được bao bọc với `flex-wrap gap-2.5 shrink-0`, gán `whitespace-nowrap shrink-0` cho cả 2 nút "Mẫu Quy Trình (1-Click)" và "Tạo Kịch Bản Mới", triệt tiêu hoàn toàn hiện tượng cắt xén chữ ở mép phải.
+       - Tương tự, thanh điều khiển Control Bar trong `WorkflowRulesTab.tsx` được bổ sung `flex-wrap min-w-0` đảm bảo không bị tràn trên mọi độ phân giải.
+    2. **Nâng cấp Động cơ Đối soát Điều kiện (`lib/automation/flow-engine.ts`):**
+       - Bổ sung hàm chẩn đoán chuyên sâu `evaluateConditionsDetailed`: Tự động phân tách danh sách từ khóa có dấu phẩy (vd: `giá, bao nhiêu, ib` $\rightarrow$ mảng `['giá', 'bao nhiêu', 'ib']`).
+       - Đối soát từng điều kiện đơn lẻ, xuất ra kết quả chi tiết từng mục: `matched` (Đạt / Chưa đạt), `actualValue` (Giá trị thực tế), `expectedValue` (Giá trị yêu cầu) và `reason` (Lý giải tường minh bằng tiếng Việt).
+    3. **Nâng cấp API Chạy Thử (`app/api/automations/trigger-test/route.ts`):**
+       - Tìm kiếm kịch bản linh hoạt trong cả bộ nhớ RAM (`memoryAutomationRules`) lẫn Database Prisma (`prisma.automationRule`).
+       - Bổ sung tham số `autoMatch: true`: Tự động trích xuất các điều kiện của kịch bản để tạo ra câu phát biểu thử nghiệm khớp 100% điều kiện, giúp tester kiểm tra thành công ngay lập tức.
+       - Khi kịch bản chạy thành công: Tự động ghi nhận `AutomationRuleLog` vào cơ sở dữ liệu Prisma và cập nhật `executionCount`.
+       - Trả về payload chẩn đoán hoàn chỉnh gồm: `purpose`, `status` (`SUCCESS` / `SKIPPED`), `diagnostic` (chi tiết dữ liệu test, kết quả từng điều kiện, lý do bỏ qua, hướng dẫn khắc phục `howToPass`, danh sách hành động đã thực thi).
+    4. **Đồng bộ Lượt Kích Hoạt Trong API Danh Sách (`app/api/automations/route.ts`):**
+       - Bổ sung `include: { _count: { select: { logs: true } } }` cho mọi trường hợp truy vấn.
+       - Ánh xạ chính xác `executionCount: rule._count?.logs ?? rule.executionCount ?? 0`, đảm bảo con số trên thẻ kịch bản và thẻ KPI "Tổng lượt kích hoạt" luôn đồng bộ và nhảy số ngay sau khi chạy test thành công.
+    5. **Xây dựng Modal Chẩn đoán Kết Quả Chạy Thử (`TestResultModal.tsx`):**
+       - **Phân định rõ rệt trạng thái qua Toast:**
+         - Khi kịch bản thành công: Bắn Toast xanh lá (`toast.success`) với icon tick xác nhận.
+         - Khi kịch bản bị bỏ qua: Bắn Toast cảnh báo màu cam (`toast.warning`) kèm thông báo rõ lý do chưa thỏa điều kiện, tuyệt đối không dùng màu xanh thành công.
+       - **Hiển thị Modal chẩn đoán chi tiết:**
+         - Nêu rõ **Mục đích chạy thử**: Giúp người dùng kiểm tra trước quy trình với dữ liệu giả lập mà không làm phiền khách hàng thật.
+         - Hiển thị rõ **Dữ liệu mẫu đã dùng**: Kênh phát sinh, Người gửi, Nội dung sự kiện (`text`).
+         - Bảng **Đối soát từng điều kiện**: Từng điều kiện có nhãn "Đạt" (xanh) hoặc "Chưa đạt" (cam) và giải thích chi tiết tại sao chưa đạt.
+         - Khung **Hướng dẫn khắc phục**: Chỉ rõ cần bổ sung từ khóa gì hoặc dữ liệu gì để thỏa mãn.
+         - Nút 1-Click **"⚡ Chạy Thử Khớp Điều Kiện (100% Pass)"**: Bấm để chạy ngay với dữ liệu chuẩn, lập tức kích hoạt chuỗi hành động và tăng số lượt chạy lên 1!
+         - Nút **"📋 Xem Nhật Ký (Logs)"**: Chuyển thẳng sang Tab Nhật ký để xem chi tiết log vừa ghi nhận.
+  - **Kiểm thử tự động:**
+    - Cập nhật bộ unit test `__tests__/api/automations/rules.test.ts` bổ sung các ca kiểm thử: phân tách từ khóa dấu phẩy, báo cáo chi tiết lỗi điều kiện `evaluateConditionsDetailed`, báo cáo thành công (10/10 tests passed).
+    - Build thành công cả `electron-app/frontend` (Vite) và Next.js production.
+  - **Tệp thay đổi:** `lib/automation/flow-engine.ts`, `app/api/automations/trigger-test/route.ts`, `app/api/automations/route.ts`, `electron-app/frontend/src/components/automation/TestResultModal.tsx`, `electron-app/frontend/src/components/automation/WorkflowRulesTab.tsx`, `electron-app/frontend/src/pages/Automation.tsx`, `__tests__/api/automations/rules.test.ts`, `TEST_CASES.md`, `UPDATES.md`.
+
+---
+
 ## 🚀 [2026-10-24] — Khắc Phục Lỗi Giao Diện Thẻ Kịch Bản Tự Động Hóa (Automation Rule Cards Layout & Overflow)
 
 ### Phân hệ M11. Tự Động Hóa (Automation):

@@ -84,54 +84,115 @@ export interface AutomationTemplate {
   recommendedFor: string;
 }
 
-// ============================================
-// Condition Evaluation Engine (F142)
-// ============================================
+export interface ConditionEvaluationResult {
+  condition: AutomationCondition;
+  matched: boolean;
+  actualValue: string;
+  expectedValue: string;
+  reason: string;
+}
 
-export function evaluateConditions(conditions: AutomationCondition[], context: Record<string, any>): boolean {
-  if (!conditions || conditions.length === 0) return true;
+export interface DetailedEvaluation {
+  isMatched: boolean;
+  results: ConditionEvaluationResult[];
+  failedConditions: ConditionEvaluationResult[];
+  explanation: string;
+}
+
+export function evaluateConditionsDetailed(
+  conditions: AutomationCondition[],
+  context: Record<string, any>
+): DetailedEvaluation {
+  if (!conditions || conditions.length === 0) {
+    return {
+      isMatched: true,
+      results: [],
+      failedConditions: [],
+      explanation: 'Kịch bản không có điều kiện lọc, tự động thỏa mãn mọi sự kiện.',
+    };
+  }
+
+  const results: ConditionEvaluationResult[] = [];
 
   for (const condition of conditions) {
     const rawVal = context[condition.field] ?? context.text ?? '';
     const textVal = String(rawVal).toLowerCase().trim();
-    const condVal = Array.isArray(condition.value) 
+    
+    // Support comma-separated strings as multiple target values for contains and in
+    const condList: string[] = Array.isArray(condition.value)
       ? condition.value.map(v => String(v).toLowerCase().trim())
-      : String(condition.value).toLowerCase().trim();
+      : typeof condition.value === 'string' && condition.value.includes(',')
+        ? condition.value.split(',').map(s => s.toLowerCase().trim()).filter(Boolean)
+        : [String(condition.value).toLowerCase().trim()];
 
     let matched = false;
+    let reason = '';
 
     switch (condition.operator) {
       case 'contains':
-        if (Array.isArray(condVal)) {
-          matched = condVal.some(v => textVal.includes(v));
-        } else {
-          matched = textVal.includes(condVal);
-        }
+        matched = condList.some(v => textVal.includes(v));
+        reason = matched
+          ? `Nội dung chứa từ khóa phù hợp (${condList.filter(v => textVal.includes(v)).join(', ')})`
+          : `Nội dung "${rawVal}" không chứa bất kỳ từ khóa nào trong danh sách yêu cầu: "${Array.isArray(condition.value) ? condition.value.join(', ') : condition.value}"`;
         break;
       case 'equals':
-        matched = textVal === condVal;
+        matched = textVal === String(condition.value).toLowerCase().trim();
+        reason = matched
+          ? `Trường ${condition.field} bằng chính xác giá trị "${condition.value}"`
+          : `Trường ${condition.field} có giá trị thực tế là "${rawVal}", không bằng "${condition.value}"`;
         break;
       case 'not_equals':
-        matched = textVal !== condVal;
+        matched = textVal !== String(condition.value).toLowerCase().trim();
+        reason = matched
+          ? `Trường ${condition.field} khác giá trị "${condition.value}"`
+          : `Trường ${condition.field} có giá trị "${rawVal}" trùng với "${condition.value}"`;
         break;
       case 'starts_with':
-        matched = typeof condVal === 'string' && textVal.startsWith(condVal);
+        matched = condList.some(v => textVal.startsWith(v));
+        reason = matched
+          ? `Nội dung bắt đầu bằng tiền tố phù hợp`
+          : `Nội dung "${rawVal}" không bắt đầu bằng tiền tố "${condition.value}"`;
         break;
       case 'in':
-        if (Array.isArray(condVal)) {
-          matched = condVal.includes(textVal);
-        } else {
-          matched = textVal.includes(condVal);
-        }
+        matched = condList.includes(textVal);
+        reason = matched
+          ? `Giá trị "${rawVal}" nằm trong danh mục cho phép`
+          : `Giá trị "${rawVal}" không nằm trong danh mục: "${Array.isArray(condition.value) ? condition.value.join(', ') : condition.value}"`;
         break;
       default:
         matched = false;
+        reason = `Toán tử điều kiện không được hỗ trợ: ${condition.operator}`;
     }
 
-    if (!matched) return false;
+    results.push({
+      condition,
+      matched,
+      actualValue: String(rawVal),
+      expectedValue: Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value),
+      reason,
+    });
   }
 
-  return true;
+  const failedConditions = results.filter(r => !r.matched);
+  const isMatched = failedConditions.length === 0;
+
+  let explanation = '';
+  if (isMatched) {
+    explanation = 'Tất cả các điều kiện lọc đều thỏa mãn.';
+  } else {
+    explanation = `Có ${failedConditions.length}/${conditions.length} điều kiện chưa thỏa mãn: ${failedConditions.map(f => f.reason).join('; ')}`;
+  }
+
+  return {
+    isMatched,
+    results,
+    failedConditions,
+    explanation,
+  };
+}
+
+export function evaluateConditions(conditions: AutomationCondition[], context: Record<string, any>): boolean {
+  return evaluateConditionsDetailed(conditions, context).isMatched;
 }
 
 // ============================================

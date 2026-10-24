@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { 
   evaluateConditions, 
+  evaluateConditionsDetailed,
   executeActions, 
   INITIAL_AUTOMATION_TEMPLATES, 
   AutomationRuleItem,
@@ -68,14 +69,51 @@ describe('M11 Automation Workflow Rules & Engine', () => {
     });
   });
 
-  describe('Condition Evaluation Engine', () => {
-    it('evaluates "contains" condition accurately', () => {
+  describe('Condition Evaluation Engine (Detailed Breakdown & Diagnostic)', () => {
+    it('evaluates "contains" condition accurately with single and comma-separated keywords', () => {
       const conditions: AutomationCondition[] = [
-        { field: 'keyword', operator: 'contains', value: 'giá' },
+        { field: 'keyword', operator: 'contains', value: 'giá, bao nhiêu, ib, ship' },
       ];
 
       expect(evaluateConditions(conditions, { text: 'Sản phẩm này giá bao nhiêu?' })).toBe(true);
+      expect(evaluateConditions(conditions, { text: 'Có ship hỏa tốc không shop?' })).toBe(true);
       expect(evaluateConditions(conditions, { text: 'Xin chào shop' })).toBe(false);
+    });
+
+    it('provides detailed diagnostic report on failed conditions with reasons', () => {
+      const conditions: AutomationCondition[] = [
+        { field: 'keyword', operator: 'contains', value: 'chốt đơn, mua ngay' },
+        { field: 'status', operator: 'equals', value: 'VIP' },
+      ];
+
+      const payload = {
+        text: 'Shop ơi áo này giá bao nhiêu?',
+        status: 'NEW',
+      };
+
+      const detailed = evaluateConditionsDetailed(conditions, payload);
+
+      expect(detailed.isMatched).toBe(false);
+      expect(detailed.failedConditions).toHaveLength(2);
+      expect(detailed.failedConditions[0].condition.field).toBe('keyword');
+      expect(detailed.failedConditions[0].reason).toContain('không chứa bất kỳ từ khóa nào');
+      expect(detailed.failedConditions[1].condition.field).toBe('status');
+      expect(detailed.failedConditions[1].reason).toContain('không bằng "VIP"');
+      expect(detailed.explanation).toContain('2/2 điều kiện chưa thỏa mãn');
+    });
+
+    it('provides detailed report on successful match', () => {
+      const conditions: AutomationCondition[] = [
+        { field: 'keyword', operator: 'contains', value: 'tư vấn' },
+      ];
+
+      const payload = { text: 'Shop ơi tư vấn size áo giúp em' };
+      const detailed = evaluateConditionsDetailed(conditions, payload);
+
+      expect(detailed.isMatched).toBe(true);
+      expect(detailed.failedConditions).toHaveLength(0);
+      expect(detailed.results[0].matched).toBe(true);
+      expect(detailed.results[0].reason).toContain('Nội dung chứa từ khóa phù hợp');
     });
 
     it('evaluates multiple conditions with logical AND', () => {

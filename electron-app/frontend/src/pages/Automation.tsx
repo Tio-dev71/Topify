@@ -39,44 +39,42 @@ export default function Automation() {
   return (
     <div className="space-y-6 animate-fade-in p-2 sm:p-4 max-w-7xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-200">
-              <Zap className="w-5 h-5" />
+      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-200 shrink-0">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                Tự Động Hóa Đa Phân Hệ (Automation Flow)
+              </h1>
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0 whitespace-nowrap">
+                M11 Core
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-                  Tự Động Hóa Đa Phân Hệ (Automation Flow)
-                </h1>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                  M11 Core
-                </span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Xây dựng quy trình kích hoạt (F141), điều kiện lọc (F142), hành động liên module (F143) và theo dõi nhật ký thực thi (F144).
-              </p>
-            </div>
+            <p className="text-xs text-gray-500 line-clamp-2 sm:line-clamp-none">
+              Xây dựng quy trình kích hoạt (F141), điều kiện lọc (F142), hành động liên module (F143) và theo dõi nhật ký thực thi (F144).
+            </p>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-stretch sm:self-auto">
           <button
             onClick={() => setShowTemplatesModal(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-2xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors shadow-sm"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-2xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors shadow-sm whitespace-nowrap shrink-0"
           >
-            <Sparkles className="w-4 h-4" />
-            Mẫu Quy Trình (1-Click)
+            <Sparkles className="w-4 h-4 shrink-0" />
+            <span>Mẫu Quy Trình (1-Click)</span>
           </button>
 
           <button
             onClick={handleOpenCreateModal}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-2xl bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-md shadow-purple-200"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-2xl bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-md shadow-purple-200 whitespace-nowrap shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            Tạo Kịch Bản Mới
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Tạo Kịch Bản Mới</span>
           </button>
         </div>
       </div>
@@ -135,6 +133,7 @@ export default function Automation() {
             onOpenTemplatesModal={() => setShowTemplatesModal(true)}
             onEditRule={handleEditRule}
             onRefreshLogs={handleRefresh}
+            onNavigateToLogs={() => setActiveTab('logs')}
           />
         )}
 
