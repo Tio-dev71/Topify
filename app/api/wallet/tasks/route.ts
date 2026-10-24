@@ -9,11 +9,18 @@ import {
 // GET /api/wallet/tasks - List all earning tasks (F150)
 export async function GET() {
   try {
+    const now = Date.now();
+    const enrichedTasks = memoryEarningTasks.map(t => ({
+      ...t,
+      isExpired: new Date(t.expiresAt).getTime() < now,
+    }));
+
     return NextResponse.json({
-      tasks: memoryEarningTasks,
-      total: memoryEarningTasks.length,
-      completedCount: memoryEarningTasks.filter(t => t.isCompleted).length,
-      claimedCount: memoryEarningTasks.filter(t => t.isClaimed).length,
+      tasks: enrichedTasks,
+      total: enrichedTasks.length,
+      completedCount: enrichedTasks.filter(t => t.isCompleted).length,
+      claimedCount: enrichedTasks.filter(t => t.isClaimed).length,
+      expiredCount: enrichedTasks.filter(t => t.isExpired && !t.isCompleted).length,
       success: true,
     });
   } catch (error: any) {
@@ -32,7 +39,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nhiệm vụ không tồn tại' }, { status: 404 });
     }
 
+    const isExpired = new Date(task.expiresAt).getTime() < Date.now();
+
     if (!task.isCompleted) {
+      if (isExpired) {
+        return NextResponse.json({
+          error: 'Nhiệm vụ đã hết hạn và chưa hoàn thành mục tiêu',
+        }, { status: 400 });
+      }
       return NextResponse.json({
         error: `Chưa hoàn thành nhiệm vụ (${task.progress}/${task.maxProgress} ${task.unit})`,
       }, { status: 400 });

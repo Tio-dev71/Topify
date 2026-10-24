@@ -12,6 +12,35 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-24] — Sửa Lỗi Hiển Thị Trạng Thái Nhiệm Vụ Quá Hạn & Kích Hoạt Nhận Thưởng Tab Nhiệm Vụ Kiếm Thưởng (F150)
+
+### Phân hệ M12. Ví Doanh Thu & Tiếp Thị Liên Kết (Wallet & Earnings - F150):
+- **[F150] Xử lý chính xác trạng thái Quá Hạn (Overdue) và trạng thái Đã Nhận Thưởng / Nhận Thưởng Ngay:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    1. **Nhiệm vụ quá hạn vẫn báo "Đang thực hiện":** Nhiệm vụ `'Xuất bản 10 bài đăng social trong tuần'` (tiến độ 8/10, 80%) có hạn chót là `20/10/2026`, thời điểm kiểm thử là `22/10/2026` (hoặc `24/10/2026`), nhưng ở góc dưới bên phải card vẫn hiển thị `"Đang thực hiện"`, gây hiểu nhầm cho người dùng là nhiệm vụ vẫn còn hiệu lực.
+    2. **Nhiệm vụ hoàn thành 100% hiển thị "Đã nhận thưởng" xám mờ:** Nhiệm vụ `'Đạt mốc 10.000 lượt xem video ngắn'` (10.000/10.000, 100%) hiển thị nhãn xám *"Đã nhận thưởng"*, trong khi người dùng thực tế chưa hề bấm *"Nhận thưởng"*, khiến người dùng mất cơ hội tương tác và không kiểm tra được luồng cộng tiền ví.
+  - **Giải pháp xử lý toàn diện:**
+    1. **Bổ sung logic kiểm tra Quá hạn (`isOverdue = isExpired && !isCompleted`):**
+       - Tại API Backend (`/api/wallet/tasks`): Tính toán thuộc tính động `isExpired: new Date(t.expiresAt).getTime() < now` cho từng nhiệm vụ và trả về `expiredCount`. Chặn yêu cầu nhận thưởng với các task quá hạn chưa hoàn thành (`400 Bad Request: Nhiệm vụ đã hết hạn và chưa hoàn thành mục tiêu`).
+       - Tại giao diện Frontend (`WalletEarnings.tsx`): Kiểm tra thời gian hết hạn của từng task:
+         - Khi nhiệm vụ đã quá hạn và chưa hoàn thành (`isOverdue`):
+           - Góc dưới bên phải hiển thị rõ ràng badge đỏ: `⚠️ Đã hết hạn` (`text-rose-600 bg-rose-50 border-rose-200`). Tuyệt đối không hiển thị `"Đang thực hiện"`.
+           - Dòng hạn chót hiển thị màu đỏ kèm icon cảnh báo `AlertCircle` (`text-rose-600`).
+           - Huy hiệu danh mục bổ sung tag `Quá hạn` màu đỏ.
+           - Phần thưởng VND hiển thị gạch ngang (`line-through text-gray-400`).
+           - Thanh tiến độ chuyển sang màu đỏ hồng nhạt `bg-rose-400`.
+         - Khi nhiệm vụ còn trong hạn và chưa hoàn thành: Hiển thị badge vàng/cam `Clock` `"Đang thực hiện"`.
+    2. **Chuẩn hóa trạng thái Nhận Thưởng:**
+       - Trong bộ dữ liệu giả lập (`lib/wallet/wallet-engine.ts`): Cập nhật `task_002` (`'Đạt mốc 10.000 lượt xem video ngắn'`) sang `isClaimed: false, isCompleted: true`.
+       - Trên giao diện Frontend:
+         - Khi nhiệm vụ đạt 100% tiến độ và chưa nhận thưởng (`isCompleted && !isClaimed`): Hiển thị nút bấm xanh lá nổi bật có hiệu ứng ánh sao: `✨ Nhận Thưởng Ngay` (`animate-pulse bg-emerald-600 hover:bg-emerald-700`).
+         - Khi người dùng bấm nút: Gửi request `POST /api/wallet/tasks`, cộng ngay tiền thưởng vào số dư khả dụng (`availableBalance`), ghi nhận 1 giao dịch `EARNING` vào sổ cái, và chuyển trạng thái nút sang `✓ Đã nhận thưởng` màu xám.
+         - Trạng thái `✓ Đã nhận thưởng` chỉ hiển thị đối với nhiệm vụ thực sự đã được bấm nhận thưởng thành công.
+    3. **Bổ sung Bộ Kiểm Thử Unit Test F150 (`__tests__/api/wallet/wallet.test.ts`):**
+       - Test GET `/api/wallet/tasks`: Kiểm tra làm giàu dữ liệu với cờ `isExpired`, phát hiện đúng `task_001` quá hạn và `task_002` sẵn sàng nhận thưởng.
+       - Test POST `/api/wallet/tasks`: Chặn nhận thưởng task đã quá hạn chưa hoàn thành.
+       - Test POST `/api/wallet/tasks`: Cho phép nhận thưởng task hợp lệ, cộng tiền ví, tạo transaction và chặn nhận thưởng lần 2 (idempotency).
+
 ---
 
 ## 🚀 [2026-10-24] — Khắc Phục Lỗi Vỡ Layout Header, Tabs & Nút Rút Tiền Trang Ví & Hoa Hồng (Wallet)

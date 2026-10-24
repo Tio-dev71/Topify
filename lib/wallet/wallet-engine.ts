@@ -329,7 +329,7 @@ export const memoryEarningTasks: EarningTaskItem[] = [
     progress: 10000,
     maxProgress: 10000,
     unit: 'lượt xem',
-    isClaimed: true,
+    isClaimed: false,
     isCompleted: true,
     expiresAt: '2026-10-31T23:59:59.000Z',
   },

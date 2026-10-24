@@ -25,7 +25,8 @@ import {
   Users,
   Eye,
   Trash2,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 import api from '../lib/axios';
 import { toast } from 'sonner';
@@ -626,17 +627,39 @@ export default function WalletEarnings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {earningTasks.map((task: any) => {
               const percent = Math.min(100, Math.round((task.progress / task.maxProgress) * 100));
+              const isExpired = task.isExpired ?? (new Date(task.expiresAt).getTime() < Date.now());
+              const isOverdue = isExpired && !task.isCompleted;
+
               return (
                 <div 
                   key={task.id}
-                  className="p-5 rounded-3xl bg-white border border-gray-200 hover:border-purple-200 shadow-sm flex flex-col justify-between space-y-4"
+                  className={`p-5 rounded-3xl bg-white border shadow-sm flex flex-col justify-between space-y-4 transition-all ${
+                    isOverdue 
+                      ? 'border-rose-200 bg-rose-50/20' 
+                      : task.isCompleted && !task.isClaimed
+                      ? 'border-emerald-200 bg-emerald-50/10'
+                      : 'border-gray-200 hover:border-purple-200'
+                  }`}
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                        {task.category}
-                      </span>
-                      <span className="text-sm font-extrabold text-emerald-600">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                          isOverdue 
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-purple-50 text-purple-700 border-purple-200'
+                        }`}>
+                          {task.category}
+                        </span>
+                        {isOverdue && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 border border-rose-200">
+                            Quá hạn
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-sm font-extrabold ${
+                        isOverdue ? 'text-gray-400 line-through' : 'text-emerald-600'
+                      }`}>
                         +{task.rewardAmount.toLocaleString()} VND
                       </span>
                     </div>
@@ -650,12 +673,18 @@ export default function WalletEarnings() {
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs font-semibold text-gray-600">
                         <span>Tiến độ:</span>
-                        <span>{task.progress.toLocaleString()} / {task.maxProgress.toLocaleString()} {task.unit} ({percent}%)</span>
+                        <span className={isOverdue ? 'text-rose-600 font-bold' : ''}>
+                          {task.progress.toLocaleString()} / {task.maxProgress.toLocaleString()} {task.unit} ({percent}%)
+                        </span>
                       </div>
                       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
                         <div 
                           className={`h-full transition-all duration-500 rounded-full ${
-                            task.isCompleted ? 'bg-emerald-500' : 'bg-purple-600'
+                            isOverdue 
+                              ? 'bg-rose-400' 
+                              : task.isCompleted 
+                              ? 'bg-emerald-500' 
+                              : 'bg-purple-600'
                           }`}
                           style={{ width: `${percent}%` }}
                         />
@@ -664,25 +693,39 @@ export default function WalletEarnings() {
                   </div>
 
                   <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400">
-                      Hết hạn: {new Date(task.expiresAt).toLocaleDateString('vi-VN')}
-                    </span>
+                    {isOverdue ? (
+                      <span className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        Hết hạn: {new Date(task.expiresAt).toLocaleDateString('vi-VN')}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        Hết hạn: {new Date(task.expiresAt).toLocaleDateString('vi-VN')}
+                      </span>
+                    )}
 
                     {task.isClaimed ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-400 bg-gray-100 px-3 py-1.5 rounded-xl">
-                        <Check className="w-3.5 h-3.5" /> Đã nhận thưởng
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Đã nhận thưởng
                       </span>
                     ) : task.isCompleted ? (
                       <button
                         onClick={() => handleClaimTask(task)}
                         disabled={claimingTaskId === task.id}
-                        className="px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all flex items-center gap-1.5 animate-pulse"
+                        className="px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all flex items-center gap-1.5 animate-pulse whitespace-nowrap shrink-0"
                       >
                         <Sparkles className="w-3.5 h-3.5" />
                         {claimingTaskId === task.id ? 'Đang nhận...' : 'Nhận Thưởng Ngay'}
                       </button>
+                    ) : isOverdue ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-500" /> Đã hết hạn
+                      </span>
                     ) : (
-                      <span className="text-xs font-medium text-gray-400">Đang thực hiện</span>
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0">
+                        <Clock className="w-3.5 h-3.5 text-amber-500" /> Đang thực hiện
+                      </span>
                     )}
                   </div>
                 </div>

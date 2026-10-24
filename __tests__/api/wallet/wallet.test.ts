@@ -146,4 +146,75 @@ describe('Wallet & Referral Growth Engine (M12 & M13: F146 - F155)', () => {
       expect(memoryReferralProfile.conversionRate).toBeLessThanOrEqual(100);
     });
   });
+
+  describe('Earning Tasks Expiration & Claim Logic (F150)', () => {
+    it('should enrich tasks with isExpired status via GET /api/wallet/tasks', async () => {
+      const { GET } = await import('@/app/api/wallet/tasks/route');
+      const res = await GET();
+      const data = await res.json();
+
+      expect(data.success).toBe(true);
+      expect(data.tasks.length).toBeGreaterThanOrEqual(4);
+      expect(data.expiredCount).toBeGreaterThanOrEqual(1);
+
+      // task_001 expired on 2026-10-19 and is incomplete (8/10)
+      const task1 = data.tasks.find((t: any) => t.id === 'task_001');
+      expect(task1).toBeDefined();
+      expect(task1.isExpired).toBe(true);
+      expect(task1.isCompleted).toBe(false);
+      expect(task1.isClaimed).toBe(false);
+
+      // task_002 is completed (10000/10000) and unclaimed, ready to claim
+      const task2 = data.tasks.find((t: any) => t.id === 'task_002');
+      expect(task2).toBeDefined();
+      expect(task2.isCompleted).toBe(true);
+      expect(task2.isClaimed).toBe(false);
+    });
+
+    it('should reject claim for expired uncompleted task (task_001)', async () => {
+      const { POST } = await import('@/app/api/wallet/tasks/route');
+      const req = {
+        json: async () => ({ taskId: 'task_001' }),
+      } as any;
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(data.error).toContain('hết hạn');
+    });
+
+    it('should allow claiming completed task (task_002) and update wallet balance', async () => {
+      const { POST } = await import('@/app/api/wallet/tasks/route');
+      const balanceBefore = memoryWallet.availableBalance;
+      const task2 = memoryEarningTasks.find(t => t.id === 'task_002')!;
+      const reward = task2.rewardAmount;
+
+      const req = {
+        json: async () => ({ taskId: 'task_002' }),
+      } as any;
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.success).toBe(true);
+      expect(data.rewardAmount).toBe(reward);
+      expect(task2.isClaimed).toBe(true);
+      expect(memoryWallet.availableBalance).toBe(balanceBefore + reward);
+
+      // Verify transaction record was logged
+      const claimTx = memoryTransactions.find(t => t.referenceId === 'task_002');
+      expect(claimTx).toBeDefined();
+      expect(claimTx?.type).toBe('EARNING');
+      expect(claimTx?.amount).toBe(reward);
+
+      // Second claim should fail
+      const repeatRes = await POST(req);
+      const repeatData = await repeatRes.json();
+      expect(repeatRes.status).toBe(400);
+      expect(repeatData.error).toContain('đã được nhận thưởng');
+    });
+  });
 });
+
