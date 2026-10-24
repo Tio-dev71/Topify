@@ -31,6 +31,10 @@ import api from '../lib/axios';
 import { SpinModal, type SpinVariantItem } from '../components/SpinModal';
 import { AiWriterModal } from '../components/AiWriterModal';
 import { ImportPostsModal } from '../components/content-studio/ImportPostsModal';
+import {
+  generateSpinVariantsClient,
+  parseSpintaxClient,
+} from '../lib/spinEngine';
 
 const INDUSTRIES = [
   { id: 'FASHION', label: 'Thời trang & Phụ kiện', icon: '👗', desc: 'OOTD, mixmatch, phong cách sành điệu' },
@@ -71,6 +75,7 @@ export default function ContentStudio() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'ai_writer' | 'spin_tool' | 'templates' | 'import_posts'>('ai_writer');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSpinModalOpen, setIsSpinModalOpen] = useState(false);
 
   // AI Writer State (F016)
   const [industry, setIndustry] = useState('FASHION');
@@ -160,9 +165,19 @@ export default function ContentStudio() {
         setSpinVariants(res.data.data.variants || []);
         setAverageUniqueness(res.data.data.averageUniqueness || 82);
         toast.success(`Đã tự động tạo ${res.data.data.variants.length} biến thể caption chống trùng lặp!`);
+        return;
       }
+      throw new Error('Lỗi phản hồi dữ liệu');
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Không thể tạo biến thể spin');
+      console.warn('API spin thất bại, sử dụng bộ sinh dự phòng cục bộ:', err);
+      try {
+        const localResult = generateSpinVariantsClient(spinInput, spinCount);
+        setSpinVariants(localResult.variants);
+        setAverageUniqueness(localResult.averageUniqueness);
+        toast.success(`Đã tự động tạo ${localResult.variants.length} biến thể caption chống trùng lặp!`);
+      } catch {
+        toast.error(err?.response?.data?.error || 'Không thể tạo biến thể spin');
+      }
     } finally {
       setIsSpinning(false);
     }
@@ -180,9 +195,19 @@ export default function ContentStudio() {
         setSpintaxCombos(res.data.data.totalCombinations || 1);
         setSpintaxSample(res.data.data.sampleVariant || '');
         toast.success('Bung thử Spintax thành công!');
+        return;
       }
-    } catch {
-      toast.error('Lỗi khi phân tích Spintax');
+      throw new Error('Lỗi phân tích');
+    } catch (err: any) {
+      console.warn('API spintax thất bại, dùng bộ phân tích spintax cục bộ:', err);
+      try {
+        const localSpintax = parseSpintaxClient(spintaxInput);
+        setSpintaxCombos(localSpintax.totalCombinations);
+        setSpintaxSample(localSpintax.sampleVariant);
+        toast.success('Bung thử Spintax thành công!');
+      } catch {
+        toast.error('Lỗi khi phân tích Spintax');
+      }
     }
   };
 
@@ -262,6 +287,14 @@ export default function ContentStudio() {
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               Import Excel / Google Drive (F019)
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSpinModalOpen(true)}
+              className="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-purple-500/30 hover:bg-purple-500/50 text-white border border-purple-300/40 shadow-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              Mở Popup Spin (F015)
             </button>
           </div>
         </div>
@@ -750,9 +783,19 @@ export default function ContentStudio() {
                 </div>
               </div>
 
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                Chống phạt trùng lặp
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSpinModalOpen(true)}
+                  className="text-xs font-bold px-3 py-1 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-all flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3 h-3 text-purple-600" />
+                  Mở Popup F015
+                </button>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  Chống phạt trùng lặp
+                </span>
+              </div>
             </div>
 
             <div>
@@ -1089,6 +1132,17 @@ export default function ContentStudio() {
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         onSuccess={() => navigate('/posts')}
+      />
+
+      {/* F015: Spin Modal Popup */}
+      <SpinModal
+        isOpen={isSpinModalOpen}
+        onClose={() => setIsSpinModalOpen(false)}
+        initialCaption={spinInput || topic || ''}
+        onApplyVariant={(selectedCaption, selectedTitle) => {
+          setSpinInput(selectedCaption);
+          handleApplyToCreatePost(selectedTitle || 'Biến thể bài viết', selectedCaption);
+        }}
       />
     </div>
   );

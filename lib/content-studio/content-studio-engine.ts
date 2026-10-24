@@ -428,7 +428,20 @@ const SYNONYM_MAP: Record<string, string[]> = {
   'nhanh chóng': ['tốc độ', 'chỉ trong chớp mắt', 'tức thì', 'cực nhanh'],
   'dễ dàng': ['tiện lợi', 'đơn giản', 'nhẹ nhàng', 'chẳng chút khó khăn'],
   'chất lượng': ['chuẩn xịn', 'uy tín hàng đầu', 'đẳng cấp', 'độ bền cao'],
+  'đình đám': ['nổi tiếng', 'gây sốt toàn cầu', 'siêu hit', 'làm mưa làm gió'],
+  'bản nhạc': ['ca khúc', 'bài hát', 'giai điệu', 'tác phẩm âm nhạc'],
 };
+
+const TEMPLATE_BUILDERS = [
+  (h: string, b: string, c: string) => `${h}${b}${c}`,
+  (h: string, b: string, c: string) => `【TỔNG HỢP】${h}\n\n${b}\n\n📌 Đừng quên lưu lại để áp dụng nhé!${c}`,
+  (h: string, b: string, c: string) => `✨ Góc chia sẻ hữu ích:\n${b}\n\n💡 Bạn đã thử cách này bao giờ chưa?${c}`,
+  (h: string, b: string, c: string) => `🔥 CẢNH BÁO: Đừng lướt qua nếu bạn đang tìm kiếm:\n\n${b}\n\n👉 Xem ngay kẻo tiếc!${c}`,
+  (h: string, b: string, c: string) => `💡 TIP CỰC HAY DÀNH CHO BẠN:\n${h}\n\n❝ ${b} ❞\n\n🎯 Chúc bạn một ngày làm việc hiệu quả và bùng nổ doanh số!${c}`,
+  (h: string, b: string, c: string) => `🌟 BẬT MÍ BÍ QUYẾT TRIỆU VIEW:\n${b}\n\n👉 Áp dụng ngay hôm nay để thấy sự khác biệt rõ rệt!${c}`,
+  (h: string, b: string, c: string) => `🚀 KHÁM PHÁ NGAY:\n${h}\n\n${b}\n\n👇 Xem chi tiết bên dưới nhé!${c}`,
+  (h: string, b: string, c: string) => `💎 PHIÊN BẢN ĐẶC BIỆT:\n❝ ${b} ❞\n\n⚡ Lưu lại ngay bài viết hữu ích này bạn nhé!${c}`,
+];
 
 /**
  * Thuật toán sinh biến thể Caption tự động chống trùng lặp/spam (F015)
@@ -488,19 +501,9 @@ export function generateSpinVariants(
       }
     });
 
-    // Cấu trúc biến thể
-    let finalCaption = '';
-    if (i === 0) {
-      finalCaption = `${hook}${transformedBody}${cta}`;
-    } else if (i === 1) {
-      finalCaption = `【TỔNG HỢP】${hook}\n\n${transformedBody}\n\n📌 Đừng quên lưu lại để áp dụng nhé!${cta}`;
-    } else if (i === 2) {
-      finalCaption = `✨ Góc chia sẻ hữu ích:\n${transformedBody}\n\n💡 Bạn đã thử cách này bao giờ chưa?${cta}`;
-    } else if (i === 3) {
-      finalCaption = `🔥 CẢNH BÁO: Đừng lướt qua nếu bạn đang tìm kiếm:\n\n${transformedBody}\n\n👉 Xem ngay kẻo tiếc!${cta}`;
-    } else {
-      finalCaption = `${hook}\n\n❝ ${transformedBody} ❞\n\n🎯 Chúc bạn một ngày làm việc hiệu quả và bùng nổ doanh số!${cta}`;
-    }
+    // Cấu trúc biến thể theo các template độc nhất
+    const builder = TEMPLATE_BUILDERS[i % TEMPLATE_BUILDERS.length];
+    const finalCaption = builder(hook, transformedBody, cta);
 
     const uniqueness = calculateUniquenessScore(originalCaption, finalCaption);
 

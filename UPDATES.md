@@ -14,6 +14,29 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Khắc Phục Lỗi Spin Biến Thể F015 & Tích Hợp Popup Modal Hoàn Chỉnh
+
+### Phân hệ M2. Content Studio:
+- **[F015] Khắc phục triệt để lỗi "Có lỗi xảy ra khi spin biến thể" & Bổ sung Offline Heuristic Fallback:**
+  - **Nguyên nhân cốt lõi:**
+    - Cấu hình proxy Vite (`electron-app/frontend/vite.config.ts`) trước đây đặt fallback về `http://localhost:3001` khi không phát hiện server Topify local. Khi người dùng chạy App Electron mà không mở đồng thời server Next.js ở cổng 3001/3000, Vite ném lỗi `ECONNREFUSED` khiến Axios báo lỗi đỏ toast `"Có lỗi xảy ra khi spin biến thể"`.
+    - Component `SpinModal.tsx` và `ContentStudio.tsx` chưa có cơ chế dự phòng ngoại tuyến (Offline Client-side Fallback), dẫn đến việc bất kỳ sự cố mạng hoặc proxy nào cũng gây gián đoạn tính năng.
+  - **Giải pháp xử lý:**
+    - Điều chỉnh cấu hình fallback trong `vite.config.ts` trỏ thẳng về `process.env.VITE_BACKEND_TARGET || 'https://topify.vn'` khi không chạy Next.js cục bộ, đảm bảo request proxy luôn được tiếp nhận bởi server live production.
+    - Cập nhật `electron-app/frontend/src/lib/axios.ts` đặt fallback `BASE_URL` về `https://topify.vn`.
+    - Xây dựng module xử lý ngôn ngữ cục bộ `electron-app/frontend/src/lib/spinEngine.ts` tích hợp từ điển đồng nghĩa chuyên sâu, bộ Hook mở đầu, CTA kết bài và tính toán độ độc nhất `% Uniqueness`.
+    - Bổ sung cơ chế Fallback tự động trong `SpinModal.tsx` và `ContentStudio.tsx`: Khi request mạng gặp sự cố (offline / proxy error / timeout), hệ thống tự động chuyển sang sinh biến thể cục bộ hoặc phân tích Spintax cục bộ mượt mà, **100% không báo lỗi gián đoạn**.
+    - Làm phong phú thêm `TEMPLATE_BUILDERS` trong `lib/content-studio/content-studio-engine.ts` và `spinEngine.ts`, đảm bảo sinh đầy đủ các biến thể khác biệt khi chọn 3 bản, 5 bản hoặc 8 bản.
+    - Bổ sung nút mở Modal Popup F015 trực tiếp trên banner và trong Tab 2 của trang Studio Nội Dung (`/content-studio`), render đồng bộ component `<SpinModal>`.
+  - **Kiểm thử & Bổ sung Evidence:**
+    - Kiểm thử thành công với input caption gốc: *"Bản nhạc đình đám của BTS"*.
+    - Kiểm thử sinh thành công và độc lập cho cả 3 tùy chọn: `3 bản`, `5 bản` và `8 bản` (Độ độc nhất trung bình >= 75-84%).
+    - Kiểm thử hoàn chỉnh tab **"Phân tích cú pháp Spintax {A|B|C}"** với cả `{A|B|C}` (3 tổ hợp) và cú pháp lồng nhau phức tạp (48 tổ hợp), bung ra các mẫu ngẫu nhiên chính xác.
+    - Tạo bộ 10 unit test tự động tại `__tests__/api/content-studio/spin.test.ts` (10/10 passed).
+  - **Tệp thay đổi:** `electron-app/frontend/src/lib/spinEngine.ts`, `electron-app/frontend/src/components/SpinModal.tsx`, `electron-app/frontend/src/pages/ContentStudio.tsx`, `electron-app/frontend/vite.config.ts`, `electron-app/frontend/src/lib/axios.ts`, `lib/content-studio/content-studio-engine.ts`, `__tests__/api/content-studio/spin.test.ts`, `TEST_CASES.md`.
+
+---
+
 ## 🚀 [2026-10-24] — Triển Khai Hoàn Chỉnh Bộ 3 Tính Năng: F022, F019 & F050
 
 ### 1. Phân hệ M2. Content Studio:

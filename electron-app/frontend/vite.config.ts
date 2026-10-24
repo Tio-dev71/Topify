@@ -26,7 +26,7 @@ export default defineConfig(async () => {
     } else if (await checkIsTopify(3000)) {
       target = 'http://localhost:3000';
     } else {
-      target = 'http://localhost:3001';
+      target = process.env.VITE_BACKEND_TARGET || 'https://topify.vn';
     }
   }
 

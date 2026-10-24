@@ -15,17 +15,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
+import {
+  type SpinVariantItem,
+  generateSpinVariantsClient,
+  parseSpintaxClient,
+} from '../lib/spinEngine';
 
-export interface SpinVariantItem {
-  id: string;
-  index: number;
-  caption: string;
-  title: string;
-  uniquenessScore: number;
-  hook: string;
-  hashtags: string[];
-  wordCount: number;
-}
+export type { SpinVariantItem };
 
 interface SpinModalProps {
   isOpen: boolean;
@@ -83,11 +79,19 @@ export function SpinModal({
         setVariants(res.data.data.variants || []);
         setAverageUniqueness(res.data.data.averageUniqueness || 80);
         toast.success(`Đã tự động sinh thành công ${res.data.data.variants.length} biến thể độc nhất!`);
-      } else {
-        throw new Error('Không nhận được dữ liệu phản hồi');
+        return;
       }
+      throw new Error('Dữ liệu phản hồi không hợp lệ');
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Có lỗi xảy ra khi spin biến thể');
+      console.warn('API spin thất bại hoặc offline, sử dụng bộ sinh dự phòng cục bộ:', err);
+      try {
+        const localResult = generateSpinVariantsClient(inputText, variantsCount, initialTitle);
+        setVariants(localResult.variants);
+        setAverageUniqueness(localResult.averageUniqueness);
+        toast.success(`Đã tự động sinh thành công ${localResult.variants.length} biến thể độc nhất!`);
+      } catch (fallbackErr: any) {
+        toast.error(err?.response?.data?.error || 'Có lỗi xảy ra khi spin biến thể');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -110,9 +114,19 @@ export function SpinModal({
         setSpintaxCombinations(res.data.data.totalCombinations || 1);
         setSpintaxSample(res.data.data.sampleVariant || '');
         toast.success('Bung thử Spintax thành công!');
+        return;
       }
+      throw new Error('Không nhận được dữ liệu phản hồi');
     } catch (err: any) {
-      toast.error('Không thể phân tích cú pháp Spintax');
+      console.warn('API spintax thất bại hoặc offline, sử dụng bộ phân tích dự phòng cục bộ:', err);
+      try {
+        const localSpintax = parseSpintaxClient(spintaxInput);
+        setSpintaxCombinations(localSpintax.totalCombinations);
+        setSpintaxSample(localSpintax.sampleVariant);
+        toast.success('Bung thử Spintax thành công!');
+      } catch {
+        toast.error('Không thể phân tích cú pháp Spintax');
+      }
     } finally {
       setIsGenerating(false);
     }
