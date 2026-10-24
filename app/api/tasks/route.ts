@@ -370,7 +370,7 @@ export async function POST(req: NextRequest) {
             title: newTask.title,
             description: newTask.description,
             priority: newTask.priority,
-            status: newTask.status,
+            status: newTask.status === 'REVIEW' ? 'IN_REVIEW' : (newTask.status as any),
             dueDate: newTask.dueDate ? new Date(newTask.dueDate) : null,
             assigneeId: newTask.assigneeId,
             isRecurring: newTask.isRecurring,

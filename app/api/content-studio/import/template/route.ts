@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const buffer = generateSampleExcelTemplate();
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

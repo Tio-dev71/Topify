@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import jwt from 'jsonwebtoken';
 import { 
   memoryWallet, 
   memoryTransactions, 
@@ -10,11 +11,34 @@ import {
   WalletTransactionItem
 } from '@/lib/wallet/wallet-engine';
 
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function authenticateUser(req: NextRequest): Promise<string | undefined> {
+  // 1. Try NextAuth session (Web)
+  try {
+    const session = await auth().catch(() => null);
+    if (session?.user?.id) return session.user.id;
+  } catch {}
+
+  // 2. Try Bearer JWT token (Desktop / Electron)
+  try {
+    const authHeader = req?.headers?.get ? req.headers.get('authorization') : null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.sub || decoded?.id) {
+        return decoded.sub || decoded.id;
+      }
+    }
+  } catch {}
+
+  return undefined;
+}
+
 // GET /api/wallet - Get full wallet information, transactions, and withdrawals
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth().catch(() => null);
-    const userId = session?.user?.id;
+    const userId = await authenticateUser(req);
 
     let walletData: any = null;
     let transactions: any[] = [];
@@ -125,12 +149,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const session = await auth().catch(() => null);
-    let userId = session?.user?.id;
-    if (!userId) {
-      const firstUser = await prisma.user.findFirst();
-      userId = firstUser?.id;
-    }
+    const userId = await authenticateUser(req);
 
     const pm = memoryPaymentMethods.find(p => p.id === paymentMethodId) || memoryPaymentMethods[0];
     const pmDesc = pm ? `${pm.bankName || pm.type} - ${pm.accountNumber}` : 'Ngân hàng mặc định';

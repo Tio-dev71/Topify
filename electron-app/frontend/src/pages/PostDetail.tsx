@@ -63,6 +63,44 @@ export default function PostDetail() {
   const [editFirstComment, setEditFirstComment] = useState('');
   const [editScheduledAt, setEditScheduledAt] = useState('');
 
+  // Version History State (F081)
+  const [versions, setVersions] = useState<any[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
+
+  const fetchVersions = async () => {
+    try {
+      setLoadingVersions(true);
+      const res = await api.get(`/posts/${id}/versions`);
+      if (res.data?.versions) {
+        setVersions(res.data.versions);
+      }
+    } catch {
+      //
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  const handleRestoreVersion = async (v: any) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn khôi phục về phiên bản ngày ${new Date(v.createdAt).toLocaleString('vi-VN')}?`)) {
+      return;
+    }
+    try {
+      setRestoringVersionId(v.id);
+      const res = await api.post(`/posts/${id}/versions`, { versionId: v.id });
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Khôi phục phiên bản thành công!');
+        fetchPost();
+        fetchVersions();
+      }
+    } catch (e: any) {
+      toast.error('Lỗi khi khôi phục phiên bản: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setRestoringVersionId(null);
+    }
+  };
+
   const fetchPost = async () => {
     try {
       setLoading(true);
@@ -93,9 +131,11 @@ export default function PostDetail() {
     }
   };
 
-
   useEffect(() => {
-    if (id) fetchPost();
+    if (id) {
+      fetchPost();
+      fetchVersions();
+    }
   }, [id]);
 
   const handleSaveEdit = async () => {
@@ -113,9 +153,20 @@ export default function PostDetail() {
         firstComment: editFirstComment.trim() || null,
         scheduledAt: editScheduledAt ? new Date(editScheduledAt).toISOString() : null,
       });
-      toast.success('Đã cập nhật bài viết thành công');
+
+      // Save a new version snapshot in history (F081)
+      try {
+        await api.post(`/posts/${id}/versions`, {
+          title: editTitle.trim(),
+          caption: editCaption.trim() || null,
+          hashtags: editHashtags.trim() || null,
+        });
+      } catch {}
+
+      toast.success('Đã cập nhật bài viết & lưu bản sao lịch sử thành công');
       setIsEditing(false);
       fetchPost();
+      fetchVersions();
     } catch (e: any) {
       toast.error('Lỗi lưu bài viết: ' + (e.response?.data?.error || e.message));
     } finally {
@@ -464,6 +515,91 @@ export default function PostDetail() {
                     Huỷ
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Lịch sử phiên bản bài viết (F081: Version History & Restore) */}
+          <div className="card-apple p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-gray-900 text-sm">
+                  Lịch sử phiên bản (Version History - F081)
+                </h3>
+              </div>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold font-mono">
+                {versions.length} phiên bản đã lưu
+              </span>
+            </div>
+
+            {loadingVersions ? (
+              <div className="py-6 text-center text-xs text-gray-400">Đang tải lịch sử phiên bản...</div>
+            ) : versions.length === 0 ? (
+              <div className="py-6 text-center text-xs text-gray-500 bg-gray-50/50 rounded-2xl border border-gray-100 p-4">
+                Chưa có phiên bản cũ nào được ghi nhận. Các chỉnh sửa mới sẽ tự động lưu lại bản sao lịch sử tại đây.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {versions.map((ver, idx) => {
+                  const isCurrent = idx === 0 && ver.caption === post.caption && ver.title === post.title;
+                  return (
+                    <div
+                      key={ver.id}
+                      className="p-4 rounded-2xl border border-gray-100 bg-white hover:border-indigo-200 transition space-y-2.5 shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center font-mono">
+                            v{versions.length - idx}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-800">
+                            {new Date(ver.createdAt).toLocaleString('vi-VN')}
+                          </span>
+                          {ver.editedBy?.name && (
+                            <span className="text-[11px] text-gray-500">
+                              bởi <span className="font-medium text-gray-700">{ver.editedBy.name}</span>
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                              Bản hiện tại
+                            </span>
+                          )}
+                        </div>
+
+                        {!isCurrent && (
+                          <button
+                            type="button"
+                            disabled={restoringVersionId === ver.id}
+                            onClick={() => handleRestoreVersion(ver)}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-600 text-xs font-semibold border border-indigo-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <RotateCcw className={`w-3.5 h-3.5 ${restoringVersionId === ver.id ? 'animate-spin' : ''}`} />
+                            <span>{restoringVersionId === ver.id ? 'Đang khôi phục...' : 'Khôi phục bản này'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Version content snapshot */}
+                      <div className="text-xs text-gray-600 bg-gray-50/70 p-3 rounded-xl border border-gray-100 space-y-1">
+                        <div className="font-semibold text-gray-900 truncate">
+                          Tiêu đề: {ver.title || '(Không có tiêu đề)'}
+                        </div>
+                        {ver.caption && (
+                          <p className="line-clamp-2 text-gray-600 italic">
+                            "{ver.caption}"
+                          </p>
+                        )}
+                        {ver.hashtags && (
+                          <div className="text-[11px] font-mono text-indigo-600">
+                            {ver.hashtags}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -28,6 +28,7 @@ import Campaigns from './pages/Campaigns';
 import WalletEarnings from './pages/WalletEarnings';
 import TopifyAI from './pages/TopifyAI';
 import SecurityIntegrations from './pages/SecurityIntegrations';
+import Competitors from './pages/Competitors';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -47,6 +48,8 @@ function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/intelligence/social-search" element={<SocialSearch />} />
           <Route path="/intelligence/alerts" element={<ViralAlerts />} />
+          <Route path="/intelligence/competitors" element={<Competitors />} />
+          <Route path="/competitors" element={<Competitors />} />
           <Route path="/media/studio" element={<MediaStudio />} />
           <Route path="/accounts" element={<FacebookAccounts />} />
           <Route path="/tasks" element={<Tasks />} />
@@ -63,6 +66,7 @@ function App() {
           <Route path="/automation" element={<Automation />} />
           <Route path="/buff" element={<BuffSystem />} />
           <Route path="/wallet" element={<WalletEarnings />} />
+          <Route path="/referral" element={<WalletEarnings defaultTab="referral" />} />
           <Route path="/ai" element={<TopifyAI />} />
           <Route path="/security" element={<SecurityIntegrations />} />
           <Route path="/history" element={<History />} />

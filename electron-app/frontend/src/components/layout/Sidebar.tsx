@@ -27,6 +27,9 @@ import {
   Sparkles,
   ShieldCheck,
   Wand2,
+  Target,
+  Gift,
+  PieChart,
 } from 'lucide-react';
 
 const navigation = [
@@ -38,6 +41,7 @@ const navigation = [
   { key: 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
   { key: 'Thám tử xu hướng (MXH)', href: '/intelligence/social-search', icon: Search },
   { key: 'Cảnh báo bùng nổ', href: '/intelligence/alerts', icon: Flame },
+  { key: 'Theo dõi đối thủ (Fanpages)', href: '/competitors', icon: Target },
   { key: 'Media Studio AI', href: '/media/studio', icon: Film },
   { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play },
   { key: 'Quản lý bài viết', href: '/posts', icon: Calendar },
@@ -49,15 +53,16 @@ const navigation = [
   { key: 'Tự động hóa', href: '/automation', icon: Play },
   { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart },
   { key: 'Ví & Hoa hồng (Wallet)', href: '/wallet', icon: Wallet },
+  { key: 'Tiếp thị liên kết (Referral)', href: '/referral', icon: Gift },
+  { key: 'Thành viên & Nhóm (F116/F117)', href: '/team', icon: Users },
+  { key: 'Gói cước & Quota (M8)', href: '/settings?tab=quota', icon: PieChart },
   { key: 'Topify AI Hub', href: '/ai', icon: Sparkles },
   { key: 'Bảo mật & Tích hợp', href: '/security', icon: ShieldCheck },
   { key: 'Nhật ký hoạt động', href: '/history', icon: Activity },
   { key: 'Cài đặt hệ thống', href: '/settings', icon: Settings },
 ];
 
-const adminNavigation = [
-  { key: 'Quản lý nhân sự', href: '/team', icon: Users },
-];
+const adminNavigation: any[] = [];
 
 const superAdminNavigation = [
   { key: 'Không gian làm việc (Workspaces)', href: '/super-admin', icon: Building2 },

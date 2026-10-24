@@ -28,11 +28,20 @@ import {
   X,
   AlertCircle
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../lib/axios';
 import { toast } from 'sonner';
 
-export default function WalletEarnings() {
-  const [activeTab, setActiveTab] = useState<'balance' | 'transactions' | 'payment_methods' | 'tasks' | 'referral'>('balance');
+interface WalletEarningsProps {
+  defaultTab?: 'balance' | 'transactions' | 'payment_methods' | 'tasks' | 'referral';
+}
+
+export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {}) {
+  const [searchParams] = useSearchParams();
+  const queryTab = searchParams.get('tab') as any;
+  const [activeTab, setActiveTab] = useState<'balance' | 'transactions' | 'payment_methods' | 'tasks' | 'referral'>(
+    defaultTab || (queryTab && ['balance', 'transactions', 'payment_methods', 'tasks', 'referral'].includes(queryTab) ? queryTab : 'balance')
+  );
   const [loading, setLoading] = useState(true);
 
   // Wallet State (F146, F147, F148)
@@ -77,13 +86,47 @@ export default function WalletEarnings() {
     fetchFraudAlerts();
   }, []);
 
+  const getClaimedLocalTaskIds = (): string[] => {
+    try {
+      return JSON.parse(localStorage.getItem('topify_claimed_task_ids') || '[]');
+    } catch {
+      return [];
+    }
+  };
+
+  const getLocalBalanceOffset = (): number => {
+    try {
+      return Number(localStorage.getItem('topify_wallet_balance_offset') || 0);
+    } catch {
+      return 0;
+    }
+  };
+
+  const getLocalTransactions = (): any[] => {
+    try {
+      return JSON.parse(localStorage.getItem('topify_local_transactions') || '[]');
+    } catch {
+      return [];
+    }
+  };
+
   const fetchWalletData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       const res = await api.get('/wallet');
       if (res.data) {
-        setWallet(res.data.wallet);
-        setTransactions(res.data.transactions || []);
+        const localOffset = getLocalBalanceOffset();
+        const baseWallet = res.data.wallet || { availableBalance: 2500000, pendingBalance: 0, totalWithdrawn: 0 };
+        setWallet({
+          ...baseWallet,
+          availableBalance: Math.max(0, (baseWallet.availableBalance || 0) + localOffset),
+        });
+
+        const localTxs = getLocalTransactions();
+        const serverTxs = res.data.transactions || [];
+        const mergedTxs = [...localTxs, ...serverTxs.filter((st: any) => !localTxs.some((lt: any) => lt.id === st.id))];
+        setTransactions(mergedTxs);
+
         setWithdrawals(res.data.withdrawals || []);
         setPaymentMethods(res.data.paymentMethods || []);
         if (res.data.paymentMethods?.length > 0) {
@@ -102,7 +145,14 @@ export default function WalletEarnings() {
   const fetchTasks = async () => {
     try {
       const res = await api.get('/wallet/tasks');
-      if (res.data?.tasks) setEarningTasks(res.data.tasks);
+      if (res.data?.tasks) {
+        const localClaimed = getClaimedLocalTaskIds();
+        const enriched = res.data.tasks.map((t: any) => ({
+          ...t,
+          isClaimed: t.isClaimed || localClaimed.includes(t.id),
+        }));
+        setEarningTasks(enriched);
+      }
     } catch (e) {}
   };
 
@@ -159,7 +209,46 @@ export default function WalletEarnings() {
         setShowWithdrawModal(false);
         setWithdrawAmount('');
         setWithdrawNote('');
-        fetchWalletData();
+
+        // Cập nhật số dư và lưu offset cục bộ
+        const currentOffset = getLocalBalanceOffset() - amount;
+        localStorage.setItem('topify_wallet_balance_offset', String(currentOffset));
+
+        const pm = paymentMethods.find((p: any) => p.id === selectedMethodId) || paymentMethods[0];
+        const pmDesc = pm ? `${pm.bankName || pm.type} - ${pm.accountNumber}` : 'Ngân hàng mặc định';
+
+        const newWd = res.data?.withdrawal || {
+          id: `wd_${Date.now()}`,
+          amount,
+          fee: 0,
+          netAmount: amount,
+          paymentMethod: pmDesc,
+          accountInfo: pm?.accountName || 'Người dùng Topify',
+          status: 'PENDING',
+          note: withdrawNote || 'Yêu cầu rút tiền tự động',
+          createdAt: new Date().toISOString(),
+        };
+        setWithdrawals((prev: any[]) => [newWd, ...prev]);
+
+        const wdTx = {
+          id: `tx_${Date.now()}`,
+          type: 'WITHDRAWAL',
+          amount: -amount,
+          description: `Yêu cầu rút tiền về ${pmDesc}`,
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+        };
+        const localTxs = [wdTx, ...getLocalTransactions()].slice(0, 50);
+        localStorage.setItem('topify_local_transactions', JSON.stringify(localTxs));
+        setTransactions((prev: any[]) => [wdTx, ...prev]);
+
+        setWallet((prev: any) => ({
+          ...prev,
+          availableBalance: Math.max(0, (prev?.availableBalance || 0) - amount),
+          pendingBalance: (prev?.pendingBalance || 0) + amount,
+        }));
+
+        fetchWalletData(true);
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Lỗi khi rút tiền');
@@ -221,20 +310,34 @@ export default function WalletEarnings() {
       if (res.data?.success) {
         toast.success(res.data.message);
 
-        // 1. Cập nhật ngay lập tức số dư ví
-        if (res.data.wallet) {
-          setWallet(res.data.wallet);
-        } else {
-          setWallet((prev: any) => ({
-            ...prev,
-            availableBalance: (prev?.availableBalance || 0) + (res.data.rewardAmount || task.rewardAmount),
-          }));
-        }
+        const rewardAmt = res.data.rewardAmount || task.rewardAmount || 100000;
 
-        // 2. Thêm ngay giao dịch thưởng vào đầu danh sách sổ cái
-        if (res.data.transaction) {
-          setTransactions((prev: any[]) => [res.data.transaction, ...prev]);
-        }
+        // Lưu offset số dư vào localStorage
+        const currentOffset = getLocalBalanceOffset() + rewardAmt;
+        localStorage.setItem('topify_wallet_balance_offset', String(currentOffset));
+
+        // Lưu ID nhiệm vụ đã nhận vào localStorage
+        const claimedIds = Array.from(new Set([...getClaimedLocalTaskIds(), task.id]));
+        localStorage.setItem('topify_claimed_task_ids', JSON.stringify(claimedIds));
+
+        // 1. Cập nhật ngay lập tức số dư ví
+        setWallet((prev: any) => ({
+          ...prev,
+          availableBalance: (prev?.availableBalance || 0) + rewardAmt,
+        }));
+
+        // 2. Thêm ngay giao dịch thưởng vào đầu danh sách sổ cái & lưu localStorage
+        const rewardTx = res.data.transaction || {
+          id: `tx_${Date.now()}`,
+          type: 'EARNING',
+          amount: rewardAmt,
+          description: `Thưởng hoàn thành nhiệm vụ: ${task.title}`,
+          status: 'COMPLETED',
+          createdAt: new Date().toISOString(),
+        };
+        const localTxs = [rewardTx, ...getLocalTransactions()].slice(0, 50);
+        localStorage.setItem('topify_local_transactions', JSON.stringify(localTxs));
+        setTransactions((prev: any[]) => [rewardTx, ...prev.filter((t: any) => t.id !== rewardTx.id)]);
 
         // 3. Đánh dấu nhiệm vụ đã nhận thưởng trên card
         setEarningTasks((prev: any[]) => prev.map((t: any) => t.id === task.id ? { ...t, isClaimed: true } : t));

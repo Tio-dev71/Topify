@@ -318,7 +318,7 @@ export const memoryEarningTasks: EarningTaskItem[] = [
     unit: 'bài đăng',
     isClaimed: false,
     isCompleted: false,
-    expiresAt: '2026-10-19T23:59:59.000Z',
+    expiresAt: '2026-10-19T00:00:00.000Z',
   },
   {
     id: 'task_002',
@@ -331,7 +331,7 @@ export const memoryEarningTasks: EarningTaskItem[] = [
     unit: 'lượt xem',
     isClaimed: false,
     isCompleted: true,
-    expiresAt: '2026-10-31T23:59:59.000Z',
+    expiresAt: '2027-12-31T23:59:59.000Z',
   },
   {
     id: 'task_003',
@@ -343,11 +343,24 @@ export const memoryEarningTasks: EarningTaskItem[] = [
     maxProgress: 3,
     unit: 'shop',
     isClaimed: false,
-    isCompleted: true, // Đã hoàn thành, sẵn sàng Claim thưởng!
-    expiresAt: '2026-10-25T23:59:59.000Z',
+    isCompleted: true,
+    expiresAt: '2027-12-31T23:59:59.000Z',
   },
   {
     id: 'task_004',
+    title: 'Khởi tạo chiến dịch tiếp thị đầu tiên',
+    description: 'Thiết lập mục tiêu KPI và phân bổ ngân sách cho chiến dịch mới trong mục Chiến dịch.',
+    rewardAmount: 100000,
+    category: 'SETUP',
+    progress: 1,
+    maxProgress: 1,
+    unit: 'chiến dịch',
+    isClaimed: false,
+    isCompleted: true,
+    expiresAt: '2027-12-31T23:59:59.000Z',
+  },
+  {
+    id: 'task_005',
     title: 'Kết nối trọn bộ 3 nền tảng TikTok + Facebook + Shopee',
     description: 'Liên kết ít nhất 1 tài khoản cho mỗi mạng xã hội cốt lõi trong mục Quản lý kênh.',
     rewardAmount: 30000,
@@ -357,7 +370,7 @@ export const memoryEarningTasks: EarningTaskItem[] = [
     unit: 'kênh',
     isClaimed: true,
     isCompleted: true,
-    expiresAt: '2026-12-31T23:59:59.000Z',
+    expiresAt: '2027-12-31T23:59:59.000Z',
   },
 ];
 

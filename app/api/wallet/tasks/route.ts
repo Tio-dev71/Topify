@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import jwt from 'jsonwebtoken';
 import { 
   memoryEarningTasks, 
   memoryWallet, 
@@ -8,14 +9,38 @@ import {
   WalletTransactionItem 
 } from '@/lib/wallet/wallet-engine';
 
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function authenticateUser(req?: NextRequest): Promise<string | undefined> {
+  if (!req) return undefined;
+  // 1. Try NextAuth session (Web)
+  try {
+    const session = await auth().catch(() => null);
+    if (session?.user?.id) return session.user.id;
+  } catch {}
+
+  // 2. Try Bearer JWT token (Desktop / Electron)
+  try {
+    const authHeader = req?.headers?.get ? req.headers.get('authorization') : null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.sub || decoded?.id) {
+        return decoded.sub || decoded.id;
+      }
+    }
+  } catch {}
+
+  return undefined;
+}
+
 // GET /api/wallet/tasks - List all earning tasks (F150)
 export async function GET(req?: NextRequest) {
   try {
     let claimedTaskIds = new Set<string>();
 
     try {
-      const session = await auth().catch(() => null);
-      const userId = session?.user?.id;
+      const userId = await authenticateUser(req);
 
       if (userId) {
         const dbWallet = await prisma.wallet.findUnique({
@@ -82,12 +107,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check auth and database
-    let userId: string | undefined;
-    try {
-      const session = await auth().catch(() => null);
-      userId = session?.user?.id;
-    } catch (e) {}
+    const userId = await authenticateUser(req);
 
     if (userId) {
       try {

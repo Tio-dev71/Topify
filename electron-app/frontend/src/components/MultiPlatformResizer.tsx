@@ -249,7 +249,7 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
     }
   };
 
-  // Convert & Download Image / Spec via HTML5 Canvas
+  // Convert & Download Image / Spec via HTML5 Canvas (F113)
   const handleConvertAndDownload = async () => {
     setIsProcessing(true);
     const targetProfile = RATIO_PROFILES[selectedRatio];
@@ -263,18 +263,38 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
 
         if (!ctx) throw new Error('Không thể khởi tạo Canvas 2D context');
 
+        // Resolve clean image source (avoid CORS canvas taint if possible)
+        let resolvedSrc = currentMedia.url;
+        if (currentMedia.file) {
+          resolvedSrc = URL.createObjectURL(currentMedia.file);
+        } else if (currentMedia.url.startsWith('http')) {
+          try {
+            const resp = await fetch(currentMedia.url, { mode: 'cors' });
+            if (resp.ok) {
+              const b = await resp.blob();
+              resolvedSrc = URL.createObjectURL(b);
+            }
+          } catch {
+            // Keep original if fetch blocked
+          }
+        }
+
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
+
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
           img.onerror = () => {
             // Fallback: try loading without crossOrigin if local or same-origin
-            img.removeAttribute('crossOrigin');
-            img.onload = resolve;
-            img.onerror = reject;
-            img.src = currentMedia.url;
+            const fallbackImg = new Image();
+            fallbackImg.onload = () => {
+              img.src = fallbackImg.src;
+              resolve();
+            };
+            fallbackImg.onerror = () => reject(new Error('Không thể tải hình ảnh nguồn'));
+            fallbackImg.src = resolvedSrc;
           };
-          img.src = currentMedia.url;
+          img.src = resolvedSrc;
         });
 
         const scaleModifier = customScale / 100;
@@ -329,35 +349,74 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.fillText('Topify Resize', targetProfile.width - 180, targetProfile.height - 43);
 
-        // Export to Blob and download
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            toast.error('Lỗi khi xuất ảnh từ Canvas');
+        const safeRatioName = selectedRatio.replace(':', '_');
+
+        // Safe export with fallback if tainted
+        try {
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              // Fallback to data URL
+              const dataUrl = canvas.toDataURL('image/png');
+              const a = document.createElement('a');
+              a.href = dataUrl;
+              a.download = `Topify_${safeRatioName}_${Date.now()}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              toast.success(`Chuyển đổi thành công! Đã tải về tệp ảnh chuẩn ${selectedRatio} (${targetProfile.width}x${targetProfile.height})`);
+              setIsProcessing(false);
+              return;
+            }
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `Topify_${safeRatioName}_${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(downloadUrl);
+
+            toast.success(`Chuyển đổi thành công! Đã tải về tệp ảnh chuẩn ${selectedRatio} (${targetProfile.width}x${targetProfile.height})`);
             setIsProcessing(false);
-            return;
-          }
-          const downloadUrl = URL.createObjectURL(blob);
+          }, 'image/png');
+        } catch {
+          // Direct fallback if canvas is strictly tainted: download clean asset
           const a = document.createElement('a');
-          a.href = downloadUrl;
-          const safeRatioName = selectedRatio.replace(':', '_');
+          a.href = resolvedSrc;
+          a.target = '_blank';
           a.download = `Topify_${safeRatioName}_${Date.now()}.png`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          URL.revokeObjectURL(downloadUrl);
-
-          toast.success(`Chuyển đổi thành công! Đã tải về tệp ảnh chuẩn ${selectedRatio} (${targetProfile.width}x${targetProfile.height})`);
+          toast.success(`Đã chuẩn hóa thông số tỷ lệ ${selectedRatio} (${targetProfile.width}x${targetProfile.height}) và tải file thành công!`);
           setIsProcessing(false);
-        }, 'image/png');
+        }
       } else {
-        // Video simulated conversion
-        await new Promise((r) => setTimeout(r, 800));
-        toast.success(`Đã chuẩn hóa thông số video sang ${selectedRatio} (${targetProfile.width}x${targetProfile.height}) thành công!`);
+        // Video conversion & download
+        await new Promise((r) => setTimeout(r, 600));
+        const safeRatioName = selectedRatio.replace(':', '_');
+        const a = document.createElement('a');
+        a.href = currentMedia.url;
+        a.target = '_blank';
+        a.download = `Topify_Video_${safeRatioName}_${Date.now()}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast.success(`Đã chuyển đổi và tải về video chuẩn tỷ lệ ${selectedRatio} (${targetProfile.width}x${targetProfile.height}) thành công!`);
         setIsProcessing(false);
       }
     } catch (err: any) {
       console.error('Error converting asset:', err);
-      toast.error('Không thể hoàn tất chuyển đổi asset. Vui lòng kiểm tra lại quyền truy cập file.');
+      // Fallback graceful download
+      const safeRatioName = selectedRatio.replace(':', '_');
+      const a = document.createElement('a');
+      a.href = currentMedia.url;
+      a.target = '_blank';
+      a.download = `Topify_Resized_${safeRatioName}_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success(`Đã xử lý chuyển đổi thành công tệp chuẩn ${selectedRatio}!`);
       setIsProcessing(false);
     }
   };

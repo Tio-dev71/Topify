@@ -17,6 +17,7 @@ import {
   Share2,
   RefreshCw,
   Video,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -143,8 +144,90 @@ export default function MediaStudio() {
     navigate(`/create?caption=${encodedCaption}&tags=${encodedTags}&source=${encodeURIComponent(clip.title)}`);
   };
 
+  const [previewClip, setPreviewClip] = useState<HighlightClip | null>(null);
+
+  const handleDownloadClip = (clip: HighlightClip) => {
+    toast.success(`Đang tải clip ngắn "${clip.title}" (${clip.duration}s)...`);
+    // Sample video URL for highlight clip demo download
+    const sampleClipUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+    const a = document.createElement('a');
+    a.href = sampleClipUrl;
+    a.target = '_blank';
+    a.download = `Topify_Clip_${clip.id}_${Date.now()}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
+      {/* Video Preview Modal (F114) */}
+      {previewClip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Play className="w-4 h-4 text-blue-600" />
+                <h3 className="font-bold text-sm text-gray-900 truncate max-w-xs">{previewClip.title}</h3>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold">
+                  {previewClip.duration}s
+                </span>
+              </div>
+              <button
+                onClick={() => setPreviewClip(null)}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="relative bg-black aspect-video flex items-center justify-center">
+              <video
+                src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+              />
+              <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-md text-[11px] text-amber-400 font-semibold flex items-center gap-1 border border-amber-400/30">
+                <Flame className="w-3 h-3 text-amber-400" />
+                Viral: {previewClip.viralPotentialScore}/100
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200/60">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
+                  🎣 Câu Hook mở đầu (0-{previewClip.startTime + 3}s):
+                </span>
+                <p className="text-xs text-amber-950 font-medium italic mt-0.5">"{previewClip.hookPoint}"</p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadClip(previewClip)}
+                  className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 transition flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Tải clip về máy (.mp4)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const c = previewClip;
+                    setPreviewClip(null);
+                    handleTransferToStudio(c);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition flex items-center gap-1.5 shadow-sm"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                  Đưa sang Tạo bài viết
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -296,13 +379,34 @@ export default function MediaStudio() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleTransferToStudio(clip)}
-                  className="w-full py-2.5 px-3 text-xs font-semibold rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer mt-2"
-                >
-                  <ArrowRight className="w-3.5 h-3.5" />
-                  Đưa Clip Này Sang Content Studio
-                </button>
+                <div className="space-y-2 mt-2 pt-2 border-t border-gray-100">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewClip(clip)}
+                      className="py-2 px-2.5 text-xs font-semibold rounded-xl bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5 text-blue-600" />
+                      Xem trước
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadClip(clip)}
+                      className="py-2 px-2.5 text-xs font-semibold rounded-xl bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200 transition flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-600" />
+                      Tải clip (.mp4)
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTransferToStudio(clip)}
+                    className="w-full py-2.5 px-3 text-xs font-semibold rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    Đưa sang Tạo bài viết
+                  </button>
+                </div>
               </div>
             ))}
           </div>

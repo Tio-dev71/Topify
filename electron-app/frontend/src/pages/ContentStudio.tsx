@@ -33,6 +33,11 @@ import { SpinModal, type SpinVariantItem } from '../components/SpinModal';
 import { AiWriterModal } from '../components/AiWriterModal';
 import { ImportPostsModal } from '../components/content-studio/ImportPostsModal';
 import { MultiPlatformResizer, RATIO_PROFILES, type AspectRatio } from '../components/MultiPlatformResizer';
+import { ContentPillarsTab } from '../components/content-studio/ContentPillarsTab';
+import { ContentTemplatesTab } from '../components/content-studio/ContentTemplatesTab';
+import { ContentBriefsTab } from '../components/content-studio/ContentBriefsTab';
+import { PrePublishChecklistTab } from '../components/content-studio/PrePublishChecklistTab';
+import { DuplicateDetectionTab } from '../components/content-studio/DuplicateDetectionTab';
 import {
   generateSpinVariantsClient,
   parseSpintaxClient,
@@ -75,7 +80,9 @@ const FORMATS = [
 
 export default function ContentStudio() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'ai_writer' | 'spin_tool' | 'templates' | 'import_posts' | 'resize_asset'>('ai_writer');
+  const [activeTab, setActiveTab] = useState<
+    'ai_writer' | 'spin_tool' | 'pillars' | 'templates' | 'briefs' | 'checklist' | 'duplicate_check' | 'import_posts' | 'resize_asset'
+  >('ai_writer');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSpinModalOpen, setIsSpinModalOpen] = useState(false);
 
@@ -86,6 +93,16 @@ export default function ContentStudio() {
       setActiveTab('resize_asset');
     } else if (tabParam === 'spin') {
       setActiveTab('spin_tool');
+    } else if (tabParam === 'pillars' || tabParam === 'f073' || tabParam === 'f074') {
+      setActiveTab('pillars');
+    } else if (tabParam === 'templates' || tabParam === 'f076') {
+      setActiveTab('templates');
+    } else if (tabParam === 'briefs' || tabParam === 'f077') {
+      setActiveTab('briefs');
+    } else if (tabParam === 'checklist' || tabParam === 'f078') {
+      setActiveTab('checklist');
+    } else if (tabParam === 'duplicate' || tabParam === 'duplicate_check' || tabParam === 'f082') {
+      setActiveTab('duplicate_check');
     } else if (tabParam === 'import') {
       setActiveTab('import_posts');
     }
@@ -253,11 +270,11 @@ export default function ContentStudio() {
             theo 6 tone giọng (F016) và công nghệ Spin Spintax tự động chống trùng lặp, chống spam đa kênh (F015).
           </p>
 
-          <div className="flex flex-wrap gap-3 pt-2">
+          <div className="flex flex-wrap gap-2.5 pt-2">
             <button
               type="button"
               onClick={() => setActiveTab('ai_writer')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'ai_writer'
                   ? 'bg-white text-purple-900 shadow-md'
                   : 'bg-white/10 text-white hover:bg-white/20'
@@ -269,7 +286,7 @@ export default function ContentStudio() {
             <button
               type="button"
               onClick={() => setActiveTab('spin_tool')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'spin_tool'
                   ? 'bg-white text-purple-900 shadow-md'
                   : 'bg-white/10 text-white hover:bg-white/20'
@@ -280,8 +297,68 @@ export default function ContentStudio() {
             </button>
             <button
               type="button"
+              onClick={() => setActiveTab('pillars')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'pillars'
+                  ? 'bg-white text-purple-900 shadow-md ring-2 ring-amber-300'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-300" />
+              Trụ Cột & Kế Hoạch (F073/F074)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('templates')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'templates'
+                  ? 'bg-white text-purple-900 shadow-md ring-2 ring-amber-300'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-amber-300" />
+              Mẫu Bài Viết & Công Thức (F076)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('briefs')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'briefs'
+                  ? 'bg-white text-purple-900 shadow-md ring-2 ring-amber-300'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5 text-amber-300" />
+              Content Brief (F077)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('checklist')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'checklist'
+                  ? 'bg-white text-purple-900 shadow-md ring-2 ring-amber-300'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+              Checklist Trước Xuất Bản (F078)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('duplicate_check')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'duplicate_check'
+                  ? 'bg-white text-purple-900 shadow-md ring-2 ring-amber-300'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <Copy className="w-3.5 h-3.5 text-amber-300" />
+              Kiểm Tra Trùng Lặp (F082)
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('resize_asset')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'resize_asset'
                   ? 'bg-white text-purple-900 shadow-md ring-2 ring-amber-300'
                   : 'bg-white/10 text-white hover:bg-white/20'
@@ -292,20 +369,8 @@ export default function ContentStudio() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('templates')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === 'templates'
-                  ? 'bg-white text-purple-900 shadow-md'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              Công Thức Copywriting Kinh Điển
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab('import_posts')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'import_posts'
                   ? 'bg-white text-purple-900 shadow-md'
                   : 'bg-white/10 text-white hover:bg-white/20'
@@ -317,7 +382,7 @@ export default function ContentStudio() {
             <button
               type="button"
               onClick={() => setIsSpinModalOpen(true)}
-              className="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-purple-500/30 hover:bg-purple-500/50 text-white border border-purple-300/40 shadow-xs"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-purple-500/30 hover:bg-purple-500/50 text-white border border-purple-300/40 shadow-xs"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
               Mở Popup Spin (F015)
@@ -986,96 +1051,21 @@ export default function ContentStudio() {
         </div>
       )}
 
-      {/* TAB 3: MARKETING TEMPLATES */}
-      {activeTab === 'templates' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
-          {/* Card 1: AIDA */}
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4 hover:shadow-md transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 font-black flex items-center justify-center">
-                A
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-900">Công thức AIDA</h4>
-                <p className="text-xs text-gray-500">Attention - Interest - Desire - Action</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Mô hình kinh điển phù hợp cho các bài viết giới thiệu sản phẩm mới hoặc chạy quảng cáo chuyển đổi. Thu hút
-              chú ý $\rightarrow$ Gây thích thú $\rightarrow$ Kích thích khao khát $\rightarrow$ Kêu gọi hành động.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('ai_writer');
-                setGoal('DIRECT_SALES');
-                setTopic('Giới thiệu sản phẩm mới theo công thức AIDA');
-              }}
-              className="w-full py-2 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-xl text-xs font-bold transition-all"
-            >
-              Áp dụng mẫu này
-            </button>
-          </div>
+      {/* TAB: CONTENT PILLARS & MONTHLY/QUARTERLY PLAN (F073 & F074) */}
+      {activeTab === 'pillars' && <ContentPillarsTab />}
 
-          {/* Card 2: PAS */}
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4 hover:shadow-md transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 font-black flex items-center justify-center">
-                P
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-900">Công thức PAS</h4>
-                <p className="text-xs text-gray-500">Problem - Agitate - Solution</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Xoáy sâu vào nỗi đau của khách hàng $\rightarrow$ Làm trầm trọng hóa vấn đề $\rightarrow$ Đưa ra giải pháp
-              cứu cánh hoàn hảo. Rất hiệu quả cho các ngành dịch vụ, khóa học, mỹ phẩm.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('ai_writer');
-                setTone('EMPATHETIC');
-                setGoal('LEAD_GEN');
-                setTopic('Giải quyết nỗi đau khách hàng theo công thức PAS');
-              }}
-              className="w-full py-2 bg-rose-50 text-rose-800 hover:bg-rose-100 rounded-xl text-xs font-bold transition-all"
-            >
-              Áp dụng mẫu này
-            </button>
-          </div>
+      {/* TAB: CONTENT TEMPLATES & COPYWRITING FORMULAS (F076) */}
+      {activeTab === 'templates' && <ContentTemplatesTab />}
 
-          {/* Card 3: BAB */}
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4 hover:shadow-md transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 font-black flex items-center justify-center">
-                B
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-900">Công thức BAB</h4>
-                <p className="text-xs text-gray-500">Before - After - Bridge</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Tạo sự đối lập ngoạn mục giữa tình trạng Trước (Before) và Sau (After) khi sử dụng sản phẩm. Cây cầu
-              (Bridge) chính là bí quyết giúp khách hàng đạt được ước mơ.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('ai_writer');
-                setTone('SALES_FOMO');
-                setFormat('SHORT_VIDEO_SCRIPT');
-                setTopic('Kịch bản video so sánh Trước và Sau với BAB');
-              }}
-              className="w-full py-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all"
-            >
-              Áp dụng mẫu này
-            </button>
-          </div>
-        </div>
-      )}
+      {/* TAB: CONTENT BRIEFS (F077) */}
+      {activeTab === 'briefs' && <ContentBriefsTab />}
+
+      {/* TAB: PRE-PUBLISH CHECKLIST (F078) */}
+      {activeTab === 'checklist' && <PrePublishChecklistTab />}
+
+      {/* TAB: DUPLICATE CONTENT DETECTION (F082) */}
+      {activeTab === 'duplicate_check' && <DuplicateDetectionTab />}
+
 
       {/* TAB 4: IMPORT POSTS FROM EXCEL / DRIVE (F019) */}
       {activeTab === 'import_posts' && (

@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from 'vitest';
 import { 
   checkReferralFraud, 
   memoryWallet, 
@@ -148,6 +149,12 @@ describe('Wallet & Referral Growth Engine (M12 & M13: F146 - F155)', () => {
   });
 
   describe('Earning Tasks Expiration & Claim Logic (F150)', () => {
+    beforeEach(() => {
+      for (const t of memoryEarningTasks) {
+        t.isClaimed = false;
+      }
+    });
+
     it('should enrich tasks with isExpired status via GET /api/wallet/tasks', async () => {
       const { GET } = await import('@/app/api/wallet/tasks/route');
       const res = await GET();

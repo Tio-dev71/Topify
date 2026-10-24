@@ -468,6 +468,23 @@ export default function Campaigns() {
   const [newCampStartDate, setNewCampStartDate] = useState('');
   const [newCampEndDate, setNewCampEndDate] = useState('');
 
+  // F133: KPI Detail Inputs
+  const [newKpiName, setNewKpiName] = useState('Doanh thu thuần mục tiêu');
+  const [newKpiTargetValue, setNewKpiTargetValue] = useState('150000000');
+  const [newKpiUnit, setNewKpiUnit] = useState('đ');
+
+  // F134: Budget Allocation %
+  const [newBudgetAdsPercent, setNewBudgetAdsPercent] = useState('50');
+  const [newBudgetKolPercent, setNewBudgetKolPercent] = useState('30');
+  const [newBudgetMediaPercent, setNewBudgetMediaPercent] = useState('15');
+  const [newBudgetSeedingPercent, setNewBudgetSeedingPercent] = useState('5');
+
+  // F135: Linked Content Plan
+  const [newLinkedPlan, setNewLinkedPlan] = useState('plan_q4_ecommerce');
+
+  // F136: Campaign Assignee & Team Lead
+  const [newAssignee, setNewAssignee] = useState('user_1');
+
   // Asset Review Modal / State
   const [reviewAssetTarget, setReviewAssetTarget] = useState<CampaignAssetItem | null>(null);
   const [reviewNote, setReviewNote] = useState('');
@@ -495,6 +512,21 @@ export default function Campaigns() {
     }
 
     const budgetNum = Number(newCampBudget) || 50000000;
+    const targetValNum = Number(newKpiTargetValue) || (newCampObjective === 'REVENUE' ? budgetNum * 3 : 1000);
+
+    const adsPct = (Number(newBudgetAdsPercent) || 50) / 100;
+    const kolPct = (Number(newBudgetKolPercent) || 30) / 100;
+    const mediaPct = (Number(newBudgetMediaPercent) || 15) / 100;
+    const seedingPct = (Number(newBudgetSeedingPercent) || 5) / 100;
+
+    const memberMap: Record<string, { name: string; avatar: string }> = {
+      user_1: { name: 'Nguyễn Văn A (Lead)', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop' },
+      user_2: { name: 'Trần Thị B (Content)', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop' },
+      user_3: { name: 'Lê Hoàng C (Media)', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop' },
+      user_4: { name: 'Vũ Đức D (Performance)', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop' },
+    };
+    const chosenMember = memberMap[newAssignee] || memberMap['user_1'];
+
     const newCamp: EnrichedCampaign = {
       id: `camp_${Date.now()}`,
       name: newCampName.trim(),
@@ -505,30 +537,31 @@ export default function Campaigns() {
       endDate: newCampEndDate ? new Date(newCampEndDate).toISOString() : new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
       totalBudget: budgetNum,
       totalSpent: 0,
-      ownerId: 'user_1',
-      ownerName: 'Nguyễn Văn A (Lead)',
-      ownerAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+      ownerId: newAssignee,
+      ownerName: chosenMember.name,
+      ownerAvatar: chosenMember.avatar,
       channels: newCampChannels,
       kpis: [
         {
           id: `kpi_${Date.now()}`,
-          name: 'Mục tiêu doanh thu kỳ vọng',
+          name: newKpiName.trim() || (newCampObjective === 'REVENUE' ? 'Doanh thu thuần mục tiêu' : 'Chỉ số KPI mục tiêu'),
           metricType: newCampObjective,
-          targetValue: budgetNum * 3,
+          targetValue: targetValNum,
           currentValue: 0,
-          unit: 'đ',
+          unit: newKpiUnit || (newCampObjective === 'REVENUE' ? 'đ' : 'lượt'),
           completionRate: 0,
         },
       ],
       budgetCategories: [
-        { category: 'PAID_ADS', label: 'Quảng cáo trả phí (Ads)', plannedAmount: budgetNum * 0.55, actualSpent: 0, color: '#3b82f6' },
-        { category: 'KOL_BOOKING', label: 'Booking KOC/KOLs', plannedAmount: budgetNum * 0.3, actualSpent: 0, color: '#a855f7' },
-        { category: 'CREATIVE_MEDIA', label: 'Sản xuất Media', plannedAmount: budgetNum * 0.15, actualSpent: 0, color: '#10b981' },
+        { category: 'PAID_ADS', label: 'Quảng cáo trả phí (TikTok & FB Ads)', plannedAmount: budgetNum * adsPct, actualSpent: 0, color: '#3b82f6' },
+        { category: 'KOL_BOOKING', label: 'Booking KOC/KOL Review', plannedAmount: budgetNum * kolPct, actualSpent: 0, color: '#a855f7' },
+        { category: 'CREATIVE_MEDIA', label: 'Sản xuất Creative & Media', plannedAmount: budgetNum * mediaPct, actualSpent: 0, color: '#10b981' },
+        { category: 'SEEDING_OPS', label: 'Seeding hội nhóm & Phễu CRM', plannedAmount: budgetNum * seedingPct, actualSpent: 0, color: '#f59e0b' },
       ],
       phases: [
         {
           id: `ph_${Date.now()}_1`,
-          name: 'Giai đoạn 1: Teaser & Chuẩn bị',
+          name: 'Giai đoạn 1: Teaser & Chuẩn bị Creative',
           phaseKey: 'TEASER',
           startDate: new Date().toISOString(),
           endDate: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
@@ -538,7 +571,7 @@ export default function Campaigns() {
         },
         {
           id: `ph_${Date.now()}_2`,
-          name: 'Giai đoạn 2: Kick-off Mở bán',
+          name: 'Giai đoạn 2: Kick-off Mở bán & Đẩy Ads',
           phaseKey: 'KICKOFF',
           startDate: new Date(Date.now() + 4 * 24 * 3600 * 1000).toISOString(),
           endDate: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
@@ -581,8 +614,9 @@ export default function Campaigns() {
     setNewCampBudget('50000000');
     setNewCampStartDate('');
     setNewCampEndDate('');
+    setNewKpiTargetValue('150000000');
 
-    toast.success('Đã tạo chiến dịch mới thành công!');
+    toast.success('Đã tạo chiến dịch mới thành công (F133 - F136)!');
   };
 
   // Handle Approve / Reject Asset
@@ -1456,45 +1490,150 @@ export default function Campaigns() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateCampaign} className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
-              <div className="space-y-1">
-                <label className="font-semibold text-[var(--color-foreground)]">
-                  Tên chiến dịch <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: Mega Sale 12.12 - Tri Ân Khách Hàng Cuối Năm"
-                  value={newCampName}
-                  onChange={(e) => setNewCampName(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--color-foreground)] text-xs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-[var(--color-foreground)]">Mô tả mục tiêu chiến dịch</label>
-                <textarea
-                  rows={2}
-                  placeholder="Mục tiêu mở rộng tập khách hàng, thúc đẩy doanh số..."
-                  value={newCampDesc}
-                  onChange={(e) => setNewCampDesc(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--color-foreground)] text-xs resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handleCreateCampaign} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+              {/* SECTION 1: BASIC INFO */}
+              <div className="space-y-3">
+                <h4 className="text-[11px] font-bold text-[var(--color-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                  <Rocket className="w-3.5 h-3.5" /> Thông tin cơ bản chiến dịch
+                </h4>
                 <div className="space-y-1">
-                  <label className="font-semibold text-[var(--color-foreground)]">Mục tiêu cốt lõi (KPI Core)</label>
-                  <select
-                    value={newCampObjective}
-                    onChange={(e) => setNewCampObjective(e.target.value as CampaignObjectiveType)}
-                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
-                  >
-                    <option value="REVENUE">Tối ưu Doanh thu (Revenue)</option>
-                    <option value="LEADS">Thu thập Leads CRM</option>
-                    <option value="REACH">Độ phủ thương hiệu (Reach/Views)</option>
-                    <option value="APP_INSTALL">Cài đặt Ứng dụng (App Install)</option>
-                  </select>
+                  <label className="font-semibold text-[var(--color-foreground)]">
+                    Tên chiến dịch <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ví dụ: Mega Sale 12.12 - Tri Ân Khách Hàng Cuối Năm"
+                    value={newCampName}
+                    onChange={(e) => setNewCampName(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--color-foreground)] text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Mô tả mục tiêu chiến dịch</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Mục tiêu mở rộng tập khách hàng, thúc đẩy doanh số..."
+                    value={newCampDesc}
+                    onChange={(e) => setNewCampDesc(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--color-foreground)] text-xs resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[var(--color-foreground)]">Ngày bắt đầu</label>
+                    <input
+                      type="date"
+                      value={newCampStartDate}
+                      onChange={(e) => setNewCampStartDate(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[var(--color-foreground)]">Ngày kết thúc</label>
+                    <input
+                      type="date"
+                      value={newCampEndDate}
+                      onChange={(e) => setNewCampEndDate(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: F133 - KPI & OBJECTIVE */}
+              <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/15 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[var(--color-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-emerald-500" />
+                    F133 • Thiết lập Mục tiêu &amp; Chỉ số KPI
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 font-bold">
+                    Đặc tả F133
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[var(--color-foreground)]">Loại mục tiêu cốt lõi</label>
+                    <select
+                      value={newCampObjective}
+                      onChange={(e) => {
+                        const val = e.target.value as CampaignObjectiveType;
+                        setNewCampObjective(val);
+                        if (val === 'REVENUE') {
+                          setNewKpiName('Doanh thu thuần mục tiêu');
+                          setNewKpiUnit('đ');
+                        } else if (val === 'LEADS') {
+                          setNewKpiName('Số lượng Leads CRM');
+                          setNewKpiUnit('leads');
+                        } else if (val === 'REACH') {
+                          setNewKpiName('Lượt xem video (Views)');
+                          setNewKpiUnit('lượt xem');
+                        } else if (val === 'APP_INSTALL') {
+                          setNewKpiName('Lượt cài đặt ứng dụng');
+                          setNewKpiUnit('lượt cài');
+                        }
+                      }}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                    >
+                      <option value="REVENUE">Tối ưu Doanh thu (Revenue)</option>
+                      <option value="LEADS">Thu thập Leads CRM</option>
+                      <option value="REACH">Độ phủ thương hiệu (Reach/Views)</option>
+                      <option value="APP_INSTALL">Cài đặt Ứng dụng (App Install)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[var(--color-foreground)]">Tên chỉ số KPI</label>
+                    <input
+                      type="text"
+                      value={newKpiName}
+                      onChange={(e) => setNewKpiName(e.target.value)}
+                      placeholder="vd: Doanh thu thuần mục tiêu"
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[var(--color-foreground)]">Giá trị mục tiêu cần đạt</label>
+                    <input
+                      type="number"
+                      value={newKpiTargetValue}
+                      onChange={(e) => setNewKpiTargetValue(e.target.value)}
+                      placeholder="150000000"
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs font-bold text-emerald-600"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[var(--color-foreground)]">Đơn vị tính KPI</label>
+                    <input
+                      type="text"
+                      value={newKpiUnit}
+                      onChange={(e) => setNewKpiUnit(e.target.value)}
+                      placeholder="đ, leads, views..."
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 3: F134 - BUDGET ALLOCATION */}
+              <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/15 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[var(--color-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-blue-500" />
+                    F134 • Phân Bổ Ngân Sách Theo Hạng Mục
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 font-bold">
+                    Đặc tả F134
+                  </span>
                 </div>
 
                 <div className="space-y-1">
@@ -1503,51 +1642,144 @@ export default function Campaigns() {
                     type="number"
                     value={newCampBudget}
                     onChange={(e) => setNewCampBudget(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs font-semibold"
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs font-bold text-blue-600"
                   />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  <div className="p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-1">
+                    <div className="text-[10px] font-semibold text-blue-500">Quảng cáo Ads (%)</div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={newBudgetAdsPercent}
+                      onChange={(e) => setNewBudgetAdsPercent(e.target.value)}
+                      className="w-full p-1 rounded-lg border border-[var(--color-border)] bg-transparent text-xs font-bold text-center"
+                    />
+                    <div className="text-[10px] text-[var(--color-muted-foreground)] text-center truncate">
+                      {Math.round(((Number(newCampBudget) || 0) * (Number(newBudgetAdsPercent) || 0)) / 100).toLocaleString('vi-VN')}đ
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-1">
+                    <div className="text-[10px] font-semibold text-purple-500">Booking KOL (%)</div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={newBudgetKolPercent}
+                      onChange={(e) => setNewBudgetKolPercent(e.target.value)}
+                      className="w-full p-1 rounded-lg border border-[var(--color-border)] bg-transparent text-xs font-bold text-center"
+                    />
+                    <div className="text-[10px] text-[var(--color-muted-foreground)] text-center truncate">
+                      {Math.round(((Number(newCampBudget) || 0) * (Number(newBudgetKolPercent) || 0)) / 100).toLocaleString('vi-VN')}đ
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-1">
+                    <div className="text-[10px] font-semibold text-emerald-500">Creative/Media (%)</div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={newBudgetMediaPercent}
+                      onChange={(e) => setNewBudgetMediaPercent(e.target.value)}
+                      className="w-full p-1 rounded-lg border border-[var(--color-border)] bg-transparent text-xs font-bold text-center"
+                    />
+                    <div className="text-[10px] text-[var(--color-muted-foreground)] text-center truncate">
+                      {Math.round(((Number(newCampBudget) || 0) * (Number(newBudgetMediaPercent) || 0)) / 100).toLocaleString('vi-VN')}đ
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[var(--color-background)] border border-[var(--color-border)] space-y-1">
+                    <div className="text-[10px] font-semibold text-amber-500">Seeding Phễu (%)</div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={newBudgetSeedingPercent}
+                      onChange={(e) => setNewBudgetSeedingPercent(e.target.value)}
+                      className="w-full p-1 rounded-lg border border-[var(--color-border)] bg-transparent text-xs font-bold text-center"
+                    />
+                    <div className="text-[10px] text-[var(--color-muted-foreground)] text-center truncate">
+                      {Math.round(((Number(newCampBudget) || 0) * (Number(newBudgetSeedingPercent) || 0)) / 100).toLocaleString('vi-VN')}đ
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Channels Selector (F135) */}
-              <div className="space-y-1.5">
-                <label className="font-semibold text-[var(--color-foreground)]">Kênh phân phối áp dụng (Channels)</label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {(['TIKTOK', 'FACEBOOK', 'INSTAGRAM', 'YOUTUBE', 'SHOPEE'] as ChannelKey[]).map((ch) => (
-                    <label key={ch} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-muted)]/30">
-                      <input
-                        type="checkbox"
-                        checked={newCampChannels.includes(ch)}
-                        onChange={(e) => {
-                          if (e.target.checked) setNewCampChannels([...newCampChannels, ch]);
-                          else setNewCampChannels(newCampChannels.filter((c) => c !== ch));
-                        }}
-                        className="rounded border-[var(--color-border)] text-[var(--color-primary)]"
-                      />
-                      <span className="font-medium text-[var(--color-foreground)]">{ch}</span>
-                    </label>
-                  ))}
+              {/* SECTION 4: F135 - CHANNELS & CONTENT PLAN */}
+              <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/15 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[var(--color-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-purple-500" />
+                    F135 • Kênh Phân Phối &amp; Kế Hoạch Nội Dung Liên Kết
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 font-bold">
+                    Đặc tả F135
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-[var(--color-foreground)]">Kênh phân phối áp dụng (Channels)</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(['TIKTOK', 'FACEBOOK', 'INSTAGRAM', 'YOUTUBE', 'SHOPEE'] as ChannelKey[]).map((ch) => (
+                      <label key={ch} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-muted)]/30">
+                        <input
+                          type="checkbox"
+                          checked={newCampChannels.includes(ch)}
+                          onChange={(e) => {
+                            if (e.target.checked) setNewCampChannels([...newCampChannels, ch]);
+                            else setNewCampChannels(newCampChannels.filter((c) => c !== ch));
+                          }}
+                          className="rounded border-[var(--color-border)] text-[var(--color-primary)]"
+                        />
+                        <span className="font-medium text-[var(--color-foreground)]">{ch}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Gắn với Kế hoạch Nội dung (Content Plan)</label>
+                  <select
+                    value={newLinkedPlan}
+                    onChange={(e) => setNewLinkedPlan(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                  >
+                    <option value="plan_q4_ecommerce">Kế hoạch Quý 4 - Chiến Dịch E-commerce &amp; Livestream (Content Studio)</option>
+                    <option value="plan_brand_awareness">Kế hoạch Định Vị Thương Hiệu &amp; Video Viral TikTok</option>
+                    <option value="plan_holiday_sale">Kế hoạch Tri Ân Khách Hàng Dịp Lễ &amp; Mini-game</option>
+                    <option value="plan_new_launch">Kế hoạch Ra Mắt Dòng Sản Phẩm Mới</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-[var(--color-foreground)]">Ngày bắt đầu</label>
-                  <input
-                    type="date"
-                    value={newCampStartDate}
-                    onChange={(e) => setNewCampStartDate(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
-                  />
+              {/* SECTION 5: F136 - ASSIGNEE & TEAM */}
+              <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/15 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[var(--color-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-amber-500" />
+                    F136 • Gắn Thành Viên Phụ Trách (Assignee / Team Lead)
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 font-bold">
+                    Đặc tả F136
+                  </span>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-[var(--color-foreground)]">Ngày kết thúc</label>
-                  <input
-                    type="date"
-                    value={newCampEndDate}
-                    onChange={(e) => setNewCampEndDate(e.target.value)}
+                  <label className="font-semibold text-[var(--color-foreground)]">Trưởng chiến dịch phụ trách (Project Lead)</label>
+                  <select
+                    value={newAssignee}
+                    onChange={(e) => setNewAssignee(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
-                  />
+                  >
+                    <option value="user_1">Nguyễn Văn A (Project Lead &amp; Strategy)</option>
+                    <option value="user_2">Trần Thị B (Lead Content Creator &amp; Copywriter)</option>
+                    <option value="user_3">Lê Hoàng C (Media Producer &amp; Video Editor)</option>
+                    <option value="user_4">Vũ Đức D (Performance Ads &amp; Data Analyst)</option>
+                  </select>
                 </div>
               </div>
 
@@ -1561,9 +1793,10 @@ export default function Campaigns() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 text-xs font-semibold shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 text-xs font-semibold shadow-sm flex items-center gap-1.5"
                 >
-                  Tạo chiến dịch
+                  <Rocket className="w-3.5 h-3.5" />
+                  <span>Tạo chiến dịch hoàn tất</span>
                 </button>
               </div>
             </form>

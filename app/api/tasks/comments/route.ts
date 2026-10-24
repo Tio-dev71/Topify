@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
       const dbComments = await prisma.taskComment.findMany({
         where: { taskId },
         include: {
-          user: { select: { id: true, name: true, email: true, image: true } },
+          createdBy: { select: { id: true, name: true, email: true, image: true } },
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -84,9 +84,9 @@ export async function GET(req: NextRequest) {
         comments = dbComments.map((dc: any) => ({
           id: dc.id,
           taskId: dc.taskId,
-          authorId: dc.userId,
-          authorName: dc.user?.name || dc.user?.email || 'Thành viên',
-          authorAvatar: dc.user?.image || undefined,
+          authorId: dc.createdById,
+          authorName: dc.createdBy?.name || dc.createdBy?.email || 'Thành viên',
+          authorAvatar: dc.createdBy?.image || undefined,
           content: dc.content,
           mentions: [],
           attachments: [],
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
         const created = await prisma.taskComment.create({
           data: {
             taskId,
-            userId: session.user.id,
+            createdById: session.user.id,
             content: newComment.content,
           },
         });

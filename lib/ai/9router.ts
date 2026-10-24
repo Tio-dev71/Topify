@@ -897,7 +897,7 @@ function generateHeuristicAnalyticsInsights(input: AnalyticsInsightsInput): Anal
   }
 
   // Reallocate budget
-  if (highRoiCampaign && lowRoiCampaign && highRoiCampaign.id !== lowRoiCampaign.id) {
+  if (highRoiCampaign && lowRoiCampaign && highRoiCampaign.name !== lowRoiCampaign.name) {
     recommendations.push({
       id: 'rec_2',
       priority: 'HIGH',

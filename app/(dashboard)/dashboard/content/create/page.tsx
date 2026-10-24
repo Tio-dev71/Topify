@@ -64,6 +64,11 @@ export default function CreatePostPage() {
   const [isEvergreen, setIsEvergreen] = useState(false);
   const [recycleIntervalDays, setRecycleIntervalDays] = useState(30);
 
+  // Media picker state
+  const [videos, setVideos] = useState<VideoAsset[]>([]);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+  const [loadingVideos, setLoadingVideos] = useState(true);
+
   // Debounced duplicate content check
   useEffect(() => {
     if (!caption && !title && !selectedVideoId) {
@@ -96,11 +101,6 @@ export default function CreatePostPage() {
 
     return () => clearTimeout(timer);
   }, [title, caption, selectedVideoId]);
-  
-  // Media picker state
-  const [videos, setVideos] = useState<VideoAsset[]>([]);
-  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
-  const [loadingVideos, setLoadingVideos] = useState(true);
 
   // Social connection state
   const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});

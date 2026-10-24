@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
     // 4. Audit Log
     await recordAuditLog({
       action: 'POST.CREATE',
-      details: {
+      metadata: {
         source: 'EVERGREEN_RECYCLE',
         originalPostId: originalPost.id,
         recycledPostId: recycledPost.id,

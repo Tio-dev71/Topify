@@ -108,8 +108,12 @@ export async function POST(req: NextRequest) {
         status: true,
         createdAt: true,
         publishedAt: true,
-        media: {
-          select: { url: true },
+        postMedia: {
+          select: {
+            mediaAsset: {
+              select: { storageUrl: true },
+            },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -143,8 +147,11 @@ export async function POST(req: NextRequest) {
       }
 
       // 2. Check image / media URLs matching
-      if (!mediaMatched && normalizedMediaUrls.size > 0 && post.media.length > 0) {
-        const postMediaUrls = post.media.map(m => m.url.trim());
+      const postMediaUrls = ((post as any).postMedia || [])
+        .map((m: any) => m.mediaAsset?.storageUrl?.trim())
+        .filter(Boolean) as string[];
+
+      if (!mediaMatched && normalizedMediaUrls.size > 0 && postMediaUrls.length > 0) {
         for (const pUrl of postMediaUrls) {
           if (normalizedMediaUrls.has(pUrl)) {
             mediaMatched = true;

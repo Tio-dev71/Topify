@@ -1,6 +1,6 @@
 {
   "name": "autoreel-lite",
-  "version": "0.1.0",
+  "version": "1.3.9",
   "private": true,
   "scripts": {
     "dev": "concurrently \"next dev\" \"npm run worker\"",
