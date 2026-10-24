@@ -196,6 +196,8 @@ export default function TopifyAI() {
 
   // Modal 4: Prompt Viewer Modal state
   const [showPromptViewerModal, setShowPromptViewerModal] = useState(false);
+  // Modal: Change Persona for Current Session Modal
+  const [showChangePersonaModal, setShowChangePersonaModal] = useState(false);
 
   const currentSession = sessions.find((s) => s.id === currentSessionId);
   const currentPersonaObj = personas.find((p) => p.id === (currentSession?.persona || selectedPersona)) || personas[0];
@@ -320,11 +322,112 @@ export default function TopifyAI() {
     }
   };
 
-  const handleSelectPersonaQuick = (personaId: string) => {
+  const handleSelectPersonaQuick = async (personaId: string) => {
     setSelectedPersona(personaId);
     const p = personas.find((item) => item.id === personaId);
-    if (p) {
-      toast.info(`Đã chọn vai trò: ${p.emoji} ${p.name}`);
+    if (!p) return;
+
+    // 1. Nếu phiên hiện tại chưa có tin nhắn nào của user -> cập nhật trực tiếp vai trò của phiên này
+    const userMsgCount = chatMessages.filter((m) => m.role === 'user').length;
+    if (currentSessionId && userMsgCount === 0) {
+      try {
+        const welcomeContent = p.welcomeMessage || `Chào bạn! Tôi là ${p.name} trên Topify AI. Tôi sẵn sàng hỗ trợ cho phiên này!`;
+        const initialMsg = {
+          id: `msg-welcome-${Date.now()}`,
+          role: 'assistant',
+          content: welcomeContent,
+          createdAt: new Date().toISOString(),
+        };
+
+        const res = await api.post('/ai/studio/chat', {
+          action: 'update_session',
+          sessionId: currentSessionId,
+          persona: personaId,
+          title: `Tư vấn ${p.name}`,
+          systemPrompt: p.systemPrompt,
+        });
+
+        const updatedSession = res.data?.session || {
+          ...currentSession,
+          persona: personaId,
+          personaName: p.name,
+          title: `Tư vấn ${p.name}`,
+          systemPrompt: p.systemPrompt,
+          messages: [initialMsg],
+        };
+
+        setSessions((prev) => prev.map((s) => s.id === currentSessionId ? { ...s, ...updatedSession, messages: [initialMsg] } : s));
+        setChatMessages([initialMsg]);
+        toast.success(`Đã cập nhật vai trò: ${p.emoji} ${p.name}`);
+        return;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // 2. Nếu phiên hiện tại đã có tin nhắn -> tìm xem đã có phiên nào của Persona này chưa
+    const existingSession = sessions.find((s) => s.persona === personaId);
+    if (existingSession) {
+      handleSelectSession(existingSession);
+      toast.success(`Đã chuyển sang phiên: "${existingSession.title}" (${p.emoji} ${p.name})`);
+      return;
+    }
+
+    // 3. Nếu chưa có phiên nào của Persona này -> tự động khởi tạo phiên mới
+    try {
+      setLoading(true);
+      const res = await api.post('/ai/studio/chat', {
+        action: 'create_session',
+        title: `Tư vấn ${p.name}`,
+        persona: personaId,
+        systemPrompt: p.systemPrompt,
+      });
+
+      if (res.data?.session) {
+        setSessions([res.data.session, ...sessions]);
+        setCurrentSessionId(res.data.session.id);
+        setChatMessages(res.data.session.messages || []);
+        toast.success(`Đã mở phiên mới: "Tư vấn ${p.name}" (${p.emoji} ${p.name})`);
+      }
+    } catch (e: any) {
+      toast.error('Lỗi khi mở phiên theo vai trò mới');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSwitchCurrentSessionPersona = async (newPersonaId: string) => {
+    if (!currentSessionId) return;
+    const p = personas.find((item) => item.id === newPersonaId);
+    if (!p) return;
+
+    try {
+      setLoading(true);
+      const res = await api.post('/ai/studio/chat', {
+        action: 'update_session',
+        sessionId: currentSessionId,
+        persona: newPersonaId,
+        systemPrompt: p.systemPrompt,
+      });
+
+      const transitionNotice = {
+        id: `msg-transition-${Date.now()}`,
+        role: 'assistant',
+        content: `🔄 **Đã chuyển đổi vai trò trợ lý:** ${p.emoji} **${p.name}**\n\n${p.welcomeMessage || `Tôi là ${p.name}. Tôi đã tiếp nhận cuộc trò chuyện và sẵn sàng hỗ trợ bạn theo chuyên môn mới!`}`,
+        createdAt: new Date().toISOString(),
+      };
+
+      setSessions((prev) =>
+        prev.map((s) => (s.id === currentSessionId ? { ...s, persona: newPersonaId, personaName: p.name, systemPrompt: p.systemPrompt } : s))
+      );
+      setSelectedPersona(newPersonaId);
+      setChatMessages((prev) => [...prev, transitionNotice]);
+      setShowChangePersonaModal(false);
+      toast.success(`Đã đổi vai trò phiên hiện tại sang ${p.emoji} ${p.name}`);
+    } catch (e) {
+      toast.error('Không thể đổi vai trò cho phiên này');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -909,6 +1012,15 @@ export default function TopifyAI() {
                     <span className="truncate">
                       Vai trò: <strong className="text-blue-600 font-semibold">{currentSession?.personaName || currentPersonaObj?.name || 'Trợ lý AI'}</strong>
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowChangePersonaModal(true)}
+                      className="text-[10px] text-blue-600 hover:text-blue-700 font-medium hover:underline shrink-0 flex items-center gap-0.5 cursor-pointer bg-blue-50 hover:bg-blue-100/70 px-1.5 py-0.5 rounded-md border border-blue-200/60 transition-colors"
+                      title="Chuyển đổi vai trò trợ lý cho phiên trò chuyện này"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      <span>Đổi vai trò</span>
+                    </button>
                     {currentSession?.systemPrompt && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200/80 shrink-0 whitespace-nowrap">
                         ✓ Đã nạp Prompt
@@ -2006,6 +2118,72 @@ export default function TopifyAI() {
                 className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium"
               >
                 Đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ĐỔI VAI TRÒ CHO PHIÊN HIỆN TẠI */}
+      {/* ========================================================================= */}
+      {showChangePersonaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <RefreshCw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">Đổi Vai Trò Trợ Lý Cho Phiên Này</h4>
+                  <p className="text-[11px] text-gray-500">Chuyển tiếp hội thoại sang chuyên môn của Persona khác</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChangePersonaModal(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
+              {personas.map((p) => {
+                const isSelected = p.id === (currentSession?.persona || selectedPersona);
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => handleSwitchCurrentSessionPersona(p.id)}
+                    className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-3 ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50/60 shadow-2xs'
+                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="text-xl shrink-0 mt-0.5">{p.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-gray-900">{p.name}</p>
+                        {isSelected && (
+                          <span className="text-[10px] text-blue-600 font-bold bg-blue-100 px-1.5 py-0.5 rounded">
+                            Hiện tại
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-500 text-[11px] mt-0.5 line-clamp-2">{p.description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-2.5 border-t border-gray-100 flex justify-end bg-gray-50/40">
+              <button
+                type="button"
+                onClick={() => setShowChangePersonaModal(false)}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 text-xs font-medium cursor-pointer"
+              >
+                Đóng
               </button>
             </div>
           </div>

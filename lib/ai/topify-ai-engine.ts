@@ -771,6 +771,28 @@ ${effectiveSystemPrompt}
     return assistantMsg;
   }
 
+  public updateSession(sessionId: string, updates: { title?: string; persona?: string; systemPrompt?: string }): AiChatSession | null {
+    const session = this.sessions.find((s) => s.id === sessionId);
+    if (!session) return null;
+
+    if (updates.persona) {
+      session.persona = updates.persona;
+      const personaItem = this.getPersonaById(updates.persona);
+      session.personaName = personaItem ? personaItem.name : updates.persona;
+      if (!updates.systemPrompt) {
+        session.systemPrompt = personaItem?.systemPrompt || this.getPersonaSystemPrompt(updates.persona);
+      }
+    }
+    if (updates.title) {
+      session.title = updates.title.trim();
+    }
+    if (updates.systemPrompt) {
+      session.systemPrompt = updates.systemPrompt.trim();
+    }
+    session.updatedAt = new Date().toISOString();
+    return session;
+  }
+
   public deleteSession(id: string): boolean {
     const idx = this.sessions.findIndex((s) => s.id === id);
     if (idx !== -1) {

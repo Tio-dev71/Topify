@@ -32,6 +32,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ session: newSession });
     }
 
+    if (action === 'update_session') {
+      if (!sessionId) {
+        return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
+      }
+      const updated = topifyAiStore.updateSession(sessionId, { title, persona, systemPrompt });
+      if (!updated) {
+        return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      }
+      return NextResponse.json({ session: updated, sessions: topifyAiStore.getSessions() });
+    }
+
     if (action === 'get_personas') {
       return NextResponse.json({ personas: topifyAiStore.getPersonas() });
     }
