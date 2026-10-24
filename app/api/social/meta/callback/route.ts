@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
     const clientSecret = credentials.META_APP_SECRET!;
     const redirectUri = process.env.META_REDIRECT_URI || `${baseUrl}/api/social/meta/callback`;
 
-    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v20.0';
+    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v26.0';
 
     // Exchange code for token
     const tokenRes = await fetch(

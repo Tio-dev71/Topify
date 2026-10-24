@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
     const originalStateParam = token ? `meta_${token}` : 'meta';
     
     const csrfState = crypto.randomBytes(16).toString('hex');
-    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v20.0';
+    const apiVersion = process.env.META_GRAPH_API_VERSION || 'v26.0';
     const authUrl = `https://www.facebook.com/${apiVersion}/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${encodeURIComponent(stateParam)}`;
 
     const response = NextResponse.redirect(authUrl);
