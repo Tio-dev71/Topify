@@ -752,6 +752,20 @@ export default function Settings() {
               </h2>
             </div>
             <div className="p-6">
+              {/* Meta OAuth Guidance Banner */}
+              <div className="mb-5 p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-900 space-y-1.5">
+                <div className="font-semibold flex items-center gap-1.5 text-blue-950">
+                  <ShieldAlert className="w-4 h-4 text-blue-600 shrink-0" />
+                  Hướng dẫn kết nối Meta (Facebook Fanpage & Instagram Business)
+                </div>
+                <p className="text-[11.5px] leading-relaxed text-blue-800">
+                  • <strong>Nếu Facebook báo lỗi &quot;Hiện không dùng được tính năng này&quot;:</strong> Do App trên Meta for Developers đang ở chế độ <em>Phát triển (Development)</em>. Bạn cần vào <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="underline font-semibold text-blue-700 hover:text-blue-900">developers.facebook.com</a> &gt; <em>Vai trò trong ứng dụng</em> &gt; Thêm tài khoản Facebook cá nhân của bạn vào mục <strong>Người thử nghiệm (Tester)</strong> hoặc <strong>Nhà phát triển</strong>, đồng thời hoàn tất biểu mẫu <strong>Data Use Checkup (Kiểm tra việc sử dụng dữ liệu)</strong> nếu có cảnh báo.
+                </p>
+                <p className="text-[11.5px] leading-relaxed text-blue-800">
+                  • <strong>Để kết nối Fanpage &amp; Instagram:</strong> Tài khoản Facebook của bạn phải giữ quyền Quản trị viên (Admin) của Trang. Khi hộp thoại ủy quyền Facebook hiện ra, hãy tick chọn các Fanpage và tài khoản Instagram doanh nghiệp muốn phân phối video tự động trên Topify.
+                </p>
+              </div>
+
               <div className="flex flex-wrap gap-3 mb-6">
                 <button
                   type="button"
@@ -1445,6 +1459,22 @@ export default function Settings() {
                     Đang hoạt động (Connected)
                   </span>
                 </div>
+                {selectedSocialAccount.provider === 'META' && (
+                  <>
+                    <div className="flex justify-between items-center text-sm pt-1 border-t border-gray-200/60">
+                      <span className="text-gray-500">Fanpage Facebook:</span>
+                      <span className="font-medium text-gray-900 text-right">
+                        {selectedSocialAccount.pageId ? `Đã liên kết (ID: ${selectedSocialAccount.pageId})` : 'Chưa liên kết Fanpage'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500">Instagram Business:</span>
+                      <span className="font-medium text-gray-900 text-right">
+                        {selectedSocialAccount.instagramBusinessId ? `Đã liên kết (ID: ${selectedSocialAccount.instagramBusinessId})` : 'Chưa có Instagram'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="pt-2 space-y-2.5">

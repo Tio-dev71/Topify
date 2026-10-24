@@ -14,7 +14,7 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">1. Chấp nhận điều khoản</h2>
             <p>
-              Bằng việc truy cập và sử dụng ứng dụng AutoReels, bạn đồng ý tuân thủ và bị ràng buộc bởi các Điều khoản Dịch vụ này. 
+              Bằng việc truy cập và sử dụng ứng dụng Topify, bạn đồng ý tuân thủ và bị ràng buộc bởi các Điều khoản Dịch vụ này. 
               Nếu bạn không đồng ý với bất kỳ phần nào của điều khoản, vui lòng không sử dụng dịch vụ của chúng tôi.
             </p>
           </section>
@@ -22,7 +22,7 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">2. Mô tả dịch vụ</h2>
             <p>
-              AutoReels là một công cụ phần mềm cho phép người dùng tải lên, lên lịch và tự động đăng tải các video ngắn (Reels/Shorts) 
+              Topify là một công cụ phần mềm cho phép người dùng tải lên, lên lịch và tự động đăng tải các video ngắn (Reels/Shorts) 
               lên các nền tảng mạng xã hội bao gồm Facebook, Instagram và YouTube thông qua các API chính thức do các nền tảng này cung cấp.
             </p>
           </section>
@@ -30,7 +30,7 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">3. Trách nhiệm của người dùng</h2>
             <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li>Bạn chịu hoàn toàn trách nhiệm về bản quyền và nội dung của các video được đăng tải thông qua hệ thống AutoReels.</li>
+              <li>Bạn chịu hoàn toàn trách nhiệm về bản quyền và nội dung của các video được đăng tải thông qua hệ thống Topify.</li>
               <li>Bạn cam kết không sử dụng ứng dụng để đăng tải các nội dung vi phạm pháp luật, nội dung đồi trụy, thù địch hoặc vi phạm Tiêu chuẩn cộng đồng của Facebook/YouTube.</li>
               <li>Chúng tôi không chịu trách nhiệm nếu tài khoản mạng xã hội của bạn bị khóa hoặc hạn chế do vi phạm chính sách của các nền tảng đó.</li>
             </ul>

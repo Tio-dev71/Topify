@@ -10,14 +10,14 @@ export default function DataDeletionPage() {
         
         <div className="prose dark:prose-invert max-w-none text-gray-600 dark:text-neutral-300 space-y-6">
           <p>
-            AutoReels là một ứng dụng đăng nhập thông qua tài khoản mạng xã hội (Facebook/Google). 
+            Topify là một ứng dụng đăng nhập thông qua tài khoản mạng xã hội (Facebook/Google). 
             Theo các quy định về quyền riêng tư dữ liệu, bạn có quyền yêu cầu xóa hoàn toàn dữ liệu của mình khỏi hệ thống của chúng tôi.
           </p>
           
           <section>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Cách 1: Xóa dữ liệu trực tiếp trong ứng dụng</h2>
             <ol className="list-decimal pl-5 mt-2 space-y-2">
-              <li>Đăng nhập vào tài khoản AutoReels của bạn.</li>
+              <li>Đăng nhập vào tài khoản Topify của bạn.</li>
               <li>Truy cập vào mục <strong>Cài đặt (Settings)</strong> ở menu bên trái.</li>
               <li>Tìm đến các tài khoản mạng xã hội đã kết nối (Meta / YouTube).</li>
               <li>Bấm vào biểu tượng phích cắm màu đỏ (Disconnect) để ngắt kết nối.</li>
@@ -27,14 +27,14 @@ export default function DataDeletionPage() {
 
           <section>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Cách 2: Gỡ ứng dụng thông qua Facebook (Meta)</h2>
-            <p className="mb-2">Nếu bạn không muốn truy cập vào AutoReels nữa, bạn có thể xóa dữ liệu ủy quyền trực tiếp từ Facebook:</p>
+            <p className="mb-2">Nếu bạn không muốn truy cập vào Topify nữa, bạn có thể xóa dữ liệu ủy quyền trực tiếp từ Facebook:</p>
             <ol className="list-decimal pl-5 mt-2 space-y-2">
               <li>Truy cập Facebook cá nhân của bạn và vào mục <strong>Cài đặt & quyền riêng tư</strong> {'>'} <strong>Cài đặt</strong>.</li>
               <li>Ở menu bên trái, cuộn xuống và chọn <strong>Tiện ích tích hợp cho doanh nghiệp (Business Integrations)</strong>.</li>
-              <li>Tìm ứng dụng <strong>AutoReels</strong> trong danh sách.</li>
+              <li>Tìm ứng dụng <strong>Topify</strong> trong danh sách.</li>
               <li>Bấm vào nút <strong>Gỡ / Xóa (Remove)</strong>.</li>
               <li>Tùy chọn: Bạn có thể click vào ô kiểm yêu cầu xóa toàn bộ bài đăng mà ứng dụng đã đăng thay bạn.</li>
-              <li>Bấm xác nhận. Việc này sẽ thu hồi toàn bộ quyền của AutoReels và chúng tôi sẽ không thể truy cập bất kỳ dữ liệu nào của bạn nữa.</li>
+              <li>Bấm xác nhận. Việc này sẽ thu hồi toàn bộ quyền của Topify và chúng tôi sẽ không thể truy cập bất kỳ dữ liệu nào của bạn nữa.</li>
             </ol>
           </section>
 
