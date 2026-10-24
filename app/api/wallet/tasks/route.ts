@@ -15,11 +15,7 @@ export async function GET(req?: NextRequest) {
 
     try {
       const session = await auth().catch(() => null);
-      let userId = session?.user?.id;
-      if (!userId) {
-        const firstUser = await prisma.user.findFirst().catch(() => null);
-        userId = firstUser?.id;
-      }
+      const userId = session?.user?.id;
 
       if (userId) {
         const dbWallet = await prisma.wallet.findUnique({
@@ -91,10 +87,6 @@ export async function POST(req: NextRequest) {
     try {
       const session = await auth().catch(() => null);
       userId = session?.user?.id;
-      if (!userId) {
-        const firstUser = await prisma.user.findFirst().catch(() => null);
-        userId = firstUser?.id;
-      }
     } catch (e) {}
 
     if (userId) {
