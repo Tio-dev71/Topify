@@ -658,6 +658,11 @@ Sau khi lần lượt hoàn thành các module, bạn chỉ cần mở App Elect
    * Mở menu **"Chiến dịch (Campaigns)"** (`/campaigns`):
      * Tab 1 (**Danh sách Chiến dịch**):
        * Kiểm tra Grid hiển thị danh sách chiến dịch, thanh lọc trạng thái (Active/Draft/Completed) và ô tìm kiếm (**F133**).
+       * **Kiểm tra Thẻ Chiến dịch (Card UI & Data Validation):**
+         * Dòng Thời gian (Timeline): Hiển thị đầy đủ năm `dd/MM/yyyy — dd/MM/yyyy`, nằm gọn gàng trên 1 dòng duy nhất (`whitespace-nowrap`), không bị ngắt vụn tại các dấu nối (**F133, F135**).
+         * Dòng Kênh phân phối (Channels): Nhãn "Kênh:" kèm các badge nền tảng (TikTok, Facebook, Instagram, YouTube, Shopee) có màu thương hiệu, tự động xuống dòng (`flex-wrap`) khi card hẹp, không bị tràn ra ngoài viền mép thẻ.
+         * Khối Ngân sách (Budget Progress): Hiển thị nhãn "Ngân sách chiến dịch" và phần trăm, thanh tiến độ đổi màu và 2 mức tiền "Đã chi" / "Tổng" tách biệt rõ ràng, không bị co cắt chữ (`Ngân…`) (**F134**).
+         * Tính trung thực dữ liệu (Data Integrity): Chiến dịch ở trạng thái "Lên kế hoạch" (`PLANNING`) phải có số liệu ban đầu chuẩn xác (Đã chi = 0đ, Leads = 0, Doanh thu = 0đ).
        * Bấm *"Tạo Chiến dịch Mới"* $\rightarrow$ Nhập thông tin mục tiêu (Doanh thu/Lead/Awareness), ngân sách kế hoạch, chọn kênh truyền thông, thiết lập KPI định lượng (**F133, F134, F135**).
        * Kiểm tra thẻ chiến dịch hiển thị tiến độ thời gian (Timeline), mức ngân sách đã giải ngân và chỉ số tốc độ đốt ngân sách (Burn Rate Status: Bình thường / Tăng tốc / Vượt ngân sách) (**F134**).
      * Tab 2 (**Tiến độ Hợp nhất**):

@@ -249,7 +249,7 @@ const INITIAL_CAMPAIGNS: EnrichedCampaign[] = [
     startDate: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
     endDate: new Date(Date.now() + 18 * 24 * 3600 * 1000).toISOString(),
     totalBudget: 40000000,
-    totalSpent: 6500000,
+    totalSpent: 0,
     ownerId: 'user_2',
     ownerName: 'Trần Thị B',
     ownerAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
@@ -260,37 +260,67 @@ const INITIAL_CAMPAIGNS: EnrichedCampaign[] = [
         name: 'Đăng ký nhận Lookbook độc quyền',
         metricType: 'LEADS',
         targetValue: 1200,
-        currentValue: 150,
+        currentValue: 0,
         unit: 'leads',
-        completionRate: 12.5,
+        completionRate: 0,
+      },
+      {
+        id: 'kpi_22',
+        name: 'Lượt tương tác Reels & Shorts',
+        metricType: 'REACH',
+        targetValue: 800000,
+        currentValue: 0,
+        unit: 'tương tác',
+        completionRate: 0,
       },
     ],
     budgetCategories: [
-      { category: 'PAID_ADS', label: 'Quảng cáo trả phí (Ads)', plannedAmount: 18000000, actualSpent: 1500000, color: '#3b82f6' },
-      { category: 'KOL_BOOKING', label: 'Booking KOC/KOLs', plannedAmount: 14000000, actualSpent: 4000000, color: '#a855f7' },
-      { category: 'CREATIVE_MEDIA', label: 'Sản xuất Media', plannedAmount: 6000000, actualSpent: 1000000, color: '#10b981' },
-      { category: 'SEEDING_OPS', label: 'Seeding hội nhóm', plannedAmount: 2000000, actualSpent: 0, color: '#f59e0b' },
+      { category: 'PAID_ADS', label: 'Quảng cáo trả phí (TikTok & FB Ads)', plannedAmount: 18000000, actualSpent: 0, color: '#3b82f6' },
+      { category: 'KOL_BOOKING', label: 'Booking KOC/KOL Review sản phẩm', plannedAmount: 14000000, actualSpent: 0, color: '#a855f7' },
+      { category: 'CREATIVE_MEDIA', label: 'Sản xuất Video & Banner Creative', plannedAmount: 6000000, actualSpent: 0, color: '#10b981' },
+      { category: 'SEEDING_OPS', label: 'Seeding hội nhóm & Vận hành phễu', plannedAmount: 2000000, actualSpent: 0, color: '#f59e0b' },
     ],
-    phases: [],
+    phases: [
+      {
+        id: 'ph_21',
+        name: 'Giai đoạn 1: Teaser Lookbook & Thu thập Lead',
+        phaseKey: 'TEASER',
+        startDate: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
+        endDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+        targetPostsCount: 6,
+        publishedPostsCount: 0,
+        description: 'Tung bộ ảnh nghệ thuật và video moodboard phong cách châu Âu.',
+      },
+      {
+        id: 'ph_22',
+        name: 'Giai đoạn 2: Chính thức mở bán BST Thu Đông',
+        phaseKey: 'KICKOFF',
+        startDate: new Date(Date.now() + 8 * 24 * 3600 * 1000).toISOString(),
+        endDate: new Date(Date.now() + 18 * 24 * 3600 * 1000).toISOString(),
+        targetPostsCount: 15,
+        publishedPostsCount: 0,
+        description: 'Tung mã ưu đãi cho 100 khách hàng đầu tiên và kích hoạt mạng lưới KOCs.',
+      },
+    ],
     assetsCount: 3,
     contentPlanCount: 21,
     tasksCount: 8,
-    completedTasksCount: 3,
+    completedTasksCount: 2,
     financialSummary: {
       campaignId: 'camp_2',
-      totalRevenue: 22000000,
+      totalRevenue: 0,
       totalPlannedBudget: 40000000,
-      totalActualSpend: 6500000,
-      paidAdsSpend: 1500000,
-      netProfit: 15500000,
-      roiPercentage: 238,
-      roas: 14.6,
-      totalLeads: 150,
-      costPerLead: 43333,
-      totalOrders: 35,
-      costPerAcquisition: 185714,
+      totalActualSpend: 0,
+      paidAdsSpend: 0,
+      netProfit: 0,
+      roiPercentage: 0,
+      roas: 0,
+      totalLeads: 0,
+      costPerLead: 0,
+      totalOrders: 0,
+      costPerAcquisition: 0,
       rating: 'ON_TARGET',
-      summaryVerdict: 'Giai đoạn chuẩn bị tiến triển tốt, chi phí thu lead sớm ở mức tối ưu.',
+      summaryVerdict: 'Chiến dịch đang trong giai đoạn lên kế hoạch và chuẩn bị tài nguyên trước ngày khởi chạy.',
     },
     createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
     updatedAt: new Date().toISOString(),
@@ -577,6 +607,38 @@ export default function Campaigns() {
     toast.success(status === 'APPROVED' ? 'Đã phê duyệt tài nguyên!' : 'Đã từ chối tài nguyên và gửi phản hồi.');
   };
 
+  const CHANNEL_BADGE_STYLES: Record<string, string> = {
+    TIKTOK: 'bg-black/5 dark:bg-white/10 text-gray-900 dark:text-gray-100 border-black/15 dark:border-white/20',
+    FACEBOOK: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25',
+    INSTAGRAM: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/25',
+    YOUTUBE: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/25',
+    SHOPEE: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25',
+    ZALO: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/25',
+  };
+
+  const formatCampaignDateRange = (startDateStr: string, endDateStr: string) => {
+    try {
+      const start = new Date(startDateStr);
+      const end = new Date(endDateStr);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const startFormatted = `${pad(start.getDate())}/${pad(start.getMonth() + 1)}/${start.getFullYear()}`;
+      const endFormatted = `${pad(end.getDate())}/${pad(end.getMonth() + 1)}/${end.getFullYear()}`;
+      return `${startFormatted} — ${endFormatted}`;
+    } catch {
+      return `${startDateStr} — ${endDateStr}`;
+    }
+  };
+
+  const formatDateWithYear = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   // Helper render status badge
   const renderStatusBadge = (status: CampaignStatus) => {
     switch (status) {
@@ -778,18 +840,25 @@ export default function Campaigns() {
                     </p>
 
                     {/* Timeline & Channels */}
-                    <div className="flex items-center justify-between text-[11px] text-[var(--color-muted-foreground)] pt-2 border-t border-[var(--color-border)]">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>
-                          {new Date(camp.startDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} -{' '}
-                          {new Date(camp.endDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                    <div className="space-y-2 pt-2.5 border-t border-[var(--color-border)]">
+                      {/* Timeline on 1 line with full year */}
+                      <div className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                        <span className="font-medium text-[var(--color-foreground)] whitespace-nowrap text-[11px]">
+                          {formatCampaignDateRange(camp.startDate, camp.endDate)}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      {/* Channels list with wrap */}
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        <span className="text-[10px] font-medium text-[var(--color-muted-foreground)] mr-0.5">Kênh:</span>
                         {camp.channels.map((ch) => (
-                          <span key={ch} className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-[var(--color-muted)] text-[var(--color-foreground)]">
+                          <span
+                            key={ch}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                              CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
+                            }`}
+                          >
                             {ch}
                           </span>
                         ))}
@@ -822,23 +891,27 @@ export default function Campaigns() {
                     )}
 
                     {/* Budget progress (F134) */}
-                    <div className="space-y-1 pt-1">
+                    <div className="p-3 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-1.5">
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-[var(--color-muted-foreground)] flex items-center gap-1">
-                          <DollarSign className="w-3 h-3 text-emerald-500" />
-                          <span>Ngân sách:</span>
+                        <span className="text-[var(--color-muted-foreground)] font-medium flex items-center gap-1">
+                          <DollarSign className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>Ngân sách chiến dịch</span>
                         </span>
-                        <span className="font-semibold text-[var(--color-foreground)]">
-                          {camp.totalSpent.toLocaleString('vi-VN')}đ / {camp.totalBudget.toLocaleString('vi-VN')}đ ({spentPct}%)
+                        <span className={`font-bold text-xs ${spentPct > 100 ? 'text-rose-500' : spentPct > 80 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                          {spentPct}%
                         </span>
                       </div>
-                      <div className="w-full h-1 bg-[var(--color-muted)] rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${
                             spentPct > 100 ? 'bg-rose-500' : spentPct > 80 ? 'bg-amber-500' : 'bg-emerald-500'
                           }`}
                           style={{ width: `${Math.min(100, spentPct)}%` }}
                         />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-[var(--color-muted-foreground)] font-medium">
+                        <span>Đã chi: <strong className="text-[var(--color-foreground)]">{camp.totalSpent.toLocaleString('vi-VN')}đ</strong></span>
+                        <span>Tổng: <strong className="text-[var(--color-foreground)]">{camp.totalBudget.toLocaleString('vi-VN')}đ</strong></span>
                       </div>
                     </div>
                   </div>
@@ -894,6 +967,24 @@ export default function Campaigns() {
                 <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
                   {currentCampaign.description}
                 </p>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted-foreground)] mt-2">
+                  <div className="flex items-center gap-1.5 font-medium text-[var(--color-foreground)]">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span className="whitespace-nowrap">{formatCampaignDateRange(currentCampaign.startDate, currentCampaign.endDate)}</span>
+                  </div>
+                  <div className="flex items-center flex-wrap gap-1">
+                    {currentCampaign.channels.map((ch) => (
+                      <span
+                        key={ch}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
+                        }`}
+                      >
+                        {ch}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1030,8 +1121,8 @@ export default function Campaigns() {
                           <div className="font-semibold text-xs text-[var(--color-foreground)]">
                             {ph.name}
                           </div>
-                          <div className="text-[10px] text-[var(--color-muted-foreground)]">
-                            {new Date(ph.startDate).toLocaleDateString('vi-VN')} - {new Date(ph.endDate).toLocaleDateString('vi-VN')}
+                          <div className="text-[10px] text-[var(--color-muted-foreground)] whitespace-nowrap">
+                            {formatCampaignDateRange(ph.startDate, ph.endDate)}
                           </div>
                         </div>
                       </div>
@@ -1112,7 +1203,7 @@ export default function Campaigns() {
                         <div>
                           <div className="font-semibold text-[var(--color-foreground)]">{ast.name}</div>
                           <div className="text-[10px] text-[var(--color-muted-foreground)]">
-                            Đăng tải: {new Date(ast.uploadedAt).toLocaleDateString('vi-VN')}
+                            Đăng tải: {formatDateWithYear(ast.uploadedAt)}
                           </div>
                         </div>
                       </div>
@@ -1211,10 +1302,14 @@ export default function Campaigns() {
         <div className="space-y-6">
           {/* Verdict Banner */}
           <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500 text-white">
-                  {currentCampaign.financialSummary.rating === 'OUTSTANDING' ? '🏆 THÀNH CÔNG VƯỢT BẬC' : '⭐ ĐẠT MỤC TIÊU'}
+                  {currentCampaign.status === 'PLANNING'
+                    ? '📋 ĐANG LÊN KẾ HOẠCH'
+                    : currentCampaign.financialSummary.rating === 'OUTSTANDING'
+                    ? '🏆 THÀNH CÔNG VƯỢT BẬC'
+                    : '⭐ ĐẠT MỤC TIÊU'}
                 </span>
                 <span className="text-sm font-semibold text-[var(--color-foreground)]">
                   {currentCampaign.name}
@@ -1223,6 +1318,24 @@ export default function Campaigns() {
               <p className="text-xs text-[var(--color-muted-foreground)]">
                 {currentCampaign.financialSummary.summaryVerdict}
               </p>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted-foreground)] pt-1">
+                <div className="flex items-center gap-1.5 font-medium text-[var(--color-foreground)]">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span className="whitespace-nowrap">{formatCampaignDateRange(currentCampaign.startDate, currentCampaign.endDate)}</span>
+                </div>
+                <div className="flex items-center flex-wrap gap-1">
+                  {currentCampaign.channels.map((ch) => (
+                    <span
+                      key={ch}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
+                      }`}
+                    >
+                      {ch}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">

@@ -14,6 +14,40 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Khắc Phục Lỗi Giao Diện Thẻ Chiến Dịch (Campaign Cards) & Chuẩn Hóa Dữ Liệu Lên Kế Hoạch (Planning Data)
+
+### Phân hệ M10. Chiến dịch (Campaigns):
+- **[F133 - F135, F138, F139] Sửa lỗi ngày chạy xuống dòng, tag kênh tràn viền card, dòng ngân sách bị cắt và dữ liệu chiến dịch Lên kế hoạch:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    1. **Khoảng ngày bị ngắt vụn thành nhiều dòng:** Do thời gian và các tag kênh được đặt chung trên cùng một dòng `flex justify-between` trong card 3 cột hẹp (~250-280px), đồng thời định dạng `{ day: '2-digit', month: '2-digit' }` dùng dấu gạch ngang (`-`) và không có năm, khiến trình duyệt tự động bẻ dòng tại các dấu gạch nối thành 4 đoạn rời rạc (`25-` / `10 -` / `09-` / `11`).
+    2. **Tag nền tảng tràn mép card:** Các badge `TIKTOK`, `FACEBOOK`, `INSTAGRAM`, `YOUTUBE` nằm trong `flex items-center gap-1` không có thuộc tính `flex-wrap`, dẫn đến việc các tag bên phải (đặc biệt là `FACEBOOK`) bị ép sát hoặc đâm xuyên qua viền mép phải của card.
+    3. **Dòng ngân sách bị cắt cụt (`Ngân… 6.500.000đ /`):** Nhãn `"Ngân sách:"` và giá trị chi tiêu/kế hoạch đặt chung 1 hàng `flex justify-between` với số tiền lớn làm nhãn bị co lại thành `"Ngân…"`.
+    4. **Dữ liệu chưa đúng thực tế:** Thẻ chiến dịch `"Ra Mắt Bộ Sưu Tập Thời Trang Thu Đông 2026"` đang ở trạng thái `"Lên kế hoạch"` (PLANNING, chưa tới ngày chạy) nhưng lại hiển thị đã chi 6.500.000đ, đạt 150/1.200 leads (12.5%) và ghi nhận doanh thu, không phản ánh đúng logic chiến dịch đang chuẩn bị.
+  - **Giải pháp xử lý toàn diện:**
+    1. **Tách biệt dòng Thời gian (Timeline) & dòng Tag Kênh (Channels):**
+       - **Dòng Timeline:** Hiển thị độc lập với icon lịch, định dạng rõ ràng đầy đủ 4 chữ số năm `dd/MM/yyyy — dd/MM/yyyy` (vd: `25/10/2026 — 09/11/2026`) kèm lớp `whitespace-nowrap`, đảm bảo luôn hiển thị liền mạch trên 1 dòng duy nhất.
+       - **Dòng Kênh truyền thông:** Bổ sung nhãn `"Kênh:"` kèm `flex-wrap gap-1.5` và bộ style nhận diện thương hiệu cho từng nền tảng (`CHANNEL_BADGE_STYLES` cho TikTok, Facebook, Instagram, YouTube, Shopee), tự động rớt dòng an toàn khi card hẹp, tuyệt đối không tràn viền.
+    2. **Tái cấu trúc khối Ngân sách (Budget Progress F134):**
+       - Thiết kế khối thẻ ngân sách chuyên nghiệp tương đồng khối KPI:
+         - Hàng trên: Nhãn `"Ngân sách chiến dịch"` bên trái và phần trăm giải ngân `{spentPct}%` bên phải.
+         - Giữa: Thanh tiến độ trực quan với màu sắc biến thiên (xanh lá < 80%, cam 80-100%, đỏ > 100%).
+         - Hàng dưới: `Đã chi: Xđ` và `Tổng: Yđ` phân bố đều hai bên, không bao giờ xảy ra tình trạng cắt cụt nhãn.
+    3. **Chuẩn hóa dữ liệu chiến dịch Lên kế hoạch (`camp_2`):**
+       - Thiết lập toàn bộ số liệu thực tế về 0 tương ứng với trạng thái `PLANNING`: `totalSpent: 0`, `currentValue: 0` (0 leads), `completionRate: 0%`, chi tiêu các hạng mục `actualSpent: 0`, số bài đăng `publishedPostsCount: 0`, `totalRevenue: 0`, `roiPercentage: 0`, `roas: 0`.
+       - Cập nhật mô tả nhận định: `"Chiến dịch đang trong giai đoạn lên kế hoạch và chuẩn bị tài nguyên trước ngày khởi chạy."`
+       - Đồng bộ logic giữa file frontend `electron-app/frontend/src/pages/Campaigns.tsx` và backend engine `lib/campaigns/engine.ts`.
+    4. **Đồng bộ hóa trên toàn bộ 4 Tab Chiến dịch:**
+       - **Tab 1 (Danh sách Chiến dịch):** Cập nhật card timeline, kênh và ngân sách hoàn chỉnh.
+       - **Tab 2 (Tiến độ Hợp nhất F138):** Thêm timeline có năm và tag kênh vào Header Summary; chuẩn hóa ngày từng giai đoạn (Phases) dạng `dd/MM/yyyy — dd/MM/yyyy` không bẻ dòng.
+       - **Tab 3 (Kho Asset & Luồng Duyệt F137):** Cập nhật ngày đăng tải asset hiển thị đầy đủ năm `dd/MM/yyyy`.
+       - **Tab 4 (Báo cáo Tổng kết & ROI F139):** Thêm ngày chạy và danh sách kênh vào banner báo cáo; xử lý nhãn xếp hạng cho chiến dịch lên kế hoạch hiển thị `📋 ĐANG LÊN KẾ HOẠCH`.
+  - **Kiểm thử tự động:**
+    - Tạo mới unit test `__tests__/api/campaigns/route.test.ts` kiểm tra endpoint `GET /api/campaigns`, xác minh tính toàn vẹn dữ liệu `camp_2` (3/3 passed).
+    - Build thành công cả `electron-app/frontend` (Vite) và Next.js production.
+  - **Tệp thay đổi:** `electron-app/frontend/src/pages/Campaigns.tsx`, `lib/campaigns/engine.ts`, `__tests__/api/campaigns/route.test.ts`, `UPDATES.md`, `TEST_CASES.md`.
+
+---
+
 ## 🚀 [2026-10-24] — Hoàn Thiện F113 Resize Đa Nền Tảng: Tích Hợp Studio Nội Dung & Media Studio, Xuất Ảnh Canvas Đa Tỷ Lệ
 
 ### Phân hệ M2. Studio Nội Dung & M7. Media Studio:
