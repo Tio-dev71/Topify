@@ -267,39 +267,39 @@ export default function WalletEarnings() {
   return (
     <div className="space-y-6 animate-fade-in p-2 sm:p-4 max-w-7xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-200">
+      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-200 shrink-0">
             <Wallet className="w-6 h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight leading-snug">
                 Ví Doanh Thu & Tiếp Thị Liên Kết (Wallet & Referral)
               </h1>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap shrink-0 inline-flex items-center">
                 M12 & M13
               </span>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-500 leading-relaxed max-w-3xl">
               Quản lý số dư (F146), lịch sử giao dịch (F147), rút tiền (F148), nhiệm vụ kiếm tiền (F150), tiếp thị liên kết (F151-F154) và chống gian lận (F155).
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
+        <div className="flex items-center gap-2.5 self-start xl:self-center shrink-0 w-full sm:w-auto justify-end">
           <button
             onClick={() => setShowWithdrawModal(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 transition-all"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 transition-all whitespace-nowrap shrink-0"
           >
-            <ArrowDownToLine className="w-4 h-4" />
+            <ArrowDownToLine className="w-4 h-4 shrink-0" />
             Rút Tiền Ngay
           </button>
         </div>
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-1.5 border-b border-gray-200/80 px-2 overflow-x-auto text-xs">
+      <div className="flex items-center gap-1 sm:gap-1.5 border-b border-gray-200/80 px-1 sm:px-2 overflow-x-auto no-scrollbar scroll-smooth text-xs">
         {[
           { key: 'balance', label: 'Ví & Rút Tiền', icon: Wallet, badge: 'F146, F148' },
           { key: 'transactions', label: 'Lịch Sử Giao Dịch', icon: ArrowUpRight, badge: 'F147' },
@@ -313,15 +313,15 @@ export default function WalletEarnings() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as any)}
-              className={`flex items-center gap-2 px-4 py-3 font-bold border-b-2 transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${
                 isActive
                   ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50 rounded-t-xl'
                   : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
               }`}
             >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-mono">
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">{tab.label}</span>
+              <span className="hidden xl:inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-mono shrink-0 whitespace-nowrap">
                 {tab.badge}
               </span>
             </button>
@@ -334,72 +334,72 @@ export default function WalletEarnings() {
         <div className="space-y-6">
           {/* 3 Main Balances Card (F146) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg shadow-emerald-100 flex flex-col justify-between">
+            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-lg shadow-emerald-100 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between opacity-90 text-xs font-medium mb-1">
                   <span>Số Dư Khả Dụng (Available)</span>
-                  <DollarSign className="w-4 h-4" />
+                  <DollarSign className="w-4 h-4 shrink-0" />
                 </div>
-                <div className="text-3xl font-extrabold tracking-tight mt-2">
+                <div className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-2 truncate">
                   {(wallet?.availableBalance || 0).toLocaleString()} <span className="text-base font-normal">VND</span>
                 </div>
               </div>
-              <div className="mt-6 pt-4 border-t border-white/20 flex items-center justify-between text-xs">
-                <span className="opacity-80">Sẵn sàng rút về ngân hàng</span>
+              <div className="mt-5 pt-3.5 border-t border-white/20 flex items-center justify-between gap-2 text-xs">
+                <span className="opacity-80 text-xs truncate min-w-0">Sẵn sàng rút về ngân hàng</span>
                 <button
                   onClick={() => setShowWithdrawModal(true)}
-                  className="px-3 py-1 rounded-xl bg-white text-emerald-700 font-bold hover:bg-emerald-50 transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-white text-emerald-700 font-bold hover:bg-emerald-50 transition-colors whitespace-nowrap shrink-0 text-xs shadow-sm"
                 >
                   Rút ngay
                 </button>
               </div>
             </div>
 
-            <div className="p-6 rounded-3xl bg-white border border-gray-100 shadow-sm flex flex-col justify-between">
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-gray-100 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between text-gray-500 text-xs font-medium mb-1">
                   <span>Chờ Đối Soát (Pending Review)</span>
-                  <Clock className="w-4 h-4 text-amber-500" />
+                  <Clock className="w-4 h-4 text-amber-500 shrink-0" />
                 </div>
-                <div className="text-3xl font-extrabold text-amber-600 tracking-tight mt-2">
+                <div className="text-2xl sm:text-3xl font-extrabold text-amber-600 tracking-tight mt-2 truncate">
                   {(wallet?.pendingBalance || 0).toLocaleString()} <span className="text-base font-normal text-gray-500">VND</span>
                 </div>
               </div>
-              <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>Dự kiến giải ngân kỳ ngày 15</span>
-                <span className="font-semibold text-gray-700">Tự động cộng ví</span>
+              <div className="mt-5 pt-3.5 border-t border-gray-100 flex items-center justify-between gap-2 text-xs text-gray-500">
+                <span className="truncate min-w-0 text-xs">Kỳ giải ngân ngày 15</span>
+                <span className="font-semibold text-gray-700 whitespace-nowrap shrink-0 text-xs">Tự động cộng ví</span>
               </div>
             </div>
 
-            <div className="p-6 rounded-3xl bg-white border border-gray-100 shadow-sm flex flex-col justify-between">
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-gray-100 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between text-gray-500 text-xs font-medium mb-1">
                   <span>Đã Rút Thành Công (Withdrawn)</span>
-                  <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                  <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
                 </div>
-                <div className="text-3xl font-extrabold text-gray-900 tracking-tight mt-2">
+                <div className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight mt-2 truncate">
                   {(wallet?.totalWithdrawn || 0).toLocaleString()} <span className="text-base font-normal text-gray-500">VND</span>
                 </div>
               </div>
-              <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>Tổng luỹ kế các kỳ</span>
-                <span className="font-semibold text-emerald-600">{withdrawals.length} lệnh rút</span>
+              <div className="mt-5 pt-3.5 border-t border-gray-100 flex items-center justify-between gap-2 text-xs text-gray-500">
+                <span className="truncate min-w-0 text-xs">Tổng luỹ kế các kỳ</span>
+                <span className="font-semibold text-emerald-600 whitespace-nowrap shrink-0 text-xs">{withdrawals.length} lệnh rút</span>
               </div>
             </div>
           </div>
 
           {/* Withdrawals List (F148) */}
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+            <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <h3 className="text-sm font-bold text-gray-900">Lịch Sử Yêu Cầu Rút Tiền (Withdrawals - F148)</h3>
                 <p className="text-xs text-gray-500">Theo dõi tiến độ duyệt và trạng thái chuyển khoản ngân hàng</p>
               </div>
               <button
                 onClick={() => setShowWithdrawModal(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 shrink-0" />
                 Tạo lệnh rút
               </button>
             </div>
@@ -461,12 +461,12 @@ export default function WalletEarnings() {
       {/* TAB 2: Lịch Sử Giao Dịch (F147) */}
       {activeTab === 'transactions' && (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden space-y-4 p-5">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
             <div>
               <h3 className="text-sm font-bold text-gray-900">Sổ Cái Biến Động Số Dư (Transaction History - F147)</h3>
               <p className="text-xs text-gray-500">Chi tiết mọi khoản thu nhập hoa hồng, thưởng nhiệm vụ và rút tiền</p>
             </div>
-            <span className="text-xs font-semibold text-gray-600 px-3 py-1 bg-gray-100 rounded-xl">
+            <span className="text-xs font-semibold text-gray-600 px-3 py-1 bg-gray-100 rounded-xl whitespace-nowrap shrink-0">
               Tổng {transactions.length} giao dịch
             </span>
           </div>
@@ -525,16 +525,16 @@ export default function WalletEarnings() {
       {/* TAB 3: Phương Thức Nhận Tiền (F149) */}
       {activeTab === 'payment_methods' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
             <div>
               <h3 className="text-sm font-bold text-gray-900">Quản Lý Phương Thức Nhận Tiền (Payment Methods - F149)</h3>
               <p className="text-xs text-gray-500">Lưu tài khoản ngân hàng VietQR, ví điện tử Momo hoặc PayPal để nhận tiền rút tự động</p>
             </div>
             <button
               onClick={() => setShowAddMethodModal(true)}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 shrink-0" />
               Thêm Tài Khoản Mới
             </button>
           </div>
@@ -610,15 +610,15 @@ export default function WalletEarnings() {
       {/* TAB 4: Nhiệm Vụ Kiếm Tiền (F150) */}
       {activeTab === 'tasks' && (
         <div className="space-y-4">
-          <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Gift className="w-4 h-4 text-purple-600" />
+                <Gift className="w-4 h-4 text-purple-600 shrink-0" />
                 Nhiệm Vụ Đủ Điều Kiện Nhận Thu Nhập (Earning Tasks - F150)
               </h3>
               <p className="text-xs text-gray-500">Hoàn thành các nhiệm vụ tăng trưởng và bấm Nhận thưởng để cộng tiền trực tiếp vào Ví</p>
             </div>
-            <div className="text-xs font-semibold text-purple-700 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200">
+            <div className="text-xs font-semibold text-purple-700 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200 whitespace-nowrap shrink-0">
               Cập nhật hàng tuần
             </div>
           </div>
@@ -754,12 +754,12 @@ export default function WalletEarnings() {
 
           {/* Referral Funnel Tracking 4-Steps (F152) */}
           <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <h4 className="text-sm font-bold text-gray-900">Phễu Chuyển Đổi Tăng Trưởng (Referral Funnel - F152)</h4>
                 <p className="text-xs text-gray-500">Đo lường hành trình từ lượt nhấp chuột đến khách hàng trả phí</p>
               </div>
-              <div className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+              <div className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 whitespace-nowrap shrink-0">
                 Tỷ lệ chuyển đổi: {referralProfile?.conversionRate || 16.67}%
               </div>
             </div>

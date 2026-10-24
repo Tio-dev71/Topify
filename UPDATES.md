@@ -14,6 +14,33 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Khắc Phục Lỗi Vỡ Layout Header, Tabs & Nút Rút Tiền Trang Ví & Hoa Hồng (Wallet)
+
+### Phân hệ M12 & M13. Ví Doanh Thu & Tiếp Thị Liên Kết (Wallet & Referral):
+- **[F146, F148, F149, F150, F151 - F155] Tối ưu hóa toàn diện giao diện Header, Tabs Navigation và Thẻ Số Dư:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    1. **Vỡ layout Header Card:** Badge `M12 & M13` bị co hẹp và xuống thành 2 dòng (`M12 &` trên dòng 1, `M13` trên dòng 2). Chiều cao tăng lên khiến phần dưới của badge đè lên dòng mô tả tính năng (phần chữ `'nhiệm vụ kiếm tiền (F150)'` bị che khuất một phần).
+    2. **Nút "Rút Tiền Ngay" tràn sát mép card:** Nút bấm hành động bên phải bị đẩy sát mép viền ngoài cùng của card header, thiếu khoảng đệm an toàn và có nguy cơ tràn ra ngoài trên các màn hình có sidebar hẹp.
+    3. **Thanh Tabs bị cắt chữ ("Nhiệm…"):** Do kích thước 5 tabs mang nhãn và badge phân hệ quá dài (tổng chiều ngang ~960px), trên cửa sổ ứng dụng tiêu chuẩn (~800px-1100px), tab thứ 4 bị cắt cụt giữa chừng thành `'Nhiệm…'` và tab thứ 5 bị đẩy khuất khỏi tầm nhìn.
+    4. **Nút 'Rút ngay' trong card Số Dư Khả Dụng bị vỡ thành 2 dòng:** Bên trong thẻ xanh lá `Số Dư Khả Dụng (Available)`, nút bấm `'Rút ngay'` thiếu thuộc tính `whitespace-nowrap shrink-0`, bị khối text bên cạnh chèn ép khiến chữ `'Rút'` nằm ở dòng trên và `'ngay'` nằm ở dòng dưới dạng hình quả trứng.
+  - **Giải pháp xử lý toàn diện:**
+    1. **Tái cấu trúc Top Header (`WalletEarnings.tsx`):**
+       - Đổi breakpoint header sang `flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 p-5 sm:p-6`.
+       - Khối thông tin bên trái: Bọc trong `min-w-0 flex-1 space-y-1`. Hàng tiêu đề dùng `flex flex-wrap items-center gap-2 min-w-0`, badge `M12 & M13` được gán `whitespace-nowrap shrink-0 inline-flex items-center`, đảm bảo giữ nguyên trên 1 dòng duy nhất.
+       - Dòng mô tả: Áp dụng `leading-relaxed text-xs text-gray-500 max-w-3xl` với khoảng cách `space-y-1` sạch sẽ, triệt tiêu 100% hiện tượng badge chèn đè lên văn bản.
+       - Nút "Rút Tiền Ngay": Gán `whitespace-nowrap shrink-0` với cấu trúc `self-start xl:self-center`, giữ khoảng đệm padding 20px-24px tiêu chuẩn bên trong header card.
+    2. **Tối ưu thanh Tabs Navigation (`WalletEarnings.tsx`):**
+       - Áp dụng `overflow-x-auto no-scrollbar scroll-smooth` với `gap-1 sm:gap-1.5` và padding nút `px-3 sm:px-4 py-2.5 sm:py-3`.
+       - Nhãn badge phân hệ kỹ thuật (`F146, F148`, `F147`, `F149`, `F150`, `F151-F155`) được chuyển sang `hidden xl:inline-block`: Trên các màn hình laptop và desktop window thông thường (< 1280px), toàn bộ 5 tabs hiển thị trọn vẹn văn bản tiếng Việt mà không cần cuộn ngang hay bị cắt chữ thành `'Nhiệm…'`. Trên màn hình lớn (>= 1280px), các badge tự động hiện đủ.
+    3. **Tối ưu Thẻ Số Dư & Nút Bấm (`WalletEarnings.tsx`):**
+       - Thẻ Số Dư Khả Dụng: Dòng dưới gán `truncate min-w-0` cho văn bản `"Sẵn sàng rút về ngân hàng"`, và gán `whitespace-nowrap shrink-0 text-xs` cho nút `"Rút ngay"`, đảm bảo nút luôn giữ dạng pill nằm ngang chuẩn chỉnh trên 1 dòng.
+       - Thẻ Chờ Đối Soát & Đã Rút: Chuẩn hóa nhãn `"Kỳ giải ngân ngày 15"` và `"Tự động cộng ví"` với `truncate min-w-0` và `whitespace-nowrap shrink-0`, cân đối hoàn hảo trong hệ lưới 3 cột.
+       - Các bảng và card con (Lịch sử rút tiền, Lịch sử giao dịch, Phương thức nhận tiền, Nhiệm vụ kiếm tiền, Phễu tiếp thị): Đều được nâng cấp sang responsive `flex-col sm:flex-row items-start sm:items-center justify-between gap-3`.
+    4. **Bổ sung Bộ Kiểm Thử Unit Test Tự Động (`__tests__/api/wallet/wallet.test.ts`):**
+       - 12 bài test tự động bao quát thuật toán chống gian lận (`checkReferralFraud`), cấu trúc sổ cái, các trạng thái rút tiền và quy tắc tính hoa hồng.
+
+---
+
 ## 🚀 [2026-10-24] — Tối Ưu Chạy Thử Kịch Bản (Test Trigger Diagnostics) & Khắc Phục Tràn Header Trang Tự Động Hóa
 
 ### Phân hệ M11. Tự Động Hóa (Automation Flow):
