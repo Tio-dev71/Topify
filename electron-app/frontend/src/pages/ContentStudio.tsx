@@ -25,12 +25,14 @@ import {
   FileSpreadsheet,
   UploadCloud,
   Download,
+  Maximize2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import { SpinModal, type SpinVariantItem } from '../components/SpinModal';
 import { AiWriterModal } from '../components/AiWriterModal';
 import { ImportPostsModal } from '../components/content-studio/ImportPostsModal';
+import { MultiPlatformResizer, RATIO_PROFILES, type AspectRatio } from '../components/MultiPlatformResizer';
 import {
   generateSpinVariantsClient,
   parseSpintaxClient,
@@ -73,9 +75,21 @@ const FORMATS = [
 
 export default function ContentStudio() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'ai_writer' | 'spin_tool' | 'templates' | 'import_posts'>('ai_writer');
+  const [activeTab, setActiveTab] = useState<'ai_writer' | 'spin_tool' | 'templates' | 'import_posts' | 'resize_asset'>('ai_writer');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSpinModalOpen, setIsSpinModalOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam === 'resize' || tabParam === 'resize_asset' || tabParam === 'f113') {
+      setActiveTab('resize_asset');
+    } else if (tabParam === 'spin') {
+      setActiveTab('spin_tool');
+    } else if (tabParam === 'import') {
+      setActiveTab('import_posts');
+    }
+  }, []);
 
   // AI Writer State (F016)
   const [industry, setIndustry] = useState('FASHION');
@@ -263,6 +277,18 @@ export default function ContentStudio() {
             >
               <Repeat className="w-3.5 h-3.5" />
               Spin Nội Dung Chống Spam (F015)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('resize_asset')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'resize_asset'
+                  ? 'bg-white text-purple-900 shadow-md ring-2 ring-amber-300'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-amber-300" />
+              Resize Đa Nền Tảng (F113)
             </button>
             <button
               type="button"
@@ -1124,6 +1150,47 @@ export default function ContentStudio() {
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB 5: RESIZE ĐA NỀN TẢNG (F113) */}
+      {activeTab === 'resize_asset' && (
+        <div className="animate-fade-in space-y-4">
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                <Maximize2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">
+                  F113 • Chuyển Đổi Tỷ Lệ Asset Đa Nền Tảng (Facebook / IG / TikTok / Shorts)
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Tải ảnh / video từ máy hoặc chọn mẫu có sẵn, chuyển đổi kích thước chuẩn và tải về ngay hoặc áp dụng vào bài viết mới.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> F113 Đang Hoạt Động
+              </span>
+            </div>
+          </div>
+
+          <MultiPlatformResizer
+            onApplyToPost={(assetUrl: string, ratio: AspectRatio, caption?: string) => {
+              navigate('/create', {
+                state: {
+                  prefilledMediaUrl: assetUrl,
+                  prefilledMediaName: `resized_${ratio.replace(':', '_')}_${Date.now()}.png`,
+                  prefilledMediaType: 'image',
+                  prefilledTitle: `Asset đã Resize chuẩn ${ratio} (${RATIO_PROFILES[ratio]?.platforms.join(', ') || ''})`,
+                  prefilledCaption: caption || `Hình ảnh / Video chuẩn tỷ lệ ${ratio} đã được tối ưu hiển thị cho ${RATIO_PROFILES[ratio]?.platforms.join(', ')} #Topify #Resize #F113`,
+                  prefilledHashtags: '#Topify #ContentStudio #ResizeF113',
+                },
+              });
+            }}
+          />
         </div>
       )}
 

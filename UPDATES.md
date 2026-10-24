@@ -14,6 +14,40 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 
 ---
 
+## 🚀 [2026-10-24] — Hoàn Thiện F113 Resize Đa Nền Tảng: Tích Hợp Studio Nội Dung & Media Studio, Xuất Ảnh Canvas Đa Tỷ Lệ
+
+### Phân hệ M2. Studio Nội Dung & M7. Media Studio:
+- **[F113] Khắc phục lỗi "Không thực hiện chuyển đổi được (Màn Studio Nội dung và Spin)":**
+  - **Nguyên nhân cốt lõi:**
+    - Trong checklist kiểm thử của tester ghi nhận: Mở app $\rightarrow$ Click **"Studio Nội dung & Spin"** (`/content-studio`) $\rightarrow$ Tìm tính năng **Resize đa nền tảng (F113)** để chuyển asset sang tỷ lệ phù hợp Facebook/IG/TikTok/Shorts. Tuy nhiên, trước đây trang `ContentStudio.tsx` chỉ có các tab AI Writer (F016), Spin (F015), Templates và Import (F019), hoàn toàn **thiếu tab / tính năng Resize F113** khiến tester không thể thực hiện thao tác.
+    - Đồng thời, tại trang Media Studio AI (`/media/studio`), Tab 1 trước đây chỉ hiển thị khung hình mô phỏng tĩnh với ảnh Unsplash mặc định, không có cơ chế tải file từ máy tính người dùng, không cho phép chọn mẫu có sẵn, không có công cụ render/tải về thực tế và nút "Áp dụng" chưa truyền dữ liệu asset thực sang trang Tạo bài viết (`/create`).
+  - **Giải pháp xử lý toàn diện:**
+    1. **Xây dựng Component Chuyên Dụng `<MultiPlatformResizer>`:**
+       - **Đầy đủ 4 tỷ lệ chuẩn đa nền tảng:**
+         - `9:16 Dọc` (1080x1920): TikTok, Facebook Reels, Instagram Reels, YouTube Shorts.
+         - `1:1 Vuông` (1080x1080): Facebook Feed, Instagram Post, Carousel.
+         - `16:9 Ngang` (1920x1080): YouTube Video dài, Facebook Watch, Web.
+         - `4:5 Dọc Lửng` (1080x1350): Instagram Feed chuẩn (chiếm diện tích màn hình tối đa).
+       - **3 Chế độ co dãn (Fitting Modes):**
+         - `FIT_BLUR`: Tự động làm mờ hậu cảnh Gaussian Blur và căn giữa asset sắc nét.
+         - `CENTER_CROP`: Cắt trọng tâm thông minh, phủ kín toàn bộ khung hình.
+         - `LETTERBOX`: Khung viền điện ảnh đen sang trọng trên dưới hoặc 2 bên.
+       - **Nguồn Asset đa dạng:** Hỗ trợ upload ảnh/video từ máy tính (kèm kéo thả), và tích hợp sẵn 3 mẫu asset thực tế (Video review công nghệ, Banner tiếp thị 16:9, Ảnh sản phẩm thời trang 4:3) để kiểm thử 1-click tức thì.
+       - **Bộ chuyển đổi Canvas thực tế (Real HTML5 Canvas Export):** Vẽ và render trực tiếp ở độ phân giải thực (1080x1920, 1080x1080,...), áp dụng hiệu ứng và kích hoạt tải về file `.png` chất lượng cao ngay lập tức.
+       - **Thanh trượt Custom Scale (50% - 150%) & Device Viewport:** Cho phép người dùng tùy chỉnh mức độ thu phóng khung hình xem trước trực quan.
+       - **Áp dụng cho Bài Viết:** Bấm "Áp Dụng Cho Bài Viết" sẽ chuyển hướng ngay sang `/create`, tự động gán asset đã resize vào bài viết kèm tiêu đề, hashtag và caption chuẩn hóa theo tỷ lệ đích.
+    2. **Tích hợp đồng bộ trên cả 2 màn hình:**
+       - **Màn "Studio Nội dung & Spin" (`/content-studio`):** Bổ sung nút Tab nổi bật **"Resize Đa Nền Tảng (F113)"** ngay trên thanh điều hướng banner và render khối công cụ F113 hoàn chỉnh; hỗ trợ URL param `?tab=resize`.
+       - **Màn "Media Studio AI" (`/media/studio`):** Thay thế Tab 1 bằng component `<MultiPlatformResizer>` đồng nhất.
+    3. **Liên kết với Màn Tạo Bài Viết (`CreatePost.tsx`):**
+       - Lắng nghe `prefilledMediaUrl`, `prefilledMediaName`, `prefilledMediaType` từ `location.state` để tự động đính kèm asset media mà người dùng vừa resize.
+  - **Kiểm thử tự động:**
+    - Tạo bộ unit test tại `__tests__/api/media/resize.test.ts` kiểm tra toàn bộ bảng `ASPECT_RATIO_PROFILES`, thuật toán tính toán `calculateResizeTransform` cho cả 4 tỷ lệ và 3 chế độ co dãn, cùng 2 endpoint `GET` và `POST` `/api/media/resize` (7/7 passed).
+    - Build thành công cả frontend Vite Electron App và Next.js production.
+  - **Tệp thay đổi:** `electron-app/frontend/src/components/MultiPlatformResizer.tsx`, `electron-app/frontend/src/pages/ContentStudio.tsx`, `electron-app/frontend/src/pages/MediaStudio.tsx`, `electron-app/frontend/src/pages/CreatePost.tsx`, `__tests__/api/media/resize.test.ts`, `TEST_CASES.md`, `UPDATES.md`.
+
+---
+
 ## 🚀 [2026-10-24] — Tối Ưu AI Content Score (F084): Nhận Diện Caption Vô Nghĩa & Lược Bỏ Brand Voice Khi Chưa Cấu Hình
 
 ### Phân hệ M2. Content Studio:

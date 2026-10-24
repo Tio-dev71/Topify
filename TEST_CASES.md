@@ -459,16 +459,17 @@ Hệ thống thiết kế một lớp Adapter chuẩn hóa duy nhất (`lib/ai/9
 
 ## [F113] - Resize Đa Nền Tảng (Multi-Aspect Ratio Video & Image)
 
-* **Phân hệ:** M7. Media Studio (Màn hình `/media/studio` Tab **"Resize Đa Tỷ Lệ"**).
-* **Mục tiêu:** Cắt ghép và đổi tỷ lệ khung hình video sang 4 định dạng chuẩn (9:16, 1:1, 16:9, 4:5) kèm 3 chế độ co dãn (Fit Blur, Center Crop, Letterbox).
+* **Phân hệ:** M7. Media Studio & M2. Studio Nội Dung & Spin (Truy cập tại `/content-studio` Tab **"Resize Đa Nền Tảng (F113)"** hoặc `/media/studio` Tab 1 **"[F113] Resize Đa Nền Tảng"**).
+* **Mục tiêu:** Chuyển đổi tỷ lệ asset sang các định dạng phù hợp Facebook / Instagram / TikTok / YouTube Shorts (9:16, 1:1, 16:9, 4:5) kèm 3 chế độ co dãn (Fit Blur, Center Crop, Letterbox), hỗ trợ chuyển đổi Canvas thực tế và tải về hoặc áp dụng sang Tạo bài viết.
 
 ### 📋 Bảng Test Cases F113
 
 | ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
 | :--- | :--- | :--- | :--- | :--- | :---: |
-| **TC-F113-01** | Chọn tỷ lệ 9:16 (TikTok/Shorts) | 1. Mở menu **"Media Studio AI"** (`/media/studio`).<br>2. Tại Tab Resize, chọn tỷ lệ `9:16`. | Click tỷ lệ `9:16` | • Khung xem trước chuyển sang dạng dọc chuẩn 1080x1920 (aspect-ratio 9/16).<br>• Hiển thị thông số khuyến nghị: 1080x1920, 60fps. | [ ] |
-| **TC-F113-02** | Thay đổi chế độ co dãn (Fit Blur / Center Crop) | 1. Chọn chế độ `Nền mờ (Fit Blur)`.<br>2. Quan sát khung preview.<br>3. Chuyển sang `Cắt tâm (Center Crop)`. | Click radio chế độ | • Chế độ Fit Blur: Video gốc giữ tỷ lệ ở giữa, nền phía sau là bản sao mờ phóng to.<br>• Chế độ Center Crop: Video lấp đầy khung hình, giữ tâm đối tượng. | [ ] |
-| **TC-F113-03** | Tạo phiên bản mới đa tỷ lệ | 1. Bấm nút **"Tạo Phiên Bản 9:16 Chuẩn Hóa"**. | Click Render | • Gọi `POST /api/media/resize` trả về thông số transformation và URL kết quả mô phỏng. | [ ] |
+| **TC-F113-01** | Resize đa nền tảng tại Studio Nội dung & Spin | 1. Mở app Topify $\rightarrow$ Click menu **"Studio Nội dung & Spin"** (`/content-studio`).<br>2. Bấm Tab **"Resize Đa Nền Tảng (F113)"**.<br>3. Chọn tỷ lệ 9:16 (TikTok/Shorts) hoặc 1:1 (Facebook/IG) $\rightarrow$ Quan sát khung hình. | Click tab & chọn tỷ lệ | • Hiển thị giao diện MultiPlatformResizer hoàn chỉnh ngay trong Studio Nội dung.<br>• Chuyển đổi khung hình xem trước sang đúng tỷ lệ chuẩn.<br>• Đầy đủ thông số kích thước và nền tảng hỗ trợ. | [x] Đã Đạt |
+| **TC-F113-02** | Thay đổi chế độ co dãn (Fit Blur / Center Crop / Letterbox) | 1. Chọn chế độ `Fit Blur (Nền mờ)`.<br>2. Chuyển sang `Center Crop (Cắt tâm)`.<br>3. Chuyển sang `Letterbox (Viền đen)`. | Click radio chế độ | • Chế độ Fit Blur: Asset giữ nguyên vẹn ở giữa, nền sau mờ Gaussian.<br>• Chế độ Center Crop: Asset phủ kín toàn khung hình tập trung vào tâm.<br>• Chế độ Letterbox: Asset giữ tỷ lệ với dải đen điện ảnh. | [x] Đã Đạt |
+| **TC-F113-03** | Chuyển đổi và Tải ảnh chuẩn hóa thực tế (Export Canvas) | 1. Bấm nút **"Chuyển Đổi & Tải Về"** (hoặc chọn tỷ lệ). | Click Export | • Hệ thống sử dụng HTML5 Canvas vẽ ảnh ở độ phân giải thực (1080x1920, 1080x1080,...), áp dụng hiệu ứng và kích hoạt tải về file `.png` sắc nét ngay lập tức. | [x] Đã Đạt |
+| **TC-F113-04** | Áp dụng Asset đã resize sang Tạo Bài Viết | 1. Bấm nút **"Áp Dụng Cho Bài Viết"**.<br>2. Kiểm tra màn hình Tạo bài viết (`/create`). | Click Áp dụng | • Tự động chuyển hướng sang `/create` kèm asset đã resize làm media chính, điền sẵn tiêu đề và hashtag phù hợp tỷ lệ. | [x] Đã Đạt |
 
 ---
 

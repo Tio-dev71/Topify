@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import { useNavigate } from 'react-router-dom';
+import { MultiPlatformResizer, RATIO_PROFILES } from '../components/MultiPlatformResizer';
 
 type AspectRatio = '9:16' | '1:1' | '16:9' | '4:5';
 type ResizeMode = 'FIT_BLUR' | 'CENTER_CROP' | 'LETTERBOX';
@@ -216,145 +217,20 @@ export default function MediaStudio() {
       {/* TAB 1: [F113] RESIZE ĐA NỀN TẢNG */}
       {/* ========================================================================= */}
       {activeTab === 'resize' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Controls Column */}
-          <div className="space-y-6">
-            <div className="p-6 rounded-2xl bg-white border border-gray-200/80 shadow-xs space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
-                <Maximize2 className="w-4 h-4 text-blue-600" />
-                1. Chọn Tỷ Lệ Đích (Target Ratio)
-              </h3>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                {[
-                  { ratio: '9:16', name: '9:16 Dọc', desc: 'TikTok, Reels, Shorts', icon: '📱' },
-                  { ratio: '1:1', name: '1:1 Vuông', desc: 'Facebook, Instagram Feed', icon: '⏹️' },
-                  { ratio: '16:9', name: '16:9 Ngang', desc: 'YouTube Video Dài', icon: '🖥️' },
-                  { ratio: '4:5', name: '4:5 Dọc Lửng', desc: 'Instagram Feed chuẩn', icon: '📐' },
-                ].map((item) => (
-                  <button
-                    key={item.ratio}
-                    onClick={() => setSelectedRatio(item.ratio as AspectRatio)}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
-                      selectedRatio === item.ratio
-                        ? 'border-blue-600 bg-blue-50/70 text-blue-900 shadow-xs'
-                        : 'border-gray-200 bg-gray-50/50 hover:bg-white text-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm text-gray-900">{item.name}</span>
-                      <span>{item.icon}</span>
-                    </div>
-                    <span className="text-[11px] text-gray-500 mt-1">{item.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-6 rounded-2xl bg-white border border-gray-200/80 shadow-xs space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
-                <Palette className="w-4 h-4 text-blue-600" />
-                2. Chế Độ Căn Chỉnh Hậu Cảnh (Mode)
-              </h3>
-
-              <div className="space-y-2">
-                {[
-                  { mode: 'FIT_BLUR', title: 'Smart Fit (Nền Mờ Blur)', desc: 'Giữ nguyên toàn bộ nội dung, làm mờ video ở 2 bên' },
-                  { mode: 'CENTER_CROP', title: 'Smart Crop (Cắt Trọng Tâm)', desc: 'Zoom đầy khung hình và căn chỉnh vào vùng giữa' },
-                  { mode: 'LETTERBOX', title: 'Letterbox (Viền Điện Ảnh)', desc: 'Thêm dải đen trên dưới hoặc hai bên' },
-                ].map((m) => (
-                  <label
-                    key={m.mode}
-                    onClick={() => setResizeMode(m.mode as ResizeMode)}
-                    className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
-                      resizeMode === m.mode
-                        ? 'border-blue-600 bg-blue-50/50 text-blue-900 shadow-xs'
-                        : 'border-gray-200 bg-white hover:bg-gray-50/50 text-gray-700'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      checked={resizeMode === m.mode}
-                      onChange={() => setResizeMode(m.mode as ResizeMode)}
-                      className="mt-1 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <div className="text-xs font-semibold text-gray-900">{m.title}</div>
-                      <div className="text-[11px] text-gray-500 leading-relaxed mt-0.5">{m.desc}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                toast.success(`Đã chuẩn hóa video sang tỷ lệ ${selectedRatio} theo chuẩn ${resizeMode}!`);
-                navigate('/create');
-              }}
-              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              Áp Dụng & Gửi Sang Content Studio
-            </button>
-          </div>
-
-          {/* Interactive Visual Canvas Preview */}
-          <div className="lg:col-span-2 p-6 rounded-2xl bg-white border border-gray-200/80 shadow-xs flex flex-col items-center justify-center min-h-[480px]">
-            <div className="text-center mb-5">
-              <span className="text-xs text-blue-600 font-mono font-semibold uppercase tracking-wider">
-                Khung Hình Xem Trước: {selectedRatio} ({resizeMode})
-              </span>
-              <p className="text-xs text-gray-400 mt-0.5">Tự động tối ưu độ phân giải Full HD (1080p) xuất bản đa kênh</p>
-            </div>
-
-            {/* Simulated Device Frame */}
-            <div
-              className={`relative rounded-3xl overflow-hidden shadow-2xl border-4 border-gray-800 bg-gray-950 flex items-center justify-center transition-all duration-500 ${
-                selectedRatio === '9:16'
-                  ? 'w-[240px] h-[426px]'
-                  : selectedRatio === '1:1'
-                  ? 'w-[320px] h-[320px]'
-                  : selectedRatio === '16:9'
-                  ? 'w-[440px] h-[247px]'
-                  : 'w-[280px] h-[350px]'
-              }`}
-            >
-              {/* Blur Background if FIT_BLUR */}
-              {resizeMode === 'FIT_BLUR' && (
-                <div
-                  className="absolute inset-0 bg-cover bg-center filter blur-md opacity-40 scale-125"
-                  style={{
-                    backgroundImage: `url(https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=600&h=400&fit=crop)`,
-                  }}
-                />
-              )}
-
-              {/* Centered Video Content Mock */}
-              <div className="relative z-10 w-full h-auto p-4 text-center">
-                <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto shadow-lg mb-3">
-                  <Play className="w-6 h-6 ml-1" />
-                </div>
-                <div className="text-xs font-bold text-white px-3 py-1 rounded bg-black/60 backdrop-blur-sm inline-block">
-                  {selectedRatio} • Full HD
-                </div>
-              </div>
-
-              {/* Watermark brand hint */}
-              <div className="absolute bottom-3 right-3 text-[10px] text-white/70 bg-black/50 px-2 py-0.5 rounded font-mono">
-                Topify Media
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center gap-4 text-xs text-gray-400">
-              <span>Độ phân giải: 1080 × {selectedRatio === '9:16' ? '1920' : selectedRatio === '1:1' ? '1080' : '1350'}</span>
-              <span>•</span>
-              <span>Tốc độ khung hình: 60 FPS</span>
-              <span>•</span>
-              <span>Hỗ trợ H.264 / AAC</span>
-            </div>
-          </div>
-        </div>
+        <MultiPlatformResizer
+          onApplyToPost={(assetUrl: string, ratio: AspectRatio, caption?: string) => {
+            navigate('/create', {
+              state: {
+                prefilledMediaUrl: assetUrl,
+                prefilledMediaName: `media_studio_resized_${ratio.replace(':', '_')}.png`,
+                prefilledMediaType: 'image',
+                prefilledTitle: `Video/Ảnh đã Resize chuẩn ${ratio} (${RATIO_PROFILES[ratio]?.platforms.join(', ') || ''})`,
+                prefilledCaption: caption || `Tối ưu tỷ lệ ${ratio} cho ${RATIO_PROFILES[ratio]?.platforms.join(', ')} #Topify #MediaStudio #F113`,
+                prefilledHashtags: '#Topify #MediaStudio #ResizeF113',
+              },
+            });
+          }}
+        />
       )}
 
       {/* ========================================================================= */}

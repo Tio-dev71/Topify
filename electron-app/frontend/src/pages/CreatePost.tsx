@@ -230,19 +230,26 @@ export default function CreatePost() {
   const [aiWriterModalOpen, setAiWriterModalOpen] = useState(false);
   const [activeVideoForModal, setActiveVideoForModal] = useState<UploadedVideo | null>(null);
 
-  // Listen for navigation state from ContentStudio
+  // Listen for navigation state from ContentStudio / MultiPlatformResizer
   useEffect(() => {
-    const locState = location.state as { prefilledTitle?: string; prefilledCaption?: string; prefilledHashtags?: string } | null;
-    if (locState?.prefilledTitle || locState?.prefilledCaption || locState?.prefilledHashtags) {
+    const locState = location.state as {
+      prefilledTitle?: string;
+      prefilledCaption?: string;
+      prefilledHashtags?: string;
+      prefilledMediaUrl?: string;
+      prefilledMediaName?: string;
+      prefilledMediaType?: 'image' | 'video';
+    } | null;
+    if (locState?.prefilledTitle || locState?.prefilledCaption || locState?.prefilledHashtags || locState?.prefilledMediaUrl) {
       if (videos.length === 0) {
         const draft: UploadedVideo = {
           id: `draft_${Date.now()}`,
-          originalFileName: 'Bản thảo kịch bản AI (Chưa gắn video)',
+          originalFileName: locState.prefilledMediaName || (locState.prefilledMediaUrl ? 'asset_resized.png' : 'Bản thảo kịch bản AI (Chưa gắn video)'),
           titleFromFileName: locState.prefilledTitle || 'Bản thảo kịch bản AI',
-          storageUrl: '',
-          size: 0,
-          mimeType: 'video/mp4',
-          isDraft: true,
+          storageUrl: locState.prefilledMediaUrl || '',
+          size: 1024 * 1024,
+          mimeType: locState.prefilledMediaType === 'image' || (locState.prefilledMediaUrl && locState.prefilledMediaUrl.startsWith('data:image')) ? 'image/png' : 'video/mp4',
+          isDraft: !locState.prefilledMediaUrl,
           title: locState.prefilledTitle || '',
           caption: locState.prefilledCaption || '',
           firstComment: '',
@@ -255,8 +262,31 @@ export default function CreatePost() {
         if (locState.prefilledHashtags) {
           updateVideoField(videos[0].id, 'hashtags', locState.prefilledHashtags);
         }
+        if (locState.prefilledMediaUrl) {
+          setVideos(prev =>
+            prev.map((v, i) =>
+              i === 0
+                ? {
+                    ...v,
+                    storageUrl: locState.prefilledMediaUrl!,
+                    originalFileName: locState.prefilledMediaName || v.originalFileName,
+                    mimeType:
+                      locState.prefilledMediaType === 'image' ||
+                      locState.prefilledMediaUrl!.startsWith('data:image')
+                        ? 'image/png'
+                        : 'video/mp4',
+                    isDraft: false,
+                  }
+                : v
+            )
+          );
+        }
       }
-      toast.success('Đã áp dụng nội dung từ Content Studio! Vui lòng tải video thực tế để xuất bản.');
+      toast.success(
+        locState.prefilledMediaUrl
+          ? 'Đã áp dụng asset đã resize và nội dung vào bài viết!'
+          : 'Đã áp dụng nội dung từ Content Studio! Vui lòng tải video thực tế để xuất bản.'
+      );
     }
   }, [location.state]);
 
