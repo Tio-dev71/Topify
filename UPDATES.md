@@ -12,6 +12,44 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] — Sửa Lỗi Import Bài Viết Excel & Google Sheets Báo Hợp Lệ Dù Nền Tảng Chưa Kết Nối (F019)
+
+### Phân hệ M2. Content Studio (Quản lý bài viết - F019: Import Bài Viết Hàng Loạt):
+- **[F019] Validate kiểm tra kết nối nền tảng (Connected Social Channels) trước khi import:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Người dùng chuẩn bị file Excel / Google Sheets import có cột Nền tảng ghi `TIKTOK / YOUTUBE_SHORTS`, nhưng tài khoản chỉ mới kết nối YouTube Shorts, chưa kết nối TikTok.
+    - Khi upload file Excel hoặc dán link Google Sheets, hệ thống báo kết quả: `TỔNG SỐ BÀI: 3, HỢP LỆ: 3, KHÔNG HỢP LỆ: 0` và record số 1 vẫn báo nhãn xanh `Hợp lệ`.
+    - **Expected:** Hệ thống phải validate dữ liệu import trước khi đẩy lên và báo record invalid (`Không hợp lệ`) vì nền tảng TikTok chưa được kết nối với tài khoản.
+    - **Actual:** Record có nền tảng TikTok (chưa connect) vẫn được báo hợp lệ.
+  - **Nguyên nhân gốc rễ:**
+    1. Trong [import-engine.ts](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts), hàm `parseExcelOrCsvBuffer` trước đó chỉ kiểm tra tính bắt buộc của `title` (`if (!title) errors.push(...)`). Hàm chưa nhận danh sách các nhà cung cấp/mạng xã hội đã kết nối (`connectedProviders`) để đối chiếu với các nền tảng trong từng hàng bài viết.
+    2. Route `POST /api/content-studio/import/parse` không truy vấn `prisma.socialAccount` của người dùng/workspace, nên không thể biết tài khoản đã kết nối những mạng xã hội nào khi phân tích tệp hoặc đọc Google Sheets.
+    3. Trên giao diện modal [ImportPostsModal.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx), các nhãn nền tảng chỉ hiển thị tên kênh thông thường mà không thể hiện trạng thái kết nối, và cột Trạng thái chỉ dựa vào mảng `errors` từ server nên hiển thị xanh `Hợp lệ`.
+  - **Giải pháp xử lý triệt để:**
+    1. **Nâng cấp `import-engine.ts`:**
+       - Định nghĩa bản đồ `PLATFORM_PROVIDER_INFO` và hàm `isPlatformProviderConnected` ánh xạ từng nền tảng (`FACEBOOK_REELS`, `INSTAGRAM_REELS`, `YOUTUBE_SHORTS`, `TIKTOK_VIDEO`, `ZALO_POST`, ...) với Provider tương ứng (`META`, `YOUTUBE`, `TIKTOK`, `ZALO`).
+       - Cập nhật cả 2 luồng: `parseExcelOrCsvBuffer` (Upload file Excel/CSV) và `fetchAndParseGoogleSheet` (Đọc từ link Google Sheets) để nhận tham số `connectedProviders`.
+       - Nếu hàng bài viết chứa nền tảng chưa được kết nối trong tài khoản (ví dụ `TIKTOK_VIDEO`), hệ thống sẽ:
+         - Thêm vào danh sách `unconnectedPlatforms`.
+         - Đẩy lỗi: `"Nền tảng TikTok chưa được kết nối với tài khoản."` vào mảng `errors`.
+         - Đánh dấu `isValid = false` và tăng đếm `invalidRows` (Không hợp lệ).
+    2. **Cập nhật Backend Route `POST /api/content-studio/import/parse`:**
+       - Truy vấn `prisma.socialAccount` theo `userId` và `workspaceId` (trạng thái `CONNECTED`/`active` và chưa hết hạn `expiresAt`).
+       - Xây dựng tập hợp `connectedProviders` và truyền vào engine phân tích cho cả 2 hình thức: file tải lên (`multipart/form-data`) và đường dẫn Google Sheets (`application/json`).
+    3. **Chặn lưu và lên lịch trên Backend `POST /api/content-studio/import/save`:**
+       - Kiểm tra xác thực các nền tảng khi lưu ở chế độ Lên lịch (`!importAsDraft`). Nếu phát hiện bài viết nhắm tới kênh chưa kết nối, lập tức trả về mã lỗi `400 Bad Request` kèm tên kênh và hướng dẫn.
+    4. **Hoàn thiện UI/UX tại `ImportPostsModal.tsx`:**
+       - Card thống kê tính toán chính xác số lượng: Hàng có kênh chưa kết nối được đếm vào thẻ đỏ **"KHÔNG HỢP LỆ"**.
+       - Tại bảng dữ liệu:
+         - Nhãn nền tảng chưa kết nối đổi sang màu đỏ kèm ghi chú rõ nét: `TIKTOK (Chưa connect)` và nút bấm `[×]` nhanh để gỡ bỏ kênh chưa kết nối. Khi người dùng bấm `[×]`, hàng sẽ tự động re-validate và lập tức chuyển thành `Hợp lệ` nếu không còn lỗi.
+         - Cột Trạng thái hiển thị badge đỏ **"Không hợp lệ"** cùng dòng thông báo lỗi chi tiết bên dưới.
+         - Hiển thị Banner cảnh báo màu đỏ ở đầu bảng kèm nút bấm tắt mở nhanh trang Cài Đặt (`#/settings`) để người dùng dễ dàng kết nối mạng xã hội.
+         - Ngăn chặn lưu hoặc lên lịch các bài viết không hợp lệ khi người dùng bấm xác nhận.
+    5. **Kiểm thử tự động:**
+       - Bổ sung test cases trong [import.test.ts](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/import.test.ts): Kiểm tra tệp chứa nền tảng TikTok khi tài khoản chỉ kết nối YouTube $\rightarrow$ kết quả `isValid = false`, `errors` chứa thông báo lỗi chưa kết nối TikTok. Toàn bộ 5/5 test cases đều pass 100%.
+
+---
+
 ## 🚀 [2026-10-24] — Sửa Lỗi Số Dư Ví Không Tăng Sau Khi Nhận Thưởng Nhiệm Vụ (F150)
 
 ### Phân hệ M12. Ví Doanh Thu & Tiếp Thị Liên Kết (Wallet & Earnings - F150):

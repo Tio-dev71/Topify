@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   UploadCloud,
@@ -15,6 +15,7 @@ import {
   ArrowRight,
   ExternalLink,
   Edit3,
+  Settings,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/axios';
@@ -32,6 +33,72 @@ export interface ParsedImportRow {
   isValid: boolean;
   errors: string[];
   warnings: string[];
+  unconnectedPlatforms?: string[];
+}
+
+export const PLATFORM_PROVIDER_MAP: Record<string, string> = {
+  FACEBOOK_REELS: 'META',
+  FACEBOOK_POST: 'META',
+  INSTAGRAM_REELS: 'META',
+  INSTAGRAM_CAROUSEL: 'META',
+  INSTAGRAM_STORY: 'META',
+  YOUTUBE_SHORTS: 'YOUTUBE',
+  TIKTOK_VIDEO: 'TIKTOK',
+  ZALO_POST: 'ZALO',
+  ZALO_ARTICLE: 'ZALO',
+};
+
+export const PLATFORM_NAMES: Record<string, string> = {
+  FACEBOOK_REELS: 'Facebook Reels',
+  FACEBOOK_POST: 'Facebook Post',
+  INSTAGRAM_REELS: 'Instagram Reels',
+  INSTAGRAM_CAROUSEL: 'Instagram Carousel',
+  INSTAGRAM_STORY: 'Instagram Story',
+  YOUTUBE_SHORTS: 'YouTube Shorts',
+  TIKTOK_VIDEO: 'TikTok',
+  ZALO_POST: 'Zalo Post',
+  ZALO_ARTICLE: 'Zalo Article',
+};
+
+export function isPlatformConnected(platform: string, connectedMap: Record<string, boolean>): boolean {
+  if (!connectedMap) return false;
+  const required = PLATFORM_PROVIDER_MAP[platform] || 'META';
+  if (connectedMap[required]) return true;
+  if (required === 'META' && (connectedMap['FACEBOOK'] || connectedMap['INSTAGRAM'])) return true;
+  if (required === 'YOUTUBE' && connectedMap['GOOGLE']) return true;
+  return false;
+}
+
+export function validateRow(
+  row: ParsedImportRow,
+  connectedMap: Record<string, boolean>,
+  hasConnectionsLoaded: boolean = true
+): { isValid: boolean; errors: string[]; unconnectedPlatforms: string[] } {
+  const errors: string[] = [];
+  const unconnectedPlatforms: string[] = [];
+
+  const titleStr = String(row.title || '').trim();
+  if (!titleStr) {
+    errors.push('Thiếu tiêu đề bài viết (Bắt buộc).');
+  }
+
+  if (!row.platforms || row.platforms.length === 0) {
+    errors.push('Bài viết phải có ít nhất 1 nền tảng đăng.');
+  } else if (hasConnectionsLoaded) {
+    for (const p of row.platforms) {
+      if (!isPlatformConnected(p, connectedMap)) {
+        unconnectedPlatforms.push(p);
+        const name = PLATFORM_NAMES[p] || p;
+        errors.push(`Nền tảng ${name} chưa được kết nối với tài khoản.`);
+      }
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    unconnectedPlatforms,
+  };
 }
 
 interface ImportPostsModalProps {
@@ -47,12 +114,48 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
   const [isParsing, setIsParsing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Connected social providers map
+  const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});
+  const [hasLoadedSocialStatus, setHasLoadedSocialStatus] = useState(false);
+
   // Parsed result state
   const [parsedRows, setParsedRows] = useState<ParsedImportRow[] | null>(null);
   const [selectedRowNumbers, setSelectedRowNumbers] = useState<number[]>([]);
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch social status on modal open
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchSocialStatus = async () => {
+      try {
+        const res = await api.get('/social/status');
+        if (res.data?.connections) {
+          const map: Record<string, boolean> = {};
+          res.data.connections.forEach((conn: any) => {
+            if (conn.provider && conn.connected !== false) {
+              const p = String(conn.provider).toUpperCase();
+              map[p] = true;
+              if (p === 'META') {
+                map['FACEBOOK'] = true;
+                map['INSTAGRAM'] = true;
+              }
+              if (p === 'GOOGLE' || p === 'YOUTUBE') {
+                map['YOUTUBE'] = true;
+                map['GOOGLE'] = true;
+              }
+            }
+          });
+          setConnectedProviders(map);
+          setHasLoadedSocialStatus(true);
+        }
+      } catch (e) {
+        console.warn('Failed to load social status in ImportPostsModal', e);
+      }
+    };
+    fetchSocialStatus();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -84,10 +187,34 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
       });
 
       if (res.data?.success) {
+        // Update connected providers if returned from backend
+        if (Array.isArray(res.data.connectedProviders) && res.data.connectedProviders.length > 0) {
+          const map: Record<string, boolean> = { ...connectedProviders };
+          res.data.connectedProviders.forEach((p: string) => {
+            const prov = String(p).toUpperCase();
+            map[prov] = true;
+            if (prov === 'META') {
+              map['FACEBOOK'] = true;
+              map['INSTAGRAM'] = true;
+            }
+            if (prov === 'YOUTUBE' || prov === 'GOOGLE') {
+              map['YOUTUBE'] = true;
+              map['GOOGLE'] = true;
+            }
+          });
+          setConnectedProviders(map);
+        }
+
         const rows: ParsedImportRow[] = res.data.rows || [];
         setParsedRows(rows);
         setSelectedRowNumbers(rows.filter((r) => r.isValid).map((r) => r.rowNumber));
-        toast.success(`Đã phân tích thành công ${rows.length} bài viết từ tệp!`);
+
+        const invalidCount = rows.filter((r) => !r.isValid).length;
+        if (invalidCount > 0) {
+          toast.warning(`Đã phân tích ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối hoặc thiếu thông tin!`);
+        } else {
+          toast.success(`Đã phân tích thành công ${rows.length} bài viết từ tệp!`);
+        }
       } else {
         toast.error(res.data?.error || 'Lỗi khi phân tích tệp bảng tính.');
       }
@@ -108,10 +235,34 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
     try {
       const res = await api.post('/content-studio/import/parse', { sheetUrl: sheetUrl.trim() });
       if (res.data?.success) {
+        // Update connected providers if returned from backend
+        if (Array.isArray(res.data.connectedProviders) && res.data.connectedProviders.length > 0) {
+          const map: Record<string, boolean> = { ...connectedProviders };
+          res.data.connectedProviders.forEach((p: string) => {
+            const prov = String(p).toUpperCase();
+            map[prov] = true;
+            if (prov === 'META') {
+              map['FACEBOOK'] = true;
+              map['INSTAGRAM'] = true;
+            }
+            if (prov === 'YOUTUBE' || prov === 'GOOGLE') {
+              map['YOUTUBE'] = true;
+              map['GOOGLE'] = true;
+            }
+          });
+          setConnectedProviders(map);
+        }
+
         const rows: ParsedImportRow[] = res.data.rows || [];
         setParsedRows(rows);
         setSelectedRowNumbers(rows.filter((r) => r.isValid).map((r) => r.rowNumber));
-        toast.success(`Đã nạp ${rows.length} bài viết từ Google Sheets!`);
+
+        const invalidCount = rows.filter((r) => !r.isValid).length;
+        if (invalidCount > 0) {
+          toast.warning(`Đã nạp ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối hoặc thiếu thông tin!`);
+        } else {
+          toast.success(`Đã nạp ${rows.length} bài viết từ Google Sheets!`);
+        }
       } else {
         toast.error(res.data?.error || 'Không thể lấy dữ liệu từ Google Sheets.');
       }
@@ -162,24 +313,45 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
     setSelectedRowNumbers((prev) => prev.filter((n) => n !== rowNum));
   };
 
+  const handleRemovePlatform = (rowNum: number, platformToRemove: string) => {
+    if (!parsedRows) return;
+    setParsedRows(
+      parsedRows.map((r) => {
+        if (r.rowNumber !== rowNum) return r;
+        const newPlatforms = r.platforms.filter((p) => p !== platformToRemove);
+        const updated = { ...r, platforms: newPlatforms };
+        const validation = validateRow(updated, connectedProviders, true);
+        const nextRow = {
+          ...updated,
+          ...validation,
+        };
+        // If it becomes valid and wasn't selected, auto select it
+        if (nextRow.isValid && !selectedRowNumbers.includes(rowNum)) {
+          setSelectedRowNumbers((prev) => [...prev, rowNum]);
+        }
+        return nextRow;
+      })
+    );
+    toast.info(`Đã gỡ bỏ kênh ${PLATFORM_NAMES[platformToRemove] || platformToRemove} khỏi dòng ${rowNum}`);
+  };
+
   const handleUpdateRowCell = (rowNum: number, field: keyof ParsedImportRow, value: any) => {
     if (!parsedRows) return;
     setParsedRows(
       parsedRows.map((r) => {
         if (r.rowNumber !== rowNum) return r;
         const updated = { ...r, [field]: value };
-        // Re-check validity if title changed
-        if (field === 'title') {
-          const titleStr = String(value || '').trim();
-          if (titleStr) {
-            updated.errors = updated.errors.filter((e) => !e.includes('tiêu đề'));
-            updated.isValid = updated.errors.length === 0;
-          } else if (!updated.errors.some((e) => e.includes('tiêu đề'))) {
-            updated.errors.push('Thiếu tiêu đề bài viết (Bắt buộc).');
-            updated.isValid = false;
-          }
+        const validation = validateRow(updated, connectedProviders, hasLoadedSocialStatus);
+        const nextRow = {
+          ...updated,
+          ...validation,
+        };
+        if (nextRow.isValid && !selectedRowNumbers.includes(rowNum)) {
+          setSelectedRowNumbers((prev) => [...prev, rowNum]);
+        } else if (!nextRow.isValid && selectedRowNumbers.includes(rowNum)) {
+          setSelectedRowNumbers((prev) => prev.filter((n) => n !== rowNum));
         }
-        return updated;
+        return nextRow;
       })
     );
   };
@@ -195,7 +367,8 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
 
     const invalidSelected = selectedPosts.filter((r) => !r.isValid);
     if (invalidSelected.length > 0) {
-      toast.error(`Có ${invalidSelected.length} bài viết đang bị lỗi (thiếu tiêu đề). Vui lòng sửa hoặc bỏ chọn trước khi lưu.`);
+      const firstError = invalidSelected[0].errors[0] || 'Lỗi dữ liệu';
+      toast.error(`Có ${invalidSelected.length} bài viết không hợp lệ (${firstError}). Vui lòng sửa hoặc bỏ chọn trước khi lưu.`);
       return;
     }
 
@@ -418,6 +591,33 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                 </div>
               </div>
 
+              {/* Unconnected Platforms / Invalid Alert Banner */}
+              {errorCount > 0 && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-800">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-rose-900">
+                        Phát hiện {errorCount} bài viết KHÔNG HỢP LỆ vì nền tảng chưa được kết nối với tài khoản hoặc thiếu thông tin!
+                      </p>
+                      <p className="text-[11px] text-rose-700 mt-0.5">
+                        Bạn có thể nhấn dấu <strong>[×]</strong> trên nhãn nền tảng đỏ để gỡ bỏ kênh chưa kết nối, hoặc mở <strong>Cài đặt</strong> để liên kết tài khoản mạng xã hội.
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href="#/settings"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 text-xs font-bold shrink-0 transition-colors shadow-xs"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    Mở Cài đặt kênh
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+
               {/* Data Table */}
               <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
                 <div className="max-h-[50vh] overflow-y-auto">
@@ -486,15 +686,43 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                               />
                             </td>
                             <td className="p-3">
-                              <div className="flex flex-wrap gap-1">
-                                {row.platforms.map((p, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100"
-                                  >
-                                    {p.replace('_REELS', '').replace('_POST', '').replace('_VIDEO', '')}
-                                  </span>
-                                ))}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {row.platforms.map((p, idx) => {
+                                  const isConnected = isPlatformConnected(p, connectedProviders);
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                        isConnected
+                                          ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                          : 'bg-rose-50 text-rose-700 border-rose-300 shadow-xs'
+                                      }`}
+                                      title={
+                                        isConnected
+                                          ? undefined
+                                          : `Nền tảng ${PLATFORM_NAMES[p] || p} chưa được kết nối với tài khoản!`
+                                      }
+                                    >
+                                      {p.replace('_REELS', '').replace('_POST', '').replace('_VIDEO', '')}
+                                      {!isConnected && (
+                                        <span className="text-[9px] text-rose-600 font-bold">
+                                          (Chưa connect)
+                                        </span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemovePlatform(row.rowNumber, p);
+                                        }}
+                                        className="hover:text-rose-900 hover:bg-rose-200/60 rounded px-0.5 ml-0.5 font-bold leading-none"
+                                        title={`Gỡ bỏ ${PLATFORM_NAMES[p] || p}`}
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  );
+                                })}
                               </div>
                             </td>
                             <td className="p-3 whitespace-nowrap text-gray-600 font-mono">
@@ -509,20 +737,28 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                             </td>
                             <td className="p-3 text-center">
                               {hasErrors ? (
-                                <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 cursor-help"
-                                  title={row.errors.join('; ')}
-                                >
-                                  <AlertCircle className="w-3 h-3 text-rose-600" />
-                                  Lỗi
-                                </span>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 cursor-help"
+                                    title={row.errors.join('\n')}
+                                  >
+                                    <AlertCircle className="w-3 h-3 text-rose-600" />
+                                    Không hợp lệ
+                                  </span>
+                                  <span
+                                    className="text-[10px] text-rose-600 font-medium max-w-[130px] truncate block"
+                                    title={row.errors.join('; ')}
+                                  >
+                                    {row.errors[0]}
+                                  </span>
+                                </div>
                               ) : hasWarnings ? (
                                 <span
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 cursor-help"
-                                  title={row.warnings.join('; ')}
+                                  title={row.warnings.join('\n')}
                                 >
                                   <AlertTriangle className="w-3 h-3 text-amber-600" />
-                                  Cảnh báo
+                                  Có cảnh báo
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">

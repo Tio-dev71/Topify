@@ -12,6 +12,7 @@ export interface ParsedImportRow {
   isValid: boolean;
   errors: string[];
   warnings: string[];
+  unconnectedPlatforms?: string[];
 }
 
 export interface ImportParseResult {
@@ -23,6 +24,29 @@ export interface ImportParseResult {
   warningRows: number;
   rows: ParsedImportRow[];
   error?: string;
+  connectedProviders?: string[];
+}
+
+export const PLATFORM_PROVIDER_INFO: Record<string, { name: string; provider: string }> = {
+  FACEBOOK_REELS: { name: 'Facebook Reels', provider: 'META' },
+  FACEBOOK_POST: { name: 'Facebook Post', provider: 'META' },
+  INSTAGRAM_REELS: { name: 'Instagram Reels', provider: 'META' },
+  INSTAGRAM_CAROUSEL: { name: 'Instagram Carousel', provider: 'META' },
+  INSTAGRAM_STORY: { name: 'Instagram Story', provider: 'META' },
+  YOUTUBE_SHORTS: { name: 'YouTube Shorts', provider: 'YOUTUBE' },
+  TIKTOK_VIDEO: { name: 'TikTok', provider: 'TIKTOK' },
+  ZALO_POST: { name: 'Zalo Post', provider: 'ZALO' },
+  ZALO_ARTICLE: { name: 'Zalo Article', provider: 'ZALO' },
+};
+
+export function isPlatformProviderConnected(platform: string, connectedSet: Set<string>): boolean {
+  const info = PLATFORM_PROVIDER_INFO[platform];
+  if (!info) return true;
+  const provider = info.provider;
+  if (connectedSet.has(provider)) return true;
+  if (provider === 'META' && (connectedSet.has('FACEBOOK') || connectedSet.has('INSTAGRAM'))) return true;
+  if (provider === 'YOUTUBE' && connectedSet.has('GOOGLE')) return true;
+  return false;
 }
 
 const VALID_PLATFORMS = [
@@ -134,8 +158,16 @@ function parseScheduleDateTime(val: any): { iso: string | null; warning?: string
 /**
  * Parse an Excel or CSV buffer into structured, validated post rows
  */
-export function parseExcelOrCsvBuffer(buffer: Buffer, source: 'EXCEL' | 'CSV' = 'EXCEL'): ImportParseResult {
+export function parseExcelOrCsvBuffer(
+  buffer: Buffer,
+  source: 'EXCEL' | 'CSV' = 'EXCEL',
+  connectedProviders?: Set<string> | string[]
+): ImportParseResult {
   try {
+    const connectedSet = connectedProviders
+      ? new Set(Array.from(connectedProviders).map(p => String(p).toUpperCase()))
+      : null;
+
     const workbook = source === 'CSV'
       ? XLSX.read(buffer.toString('utf-8'), { type: 'string' })
       : XLSX.read(buffer, { type: 'buffer', cellDates: true });
@@ -202,6 +234,18 @@ export function parseExcelOrCsvBuffer(buffer: Buffer, source: 'EXCEL' | 'CSV' = 
         warnings.push('Chưa chỉ định nền tảng -> Mặc định chọn FACEBOOK_REELS.');
       }
 
+      // Check if platforms are connected with the user's account
+      const unconnectedPlatforms: string[] = [];
+      if (connectedSet) {
+        for (const p of platforms) {
+          if (!isPlatformProviderConnected(p, connectedSet)) {
+            unconnectedPlatforms.push(p);
+            const info = PLATFORM_PROVIDER_INFO[p];
+            errors.push(`Nền tảng ${info?.name || p} chưa được kết nối với tài khoản.`);
+          }
+        }
+      }
+
       const { iso: scheduledAt, warning: dateWarning } = parseScheduleDateTime(normalizedRow.scheduledAt);
       if (dateWarning) {
         warnings.push(dateWarning);
@@ -226,6 +270,7 @@ export function parseExcelOrCsvBuffer(buffer: Buffer, source: 'EXCEL' | 'CSV' = 
         isValid,
         errors,
         warnings,
+        unconnectedPlatforms: unconnectedPlatforms.length > 0 ? unconnectedPlatforms : undefined,
       });
     });
 
@@ -237,6 +282,7 @@ export function parseExcelOrCsvBuffer(buffer: Buffer, source: 'EXCEL' | 'CSV' = 
       invalidRows,
       warningRows,
       rows,
+      connectedProviders: connectedSet ? Array.from(connectedSet) : undefined,
     };
   } catch (err: any) {
     return {
@@ -255,7 +301,10 @@ export function parseExcelOrCsvBuffer(buffer: Buffer, source: 'EXCEL' | 'CSV' = 
 /**
  * Fetch public Google Sheets export CSV and parse
  */
-export async function fetchAndParseGoogleSheet(sheetUrl: string): Promise<ImportParseResult> {
+export async function fetchAndParseGoogleSheet(
+  sheetUrl: string,
+  connectedProviders?: Set<string> | string[]
+): Promise<ImportParseResult> {
   try {
     let cleanUrl = String(sheetUrl || '').trim();
     if (!cleanUrl) {
@@ -301,7 +350,7 @@ export async function fetchAndParseGoogleSheet(sheetUrl: string): Promise<Import
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    return parseExcelOrCsvBuffer(buffer, 'CSV');
+    return parseExcelOrCsvBuffer(buffer, 'CSV', connectedProviders);
   } catch (err: any) {
     return {
       success: false,

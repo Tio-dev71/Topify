@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
+import { isPlatformProviderConnected, PLATFORM_PROVIDER_INFO } from '@/lib/content-studio/import-engine';
 import type { Platform } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,57 @@ export async function POST(req: NextRequest) {
     const workspaceId = (session.user as any).workspaceId;
     const userId = session.user.id;
     const createdPostIds: string[] = [];
+
+    // Query active/connected social accounts for platform validation
+    const socialAccounts = await prisma.socialAccount.findMany({
+      where: {
+        OR: [
+          ...(workspaceId ? [{ workspaceId }] : []),
+          { userId },
+        ],
+        status: { in: ['CONNECTED', 'active' as any] },
+      },
+      select: {
+        provider: true,
+        expiresAt: true,
+      },
+    });
+
+    const connectedProviders = new Set<string>();
+    for (const acc of socialAccounts) {
+      const isExpired = acc.expiresAt ? new Date(acc.expiresAt).getTime() < Date.now() : false;
+      if (!isExpired) {
+        const prov = String(acc.provider).toUpperCase();
+        connectedProviders.add(prov);
+        if (prov === 'META') {
+          connectedProviders.add('FACEBOOK');
+          connectedProviders.add('INSTAGRAM');
+        }
+        if (prov === 'YOUTUBE' || prov === 'GOOGLE') {
+          connectedProviders.add('YOUTUBE');
+          connectedProviders.add('GOOGLE');
+        }
+      }
+    }
+
+    // If scheduling directly, ensure all posts have connected platforms
+    if (!importAsDraft) {
+      for (const item of posts) {
+        const title = String(item.title || '').trim();
+        const rawPlatforms = Array.isArray(item.platforms) ? item.platforms : ['FACEBOOK_REELS'];
+        for (const p of rawPlatforms) {
+          if (!isPlatformProviderConnected(p, connectedProviders)) {
+            const info = PLATFORM_PROVIDER_INFO[p];
+            return NextResponse.json(
+              {
+                error: `Không thể lên lịch cho bài viết "${title}" vì nền tảng ${info?.name || p} chưa được kết nối với tài khoản. Vui lòng kết nối tài khoản hoặc lưu dạng Bản thảo (Draft).`,
+              },
+              { status: 400 }
+            );
+          }
+        }
+      }
+    }
 
     // Process posts in transaction or sequential batches
     const results = await prisma.$transaction(async (tx) => {

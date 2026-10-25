@@ -71,21 +71,58 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     expect(result.rows[0].errors[0]).toContain('Thiếu tiêu đề bài viết');
   });
 
-  it('parses an in-memory CSV buffer correctly', () => {
-    const csvContent =
-      'title,caption,platforms,scheduledAt\n' +
-      'Tiêu đề test 1,Nội dung test 1,"TIKTOK,FACEBOOK",2026-11-05 09:00\n' +
-      'Tiêu đề test 2,Nội dung test 2,INSTAGRAM,';
+  it('marks row invalid when platform TikTok is not connected (account only has YouTube)', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Top 3 bí quyết xây kênh TikTok',
+        'Nội dung': 'Kịch bản chi tiết 3 bước giữ chân...',
+        'Nền tảng': 'TIKTOK, YOUTUBE_SHORTS',
+        'Thời gian': '2026-10-26 19:30',
+      },
+    ];
 
-    const buffer = Buffer.from(csvContent, 'utf-8');
-    const result = parseExcelOrCsvBuffer(buffer, 'CSV');
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // User only connected YouTube
+    const connectedProviders = new Set(['YOUTUBE', 'GOOGLE']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
 
     expect(result.success).toBe(true);
-    expect(result.totalRows).toBe(2);
-    expect(result.validRows).toBe(2);
-    expect(result.rows[0].title).toBe('Tiêu đề test 1');
-    expect(result.rows[0].platforms).toContain('TIKTOK_VIDEO');
-    expect(result.rows[1].title).toBe('Tiêu đề test 2');
-    expect(result.rows[1].scheduledAt).toBeNull(); // Draft
+    expect(result.totalRows).toBe(1);
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(1);
+
+    const first = result.rows[0];
+    expect(first.isValid).toBe(false);
+    expect(first.unconnectedPlatforms).toContain('TIKTOK_VIDEO');
+    expect(first.errors.some((e) => e.includes('TikTok') && e.includes('chưa được kết nối'))).toBe(true);
+  });
+
+  it('marks row valid when all platforms in the row are connected', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Video Shorts Triệu View',
+        'Nội dung': 'Cách làm video ngắn YouTube...',
+        'Nền tảng': 'YOUTUBE_SHORTS',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['YOUTUBE', 'GOOGLE']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(1);
+    expect(result.invalidRows).toBe(0);
+    expect(result.rows[0].isValid).toBe(true);
+    expect(result.rows[0].unconnectedPlatforms).toBeUndefined();
   });
 });
+
