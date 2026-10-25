@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/calendar/notes - Get notes for calendar view
 export async function GET(req: NextRequest) {
   try {
@@ -11,11 +13,32 @@ export async function GET(req: NextRequest) {
     }
 
     const url = new URL(req.url);
-    const startDate = url.searchParams.get('start');
-    const endDate = url.searchParams.get('end');
-    const workspaceId = (session.user as any).workspaceId;
+    let startDate = url.searchParams.get('start');
+    let endDate = url.searchParams.get('end');
+    const month = url.searchParams.get('month');
+    const userWorkspaceId = (session.user as any).workspaceId;
 
-    const where: any = { workspaceId };
+    if (month && (!startDate || !endDate)) {
+      const [yearStr, monthStr] = month.split('-');
+      const y = parseInt(yearStr, 10);
+      const m = parseInt(monthStr, 10) - 1;
+      if (!isNaN(y) && !isNaN(m)) {
+        startDate = new Date(Date.UTC(y, m - 1, 20)).toISOString();
+        endDate = new Date(Date.UTC(y, m + 1, 10)).toISOString();
+      }
+    }
+
+    const where: any = {};
+    if (session.user.role !== 'SUPER_ADMIN') {
+      if (userWorkspaceId) {
+        where.OR = [
+          { workspaceId: userWorkspaceId },
+          { createdById: session.user.id },
+        ];
+      } else {
+        where.createdById = session.user.id;
+      }
+    }
 
     if (startDate && endDate) {
       where.date = {

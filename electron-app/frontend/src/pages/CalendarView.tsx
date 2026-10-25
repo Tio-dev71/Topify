@@ -67,13 +67,25 @@ export default function CalendarView() {
     setLoading(true);
     try {
       const monthStr = format(currentDate, 'yyyy-MM');
+      const startIso = startDate.toISOString();
+      const endIso = endDate.toISOString();
       const [postsRes, notesRes] = await Promise.all([
-        api.get(`/posts/calendar?month=${monthStr}`),
-        api.get(`/calendar/notes?month=${monthStr}`)
+        api.get(`/posts/calendar?month=${monthStr}&start=${startIso}&end=${endIso}`),
+        api.get(`/calendar/notes?month=${monthStr}&start=${startIso}&end=${endIso}`)
       ]);
 
       if (postsRes.data) {
-        setPosts(postsRes.data.posts || []);
+        const rawList = postsRes.data.posts || postsRes.data.events || (Array.isArray(postsRes.data) ? postsRes.data : []);
+        const formatted: CalendarPost[] = rawList.map((p: any) => ({
+          id: p.id,
+          title: p.title || p.caption?.substring(0, 50) || 'Chưa có tiêu đề',
+          status: p.status,
+          scheduledAt: p.scheduledAt || p.start || null,
+          createdAt: p.createdAt || p.scheduledAt || p.start || new Date().toISOString(),
+          platform: Array.isArray(p.platforms) ? p.platforms.join(', ') : p.platform,
+          content: p.caption || p.content || '',
+        }));
+        setPosts(formatted);
       }
       if (notesRes.data) {
         setNotes(notesRes.data.notes || []);
@@ -83,7 +95,17 @@ export default function CalendarView() {
       try {
         const res = await api.get('/posts');
         if (res.data) {
-          setPosts(res.data.posts || []);
+          const rawList = Array.isArray(res.data) ? res.data : res.data.posts || [];
+          const formatted: CalendarPost[] = rawList.map((p: any) => ({
+            id: p.id,
+            title: p.title || p.caption?.substring(0, 50) || 'Chưa có tiêu đề',
+            status: p.status,
+            scheduledAt: p.scheduledAt || p.publishedAt || null,
+            createdAt: p.createdAt,
+            platform: Array.isArray(p.platforms) ? p.platforms.map((pl: any) => pl.platform || pl).join(', ') : p.platform,
+            content: p.caption || '',
+          }));
+          setPosts(formatted);
         }
       } catch (e) {
         console.error(e);
@@ -165,7 +187,10 @@ export default function CalendarView() {
               {format(currentDate, 'MMMM yyyy', { locale: vi })}
             </h2>
             <p className="text-xs text-gray-400">
-              {posts.length} bài viết đã xếp lịch trong tháng này
+              {posts.filter(p => {
+                const target = p.scheduledAt || (p as any).start;
+                return target && isSameMonth(new Date(target), monthStart);
+              }).length} bài viết đã xếp lịch trong tháng này
             </p>
           </div>
         </div>
@@ -212,7 +237,10 @@ export default function CalendarView() {
           {calendarDays.map((day, idx) => {
             const isCurrentMonth = isSameMonth(day, monthStart);
             const isCurrentDay = isToday(day);
-            const dayPosts = posts.filter(p => p.scheduledAt && isSameDay(new Date(p.scheduledAt), day));
+            const dayPosts = posts.filter(p => {
+              const targetDate = p.scheduledAt || (p as any).start;
+              return targetDate && isSameDay(new Date(targetDate), day);
+            });
             const dayNotes = notes.filter(n => isSameDay(new Date(n.date), day));
 
             return (
@@ -258,23 +286,33 @@ export default function CalendarView() {
                     </div>
                   ))}
 
-                  {dayPosts.map(post => (
-                    <div
-                      key={post.id}
-                      onClick={() => setSelectedPost(post)}
-                      className={`p-1.5 rounded-md text-[10px] font-medium truncate cursor-pointer transition flex items-center gap-1 ${
-                        post.status === 'PUBLISHED'
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
-                          : post.status === 'SCHEDULED'
-                          ? 'bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                      title={post.title}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
-                      <span className="truncate">{post.title}</span>
-                    </div>
-                  ))}
+                  {dayPosts.map(post => {
+                    const postTime = post.scheduledAt || (post as any).start;
+                    const timeFormatted = postTime ? format(new Date(postTime), 'HH:mm') : null;
+
+                    return (
+                      <div
+                        key={post.id}
+                        onClick={() => setSelectedPost(post)}
+                        className={`p-1.5 rounded-md text-[10px] font-medium truncate cursor-pointer transition flex items-center gap-1 ${
+                          post.status === 'PUBLISHED'
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                            : post.status === 'SCHEDULED'
+                            ? 'bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                        title={`${timeFormatted ? `[${timeFormatted}] ` : ''}${post.title}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+                        {timeFormatted && (
+                          <span className="font-mono text-[9px] font-bold opacity-80 flex-shrink-0">
+                            {timeFormatted}
+                          </span>
+                        )}
+                        <span className="truncate">{post.title}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -351,12 +389,30 @@ export default function CalendarView() {
                 <span className="font-bold text-gray-500 block mb-0.5">Tiêu đề:</span>
                 <p className="font-bold text-sm text-gray-900">{selectedPost.title}</p>
               </div>
+              <div>
+                <span className="font-bold text-gray-500 block mb-0.5">Trạng thái:</span>
+                <span className={`inline-flex px-2 py-0.5 rounded-md font-semibold text-[11px] ${
+                  selectedPost.status === 'PUBLISHED'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : selectedPost.status === 'SCHEDULED'
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {selectedPost.status === 'PUBLISHED' ? 'Đã xuất bản' : selectedPost.status === 'SCHEDULED' ? 'Đã lên lịch' : selectedPost.status}
+                </span>
+              </div>
               {selectedPost.scheduledAt && (
                 <div>
                   <span className="font-bold text-gray-500 block mb-0.5">Thời gian lên lịch:</span>
-                  <p className="font-mono text-indigo-600">
-                    {new Date(selectedPost.scheduledAt).toLocaleString('vi-VN')}
+                  <p className="font-mono text-indigo-600 font-semibold">
+                    {format(new Date(selectedPost.scheduledAt), 'HH:mm - dd/MM/yyyy')}
                   </p>
+                </div>
+              )}
+              {selectedPost.platform && (
+                <div>
+                  <span className="font-bold text-gray-500 block mb-0.5">Nền tảng:</span>
+                  <p className="text-gray-700 font-medium">{selectedPost.platform}</p>
                 </div>
               )}
               {selectedPost.content && (
@@ -370,10 +426,10 @@ export default function CalendarView() {
             </div>
             <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
               <button
-                onClick={() => navigate(`/posts/${selectedPost.id}`)}
+                onClick={() => navigate('/posts')}
                 className="text-indigo-600 hover:underline font-semibold inline-flex items-center gap-1"
               >
-                <span>Mở trang chi tiết</span>
+                <span>Xem trong Quản lý bài viết</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
               <button

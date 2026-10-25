@@ -12,6 +12,45 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] — Sửa Lỗi Bài Viết Đã Lên Lịch Không Hiển Thị Trên Lịch Nội Dung (Calendar - F021)
+
+### Phân hệ M2. Content Studio (Lịch nội dung & Kế hoạch xuất bản - F021):
+- **[F021] Khắc phục lỗi bài viết đã lên lịch ở Quản lý bài viết hoặc Import Google Sheet/Excel không hiển thị trên Lịch nội dung:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Người dùng tạo bài viết hoặc import bài viết từ Google Sheet / Excel và đặt lịch đăng (ví dụ 28/10/2026 20:26). Bài viết đã hiển thị trạng thái `Đã lên lịch` ở màn Quản lý bài viết (`/posts`).
+    - Khi vào màn hình *Lịch nội dung (Calendar - F021)* xem Tháng 10/2026: Calendar hoàn toàn trống, ngày 28 không có bài viết nào, và bộ đếm hiển thị `"0 bài viết đã xếp lịch trong tháng này"`.
+  - **Nguyên nhân gốc rễ:**
+    1. **Sai lệch cấu trúc phản hồi Backend API ([`app/api/posts/calendar/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/posts/calendar/route.ts)):**
+       - Tuyến API `/api/posts/calendar` trước đó chỉ trả về `{ events: [...] }` với thuộc tính thời gian là `start` (dành cho Web FullCalendar). Trong khi Desktop App ([`CalendarView.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/CalendarView.tsx)) đọc `postsRes.data.posts`. Vì `posts` là `undefined`, nên `setPosts(postsRes.data.posts || [])` luôn nhận mảng rỗng `[]` và không kích hoạt fallback vào `catch` vì response vẫn là `HTTP 200`.
+    2. **Lỗi lọc phân quyền Workspace khi `workspaceId` rỗng:**
+       - Route `/api/posts/calendar` gán cứng `where = { workspaceId: workspaceId || 'none' }`. Khi người dùng là Quản trị viên (Admin) hoặc bài viết lưu chưa có workspaceId, điều kiện này lọc `workspaceId: 'none'`, dẫn đến không khớp bất kỳ bản ghi nào trong Database.
+    3. **Không nhận diện tham số query `?month=YYYY-MM`:**
+       - Route trước đó chỉ hỗ trợ `start` và `end`. Khi Desktop App gọi `?month=2026-10`, Backend không phân tích tháng mà bỏ qua điều kiện ngày hoặc lọc sai.
+    4. **Hiển thị giao diện Calendar ô ngày thiếu thời gian hẹn giờ (Giờ:Phút):**
+       - Ô ngày chỉ hiển thị tiêu đề bài viết mà không hiển thị mốc giờ hẹn giờ (ví dụ `20:26`), gây khó theo dõi timeline trong ngày.
+  - **Giải pháp xử lý triệt để:**
+    1. **Nâng cấp Backend API ([`app/api/posts/calendar/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/posts/calendar/route.ts)):**
+       - Trả về đồng thời cả `{ events, posts }` với đầy đủ các thuộc tính chuẩn hóa: `id`, `title`, `scheduledAt`, `start`, `status`, `content`, `caption`, `platform`, `platforms`.
+       - Hỗ trợ tham số `?month=YYYY-MM` tự động mở rộng dải ngày bao phủ toàn bộ ô hiển thị của tháng trên lưới lịch (gồm các ngày thuộc tuần trước và tuần sau).
+       - Căn chỉnh điều kiện phân quyền Workspace và User khớp hoàn toàn với `GET /api/posts`: Quản trị viên (`SUPER_ADMIN`) xem toàn bộ, người dùng thường xem theo workspace hoặc bài viết do mình tạo (`createdById`).
+       - Mở rộng điều kiện lọc theo ngày áp dụng cho cả `scheduledAt`, `publishedAt`, và `createdAt`.
+    2. **Đồng bộ hóa Route Ghi chú Lịch ([`app/api/calendar/notes/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/calendar/notes/route.ts)):**
+       - Bổ sung hỗ trợ query `?month=YYYY-MM` và phân quyền Workspace tương tự để ghi chú hiển thị đầy đủ và ổn định.
+    3. **Tối ưu màn hình Lịch nội dung ([`electron-app/frontend/src/pages/CalendarView.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/CalendarView.tsx)):**
+       - Cập nhật hàm `fetchCalendarData` truyền cả `month`, `start`, `end` và chuẩn hóa an toàn dữ liệu từ `postsRes.data.posts` hoặc `postsRes.data.events` lẫn fallback `/posts`.
+       - Tính toán bộ đếm tháng chính xác: Đếm đúng các bài viết có `scheduledAt` hoặc `start` nằm trong tháng đang xem (`monthScheduledCount`), giải quyết dứt điểm tình trạng hiển thị `0 bài viết đã xếp lịch trong tháng này`.
+       - Hiển thị mốc giờ hẹn giờ định dạng font mono đậm (ví dụ `20:26`) ngay trước tên bài viết trên từng ô lịch ngày.
+       - Cải tiến Modal xem chi tiết bài viết: hiển thị nhãn Trạng thái, ngày giờ lên lịch chuẩn tiếng Việt (`HH:mm - dd/MM/yyyy`), nền tảng mạng xã hội và nút liên kết trực tiếp đến màn Quản lý bài viết.
+    4. **Kiểm thử tự động:**
+       - Viết bộ unit test mới [`__tests__/api/posts/calendar.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/posts/calendar.test.ts) kiểm tra:
+         - Xác thực 401 khi chưa đăng nhập.
+         - Trả về cả `events` và `posts` khi gọi với `?month=2026-10`.
+         - Khớp chính xác bài viết lên lịch ngày 28/10/2026 với đầy đủ `scheduledAt`, `title`, `status`, `content`.
+         - Tương thích tham số `?start=...&end=...` từ Web Dashboard.
+         - $\rightarrow$ Pass toàn bộ 3/3 tests trong test suite mới và 30/30 tests toàn bộ module Posts.
+
+---
+
 ## 🚀 [2026-10-26] — Bỏ Chặn Lỗi YouTube Shorts Quá 180s, Chuyển Thành Warning Cho Phép Đăng/Lên Lịch Bình Thường
 
 ### Phân hệ M2. Content Studio (Quản lý bài viết - F014: Đăng Video Ngắn YouTube Shorts):
