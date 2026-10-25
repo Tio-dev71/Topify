@@ -226,5 +226,122 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     expect(result.rows[0].warnings.length).toBe(0);
     expect(result.rows[1].warnings.length).toBe(0);
   });
+
+  it('marks row invalid immediately when schedule time has an invalid format or is in the past', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Bài viết lỗi ngày 1',
+        'Nội dung': 'Thời gian không đúng cú pháp',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': 'sai-dinh-dang-ngay',
+      },
+      {
+        'Tiêu đề': 'Bài viết lỗi ngày 2',
+        'Nội dung': 'Thời gian ở quá khứ',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '01/01/2020 09:00',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(2);
+
+    expect(result.rows[0].isValid).toBe(false);
+    expect(result.rows[0].errors.some((e) => e.includes('Thời gian sai định dạng'))).toBe(true);
+
+    expect(result.rows[1].isValid).toBe(false);
+    expect(result.rows[1].errors.some((e) => e.includes('quá khứ'))).toBe(true);
+  });
+
+  it('marks row invalid immediately when platform is missing or unsupported', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Bài viết thiếu platform',
+        'Nội dung': 'Cột nền tảng để trống',
+        'Nền tảng': '',
+      },
+      {
+        'Tiêu đề': 'Bài viết sai platform',
+        'Nội dung': 'Nền tảng không hỗ trợ',
+        'Nền tảng': 'UNKNOWN_NETWORK_XYZ',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(2);
+
+    expect(result.rows[0].isValid).toBe(false);
+    expect(result.rows[0].errors.some((e) => e.includes('Thiếu nền tảng'))).toBe(true);
+
+    expect(result.rows[1].isValid).toBe(false);
+    expect(result.rows[1].errors.some((e) => e.includes('không hợp lệ hoặc không được hỗ trợ'))).toBe(true);
+  });
+
+  it('reports all 3 records as invalid (Hợp lệ = 0, Không hợp lệ = 3) when records have missing required fields or invalid data', () => {
+    const rows = [
+      {
+        'Tiêu đề': '', // Missing title
+        'Nội dung': 'Bài viết 1 thiếu tiêu đề',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+      {
+        'Tiêu đề': 'Bài viết 2',
+        'Nội dung': 'Bài viết 2 thiếu nền tảng',
+        'Nền tảng': '', // Missing platform
+        'Thời gian': '',
+      },
+      {
+        'Tiêu đề': 'Bài viết 3',
+        'Nội dung': 'Bài viết 3 sai thời gian',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': 'gio-dang-khong-hop-le', // Invalid schedule time
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.totalRows).toBe(3);
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(3);
+    expect(result.warningRows).toBe(0);
+
+    // Record 1: missing title
+    expect(result.rows[0].isValid).toBe(false);
+    expect(result.rows[0].errors.some((e) => e.includes('Thiếu tiêu đề'))).toBe(true);
+
+    // Record 2: missing platform
+    expect(result.rows[1].isValid).toBe(false);
+    expect(result.rows[1].errors.some((e) => e.includes('Thiếu nền tảng'))).toBe(true);
+
+    // Record 3: invalid time
+    expect(result.rows[2].isValid).toBe(false);
+    expect(result.rows[2].errors.some((e) => e.includes('Thời gian sai định dạng'))).toBe(true);
+  });
 });
 

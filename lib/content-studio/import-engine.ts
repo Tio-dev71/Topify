@@ -83,7 +83,7 @@ function normalizeKey(rawKey: string): string {
 }
 
 function parsePlatformList(raw: string | undefined | null): string[] {
-  if (!raw) return ['FACEBOOK_REELS'];
+  if (!raw) return [];
   const text = String(raw).toUpperCase().replace(/[;/|]/g, ',');
   const parts = text.split(',').map(s => s.trim()).filter(Boolean);
   const matched: string[] = [];
@@ -102,10 +102,10 @@ function parsePlatformList(raw: string | undefined | null): string[] {
   }
 
   const unique = Array.from(new Set(matched));
-  return unique.length > 0 ? unique : ['FACEBOOK_REELS'];
+  return unique;
 }
 
-function parseScheduleDateTime(val: any): { iso: string | null; warning?: string; isNow?: boolean } {
+function parseScheduleDateTime(val: any): { iso: string | null; warning?: string; error?: string; isNow?: boolean } {
   if (val === undefined || val === null || val === '') return { iso: null, isNow: true };
 
   // Handle Excel serial date numbers
@@ -114,7 +114,7 @@ function parseScheduleDateTime(val: any): { iso: string | null; warning?: string
       const dateObj = new Date((val - 25569) * 86400 * 1000);
       if (!isNaN(dateObj.getTime())) {
         if (dateObj.getTime() <= Date.now()) {
-          return { iso: null, warning: 'Thời gian đã qua trong quá khứ -> chuyển thành Bản Thảo (Draft)' };
+          return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
         }
         return { iso: dateObj.toISOString() };
       }
@@ -140,7 +140,7 @@ function parseScheduleDateTime(val: any): { iso: string | null; warning?: string
   }
 
   // Common Vietnamese/International formats:
-  // "25/10/2026 19:30" or "25-10-2026 19:30"
+  // "25/10/2026 19:30" or "25-10-2026 19:30" or "25/10/2026"
   const vnMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (vnMatch) {
     const day = parseInt(vnMatch[1], 10);
@@ -150,23 +150,29 @@ function parseScheduleDateTime(val: any): { iso: string | null; warning?: string
     const min = vnMatch[5] ? parseInt(vnMatch[5], 10) : 0;
     const dateObj = new Date(year, month, day, hour, min, 0);
     if (!isNaN(dateObj.getTime())) {
+      if (dateObj.getDate() !== day || dateObj.getMonth() !== month || dateObj.getFullYear() !== year) {
+        return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
+      }
       if (dateObj.getTime() <= Date.now()) {
-        return { iso: null, warning: 'Thời gian đã qua trong quá khứ -> chuyển thành Bản Thảo (Draft)' };
+        return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
       }
       return { iso: dateObj.toISOString() };
     }
   }
 
   // ISO / Standard JS Date parsing
-  const parsed = new Date(str);
-  if (!isNaN(parsed.getTime())) {
-    if (parsed.getTime() <= Date.now()) {
-      return { iso: null, warning: 'Thời gian đã qua trong quá khứ -> chuyển thành Bản Thảo (Draft)' };
+  const hasDateStructure = /\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(str) || /\d{1,2}[-/.]\d{1,2}[-/.]\d{4}/.test(str);
+  if (hasDateStructure) {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      if (parsed.getTime() <= Date.now()) {
+        return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+      }
+      return { iso: parsed.toISOString() };
     }
-    return { iso: parsed.toISOString() };
   }
 
-  return { iso: null, warning: `Định dạng ngày giờ "${str}" chưa chuẩn -> chuyển thành Bản Thảo (Draft)` };
+  return { iso: null, error: `Thời gian sai định dạng: "${str}" (Ví dụ đúng: 28/10/2026 20:30 hoặc 2026-10-28 20:30).` };
 }
 
 /**
@@ -243,9 +249,15 @@ export function parseExcelOrCsvBuffer(
         warnings.push('Chưa có nội dung mô tả (Caption).');
       }
 
-      const platforms = parsePlatformList(normalizedRow.platforms);
-      if (!normalizedRow.platforms) {
-        warnings.push('Chưa chỉ định nền tảng -> Mặc định chọn FACEBOOK_REELS.');
+      const rawPlatformStr = normalizedRow.platforms !== undefined && normalizedRow.platforms !== null
+        ? String(normalizedRow.platforms).trim()
+        : '';
+      const platforms = parsePlatformList(rawPlatformStr);
+
+      if (!rawPlatformStr) {
+        errors.push('Thiếu nền tảng đăng bài (Bắt buộc).');
+      } else if (platforms.length === 0) {
+        errors.push(`Nền tảng "${rawPlatformStr}" không hợp lệ hoặc không được hỗ trợ.`);
       }
 
       // Check if platforms are connected with the user's account
@@ -260,8 +272,10 @@ export function parseExcelOrCsvBuffer(
         }
       }
 
-      const { iso: scheduledAt, warning: dateWarning } = parseScheduleDateTime(normalizedRow.scheduledAt);
-      if (dateWarning) {
+      const { iso: scheduledAt, error: dateError, warning: dateWarning } = parseScheduleDateTime(normalizedRow.scheduledAt);
+      if (dateError) {
+        errors.push(dateError);
+      } else if (dateWarning) {
         warnings.push(dateWarning);
       }
 

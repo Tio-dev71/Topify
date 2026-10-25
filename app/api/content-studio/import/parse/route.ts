@@ -37,13 +37,24 @@ export async function POST(req: NextRequest) {
       if (!isExpired) {
         const prov = String(acc.provider).toUpperCase();
         connectedProviders.add(prov);
-        if (prov === 'META') {
+        if (prov === 'META' || prov === 'FACEBOOK') {
+          connectedProviders.add('META');
           connectedProviders.add('FACEBOOK');
+          connectedProviders.add('INSTAGRAM');
+        }
+        if (prov === 'INSTAGRAM') {
+          connectedProviders.add('META');
           connectedProviders.add('INSTAGRAM');
         }
         if (prov === 'YOUTUBE' || prov === 'GOOGLE') {
           connectedProviders.add('YOUTUBE');
           connectedProviders.add('GOOGLE');
+        }
+        if (prov === 'TIKTOK') {
+          connectedProviders.add('TIKTOK');
+        }
+        if (prov === 'ZALO') {
+          connectedProviders.add('ZALO');
         }
       }
     }

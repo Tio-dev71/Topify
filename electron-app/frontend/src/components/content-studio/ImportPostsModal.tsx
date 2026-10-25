@@ -83,7 +83,7 @@ export function validateRow(
   }
 
   if (!row.platforms || row.platforms.length === 0) {
-    errors.push('Bài viết phải có ít nhất 1 nền tảng đăng.');
+    errors.push('Thiếu nền tảng đăng bài (Bắt buộc).');
   } else if (hasConnectionsLoaded) {
     for (const p of row.platforms) {
       if (!isPlatformConnected(p, connectedMap)) {
@@ -94,10 +94,37 @@ export function validateRow(
     }
   }
 
+  // Check scheduledAt format if provided
+  if (row.scheduledAt && row.scheduledAt !== 'NOW') {
+    const str = String(row.scheduledAt).trim();
+    const lower = str.toLowerCase();
+    const isNow = [
+      'now',
+      'đăng ngay',
+      'dang ngay',
+      'đăng luôn',
+      'dang luon',
+      'publish now',
+      'immediate',
+    ].includes(lower);
+
+    if (!isNow) {
+      const parsed = new Date(str);
+      if (isNaN(parsed.getTime())) {
+        errors.push(`Thời gian sai định dạng: "${str}" (Ví dụ đúng: 28/10/2026 20:30 hoặc 2026-10-28 20:30).`);
+      } else if (parsed.getTime() <= Date.now()) {
+        errors.push('Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.');
+      }
+    }
+  }
+
+  // Merge with any errors previously identified by backend (deduplicated)
+  const combinedErrors = Array.from(new Set([...(row.errors || []), ...errors]));
+
   return {
-    isValid: errors.length === 0,
-    errors,
-    unconnectedPlatforms,
+    isValid: combinedErrors.length === 0,
+    errors: combinedErrors,
+    unconnectedPlatforms: Array.from(new Set([...(row.unconnectedPlatforms || []), ...unconnectedPlatforms])),
   };
 }
 
@@ -188,30 +215,49 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
 
       if (res.data?.success) {
         // Update connected providers if returned from backend
-        if (Array.isArray(res.data.connectedProviders) && res.data.connectedProviders.length > 0) {
-          const map: Record<string, boolean> = { ...connectedProviders };
+        const map: Record<string, boolean> = { ...connectedProviders };
+        if (Array.isArray(res.data.connectedProviders)) {
           res.data.connectedProviders.forEach((p: string) => {
             const prov = String(p).toUpperCase();
             map[prov] = true;
-            if (prov === 'META') {
+            if (prov === 'META' || prov === 'FACEBOOK') {
+              map['META'] = true;
               map['FACEBOOK'] = true;
+              map['INSTAGRAM'] = true;
+            }
+            if (prov === 'INSTAGRAM') {
+              map['META'] = true;
               map['INSTAGRAM'] = true;
             }
             if (prov === 'YOUTUBE' || prov === 'GOOGLE') {
               map['YOUTUBE'] = true;
               map['GOOGLE'] = true;
             }
+            if (prov === 'TIKTOK') {
+              map['TIKTOK'] = true;
+            }
+            if (prov === 'ZALO') {
+              map['ZALO'] = true;
+            }
           });
           setConnectedProviders(map);
         }
 
-        const rows: ParsedImportRow[] = res.data.rows || [];
+        const rawRows: ParsedImportRow[] = res.data.rows || [];
+        const rows = rawRows.map((r) => {
+          const validation = validateRow(r, map, true);
+          return {
+            ...r,
+            ...validation,
+          };
+        });
+
         setParsedRows(rows);
         setSelectedRowNumbers(rows.filter((r) => r.isValid).map((r) => r.rowNumber));
 
         const invalidCount = rows.filter((r) => !r.isValid).length;
         if (invalidCount > 0) {
-          toast.warning(`Đã phân tích ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối hoặc thiếu thông tin!`);
+          toast.warning(`Đã phân tích ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối, sai định dạng hoặc thiếu thông tin!`);
         } else {
           toast.success(`Đã phân tích thành công ${rows.length} bài viết từ tệp!`);
         }
@@ -236,30 +282,49 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
       const res = await api.post('/content-studio/import/parse', { sheetUrl: sheetUrl.trim() });
       if (res.data?.success) {
         // Update connected providers if returned from backend
-        if (Array.isArray(res.data.connectedProviders) && res.data.connectedProviders.length > 0) {
-          const map: Record<string, boolean> = { ...connectedProviders };
+        const map: Record<string, boolean> = { ...connectedProviders };
+        if (Array.isArray(res.data.connectedProviders)) {
           res.data.connectedProviders.forEach((p: string) => {
             const prov = String(p).toUpperCase();
             map[prov] = true;
-            if (prov === 'META') {
+            if (prov === 'META' || prov === 'FACEBOOK') {
+              map['META'] = true;
               map['FACEBOOK'] = true;
+              map['INSTAGRAM'] = true;
+            }
+            if (prov === 'INSTAGRAM') {
+              map['META'] = true;
               map['INSTAGRAM'] = true;
             }
             if (prov === 'YOUTUBE' || prov === 'GOOGLE') {
               map['YOUTUBE'] = true;
               map['GOOGLE'] = true;
             }
+            if (prov === 'TIKTOK') {
+              map['TIKTOK'] = true;
+            }
+            if (prov === 'ZALO') {
+              map['ZALO'] = true;
+            }
           });
           setConnectedProviders(map);
         }
 
-        const rows: ParsedImportRow[] = res.data.rows || [];
+        const rawRows: ParsedImportRow[] = res.data.rows || [];
+        const rows = rawRows.map((r) => {
+          const validation = validateRow(r, map, true);
+          return {
+            ...r,
+            ...validation,
+          };
+        });
+
         setParsedRows(rows);
         setSelectedRowNumbers(rows.filter((r) => r.isValid).map((r) => r.rowNumber));
 
         const invalidCount = rows.filter((r) => !r.isValid).length;
         if (invalidCount > 0) {
-          toast.warning(`Đã nạp ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối hoặc thiếu thông tin!`);
+          toast.warning(`Đã nạp ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối, sai định dạng hoặc thiếu thông tin!`);
         } else {
           toast.success(`Đã nạp ${rows.length} bài viết từ Google Sheets!`);
         }

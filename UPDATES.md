@@ -12,6 +12,50 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] (v1.3.16) — Sửa Lỗi Import Bài Viết Hàng Loạt: Báo Lỗi Ngay Khi Thiếu Field Bắt Buộc Hoặc Dữ Liệu Không Hợp Lệ (F019)
+
+### Phân hệ M2. Content Studio (Import bài viết hàng loạt Excel & Google Drive - F019):
+- **[F019] Khắc phục lỗi record thiếu field bắt buộc hoặc dữ liệu không hợp lệ chỉ báo Cảnh báo thay vì báo lỗi Không hợp lệ:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Người dùng mở *Import Bài Viết Hàng Loạt (Excel & Google Drive)*, chọn file Excel (hoặc link Google Sheets) có record trống field bắt buộc hoặc dữ liệu không hợp lệ:
+      - Nền tảng bị để trống.
+      - Nền tảng chưa được kết nối với tài khoản.
+      - Nền tảng không hợp lệ / không hỗ trợ.
+      - Thời gian sai định dạng (ví dụ chữ "sai-dinh-dang" hoặc ngày giờ không hợp lệ).
+      - Thời gian lên lịch trong quá khứ.
+    - **Thực tế bị lỗi:**
+      - Màn xem trước hiển thị `Hợp lệ = 3, Có cảnh báo = 3, Không hợp lệ = 0`.
+      - Các record chỉ có trạng thái `"Có cảnh báo"`, không bị báo lỗi `"Không hợp lệ"`.
+    - **Kỳ vọng chuẩn:**
+      - Record trống field bắt buộc hoặc không hợp lệ (Thời gian sai định dạng, Nền tảng trống hoặc chưa được liên kết) phải bị báo lỗi ngay ở bước xem trước.
+      - Trạng thái dòng phải là `"Không hợp lệ"` kèm lý do chi tiết (ví dụ: `Thiếu nền tảng đăng bài (Bắt buộc).`, `Thời gian sai định dạng...`, `Nền tảng TikTok chưa được kết nối với tài khoản.`).
+      - Bộ đếm hộp trên cùng phải tăng số lượng `"KHÔNG HỢP LỆ"` tương ứng (`Hợp lệ = 0, Không hợp lệ = 3`).
+      - Checkbox của các dòng không hợp lệ phải bị bỏ chọn mặc định để ngăn người dùng vô tình bấm lưu lỗi.
+      - Áp dụng tương tự cho cả luồng Import file Excel/CSV và *Lấy thông tin từ Google Sheets*.
+  - **Nguyên nhân gốc rễ:**
+    1. **Tự động gán mặc định nền tảng kèm warning trong [`lib/content-studio/import-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts):**
+       - Tại `parsePlatformList`, khi giá trị trống hoặc không khớp, hàm tự động trả về `['FACEBOOK_REELS']`.
+       - Tại `parseExcelOrCsvBuffer`, khi `!normalizedRow.platforms`, code cũ chỉ đẩy cảnh báo `warnings.push('Chưa chỉ định nền tảng -> Mặc định chọn FACEBOOK_REELS.')`. Do đó `errors` rỗng, dòng vẫn có `isValid = true`!
+    2. **Xử lý thời gian sai định dạng như một cảnh báo thay vì lỗi:**
+       - Tại `parseScheduleDateTime`, khi định dạng ngày giờ không khớp hoặc ở trong quá khứ, hàm cũ trả về `{ iso: null, warning: 'Định dạng ngày giờ chưa chuẩn -> chuyển thành Bản Thảo (Draft)' }`. Vì là warning nên `errors` không có lỗi, bài viết vẫn tính là Hợp lệ.
+    3. **Chưa tái kiểm tra (revalidate) tính toàn vẹn ở phía giao diện Desktop App ([`ImportPostsModal.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Giao diện nhận mảng rows từ server mà không chạy qua `validateRow` toàn diện với danh sách tài khoản đã kết nối (`connectedProviders`), đồng thời hàm `validateRow` trước đó chưa kiểm tra định dạng thời gian `scheduledAt`.
+  - **Giải pháp xử lý triệt để:**
+    1. **Bắt buộc có Nền tảng hợp lệ ([`lib/content-studio/import-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts)):**
+       - Cập nhật `parsePlatformList`: Trả về mảng rỗng `[]` khi để trống hoặc khi không có nền tảng nào hợp lệ (không tự ý gán mặc định `FACEBOOK_REELS`).
+       - Trong `parseExcelOrCsvBuffer`: Nếu cột Nền tảng để trống $\rightarrow$ báo lỗi `errors.push('Thiếu nền tảng đăng bài (Bắt buộc).')`. Nếu chứa giá trị không hỗ trợ $\rightarrow$ báo lỗi `errors.push('Nền tảng "..." không hợp lệ hoặc không được hỗ trợ.')`.
+    2. **Báo lỗi khi Thời gian sai định dạng hoặc ở quá khứ:**
+       - Trong `parseScheduleDateTime`: Nếu ngày giờ không thể phân tích hoặc có cấu trúc sai $\rightarrow$ trả về `{ iso: null, error: 'Thời gian sai định dạng: "..." (Ví dụ đúng: 28/10/2026 20:30 hoặc 2026-10-28 20:30).' }`.
+       - Nếu ngày giờ hợp lệ nhưng nhỏ hơn hoặc bằng `Date.now()` $\rightarrow$ trả về `{ iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' }`.
+       - Khi có `dateError`, đẩy thẳng vào `errors.push(dateError)` $\rightarrow$ dòng lập tức chuyển thành `isValid: false`, bộ đếm `invalidRows` tăng chuẩn xác.
+    3. **Đồng bộ hóa kiểm tra liên kết nền tảng trên Desktop App ([`ImportPostsModal.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Nâng cấp `validateRow` kiểm tra đồng thời: Tiêu đề bắt buộc, Nền tảng bắt buộc, Nền tảng đã kết nối, và Định dạng thời gian.
+       - Tự động chạy `validateRow` trên toàn bộ dòng khi nạp xong từ file Excel/CSV hoặc Google Sheets. Các dòng lỗi sẽ tự động hiển thị nhãn đỏ `"Không hợp lệ"`, dòng lý do lỗi hiển thị ngay bên dưới, và tự động bỏ tích checkbox chọn bài.
+    4. **Kiểm thử tự động ([`__tests__/api/content-studio/import.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/import.test.ts)):**
+       - Thêm test case thời gian sai định dạng hoặc ở quá khứ: Đảm bảo báo lỗi `isValid = false`, `invalidRows = 2`.
+       - Thêm test case thiếu nền tảng hoặc nền tảng không hỗ trợ: Đảm bảo báo lỗi `isValid = false`, `invalidRows = 2`.
+       - Thêm test case tệp có 3 bài lỗi (thiếu tiêu đề, thiếu nền tảng, sai thời gian): Đảm bảo `Hợp lệ = 0, Không hợp lệ = 3, Có cảnh báo = 0`.
+
 ## 🚀 [2026-10-26] (v1.3.15) — Sửa Lỗi Import Bài Viết Hàng Loạt: Để Trống Thời Gian Mặc Định Đăng Ngay (F019)
 
 ### Phân hệ M2. Content Studio (Import bài viết hàng loạt Excel & Google Drive - F019):
