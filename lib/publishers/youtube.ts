@@ -3,6 +3,7 @@ import type { Post, VideoAsset, SocialAccount, PostPlatform } from '@prisma/clie
 import { getStorage } from '@/lib/storage';
 import { getValidAccessToken } from './googleAuth';
 import { prisma } from '@/lib/db';
+import { safeSlice, sanitizeUtf8 } from '@/lib/utils';
 
 /**
  * YouTube Shorts publisher using YouTube Data API v3.
@@ -26,17 +27,17 @@ export class YouTubeShortsPublisher implements Publisher {
       const storage = getStorage();
 
       // Ensure title includes #Shorts for YouTube algorithm to recognize it (max 100 chars for YouTube Data API)
-      let title = post.title?.trim() || 'Shorts';
+      let title = sanitizeUtf8(post.title) || 'Shorts';
       if (!title.toLowerCase().includes('#shorts')) {
-        if (title.length + 8 <= 100) {
+        if (Array.from(title).length + 8 <= 100) {
           title = `${title} #Shorts`;
         } else {
-          title = `${title.slice(0, 91)} #Shorts`;
+          title = `${safeSlice(title, 91)} #Shorts`;
         }
       }
 
       // Ensure description includes #Shorts tag
-      let description = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
+      let description = sanitizeUtf8([post.caption, post.hashtags].filter(Boolean).join('\n\n'));
       if (!description.toLowerCase().includes('#shorts')) {
         description = description ? `${description}\n\n#Shorts #YouTubeShorts` : '#Shorts #YouTubeShorts';
       }

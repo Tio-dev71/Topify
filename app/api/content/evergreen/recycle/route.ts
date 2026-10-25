@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
+import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,11 +59,13 @@ export async function POST(req: NextRequest) {
 
     const scheduledDate = newScheduledAt ? new Date(newScheduledAt) : null;
 
-    // 1. Create the new cloned/recycled post
+    // 1. Create the new cloned/recycled post (sanitized against lone surrogates)
+    const rawRecycledTitle = newTitle || originalPost.title;
+    const rawRecycledCaption = newCaption !== undefined ? newCaption : originalPost.caption;
     const recycledPost = await prisma.post.create({
       data: {
-        title: (newTitle || originalPost.title).trim(),
-        caption: (newCaption !== undefined ? newCaption : originalPost.caption) || null,
+        title: sanitizeUtf8(rawRecycledTitle) || originalPost.title,
+        caption: sanitizeUtf8Nullable(rawRecycledCaption),
         firstComment: originalPost.firstComment,
         hashtags: originalPost.hashtags,
         videoAssetId: originalPost.videoAssetId,

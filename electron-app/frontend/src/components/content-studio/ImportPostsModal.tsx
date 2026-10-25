@@ -69,6 +69,82 @@ export function isPlatformConnected(platform: string, connectedMap: Record<strin
   return false;
 }
 
+export function validateScheduleDate(str: string): { isValid: boolean; error?: string } {
+  const clean = String(str || '').trim();
+  if (!clean || clean === 'NOW') return { isValid: true };
+  const lower = clean.toLowerCase();
+  if (['now', 'đăng ngay', 'dang ngay', 'đăng luôn', 'dang luon', 'publish now', 'immediate'].includes(lower)) {
+    return { isValid: true };
+  }
+
+  const currentYear = new Date().getFullYear();
+
+  // Pattern 1: Time first (e.g. 11:59 11/11, 11:59 11/11/2026, 11:59 (11/11))
+  const timeFirstMatch = clean.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s+[\(]?(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?[\)]?$/);
+  if (timeFirstMatch) {
+    const hour = parseInt(timeFirstMatch[1], 10);
+    const min = parseInt(timeFirstMatch[2], 10);
+    const sec = timeFirstMatch[3] ? parseInt(timeFirstMatch[3], 10) : 0;
+    const day = parseInt(timeFirstMatch[4], 10);
+    const month = parseInt(timeFirstMatch[5], 10) - 1;
+    const hasExplicitYear = Boolean(timeFirstMatch[6]);
+    let year = hasExplicitYear ? parseInt(timeFirstMatch[6], 10) : currentYear;
+
+    if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+      let dateObj = new Date(year, month, day, hour, min, sec);
+      if (!isNaN(dateObj.getTime()) && dateObj.getDate() === day && dateObj.getMonth() === month) {
+        if (!hasExplicitYear && dateObj.getTime() <= Date.now()) {
+          const nextYearObj = new Date(year + 1, month, day, hour, min, sec);
+          if (nextYearObj.getTime() > Date.now()) dateObj = nextYearObj;
+        }
+        if (dateObj.getTime() <= Date.now()) {
+          return { isValid: false, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+        }
+        return { isValid: true };
+      }
+    }
+    return { isValid: false, error: `Thời gian "${clean}" sai định dạng hoặc ngày không tồn tại.` };
+  }
+
+  // Pattern 2: Date first (e.g. 11/11/2026 11:59, 11/11 11:59, 11/11)
+  const dateFirstMatch = clean.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (dateFirstMatch) {
+    const day = parseInt(dateFirstMatch[1], 10);
+    const month = parseInt(dateFirstMatch[2], 10) - 1;
+    const hasExplicitYear = Boolean(dateFirstMatch[3]);
+    let year = hasExplicitYear ? parseInt(dateFirstMatch[3], 10) : currentYear;
+    const hour = dateFirstMatch[4] ? parseInt(dateFirstMatch[4], 10) : 9;
+    const min = dateFirstMatch[5] ? parseInt(dateFirstMatch[5], 10) : 0;
+    const sec = dateFirstMatch[6] ? parseInt(dateFirstMatch[6], 10) : 0;
+
+    if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+      let dateObj = new Date(year, month, day, hour, min, sec);
+      if (!isNaN(dateObj.getTime()) && dateObj.getDate() === day && dateObj.getMonth() === month) {
+        if (!hasExplicitYear && dateObj.getTime() <= Date.now()) {
+          const nextYearObj = new Date(year + 1, month, day, hour, min, sec);
+          if (nextYearObj.getTime() > Date.now()) dateObj = nextYearObj;
+        }
+        if (dateObj.getTime() <= Date.now()) {
+          return { isValid: false, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+        }
+        return { isValid: true };
+      }
+    }
+    return { isValid: false, error: `Thời gian "${clean}" sai định dạng hoặc ngày không tồn tại.` };
+  }
+
+  // Pattern 3: ISO / Standard Date fallback
+  const parsed = new Date(clean);
+  if (!isNaN(parsed.getTime())) {
+    if (parsed.getTime() <= Date.now()) {
+      return { isValid: false, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+    }
+    return { isValid: true };
+  }
+
+  return { isValid: false, error: `Thời gian sai định dạng: "${clean}" (Ví dụ đúng: 11:59 11/11, 28/10/2026 20:30 hoặc 2026-10-28 20:30).` };
+}
+
 export function validateRow(
   row: ParsedImportRow,
   connectedMap: Record<string, boolean>,
@@ -96,25 +172,9 @@ export function validateRow(
 
   // Check scheduledAt format if provided
   if (row.scheduledAt && row.scheduledAt !== 'NOW') {
-    const str = String(row.scheduledAt).trim();
-    const lower = str.toLowerCase();
-    const isNow = [
-      'now',
-      'đăng ngay',
-      'dang ngay',
-      'đăng luôn',
-      'dang luon',
-      'publish now',
-      'immediate',
-    ].includes(lower);
-
-    if (!isNow) {
-      const parsed = new Date(str);
-      if (isNaN(parsed.getTime())) {
-        errors.push(`Thời gian sai định dạng: "${str}" (Ví dụ đúng: 28/10/2026 20:30 hoặc 2026-10-28 20:30).`);
-      } else if (parsed.getTime() <= Date.now()) {
-        errors.push('Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.');
-      }
+    const dateCheck = validateScheduleDate(String(row.scheduledAt));
+    if (!dateCheck.isValid && dateCheck.error) {
+      errors.push(dateCheck.error);
     }
   }
 

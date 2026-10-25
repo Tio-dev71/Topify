@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import {
   parseExcelOrCsvBuffer,
   generateSampleExcelTemplate,
+  parseScheduleDateTime,
 } from '@/lib/content-studio/import-engine';
 
 describe('Content Studio Bulk Import Engine (F019)', () => {
@@ -342,6 +343,100 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     // Record 3: invalid time
     expect(result.rows[2].isValid).toBe(false);
     expect(result.rows[2].errors.some((e) => e.includes('Thời gian sai định dạng'))).toBe(true);
+  });
+
+  it('parses schedule date with formats "11:59 11/11", "11/11 11:59", and Date objects without error or warning', () => {
+    // 1. Time first: "11:59 11/11"
+    const res1 = parseScheduleDateTime('11:59 11/11');
+    expect(res1.error).toBeUndefined();
+    expect(res1.warning).toBeUndefined();
+    expect(res1.iso).toBeDefined();
+    expect(typeof res1.iso).toBe('string');
+    const parsedDate1 = new Date(res1.iso!);
+    expect(parsedDate1.getDate()).toBe(11);
+    expect(parsedDate1.getMonth()).toBe(10); // November is month 10 (0-indexed)
+    expect(parsedDate1.getHours()).toBe(11);
+    expect(parsedDate1.getMinutes()).toBe(59);
+
+    // 2. Date first: "11/11 11:59"
+    const res2 = parseScheduleDateTime('11/11 11:59');
+    expect(res2.error).toBeUndefined();
+    expect(res2.warning).toBeUndefined();
+    expect(res2.iso).toBeDefined();
+
+    // 3. Date object (e.g. from XLSX cellDates: true)
+    const futureDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+    const res3 = parseScheduleDateTime(futureDate);
+    expect(res3.error).toBeUndefined();
+    expect(res3.warning).toBeUndefined();
+    expect(res3.iso).toBe(futureDate.toISOString());
+
+    // 4. Empty or now
+    const res4 = parseScheduleDateTime('');
+    expect(res4.iso).toBeNull();
+    expect(res4.isNow).toBe(true);
+    expect(res4.warning).toBeUndefined();
+    expect(res4.error).toBeUndefined();
+  });
+
+  it('imports 3 Facebook records (record 1 with 11:59 11/11, records 2 and 3 with empty time) as 100% valid with 0 warnings', () => {
+    const rows = [
+      {
+        'Tiêu đề bài viết': 'Top 3 bí quyết xây kênh TikTok 1',
+        'Nội dung (Caption)': 'Kịch bản chi tiết 3 bước giữ chân người xem trong 3 giây đầu tiên. Áp dụng ngay để nhân 5...',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '11:59 11/11',
+      },
+      {
+        'Tiêu đề bài viết': 'Chiến lược tối ưu kịch bản video',
+        'Nội dung (Caption)': 'Review góc quay và bố cục món ăn chuẩn viral. Đầy đủ phân cảnh hook, thân bài và kêu...',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+      {
+        'Tiêu đề bài viết': 'Bí mật tăng tương tác tự nhiên k',
+        'Nội dung (Caption)': 'Cách đặt câu hỏi kích thích thảo luận và tận dụng tính năng Spin biến thể để tránh trùng...',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.totalRows).toBe(3);
+    expect(result.validRows).toBe(3);
+    expect(result.warningRows).toBe(0); // Expected: 0 warnings!
+    expect(result.invalidRows).toBe(0);
+
+    // Record 1: Scheduled with 11:59 11/11 -> Valid, 0 warnings
+    expect(result.rows[0].isValid).toBe(true);
+    expect(result.rows[0].warnings).toEqual([]);
+    expect(result.rows[0].errors).toEqual([]);
+    expect(result.rows[0].scheduledAt).not.toBeNull();
+    const d1 = new Date(result.rows[0].scheduledAt!);
+    expect(d1.getDate()).toBe(11);
+    expect(d1.getMonth()).toBe(10); // Nov
+    expect(d1.getHours()).toBe(11);
+    expect(d1.getMinutes()).toBe(59);
+
+    // Record 2: Empty time -> Valid, 0 warnings, scheduledAt null (Publish Now)
+    expect(result.rows[1].isValid).toBe(true);
+    expect(result.rows[1].warnings).toEqual([]);
+    expect(result.rows[1].errors).toEqual([]);
+    expect(result.rows[1].scheduledAt).toBeNull();
+
+    // Record 3: Empty time -> Valid, 0 warnings, scheduledAt null (Publish Now)
+    expect(result.rows[2].isValid).toBe(true);
+    expect(result.rows[2].warnings).toEqual([]);
+    expect(result.rows[2].errors).toEqual([]);
+    expect(result.rows[2].scheduledAt).toBeNull();
   });
 });
 

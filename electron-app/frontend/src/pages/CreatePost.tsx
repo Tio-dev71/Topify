@@ -334,21 +334,23 @@ export default function CreatePost() {
   };
 
   const handleApplySpinVariant = (caption: string, title?: string) => {
+    const safeCaption = typeof caption?.toWellFormed === 'function' ? caption.toWellFormed().replace(/\uFFFD/g, '') : caption;
+    const safeTitle = typeof title?.toWellFormed === 'function' ? title.toWellFormed().replace(/\uFFFD/g, '') : title;
     const targetVideo = activeVideoForModal || (videos.length > 0 ? videos[0] : null);
     if (targetVideo) {
-      updateVideoField(targetVideo.id, 'caption', caption);
-      if (title) updateVideoField(targetVideo.id, 'title', title);
+      updateVideoField(targetVideo.id, 'caption', safeCaption);
+      if (safeTitle) updateVideoField(targetVideo.id, 'title', safeTitle);
     } else {
       const draft: UploadedVideo = {
         id: `draft_${Date.now()}`,
         originalFileName: 'Bản thảo Spin (Chưa gắn video)',
-        titleFromFileName: title || 'Bản thảo Spin',
+        titleFromFileName: safeTitle || 'Bản thảo Spin',
         storageUrl: '',
         size: 0,
         mimeType: 'video/mp4',
         isDraft: true,
-        title: title || 'Biến thể bài viết',
-        caption: caption,
+        title: safeTitle || 'Biến thể bài viết',
+        caption: safeCaption,
         firstComment: '',
         hashtags: '#Topify #SpinVariant',
       };
@@ -362,10 +364,12 @@ export default function CreatePost() {
     setVideos((prev) =>
       prev.map((v, idx) => {
         const variant = variants[idx % variants.length];
+        const safeCaption = typeof variant.caption?.toWellFormed === 'function' ? variant.caption.toWellFormed().replace(/\uFFFD/g, '') : variant.caption;
+        const safeTitle = typeof variant.title?.toWellFormed === 'function' ? variant.title.toWellFormed().replace(/\uFFFD/g, '') : variant.title;
         return {
           ...v,
-          caption: variant.caption,
-          title: variant.title || v.title,
+          caption: safeCaption,
+          title: safeTitle || v.title,
         };
       })
     );
@@ -477,8 +481,10 @@ export default function CreatePost() {
           '✨ Chia sẻ hữu ích hôm nay dành cho bạn: ',
           '🚀 Khám phá ngay mẹo đỉnh cao này: ',
         ];
+        const cleanOriginal = original ? original.replace(/^[🔥💡✨🚀]\s*/u, '').trim() : '';
+        const safeOriginal = typeof cleanOriginal.toWellFormed === 'function' ? cleanOriginal.toWellFormed().replace(/\uFFFD/g, '') : cleanOriginal;
         const randomHook = hooks[Math.floor(Math.random() * hooks.length)];
-        const newText = original ? `${randomHook}${original.replace(/^[🔥💡✨🚀]\s*/, '')}` : randomHook;
+        const newText = safeOriginal ? `${randomHook}${safeOriginal}` : randomHook;
         updateVideoField(video.id, 'caption', newText);
         toast.success('Đã làm mới nội dung Caption!');
       }
@@ -778,9 +784,16 @@ export default function CreatePost() {
     setSubmitting(true);
     let successCount = 0;
 
+    const sanitizeClientText = (val: string | null | undefined): string | null => {
+      if (!val) return null;
+      const wellFormed = typeof val.toWellFormed === 'function' ? val.toWellFormed() : val;
+      const cleaned = wellFormed.replace(/\uFFFD/g, '').trim();
+      return cleaned || null;
+    };
+
     for (const video of videos) {
       try {
-        const payloadTitle = video.title.trim() || video.titleFromFileName;
+        const payloadTitle = sanitizeClientText(video.title) || sanitizeClientText(video.titleFromFileName) || 'Untitled';
         let payloadScheduledAt: string | null = null;
         let randomStartIso: string | undefined = undefined;
         let randomEndIso: string | undefined = undefined;
@@ -796,9 +809,9 @@ export default function CreatePost() {
 
         const res = await api.post('/posts', {
           title: payloadTitle,
-          caption: video.caption.trim() || null,
-          firstComment: video.firstComment.trim() || null,
-          hashtags: video.hashtags.trim() || null,
+          caption: sanitizeClientText(video.caption),
+          firstComment: sanitizeClientText(video.firstComment),
+          hashtags: sanitizeClientText(video.hashtags),
           videoAssetId: video.id,
           platforms,
           publishMode,

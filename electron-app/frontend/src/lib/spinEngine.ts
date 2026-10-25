@@ -148,15 +148,17 @@ export function generateSpinVariantsClient(
     const rawVariants = expandSpintaxMultipleClient(originalCaption, count);
     const variants: SpinVariantItem[] = rawVariants.map((cap, i) => {
       const uniqueness = calculateUniquenessScore(originalCaption, cap);
+      const safeCap = typeof cap.toWellFormed === 'function' ? cap.toWellFormed() : cap;
+      const hookText = Array.from(safeCap).slice(0, 45).join('') + '...';
       return {
         id: `spin-var-${Date.now()}-${i + 1}`,
         index: i + 1,
         title: originalTitle ? `${originalTitle} (Biến thể #${i + 1})` : `Biến thể #${i + 1}`,
-        caption: cap,
+        caption: safeCap,
         uniquenessScore: uniqueness,
-        hook: cap.slice(0, 45) + '...',
+        hook: hookText,
         hashtags: ['#Topify', '#ViralContent', `#Variant${i + 1}`],
-        wordCount: cap.split(/\s+/).filter(Boolean).length,
+        wordCount: safeCap.split(/\s+/).filter(Boolean).length,
       };
     });
 
@@ -173,14 +175,16 @@ export function generateSpinVariantsClient(
     };
   }
 
-  const cleanBase = originalCaption.replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/, '').trim();
+  // Sử dụng cờ /u để regex xử lý đúng ký tự Unicode 32-bit (surrogate pairs) và không cắt đứt emoji
+  const cleanBase = originalCaption.replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/u, '').trim();
+  const safeBase = typeof cleanBase.toWellFormed === 'function' ? cleanBase.toWellFormed() : cleanBase;
   const variants: SpinVariantItem[] = [];
 
   for (let i = 0; i < count; i++) {
     const hook = HOOK_PREFIXES[(i * 3 + Math.floor(Math.random() * 2)) % HOOK_PREFIXES.length];
     const cta = CTA_VARIANTS[(i * 2 + Math.floor(Math.random() * 2)) % CTA_VARIANTS.length];
 
-    let transformedBody = cleanBase;
+    let transformedBody = safeBase;
     Object.entries(SYNONYM_MAP).forEach(([key, synList]) => {
       if (transformedBody.toLowerCase().includes(key)) {
         const replacement = synList[i % synList.length];
@@ -190,7 +194,8 @@ export function generateSpinVariantsClient(
     });
 
     const builder = TEMPLATE_BUILDERS[i % TEMPLATE_BUILDERS.length];
-    const finalCaption = builder(hook, transformedBody, cta);
+    const rawCaption = builder(hook, transformedBody, cta);
+    const finalCaption = typeof rawCaption.toWellFormed === 'function' ? rawCaption.toWellFormed() : rawCaption;
 
     const uniqueness = calculateUniquenessScore(originalCaption, finalCaption);
 

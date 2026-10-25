@@ -105,8 +105,24 @@ function parsePlatformList(raw: string | undefined | null): string[] {
   return unique;
 }
 
-function parseScheduleDateTime(val: any): { iso: string | null; warning?: string; error?: string; isNow?: boolean } {
+export function parseScheduleDateTime(val: any): { iso: string | null; warning?: string; error?: string; isNow?: boolean } {
   if (val === undefined || val === null || val === '') return { iso: null, isNow: true };
+
+  // Handle Date objects (e.g. from XLSX cellDates: true)
+  if (val instanceof Date) {
+    if (!isNaN(val.getTime())) {
+      let dateObj = val;
+      if (dateObj.getFullYear() < 1970) {
+        const now = new Date();
+        dateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), val.getHours(), val.getMinutes(), val.getSeconds());
+      }
+      if (dateObj.getTime() <= Date.now()) {
+        return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+      }
+      return { iso: dateObj.toISOString() };
+    }
+    return { iso: null, error: 'Thời gian không hợp lệ.' };
+  }
 
   // Handle Excel serial date numbers
   if (typeof val === 'number') {
@@ -139,28 +155,89 @@ function parseScheduleDateTime(val: any): { iso: string | null; warning?: string
     return { iso: null, isNow: true };
   }
 
-  // Common Vietnamese/International formats:
-  // "25/10/2026 19:30" or "25-10-2026 19:30" or "25/10/2026"
-  const vnMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (vnMatch) {
-    const day = parseInt(vnMatch[1], 10);
-    const month = parseInt(vnMatch[2], 10) - 1;
-    const year = parseInt(vnMatch[3], 10);
-    const hour = vnMatch[4] ? parseInt(vnMatch[4], 10) : 9;
-    const min = vnMatch[5] ? parseInt(vnMatch[5], 10) : 0;
-    const dateObj = new Date(year, month, day, hour, min, 0);
-    if (!isNaN(dateObj.getTime())) {
-      if (dateObj.getDate() !== day || dateObj.getMonth() !== month || dateObj.getFullYear() !== year) {
-        return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
+  const currentYear = new Date().getFullYear();
+
+  // Pattern 1: Time first, then date (e.g. "11:59 11/11", "11:59 (11/11)", "11:59 11/11/2026", "11:59 11-11")
+  const timeFirstMatch = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s+[\(]?(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?[\)]?$/);
+  if (timeFirstMatch) {
+    const hour = parseInt(timeFirstMatch[1], 10);
+    const min = parseInt(timeFirstMatch[2], 10);
+    const sec = timeFirstMatch[3] ? parseInt(timeFirstMatch[3], 10) : 0;
+    const day = parseInt(timeFirstMatch[4], 10);
+    const month = parseInt(timeFirstMatch[5], 10) - 1;
+    const hasExplicitYear = Boolean(timeFirstMatch[6]);
+    let year = hasExplicitYear ? parseInt(timeFirstMatch[6], 10) : currentYear;
+
+    if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+      let dateObj = new Date(year, month, day, hour, min, sec);
+      if (!isNaN(dateObj.getTime()) && dateObj.getDate() === day && dateObj.getMonth() === month) {
+        if (!hasExplicitYear && dateObj.getTime() <= Date.now()) {
+          const nextYearObj = new Date(year + 1, month, day, hour, min, sec);
+          if (nextYearObj.getTime() > Date.now()) {
+            dateObj = nextYearObj;
+          }
+        }
+        if (dateObj.getTime() <= Date.now()) {
+          return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+        }
+        return { iso: dateObj.toISOString() };
       }
-      if (dateObj.getTime() <= Date.now()) {
-        return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
-      }
-      return { iso: dateObj.toISOString() };
     }
+    return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
   }
 
-  // ISO / Standard JS Date parsing
+  // Pattern 2: Date first (DD/MM/YYYY or DD/MM), then time (optional) (e.g. "11/11/2026 11:59", "11/11 11:59", "11/11/2026", "11/11")
+  const dateFirstMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (dateFirstMatch) {
+    const day = parseInt(dateFirstMatch[1], 10);
+    const month = parseInt(dateFirstMatch[2], 10) - 1;
+    const hasExplicitYear = Boolean(dateFirstMatch[3]);
+    let year = hasExplicitYear ? parseInt(dateFirstMatch[3], 10) : currentYear;
+    const hour = dateFirstMatch[4] ? parseInt(dateFirstMatch[4], 10) : 9;
+    const min = dateFirstMatch[5] ? parseInt(dateFirstMatch[5], 10) : 0;
+    const sec = dateFirstMatch[6] ? parseInt(dateFirstMatch[6], 10) : 0;
+
+    if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+      let dateObj = new Date(year, month, day, hour, min, sec);
+      if (!isNaN(dateObj.getTime()) && dateObj.getDate() === day && dateObj.getMonth() === month) {
+        if (!hasExplicitYear && dateObj.getTime() <= Date.now()) {
+          const nextYearObj = new Date(year + 1, month, day, hour, min, sec);
+          if (nextYearObj.getTime() > Date.now()) {
+            dateObj = nextYearObj;
+          }
+        }
+        if (dateObj.getTime() <= Date.now()) {
+          return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+        }
+        return { iso: dateObj.toISOString() };
+      }
+    }
+    return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
+  }
+
+  // Pattern 3: ISO / YYYY-MM-DD or YYYY/MM/DD (e.g. "2026-11-11 11:59", "2026-11-11T11:59:00", "2026/11/11 11:59")
+  const isoMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    const hour = isoMatch[4] ? parseInt(isoMatch[4], 10) : 9;
+    const min = isoMatch[5] ? parseInt(isoMatch[5], 10) : 0;
+    const sec = isoMatch[6] ? parseInt(isoMatch[6], 10) : 0;
+
+    if (month >= 0 && month <= 11 && day >= 1 && day <= 31 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+      const dateObj = new Date(year, month, day, hour, min, sec);
+      if (!isNaN(dateObj.getTime()) && dateObj.getDate() === day && dateObj.getMonth() === month) {
+        if (dateObj.getTime() <= Date.now()) {
+          return { iso: null, error: 'Thời gian lên lịch đã qua trong quá khứ, vui lòng chọn thời điểm trong tương lai.' };
+        }
+        return { iso: dateObj.toISOString() };
+      }
+    }
+    return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
+  }
+
+  // ISO / Standard JS Date fallback parsing
   const hasDateStructure = /\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(str) || /\d{1,2}[-/.]\d{1,2}[-/.]\d{4}/.test(str);
   if (hasDateStructure) {
     const parsed = new Date(str);
@@ -172,7 +249,7 @@ function parseScheduleDateTime(val: any): { iso: string | null; warning?: string
     }
   }
 
-  return { iso: null, error: `Thời gian sai định dạng: "${str}" (Ví dụ đúng: 28/10/2026 20:30 hoặc 2026-10-28 20:30).` };
+  return { iso: null, error: `Thời gian sai định dạng: "${str}" (Ví dụ đúng: 11:59 11/11, 28/10/2026 20:30 hoặc 2026-10-28 20:30).` };
 }
 
 /**

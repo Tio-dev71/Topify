@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
+import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -245,13 +246,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create post with platforms
+    // Create post with platforms (safely sanitized against lone surrogate pairs)
     const post = await prisma.post.create({
       data: {
-        title,
-        caption,
-        firstComment,
-        hashtags,
+        title: sanitizeUtf8(title) || 'Untitled Post',
+        caption: sanitizeUtf8Nullable(caption),
+        firstComment: sanitizeUtf8Nullable(firstComment),
+        hashtags: sanitizeUtf8Nullable(hashtags),
         videoAssetId,
         createdById: session.user.id,
         workspaceId: (session.user as any).workspaceId,

@@ -458,15 +458,17 @@ export function generateSpinVariants(
     const rawVariants = expandSpintaxMultiple(originalCaption, count);
     const variants: SpinVariant[] = rawVariants.map((cap, i) => {
       const uniqueness = calculateUniquenessScore(originalCaption, cap);
+      const safeCap = typeof cap.toWellFormed === 'function' ? cap.toWellFormed() : cap;
+      const hookText = Array.from(safeCap).slice(0, 45).join('') + '...';
       return {
         id: `spin-var-${Date.now()}-${i + 1}`,
         index: i + 1,
         title: originalTitle ? `${originalTitle} (Biến thể #${i + 1})` : `Biến thể #${i + 1}`,
-        caption: cap,
+        caption: safeCap,
         uniquenessScore: uniqueness,
-        hook: cap.slice(0, 45) + '...',
+        hook: hookText,
         hashtags: ['#Topify', '#ViralContent', `#Variant${i + 1}`],
-        wordCount: cap.split(/\s+/).filter(Boolean).length,
+        wordCount: safeCap.split(/\s+/).filter(Boolean).length,
       };
     });
 
@@ -484,7 +486,9 @@ export function generateSpinVariants(
   }
 
   // Nếu là Caption văn bản thông thường, áp dụng kỹ thuật AI/Heuristic Transformation
-  const cleanBase = originalCaption.replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/, '').trim();
+  // Sử dụng cờ /u để regex xử lý đúng ký tự Unicode 32-bit (surrogate pairs) và không cắt đứt emoji
+  const cleanBase = originalCaption.replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/u, '').trim();
+  const safeBase = typeof cleanBase.toWellFormed === 'function' ? cleanBase.toWellFormed() : cleanBase;
   const variants: SpinVariant[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -492,7 +496,7 @@ export function generateSpinVariants(
     const cta = CTA_VARIANTS[(i * 2 + Math.floor(Math.random() * 2)) % CTA_VARIANTS.length];
 
     // Thay thế từ đồng nghĩa ngẫu nhiên trong phần thân
-    let transformedBody = cleanBase;
+    let transformedBody = safeBase;
     Object.entries(SYNONYM_MAP).forEach(([key, synList]) => {
       if (transformedBody.toLowerCase().includes(key) && Math.random() > 0.3) {
         const replacement = synList[i % synList.length];
@@ -503,7 +507,8 @@ export function generateSpinVariants(
 
     // Cấu trúc biến thể theo các template độc nhất
     const builder = TEMPLATE_BUILDERS[i % TEMPLATE_BUILDERS.length];
-    const finalCaption = builder(hook, transformedBody, cta);
+    const rawCaption = builder(hook, transformedBody, cta);
+    const finalCaption = typeof rawCaption.toWellFormed === 'function' ? rawCaption.toWellFormed() : rawCaption;
 
     const uniqueness = calculateUniquenessScore(originalCaption, finalCaption);
 

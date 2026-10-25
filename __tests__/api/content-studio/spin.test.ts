@@ -45,6 +45,25 @@ describe('Content Studio F015 Spin & Anti-Spam Engine', () => {
     expect(uniqueCaptions.size).toBe(8);
   });
 
+  it('safely handles captions with 32-bit emoji prefixes without producing lone surrogate pairs', () => {
+    const testEmojis = ['🔥', '💡', '✨', '🚀', '📌', '⚡', '🎯', '💎', '🌟', '🏆'];
+    for (const emoji of testEmojis) {
+      const inputCaption = `${emoji} Mom Took My Money... Then Grandma Arrived #funnycats #catmemes #grandma.mp4`;
+      const result = generateSpinVariants(inputCaption, 4);
+
+      expect(result.variants).toHaveLength(4);
+      result.variants.forEach((v) => {
+        // Must be well-formed UTF-16
+        expect(typeof v.caption.isWellFormed === 'function' ? v.caption.isWellFormed() : true).toBe(true);
+        // JSON serialization should not contain lone surrogate hex escapes
+        const jsonStr = JSON.stringify(v.caption);
+        expect(jsonStr).not.toMatch(/\\u[dD][89a-fA-F][0-9a-fA-F]{2}(?!\\u[dD][c-fC-F][0-9a-fA-F]{2})/);
+        // Hook should also be well-formed
+        expect(typeof v.hook.isWellFormed === 'function' ? v.hook.isWellFormed() : true).toBe(true);
+      });
+    }
+  });
+
   it('parses Spintax syntax correctly with combinations count and random variant', () => {
     const spintax = '{Xin chào|Hi cả nhà|Chào các bạn}, {hôm nay|ngày đẹp trời} mình {chia sẻ|bật mí} {bí quyết|tuyệt chiêu} {tuyệt vời|đỉnh cao} này nhé!';
     const parsed = parseSpintax(spintax);

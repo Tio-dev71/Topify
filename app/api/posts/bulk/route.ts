@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
 
 // POST /api/posts/bulk — Create multiple posts at once
 export async function POST(req: NextRequest) {
@@ -74,10 +75,10 @@ export async function POST(req: NextRequest) {
         }
         const post = await prisma.post.create({
           data: {
-            title: p.title || `Bài viết ${i + 1}`,
-            caption: p.caption,
-            firstComment: p.firstComment,
-            hashtags: p.hashtags,
+            title: sanitizeUtf8(p.title) || `Bài viết ${i + 1}`,
+            caption: sanitizeUtf8Nullable(p.caption),
+            firstComment: sanitizeUtf8Nullable(p.firstComment),
+            hashtags: sanitizeUtf8Nullable(p.hashtags),
             postType: p.postType || 'FEED',
             videoAssetId: p.videoAssetId || null,
             createdById: session.user.id,

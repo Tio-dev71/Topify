@@ -85,3 +85,33 @@ export const STATUS_CONFIG = {
   PARTIAL_FAILED: { label: 'Partial', color: 'bg-orange-50 text-orange-700' },
   PENDING: { label: 'Pending', color: 'bg-gray-100 text-gray-700' },
 } as const;
+
+/**
+ * Sanitize a string to ensure it is valid UTF-8/UTF-16 without lone surrogates.
+ * Prevents Prisma / Rust serde_json errors: "lone leading surrogate in hex escape".
+ */
+export function sanitizeUtf8(str: unknown): string {
+  if (typeof str !== 'string') return '';
+  const wellFormed = typeof str.toWellFormed === 'function' ? str.toWellFormed() : str;
+  return wellFormed.replace(/\uFFFD/g, '').trim();
+}
+
+/**
+ * Sanitize a nullable or optional string to ensure it is valid UTF-8/UTF-16 without lone surrogates.
+ */
+export function sanitizeUtf8Nullable(str: unknown): string | null {
+  if (typeof str !== 'string') return null;
+  const wellFormed = typeof str.toWellFormed === 'function' ? str.toWellFormed() : str;
+  const cleaned = wellFormed.replace(/\uFFFD/g, '').trim();
+  return cleaned || null;
+}
+
+/**
+ * Safely slice a string by Unicode code points (avoiding cutting emoji surrogate pairs in half).
+ */
+export function safeSlice(str: string, maxLength: number): string {
+  if (!str) return '';
+  const wellFormed = typeof str.toWellFormed === 'function' ? str.toWellFormed() : str;
+  return Array.from(wellFormed).slice(0, maxLength).join('');
+}
+

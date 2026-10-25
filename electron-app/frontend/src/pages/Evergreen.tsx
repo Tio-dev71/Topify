@@ -125,8 +125,10 @@ export default function Evergreen() {
           '✨ Top kiến thức không bao giờ lỗi thời: ',
           '🚀 Đừng bỏ lỡ video cực hay này: ',
         ];
+        const cleanExisting = newCaption ? newCaption.replace(/^[🔥💡✨🚀]\s*/u, '').trim() : '';
+        const safeExisting = typeof cleanExisting.toWellFormed === 'function' ? cleanExisting.toWellFormed().replace(/\uFFFD/g, '') : cleanExisting;
         const randomHook = hooks[Math.floor(Math.random() * hooks.length)];
-        setNewCaption(newCaption ? `${randomHook}${newCaption.replace(/^[🔥💡✨🚀]\s*/, '')}` : randomHook);
+        setNewCaption(safeExisting ? `${randomHook}${safeExisting}` : randomHook);
         toast.success('Đã làm mới biến thể Caption!');
       }
     } catch {
@@ -134,6 +136,13 @@ export default function Evergreen() {
     } finally {
       setIsSpinning(false);
     }
+  };
+
+  const sanitizeClientText = (val: string | null | undefined): string | null => {
+    if (!val) return null;
+    const wellFormed = typeof val.toWellFormed === 'function' ? val.toWellFormed() : val;
+    const cleaned = wellFormed.replace(/\uFFFD/g, '').trim();
+    return cleaned || null;
   };
 
   const handleConfirmRecycle = async () => {
@@ -151,8 +160,8 @@ export default function Evergreen() {
     try {
       const res = await api.post('/content/evergreen/recycle', {
         postId: selectedPost.id,
-        newTitle: newTitle.trim(),
-        newCaption: newCaption.trim() || null,
+        newTitle: sanitizeClientText(newTitle) || selectedPost.title,
+        newCaption: sanitizeClientText(newCaption),
         publishMode: newPublishMode,
         newScheduledAt: newPublishMode === 'schedule' ? new Date(newScheduledAt).toISOString() : null,
         platforms: selectedPlatforms,

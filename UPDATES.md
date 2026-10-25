@@ -12,6 +12,30 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] (v1.3.18) — Sửa Lỗi Import Bài Viết Hàng Loạt Gắn Cảnh Báo Sai & Lỗi Lone Surrogate Khi Đăng Bài Spin Biến Thể
+
+### Phân hệ M2. Quản lý bài viết & Content Studio (Import bài viết hàng loạt F019 & Spin biến thể F014):
+- **[F019] Khắc phục lỗi record nền tảng Facebook bị gắn trạng thái "Cảnh báo" dù không có tình huống cảnh báo:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Người dùng import file Excel có 3 bài viết nền tảng FACEBOOK (bài 1 có Thời gian `11:59 11/11`, bài 2 và 3 để trống Thời gian).
+    - Màn xem trước hiển thị cả 3 bài đều bị gắn trạng thái `"Có cảnh báo"`, bộ đếm `"Có cảnh báo"` = 3, dù bài 1 đã có Thời gian hợp lệ và cả 3 bài không thuộc trường hợp cần cảnh báo nào (như video dài > 180s cho YouTube Shorts).
+  - **Nguyên nhân gốc rễ:**
+    1. Bộ phân tích ngày giờ `parseScheduleDateTime` tại [`lib/content-studio/import-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts) chưa hỗ trợ định dạng thời gian đứng trước ngày (`HH:mm DD/MM` như `11:59 11/11`), các định dạng không có năm hoặc kiểu `val instanceof Date` do thư viện `xlsx` trả về khi mở file với `{ cellDates: true }`.
+    2. Giao diện Desktop App trước đó chưa đồng bộ bộ phân tích ngày giờ linh hoạt với backend và bản build `frontend/dist` bị nghẽn do lỗi biên dịch TypeScript.
+  - **Giải pháp xử lý:**
+    1. **Nâng cấp `parseScheduleDateTime` tại [`lib/content-studio/import-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts):**
+       - Bổ sung nhận diện `val instanceof Date` trực tiếp từ cell Date của Excel.
+       - Hỗ trợ định dạng giờ đứng trước ngày: `11:59 11/11`, `11:59 (11/11)`, `11:59 11/11/2026`. Tự động dùng năm hiện tại (`2026`) hoặc năm tiếp theo nếu ngày trong năm hiện tại đã qua.
+       - Hỗ trợ đầy đủ các định dạng ngày giờ chuẩn Việt Nam và quốc tế: `11/11 11:59`, `11/11/2026 11:59`, `2026-11-11 11:59`, `now`, `đăng ngay`, hoặc để trống.
+       - Đảm bảo các bài viết nền tảng Facebook hợp lệ có `warnings: []`, hiển thị trạng thái `"Hợp lệ"` xanh chuẩn xác, bộ đếm `"Có cảnh báo"` = 0. Cảnh báo chỉ xuất hiện cho các trường hợp đặc thù như YouTube Shorts > 180s.
+    2. **Đồng bộ hóa bộ thẩm định thời gian trên Desktop App ([`ImportPostsModal.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Bổ sung `validateScheduleDate` tương thích với `parseScheduleDateTime` của backend.
+    3. **Khắc phục lỗi Prisma Lone Surrogate khi đăng bài Spin biến thể:**
+       - Tích hợp `sanitizeUtf8`, `sanitizeUtf8Nullable` và cờ `/u` cho regex tách từ/emoji tại [`content-studio-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/content-studio-engine.ts), [`spinEngine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/lib/spinEngine.ts) và các API tạo bài viết [`app/api/posts/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/posts/route.ts), loại bỏ triệt để lỗi `Invalid prisma.post.create() invocation: lone leading surrogate in hex escape`.
+    4. **Bổ sung Unit Tests ([`__tests__/api/content-studio/import.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/import.test.ts)):**
+       - Thêm test case xác thực định dạng `11:59 11/11`, `11/11 11:59`, `Date` object và `now`.
+       - Thêm test case tái hiện chính xác kịch bản 3 bài Facebook (bài 1: `11:59 11/11`, bài 2 & 3: để trống): kết quả 100% hợp lệ, 0 cảnh báo (`warningRows = 0`), đúng kỳ vọng của QA.
+
 ## 🚀 [2026-10-26] (v1.3.17) — Sửa Lỗi UI Quản Lý Bài Viết: Khắc Phục Xung Đột Sticky Filter Bar & Đè Lớp Card Bài Viết
 
 ### Phân hệ M2. Quản lý bài viết (Posts Management - Grid/List View):

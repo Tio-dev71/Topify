@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { recordAuditLog } from '@/lib/audit-log';
+import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,12 +93,12 @@ export async function PATCH(
       }
     }
 
-    // Only allow updating certain fields
+    // Only allow updating certain fields (sanitized against lone surrogates)
     const updateData: any = {};
-    if (body.title !== undefined) updateData.title = body.title;
-    if (body.caption !== undefined) updateData.caption = body.caption;
-    if (body.hashtags !== undefined) updateData.hashtags = body.hashtags;
-    if (body.firstComment !== undefined) updateData.firstComment = body.firstComment;
+    if (body.title !== undefined) updateData.title = sanitizeUtf8(body.title) || post.title;
+    if (body.caption !== undefined) updateData.caption = sanitizeUtf8Nullable(body.caption);
+    if (body.hashtags !== undefined) updateData.hashtags = sanitizeUtf8Nullable(body.hashtags);
+    if (body.firstComment !== undefined) updateData.firstComment = sanitizeUtf8Nullable(body.firstComment);
     if (body.scheduledAt !== undefined) {
       updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
       if (body.scheduledAt && post.status !== 'PUBLISHED' && post.status !== 'PUBLISHING') {
