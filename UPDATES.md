@@ -12,6 +12,38 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] (v1.3.19) — Sửa Lỗi Random Trong Khung: Khung Giờ Đã Qua Vẫn Chọn Được & Mốc Random Nhỏ Hơn Giờ Hiện Tại (F022)
+
+### Phân hệ M2. Quản lý bài viết & Content Studio (Chế độ đăng ngẫu nhiên trong khung F022):
+- **[F022] Khắc phục lỗi khung giờ đã qua vẫn chọn được và mốc giờ random ra nhỏ hơn thời gian hiện tại:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Khi người dùng ở trang Tạo bài viết chọn chế độ "Random trong khung", đặt "Ngày áp dụng khung giờ" là ngày hiện tại (`25/10/2026`).
+    - Giờ hệ thống đang là `21:14`.
+    - Các khung giờ trước đó (Sáng, Trưa, Chiều) đã kết thúc nhưng vẫn click chọn được bình thường mà không bị disable.
+    - Khi chọn khung giờ vàng "Tối (Hot) 19:30 – 22:30", mục "Mô phỏng thời điểm đăng ngẫu nhiên" sinh ra mốc `20:29 (25/10)`, nhỏ hơn giờ hiện tại (`21:14`).
+  - **Nguyên nhân gốc rễ:**
+    1. UI chưa kiểm tra thời điểm kết thúc của các preset khung giờ vàng so với thời gian hiện tại khi ngày áp dụng là hôm nay (`randomDate === today`). Do đó các khung Sáng (11:30), Trưa (13:45), Chiều (18:00) không bị vô hiệu hóa (disabled).
+    2. Trong hàm tính toán thời điểm ngẫu nhiên `getComputedRandomTimes`, mốc bắt đầu `startMs` luôn lấy cố định là giờ bắt đầu của khung (`19:30`), không tính đến trường hợp khung giờ đang chạy dở (`startMs < nowMs < endMs`). Khi sinh số ngẫu nhiên từ `19:30` đến `22:30`, kết quả rơi vào `20:29` (thời điểm đã trôi qua trong quá khứ).
+    3. Backend API (`POST /api/posts`) trước đây chưa chặn trường hợp `randomWindowEnd <= Date.now()` và chưa tự động dịch `effectiveStart = Math.max(start, now + 1 min)` khi khung đang diễn ra.
+  - **Giải pháp xử lý:**
+    1. **Tách mô-đun thuật toán độc lập [`lib/content-studio/random-window.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/random-window.ts) & [`electron-app/frontend/src/lib/randomWindow.ts`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/lib/randomWindow.ts):**
+       - Hàm `isPresetDisabled`: Tự động vô hiệu hóa (`disabled`) các khung giờ vàng có `end <= now` khi ngày chọn là hôm nay, hiển thị badge "Đã qua" và ngăn click.
+       - Tự động chuyển sang khung hợp lệ kế tiếp hoặc chế độ "Tùy Chỉnh" khi ngày áp dụng thay đổi.
+       - Giới hạn ngày chọn `min` bằng ngày hiện tại theo giờ cục bộ `getLocalDateString`.
+       - Hàm `getWindowStatus`: Nhận diện chính xác 3 trạng thái: `isExpired` (khung đã qua), `isInProgress` (khung đang chạy dở), và `future` (khung trong tương lai).
+       - Hàm `computeRandomWindowTimes`: Khi khung đang chạy dở (`isInProgress`), `effectiveStartMs` được đẩy lên ít nhất `now + 1 phút`. Thuật toán chỉ random trong phần thời gian còn lại `[effectiveStartMs, endMs]`. Mốc giờ random đảm bảo 100% luôn lớn hơn thời gian hiện tại và nhỏ hơn hoặc bằng giờ kết thúc khung.
+    2. **Cập nhật giao diện Desktop App ([`CreatePost.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/CreatePost.tsx)):**
+       - Các nút preset đã qua được gắn cờ `disabled`, giảm độ mờ, đổi con trỏ `not-allowed`, có nhãn "Đã qua".
+       - Thêm thông báo hướng dẫn khi khung đang diễn ra: *"Khung giờ đang diễn ra. Thời điểm đăng chỉ được random trong phần thời gian còn lại (từ giờ hiện tại đến {randomEndTime})"* hoặc cảnh báo lỗi khi khung đã kết thúc.
+       - Nút "Random lại mốc giờ" bị disable khi khung đã hết hạn.
+       - Thẩm định chặt chẽ khi bấm xuất bản bài viết, ngăn chặn gửi mốc thời gian trong quá khứ.
+    3. **Tăng cường bảo vệ phía Backend API ([`app/api/posts/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/posts/route.ts)):**
+       - Từ chối mã 400 nếu `randomWindowEnd <= Date.now()`.
+       - Tự động căn chỉnh `effectiveStart = Math.max(start, Date.now() + 60s)` và re-randomize nếu `scheduledAt` nhận được nhỏ hơn `effectiveStart`, triệt tiêu hoàn toàn nguy cơ lên lịch vào quá khứ.
+    4. **Bổ sung Unit Tests hoàn chỉnh:**
+       - [`__tests__/api/content-studio/random-window.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/random-window.test.ts): 10 test cases kiểm thử độc lập cho preset disable, trạng thái khung, và kiểm tra 25 lần random liên tiếp trong khung đang chạy dở đều cho kết quả `> 21:14` (không thể xuất hiện `20:29`).
+       - [`__tests__/api/posts/route.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/posts/route.test.ts): Bổ sung test case từ chối khung giờ quá khứ và tự động căn chỉnh thời gian khi khung đang diễn ra.
+
 ## 🚀 [2026-10-26] (v1.3.18) — Sửa Lỗi Import Bài Viết Hàng Loạt Gắn Cảnh Báo Sai & Lỗi Lone Surrogate Khi Đăng Bài Spin Biến Thể
 
 ### Phân hệ M2. Quản lý bài viết & Content Studio (Import bài viết hàng loạt F019 & Spin biến thể F014):

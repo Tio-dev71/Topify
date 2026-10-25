@@ -236,6 +236,9 @@ describe('Posts API Route', () => {
       const mockPost = { id: 'post-random-1', status: 'SCHEDULED' };
       vi.mocked(prisma.post.create).mockResolvedValue(mockPost as any);
 
+      const futureStart = new Date(Date.now() + 3600 * 1000).toISOString();
+      const futureEnd = new Date(Date.now() + 7200 * 1000).toISOString();
+
       const req = new NextRequest('http://localhost/api/posts', { 
         method: 'POST', 
         body: JSON.stringify({
@@ -243,14 +246,75 @@ describe('Posts API Route', () => {
           videoAssetId: 'video-1',
           platforms: ['FACEBOOK_REELS'],
           publishMode: 'random_window',
-          randomWindowStart: '2026-10-25T09:00:00.000Z',
-          randomWindowEnd: '2026-10-25T11:30:00.000Z',
+          randomWindowStart: futureStart,
+          randomWindowEnd: futureEnd,
         }) 
       });
       const res = await POST(req);
       
       expect(res.status).toBe(201);
       expect(schedulePublish).toHaveBeenCalledWith('post-random-1', expect.any(Date));
+    });
+
+    it('rejects random_window post creation if window end is in the past (F022)', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-1', workspaceId: 'ws-1' } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'META' } as any]);
+
+      const pastStart = new Date(Date.now() - 7200 * 1000).toISOString();
+      const pastEnd = new Date(Date.now() - 3600 * 1000).toISOString();
+
+      const req = new NextRequest('http://localhost/api/posts', { 
+        method: 'POST', 
+        body: JSON.stringify({
+          title: 'Test Past Random Window Post',
+          videoAssetId: 'video-1',
+          platforms: ['FACEBOOK_REELS'],
+          publishMode: 'random_window',
+          randomWindowStart: pastStart,
+          randomWindowEnd: pastEnd,
+        }) 
+      });
+      const res = await POST(req);
+      const json = await res.json();
+      
+      expect(res.status).toBe(400);
+      expect(json.error).toContain('đã kết thúc trong quá khứ');
+    });
+
+    it('re-randomizes into remaining future time when window is in progress (start < now < end)', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-1', workspaceId: 'ws-1' } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'META' } as any]);
+
+      const mockPost = { id: 'post-random-progress', status: 'SCHEDULED' };
+      vi.mocked(prisma.post.create).mockResolvedValue(mockPost as any);
+
+      // Window started 1 hour ago, ends 2 hours in future (in progress)
+      const windowStart = new Date(Date.now() - 3600 * 1000).toISOString();
+      const windowEnd = new Date(Date.now() + 7200 * 1000).toISOString();
+      // Client previously tried to send a past timestamp
+      const pastScheduledAt = new Date(Date.now() - 1800 * 1000).toISOString();
+
+      const req = new NextRequest('http://localhost/api/posts', { 
+        method: 'POST', 
+        body: JSON.stringify({
+          title: 'Test In Progress Window Post',
+          videoAssetId: 'video-1',
+          platforms: ['FACEBOOK_REELS'],
+          publishMode: 'random_window',
+          scheduledAt: pastScheduledAt,
+          randomWindowStart: windowStart,
+          randomWindowEnd: windowEnd,
+        }) 
+      });
+      const res = await POST(req);
+      
+      expect(res.status).toBe(201);
+      // Scheduled date must be strictly in the future (> Date.now())
+      const scheduledArg = vi.mocked(schedulePublish).mock.calls.find(c => c[0] === 'post-random-progress')?.[1];
+      expect(scheduledArg).toBeInstanceOf(Date);
+      expect(scheduledArg!.getTime()).toBeGreaterThan(Date.now());
     });
 
     it('allows YouTube Shorts post creation when video duration > 180s and returns warning', async () => {

@@ -160,8 +160,21 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
         }
-        if (!finalScheduledAt || finalScheduledAt.getTime() < start || finalScheduledAt.getTime() > end) {
-          const randomMs = start + Math.floor(Math.random() * (end - start));
+        if (end <= Date.now()) {
+          return NextResponse.json(
+            { error: 'Khung giờ lên lịch ngẫu nhiên đã kết thúc trong quá khứ.' },
+            { status: 400 }
+          );
+        }
+        const effectiveStart = Math.max(start, Date.now() + 60 * 1000);
+        if (end <= effectiveStart) {
+          return NextResponse.json(
+            { error: 'Thời gian còn lại trong khung giờ quá ngắn (dưới 1 phút).' },
+            { status: 400 }
+          );
+        }
+        if (!finalScheduledAt || finalScheduledAt.getTime() < effectiveStart || finalScheduledAt.getTime() > end) {
+          const randomMs = effectiveStart + Math.floor(Math.random() * (end - effectiveStart));
           finalScheduledAt = new Date(randomMs);
         }
       } else if (!finalScheduledAt) {

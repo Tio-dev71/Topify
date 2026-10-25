@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Copy,
   AlertTriangle,
+  AlertCircle,
   Repeat,
   Sparkles,
   Wand2,
@@ -28,6 +29,13 @@ import {
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import { PLATFORM_CONFIG, safeFormatDate } from '../lib/utils';
+import {
+  GOLDEN_HOUR_PRESETS,
+  getLocalDateString,
+  isPresetDisabled,
+  getWindowStatus,
+  computeRandomWindowTimes,
+} from '../lib/randomWindow';
 import { DuplicateWarningCard, type DuplicateCheckResult } from '../components/DuplicateWarningCard';
 import { ContentScoreCard, type ContentScoreData } from '../components/ContentScoreCard';
 import { SpinModal, type SpinVariantItem } from '../components/SpinModal';
@@ -134,11 +142,12 @@ export default function CreatePost() {
   // F022: Random Time Window State
   const getInitialRandomDate = () => {
     const now = new Date();
-    if (now.getHours() >= 21) {
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      return tomorrow.toISOString().slice(0, 10);
+    // Evening preset ends at 22:30. If it's already 22:30 or later, default to tomorrow
+    if (now.getHours() > 22 || (now.getHours() === 22 && now.getMinutes() >= 30)) {
+      const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      return getLocalDateString(tomorrow);
     }
-    return now.toISOString().slice(0, 10);
+    return getLocalDateString(now);
   };
 
   const [randomDate, setRandomDate] = useState<string>(getInitialRandomDate);
@@ -148,15 +157,24 @@ export default function CreatePost() {
   const [isEvenlySpaced, setIsEvenlySpaced] = useState<boolean>(true);
   const [randomShuffleKey, setRandomShuffleKey] = useState<number>(0);
 
-  const GOLDEN_HOUR_PRESETS = [
-    { id: 'morning', label: '🌅 Sáng', start: '08:30', end: '11:30', desc: 'Đón tương tác đầu ngày' },
-    { id: 'noon', label: '☀️ Trưa', start: '12:00', end: '13:45', desc: 'Nghỉ trưa lướt MXH' },
-    { id: 'afternoon', label: '🌆 Chiều', start: '16:00', end: '18:00', desc: 'Giờ tan tầm' },
-    { id: 'evening', label: '🌙 Tối (Hot)', start: '19:30', end: '22:30', desc: 'Giờ vàng triệu view' },
-    { id: 'custom', label: '⚙️ Tùy Chỉnh', start: randomStartTime, end: randomEndTime, desc: 'Tự chọn giờ bắt đầu & kết thúc' },
-  ];
+  // Auto-switch away from expired presets when randomDate changes
+  useEffect(() => {
+    const currentP = GOLDEN_HOUR_PRESETS.find((p) => p.id === randomPreset);
+    if (currentP && isPresetDisabled(currentP, randomDate)) {
+      const firstAvailable = GOLDEN_HOUR_PRESETS.find((p) => p.id !== 'custom' && !isPresetDisabled(p, randomDate));
+      if (firstAvailable) {
+        setRandomPreset(firstAvailable.id);
+        setRandomStartTime(firstAvailable.start);
+        setRandomEndTime(firstAvailable.end);
+        setRandomShuffleKey((k) => k + 1);
+      } else {
+        setRandomPreset('custom');
+      }
+    }
+  }, [randomDate, randomPreset]);
 
   const handleSelectPreset = (preset: { id: string; start: string; end: string }) => {
+    if (isPresetDisabled(preset, randomDate)) return;
     setRandomPreset(preset.id);
     if (preset.id !== 'custom') {
       setRandomStartTime(preset.start);
@@ -167,48 +185,20 @@ export default function CreatePost() {
 
   // Compute distributed / random timestamps for each video
   const getComputedRandomTimes = useCallback((): Record<string, Date> => {
-    if (!randomDate || !randomStartTime || !randomEndTime) return {};
-    const startDate = new Date(`${randomDate}T${randomStartTime}:00`);
-    const endDate = new Date(`${randomDate}T${randomEndTime}:00`);
-    const startMs = startDate.getTime();
-    const endMs = endDate.getTime();
-    if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) return {};
-
-    const totalDuration = endMs - startMs;
-    const count = Math.max(videos.length, 1);
-    const result: Record<string, Date> = {};
-
-    if (count === 1) {
-      const vidId = videos[0]?.id || 'preview_single';
-      const pseudoRand = ((randomShuffleKey * 9301 + 49297) % 233280) / 233280;
-      const offset = Math.floor(pseudoRand * Math.max(totalDuration - 60000, 60000));
-      result[vidId] = new Date(startMs + offset);
-      return result;
-    }
-
-    if (isEvenlySpaced) {
-      const step = totalDuration / count;
-      videos.forEach((vid, idx) => {
-        const baseOffset = idx * step + step * 0.3;
-        const jitter = ((randomShuffleKey + idx * 7) % 5 - 2) * 60000;
-        const finalMs = Math.min(Math.max(startMs + baseOffset + jitter, startMs), endMs - 60000);
-        result[vid.id] = new Date(finalMs);
-      });
-    } else {
-      const randomOffsets = videos.map((_, idx) => {
-        const rand = (((randomShuffleKey + 1) * (idx + 3) * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-        return Math.floor(rand * (totalDuration - 60000));
-      }).sort((a, b) => a - b);
-
-      videos.forEach((vid, idx) => {
-        result[vid.id] = new Date(startMs + randomOffsets[idx]);
-      });
-    }
-
-    return result;
+    const itemIds = videos.length > 0 ? videos.map((v) => v.id) : ['preview_single'];
+    return computeRandomWindowTimes({
+      randomDate,
+      startTime: randomStartTime,
+      endTime: randomEndTime,
+      itemIds,
+      isEvenlySpaced,
+      shuffleKey: randomShuffleKey,
+      currentTime: new Date(),
+    });
   }, [randomDate, randomStartTime, randomEndTime, videos, isEvenlySpaced, randomShuffleKey]);
 
   const computedRandomSchedule = getComputedRandomTimes();
+  const windowStatus = getWindowStatus(randomDate, randomStartTime, randomEndTime, new Date());
   const [submitting, setSubmitting] = useState(false);
   const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});
 
@@ -769,14 +759,23 @@ export default function CreatePost() {
         toast.error('Vui lòng chọn ngày và khung giờ đăng ngẫu nhiên (F022).');
         return;
       }
-      const startMs = new Date(`${randomDate}T${randomStartTime}:00`).getTime();
-      const endMs = new Date(`${randomDate}T${randomEndTime}:00`).getTime();
+      const [startH, startM] = randomStartTime.split(':').map(Number);
+      const [endH, endM] = randomEndTime.split(':').map(Number);
+      const [yr, mo, da] = randomDate.split('-').map(Number);
+      const startMs = new Date(yr, mo - 1, da, startH, startM, 0, 0).getTime();
+      const endMs = new Date(yr, mo - 1, da, endH, endM, 0, 0).getTime();
       if (endMs <= startMs) {
         toast.error('Khung giờ không hợp lệ: Giờ kết thúc phải sau giờ bắt đầu.');
         return;
       }
-      if (endMs <= Date.now()) {
-        toast.error('Khung giờ lên lịch ngẫu nhiên phải ở tương lai.');
+      const nowMs = Date.now();
+      if (endMs <= nowMs) {
+        toast.error('Khung giờ lên lịch ngẫu nhiên đã qua so với thời gian hiện tại. Vui lòng chọn khung giờ khác.');
+        return;
+      }
+      const effectiveStartMs = Math.max(startMs, nowMs + 60000);
+      if (endMs <= effectiveStartMs) {
+        toast.error('Thời gian còn lại trong khung giờ quá ngắn (dưới 1 phút). Vui lòng chọn khung giờ khác.');
         return;
       }
     }
@@ -801,10 +800,18 @@ export default function CreatePost() {
         if (publishMode === 'schedule') {
           payloadScheduledAt = new Date(scheduledAt).toISOString();
         } else if (publishMode === 'random_window') {
-          const vidSched = computedRandomSchedule[video.id] || new Date(`${randomDate}T${randomStartTime}:00`);
+          const vidSched = computedRandomSchedule[video.id] || computedRandomSchedule['preview_single'];
+          if (!vidSched || vidSched.getTime() <= Date.now()) {
+            toast.error('Không thể xác định thời điểm đăng hợp lệ trong tương lai.');
+            setSubmitting(false);
+            return;
+          }
           payloadScheduledAt = vidSched.toISOString();
-          randomStartIso = new Date(`${randomDate}T${randomStartTime}:00`).toISOString();
-          randomEndIso = new Date(`${randomDate}T${randomEndTime}:00`).toISOString();
+          const [startH, startM] = randomStartTime.split(':').map(Number);
+          const [endH, endM] = randomEndTime.split(':').map(Number);
+          const [yr, mo, da] = randomDate.split('-').map(Number);
+          randomStartIso = new Date(yr, mo - 1, da, startH, startM, 0, 0).toISOString();
+          randomEndIso = new Date(yr, mo - 1, da, endH, endM, 0, 0).toISOString();
         }
 
         const res = await api.post('/posts', {
@@ -1487,7 +1494,7 @@ export default function CreatePost() {
                     type="date"
                     value={randomDate}
                     onChange={(e) => setRandomDate(e.target.value)}
-                    min={new Date().toISOString().slice(0, 10)}
+                    min={getLocalDateString(new Date())}
                     className="w-full py-2.5 px-3.5 text-sm font-medium border border-purple-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-400"
                   />
                 </div>
@@ -1500,19 +1507,38 @@ export default function CreatePost() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {GOLDEN_HOUR_PRESETS.map((p) => {
                       const isSelected = randomPreset === p.id;
+                      const disabled = isPresetDisabled(p, randomDate);
                       return (
                         <button
                           key={p.id}
                           type="button"
+                          disabled={disabled}
                           onClick={() => handleSelectPreset(p)}
                           className={`p-2.5 rounded-xl border text-left transition-all ${
-                            isSelected
+                            disabled
+                              ? 'border-gray-200 bg-gray-100/70 text-gray-400 cursor-not-allowed opacity-60'
+                              : isSelected
                               ? 'border-purple-600 bg-purple-600 text-white shadow-xs font-bold'
                               : 'border-purple-100 bg-white hover:bg-purple-50 text-gray-800'
                           }`}
                         >
-                          <div className="text-xs font-bold">{p.label}</div>
-                          <div className={`text-[11px] mt-0.5 ${isSelected ? 'text-purple-100' : 'text-purple-700 font-mono'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold">{p.label}</span>
+                            {disabled && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 font-semibold">
+                                Đã qua
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className={`text-[11px] mt-0.5 ${
+                              disabled
+                                ? 'text-gray-400'
+                                : isSelected
+                                ? 'text-purple-100'
+                                : 'text-purple-700 font-mono'
+                            }`}
+                          >
                             {p.id === 'custom' ? 'Tự nhập giờ' : `${p.start} – ${p.end}`}
                           </div>
                         </button>
@@ -1522,39 +1548,59 @@ export default function CreatePost() {
                 </div>
 
                 {/* Start Time & End Time Inputs */}
-                <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-purple-100">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-purple-600" />
-                      Giờ bắt đầu khung (Start):
-                    </label>
-                    <input
-                      type="time"
-                      value={randomStartTime}
-                      onChange={(e) => {
-                        setRandomStartTime(e.target.value);
-                        setRandomPreset('custom');
-                        setRandomShuffleKey((k) => k + 1);
-                      }}
-                      className="w-full py-2 px-3 text-sm font-semibold border border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-                    />
+                <div className="bg-white p-4 rounded-xl border border-purple-100 space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-purple-600" />
+                        Giờ bắt đầu khung (Start):
+                      </label>
+                      <input
+                        type="time"
+                        value={randomStartTime}
+                        onChange={(e) => {
+                          setRandomStartTime(e.target.value);
+                          setRandomPreset('custom');
+                          setRandomShuffleKey((k) => k + 1);
+                        }}
+                        className="w-full py-2 px-3 text-sm font-semibold border border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-purple-600" />
+                        Giờ kết thúc khung (End):
+                      </label>
+                      <input
+                        type="time"
+                        value={randomEndTime}
+                        onChange={(e) => {
+                          setRandomEndTime(e.target.value);
+                          setRandomPreset('custom');
+                          setRandomShuffleKey((k) => k + 1);
+                        }}
+                        className="w-full py-2 px-3 text-sm font-semibold border border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-purple-600" />
-                      Giờ kết thúc khung (End):
-                    </label>
-                    <input
-                      type="time"
-                      value={randomEndTime}
-                      onChange={(e) => {
-                        setRandomEndTime(e.target.value);
-                        setRandomPreset('custom');
-                        setRandomShuffleKey((k) => k + 1);
-                      }}
-                      className="w-full py-2 px-3 text-sm font-semibold border border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
+
+                  {windowStatus.isInProgress && (
+                    <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                      <Clock className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                      <span>
+                        Khung giờ đang diễn ra. Thời điểm đăng chỉ được random trong phần thời gian còn lại (từ giờ hiện tại đến {randomEndTime}).
+                      </span>
+                    </div>
+                  )}
+
+                  {windowStatus.isExpired && (
+                    <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-600" />
+                      <span>
+                        Khung giờ đã qua so với thời gian hiện tại. Vui lòng chọn khung giờ khác hoặc chuyển sang ngày mai.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Evenly Spaced Toggle for Multiple Videos */}
@@ -1592,8 +1638,13 @@ export default function CreatePost() {
                     </span>
                     <button
                       type="button"
+                      disabled={windowStatus.isExpired}
                       onClick={() => setRandomShuffleKey((k) => k + 1)}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 transition-colors"
+                      className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-lg transition-colors ${
+                        windowStatus.isExpired
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-purple-100 hover:bg-purple-200 text-purple-800'
+                      }`}
                       title="Bấm để sinh thời điểm ngẫu nhiên khác"
                     >
                       <Shuffle className="w-3.5 h-3.5" />
@@ -1602,12 +1653,17 @@ export default function CreatePost() {
                   </div>
 
                   <div className="space-y-1.5">
-                    {videos.length === 0 ? (
+                    {windowStatus.isExpired ? (
+                      <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 font-medium flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                        <span>Khung giờ đã qua so với thời gian hiện tại. Vui lòng chọn khung giờ khác hoặc đổi sang ngày mai.</span>
+                      </div>
+                    ) : videos.length === 0 ? (
                       <div className="p-3 rounded-lg bg-purple-50 text-xs text-purple-900 font-medium">
                         🎲 Dự kiến xuất bản lúc: <strong className="font-bold text-purple-700">
                           {computedRandomSchedule['preview_single']
                             ? safeFormatDate(computedRandomSchedule['preview_single'].toISOString(), 'HH:mm - EEEE, dd/MM/yyyy')
-                            : `${randomStartTime} - ${randomDate}`}
+                            : 'Chưa xác định'}
                         </strong>
                       </div>
                     ) : (
@@ -1622,7 +1678,7 @@ export default function CreatePost() {
                               Video #{idx + 1}: {vid.title || vid.originalFileName}
                             </span>
                             <span className="font-bold text-purple-700 font-mono bg-white px-2.5 py-1 rounded border border-purple-200">
-                              {vidTime ? safeFormatDate(vidTime.toISOString(), 'HH:mm (dd/MM)') : 'Đang tính...'}
+                              {vidTime ? safeFormatDate(vidTime.toISOString(), 'HH:mm (dd/MM)') : 'Không hợp lệ'}
                             </span>
                           </div>
                         );
