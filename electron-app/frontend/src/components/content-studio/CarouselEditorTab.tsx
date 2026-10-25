@@ -72,10 +72,10 @@ export function CarouselEditorTab() {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const formData = new FormData();
-        formData.append('video', file); // upload endpoint handles media
+        formData.append('file', file);
 
         try {
-          const res = await api.post('/upload', formData);
+          const res = await api.post('/media', formData);
           if (res.data?.storageUrl) {
             newSlides.push({
               id: `slide_${Date.now()}_${i}`,

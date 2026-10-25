@@ -115,7 +115,7 @@ describe('POST /api/upload', () => {
 
     // Verify storage was called
     expect(getStorage).toHaveBeenCalled();
-    expect(mockStorage.upload).toHaveBeenCalledWith(expect.any(Buffer), 'test.mp4');
+    expect(mockStorage.upload).toHaveBeenCalledWith(expect.anything(), 'test.mp4', 'video/mp4');
 
     // Verify DB insertion
     expect(prisma.videoAsset.create).toHaveBeenCalledWith({

@@ -12,6 +12,34 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] (v1.3.21) — Sửa Lỗi Tải Video Lên Thư Viện Media (Tệp tin) Báo Lỗi Server (F114)
+
+### Phân hệ M2. Thư viện Media & Tệp tin (F114) [Electron App & Backend API]:
+- **[F114] Khắc phục lỗi tải file video lên Thư viện Media (Tệp tin) bị báo "Lỗi khi tải file lên server":**
+  - **Vấn đề ghi nhận từ Tester:**
+    - Mở app Topify > Click "Thư viện Media (Tệp tin)" > Click "Tải File Mới".
+    - Chọn file video dung lượng thấp (~2 MB) để tải lên.
+    - Hệ thống lập tức báo lỗi Toast: `"Lỗi khi tải file lên server"`, video không được tải lên và không hiển thị trong thư viện.
+  - **Nguyên nhân gốc rễ:**
+    1. Trong trang [`MediaLibrary.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/MediaLibrary.tsx) của Electron App, hàm `handleFileUpload` gửi request tải file nhầm đến endpoint `api.post('/upload', formData)` thay vì `api.post('/media', formData)`.
+    2. Endpoint `/api/upload` là endpoint chuyên biệt dành riêng cho tạo Reel Video (`VideoAsset`), yêu cầu tham số FormData có key là `'video'`. Trong khi đó, `MediaLibrary.tsx` truyền FormData có key là `'file'`, khiến `/api/upload` trả về lỗi HTTP `400 Bad Request: "No video file provided"`.
+    3. Ngoài ra, việc gán thủ công header `'Content-Type': 'multipart/form-data'` trong Axios call làm mất thông tin boundary phân cách multipart payload.
+    4. Tại backend [`app/api/media/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/media/route.ts), nếu client tải file video mà browser không gán MIME type (hoặc gán `application/octet-stream`), hệ thống trước đây phân loại sai thành `mediaType: 'DOCUMENT'` và không truyền `mimeType` cho Storage provider.
+  - **Giải pháp xử lý:**
+    1. **Sửa endpoint tải file trong Electron App ([`MediaLibrary.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/MediaLibrary.tsx)):**
+       - Đổi lời gọi tải file sang `api.post('/media', formData)` để lưu đúng vào thực thể `MediaAsset`.
+       - Bỏ header `Content-Type` thủ công để trình duyệt tự động sinh multipart boundary hợp lệ.
+       - Cập nhật state danh sách `assets` ngay lập tức khi tải lên thành công, đồng thời bóc tách chi tiết thông báo lỗi từ server nếu có sự cố mạng/quyền truy cập.
+       - Đồng bộ hóa logic upload trong [`CarouselEditorTab.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/CarouselEditorTab.tsx) sang endpoint `/media` thay vì `/upload`.
+    2. **Tối ưu Backend API Media ([`app/api/media/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/media/route.ts)):**
+       - Bổ sung cơ chế tự động suy luận MIME type theo phần mở rộng đuôi file (`.mp4`, `.mov`, `.webm`, `.mkv`, `.avi`, v.v.) khi `file.type` trống.
+       - Tự động nhận diện chính xác `mediaType: 'VIDEO'` cho toàn bộ các định dạng video phổ biến.
+       - Truyền `mimeType` vào `storage.upload(buffer, fileName, mimeType)` để các bộ lưu trữ (Supabase/S3/Local) thiết lập Content-Type chính xác.
+       - Tự động fallback tìm `workspaceId` từ cơ sở dữ liệu nếu thông tin phiên đăng nhập chưa có `workspaceId`.
+    3. **Tương thích ngược & Bảo vệ phân quyền ([`app/api/upload/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/upload/route.ts), [`app/api/media/[id]/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/media/[id]/route.ts)):**
+       - Cho phép `/api/upload` nhận cả key `'video'` lẫn key `'file'` để tránh lỗi 400 nếu client gửi khác tên field.
+       - Bổ sung hàm kiểm tra quyền truy cập `canAccessAsset` trong `GET/PUT/DELETE /api/media/[id]` hỗ trợ Super Admin, người sở hữu file và thành viên cùng Workspace.
+
 ## 🚀 [2026-10-26] (v1.3.20) — Khắc Phục Lỗi Đăng Ngay Kèm Bật Evergreen Không Đăng Ngay & Tự Động Tái Đăng Theo Chu Kỳ (F083)
 
 ### Phân hệ M2. Quản lý bài viết & Content Studio (Chế độ đăng ngay kết hợp Evergreen Content F083):

@@ -69,16 +69,17 @@ export default function MediaLibrary() {
 
     setIsUploading(true);
     try {
-      const res = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post('/media', formData);
 
       if (res.data) {
         toast.success(`Đã tải lên "${file.name}" thành công!`);
+        setAssets(prev => [res.data, ...prev.filter(a => a.id !== res.data.id)]);
         fetchAssets();
       }
-    } catch {
-      toast.error('Lỗi khi tải file lên server');
+    } catch (err: any) {
+      console.error('Lỗi khi tải file media lên server:', err);
+      const msg = err?.response?.data?.error || err?.message || 'Vui lòng kiểm tra kết nối mạng';
+      toast.error(`Lỗi khi tải file lên server: ${msg}`);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
