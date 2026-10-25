@@ -726,13 +726,16 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                               </div>
                             </td>
                             <td className="p-3 whitespace-nowrap text-gray-600 font-mono">
-                              {row.scheduledAt ? (
+                              {row.scheduledAt && row.scheduledAt !== 'NOW' ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700">
                                   <Calendar className="w-3 h-3 text-purple-600" />
                                   {safeFormatDate(row.scheduledAt, 'HH:mm (dd/MM)')}
                                 </span>
                               ) : (
-                                <span className="text-[11px] text-gray-400 italic">Bản thảo (Draft)</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                  <Sparkles className="w-3 h-3 text-emerald-600" />
+                                  Now (Đăng ngay)
+                                </span>
                               )}
                             </td>
                             <td className="p-3 text-center">

@@ -151,5 +151,80 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     expect(first.isValid).toBe(true);
     expect(first.warnings.some((w) => w.includes('YouTube') && w.toLowerCase().includes('video thông thường'))).toBe(true);
   });
+
+  it('defaults to publish now (valid with 0 warnings) when scheduled time is empty', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Top 3 bí quyết xây kênh TikTok 1',
+        'Nội dung': 'Kịch bản chi tiết 3 bước giữ chân người xem...',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+      {
+        'Tiêu đề': 'Chiến lược tối ưu kịch bản video',
+        'Nội dung': 'Review góc quay và bố cục món ăn chuẩn viral...',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+      {
+        'Tiêu đề': 'Bí mật tăng tương tác tự nhiên k',
+        'Nội dung': 'Cách đặt câu hỏi kích thích thảo luận...',
+        'Nền tảng': 'FACEBOOK',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.totalRows).toBe(3);
+    expect(result.validRows).toBe(3);
+    expect(result.warningRows).toBe(0);
+    expect(result.invalidRows).toBe(0);
+
+    for (const row of result.rows) {
+      expect(row.isValid).toBe(true);
+      expect(row.warnings.length).toBe(0);
+      expect(row.scheduledAt).toBeNull();
+    }
+  });
+
+  it('treats "now" and "đăng ngay" as valid publish now without draft warnings', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Bài viết đăng ngay 1',
+        'Nội dung': 'Nội dung bài viết 1',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': 'now',
+      },
+      {
+        'Tiêu đề': 'Bài viết đăng ngay 2',
+        'Nội dung': 'Nội dung bài viết 2',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': 'Đăng ngay',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(2);
+    expect(result.warningRows).toBe(0);
+    expect(result.invalidRows).toBe(0);
+
+    expect(result.rows[0].warnings.length).toBe(0);
+    expect(result.rows[1].warnings.length).toBe(0);
+  });
 });
 

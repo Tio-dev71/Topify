@@ -105,8 +105,8 @@ function parsePlatformList(raw: string | undefined | null): string[] {
   return unique.length > 0 ? unique : ['FACEBOOK_REELS'];
 }
 
-function parseScheduleDateTime(val: any): { iso: string | null; warning?: string } {
-  if (!val) return { iso: null };
+function parseScheduleDateTime(val: any): { iso: string | null; warning?: string; isNow?: boolean } {
+  if (val === undefined || val === null || val === '') return { iso: null, isNow: true };
 
   // Handle Excel serial date numbers
   if (typeof val === 'number') {
@@ -124,7 +124,20 @@ function parseScheduleDateTime(val: any): { iso: string | null; warning?: string
   }
 
   const str = String(val).trim();
-  if (!str) return { iso: null };
+  if (!str) return { iso: null, isNow: true };
+
+  const lower = str.toLowerCase();
+  if (
+    lower === 'now' ||
+    lower === 'đăng ngay' ||
+    lower === 'dang ngay' ||
+    lower === 'đăng luôn' ||
+    lower === 'dang luon' ||
+    lower === 'publish now' ||
+    lower === 'immediate'
+  ) {
+    return { iso: null, isNow: true };
+  }
 
   // Common Vietnamese/International formats:
   // "25/10/2026 19:30" or "25-10-2026 19:30"
@@ -250,8 +263,6 @@ export function parseExcelOrCsvBuffer(
       const { iso: scheduledAt, warning: dateWarning } = parseScheduleDateTime(normalizedRow.scheduledAt);
       if (dateWarning) {
         warnings.push(dateWarning);
-      } else if (!scheduledAt) {
-        warnings.push('Không có lịch hẹn -> Bài viết sẽ lưu dưới dạng Bản Thảo (Draft).');
       }
 
       // YouTube Shorts duration > 180s: add warning, do NOT block

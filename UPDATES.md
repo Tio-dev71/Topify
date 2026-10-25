@@ -12,7 +12,49 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
-## 🚀 [2026-10-26] — Sửa Lỗi Bài Viết Đã Lên Lịch Không Hiển Thị Trên Lịch Nội Dung (Calendar - F021)
+## 🚀 [2026-10-26] (v1.3.15) — Sửa Lỗi Import Bài Viết Hàng Loạt: Để Trống Thời Gian Mặc Định Đăng Ngay (F019)
+
+### Phân hệ M2. Content Studio (Import bài viết hàng loạt Excel & Google Drive - F019):
+- **[F019] Khắc phục lỗi để trống cột Thời gian bị gán nhãn "Bản thảo (Draft)" và dính cảnh báo vàng thay vì mặc định Đăng ngay (Now):**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Người dùng mở *Import Bài Viết Hàng Loạt (Excel & Google Drive)*, chọn file Excel (hoặc link Google Sheets) có 3 bài viết nền tảng FACEBOOK và để trống cột Thời gian.
+    - **Thực tế bị lỗi:**
+      - Cột *Thời gian* của cả 3 bài hiển thị chữ nghiêng màu xám `"Bản thảo (Draft)"`.
+      - Cột *Trạng thái* của cả 3 bài bị chuyển thành `"Có cảnh báo"` (Hộp đếm trên cùng: Hợp lệ 3, Có cảnh báo 3, Không hợp lệ 0).
+      - Khi bấm lưu bài viết mà không chọn "Lưu dạng Bản Thảo (Draft)", hệ thống vẫn lưu bài với trạng thái `DRAFT` thay vì đăng ngay.
+    - **Kỳ vọng chuẩn:**
+      - Khi để trống cột Thời gian, mặc định là đăng ngay (đăng luôn).
+      - Màn xem trước phải hiển thị huy hiệu thời gian là `"Now" (Đăng ngay)` với màu xanh lá nổi bật, không hiển thị là bản thảo.
+      - Trạng thái dòng phải là `"Hợp lệ"` màu xanh lá (Hợp lệ 3, Có cảnh báo 0, Không hợp lệ 0) vì không có lỗi hay cảnh báo nào.
+      - Áp dụng tương tự cho cả luồng Import file Excel/CSV và *Lấy thông tin từ Google Sheets*.
+  - **Nguyên nhân gốc rễ:**
+    1. **Tự động chèn cảnh báo Draft trong bộ phân tích mã nguồn ([`lib/content-studio/import-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts)):**
+       - Tại hàm `parseExcelOrCsvBuffer`, code cũ kiểm tra `else if (!scheduledAt) { warnings.push('Không có lịch hẹn -> Bài viết sẽ lưu dưới dạng Bản Thảo (Draft).'); }`. Dẫn đến mọi dòng bài viết để trống giờ đăng đều bị nhét cảnh báo không mong muốn vào mảng `warnings`.
+       - Tại hàm `parseScheduleDateTime`, khi giá trị để trống chỉ trả về `{ iso: null }` mà không đánh dấu cờ `isNow: true`, đồng thời chưa hỗ trợ các chuỗi đại diện cho đăng ngay như `'now'`, `'đăng ngay'`, `'đăng luôn'`.
+    2. **Giao diện xem trước Desktop App ([`ImportPostsModal.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Tại cột Thời gian, điều kiện render cũ là `row.scheduledAt ? ... : <span className="text-gray-400 italic">Bản thảo (Draft)</span>`. Khi `scheduledAt` là rỗng hoặc `NOW`, nó luôn hiển thị văn bản `"Bản thảo (Draft)"`.
+    3. **Backend API lưu bài viết ([`app/api/content-studio/import/save/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/content-studio/import/save/route.ts)):**
+       - Khi người dùng bấm nút *"Xác Nhận Lên Lịch & Lưu Bài"* (`importAsDraft: false`), nếu `item.scheduledAt` để trống, code cũ gán mặc định `status: 'DRAFT'` thay vì chuyển thành `status: 'PUBLISHING'` và gọi `enqueuePublish(post.id)`.
+  - **Giải pháp xử lý triệt để:**
+    1. **Nâng cấp `parseScheduleDateTime` & `parseExcelOrCsvBuffer` ([`lib/content-studio/import-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts)):**
+       - Khi cột Thời gian để trống (`null`, `undefined`, `''`) hoặc chứa các từ khóa (`'now'`, `'đăng ngay'`, `'đăng luôn'`, `'publish now'`, `'immediate'`), trả về `{ iso: null, isNow: true }` hoàn toàn sạch, không phát sinh bất kỳ warning nào.
+       - Xóa bỏ cảnh báo tự động `Không có lịch hẹn -> Bài viết sẽ lưu dưới dạng Bản Thảo (Draft).`. Dữ liệu 3 bài viết hợp lệ sẽ có `warningRows = 0`, hiển thị nhãn `"Hợp lệ"` xanh chuẩn xác.
+       - Áp dụng đồng bộ cho cả tải file Excel/CSV cục bộ và lấy dữ liệu trực tiếp từ link Google Sheets công khai (qua `fetchAndParseGoogleSheet`).
+    2. **Cập nhật giao diện xem trước ([`ImportPostsModal.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Khi `!row.scheduledAt || row.scheduledAt === 'NOW'`, hiển thị badge trực quan:
+         `<span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200"><Sparkles className="w-3 h-3 text-emerald-600" />Now (Đăng ngay)</span>`.
+       - Chỉ khi bài viết có thời gian cụ thể mới hiển thị ngày giờ màu tím với icon Calendar.
+    3. **Tự động kích hoạt Đăng ngay khi xác nhận lưu bài ([`app/api/content-studio/import/save/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/content-studio/import/save/route.ts)):**
+       - Phân định rõ ràng:
+         - Nếu người dùng chủ động click nút *"Lưu dạng Bản Thảo (Draft)"* (`importAsDraft: true`) $\rightarrow$ tạo bài viết với `status: 'DRAFT'`.
+         - Nếu người dùng click nút *"Xác Nhận Lên Lịch & Lưu Bài"* (`importAsDraft: false`):
+           - Nếu có `scheduledAt` trong tương lai $\rightarrow$ `status: 'SCHEDULED'`, kích hoạt `schedulePublish(post.id, post.scheduledAt)`.
+           - Nếu để trống `scheduledAt` hoặc `'NOW'` $\rightarrow$ `status: 'PUBLISHING'`, lập tức đưa vào hàng đợi đăng qua `enqueuePublish(post.id)`.
+    4. **Bổ sung Unit Tests ([`__tests__/api/content-studio/import.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/import.test.ts)):**
+       - Thêm test case xác thực tệp 3 bài viết để trống cột Thời gian: `validRows = 3`, `warningRows = 0`, `invalidRows = 0`, `warnings.length = 0`.
+       - Thêm test case nhận diện các chuỗi `'now'`, `'Đăng ngay'` là hợp lệ với 0 cảnh báo.
+
+## 🚀 [2026-10-26] (v1.3.14) — Sửa Lỗi Bài Viết Đã Lên Lịch Không Hiển Thị Trên Lịch Nội Dung (Calendar - F021)
 
 ### Phân hệ M2. Content Studio (Lịch nội dung & Kế hoạch xuất bản - F021):
 - **[F021] Khắc phục lỗi bài viết đã lên lịch ở Quản lý bài viết hoặc Import Google Sheet/Excel không hiển thị trên Lịch nội dung:**

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { schedulePublish } from '@/lib/queue';
+import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
 import { isPlatformProviderConnected, PLATFORM_PROVIDER_INFO } from '@/lib/content-studio/import-engine';
@@ -112,15 +112,22 @@ export async function POST(req: NextRequest) {
         }
 
         // Determine scheduling
-        let status: 'DRAFT' | 'SCHEDULED' = 'DRAFT';
+        let status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' = 'DRAFT';
         let finalScheduledAt: Date | null = null;
 
-        if (!importAsDraft && item.scheduledAt) {
+        if (importAsDraft) {
+          status = 'DRAFT';
+        } else if (item.scheduledAt && item.scheduledAt !== 'NOW') {
           const parsedDate = new Date(item.scheduledAt);
           if (!isNaN(parsedDate.getTime()) && parsedDate.getTime() > Date.now()) {
             status = 'SCHEDULED';
             finalScheduledAt = parsedDate;
+          } else {
+            status = 'PUBLISHING';
           }
+        } else {
+          // Empty or 'NOW' and !importAsDraft -> default is Đăng ngay (Publish now)!
+          status = 'PUBLISHING';
         }
 
         const post = await tx.post.create({
@@ -157,8 +164,14 @@ export async function POST(req: NextRequest) {
 
     for (const post of results) {
       createdPostIds.push(post.id);
-      // Queue publish job if scheduled
-      if (post.status === 'SCHEDULED' && post.scheduledAt) {
+      // Queue publish job if scheduled or publish now
+      if (post.status === 'PUBLISHING') {
+        try {
+          await enqueuePublish(post.id);
+        } catch (e: any) {
+          console.warn(`[ImportPost] Queue publish now warning for ${post.id}:`, e.message);
+        }
+      } else if (post.status === 'SCHEDULED' && post.scheduledAt) {
         try {
           await schedulePublish(post.id, post.scheduledAt);
           if (post.scheduledAt <= new Date()) {
