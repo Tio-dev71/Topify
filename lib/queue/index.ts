@@ -46,12 +46,29 @@ export const publishQueue = isBuild ? { add: async () => {} } as any : new Queue
  * Add a post to the publish queue for immediate processing
  */
 export async function enqueuePublish(postId: string) {
+  let queuedToWorker = false;
   try {
-    await publishQueue.add('publish', { postId }, {
-      jobId: `publish-${postId}-${Date.now()}`,
-    });
+    const workers = await Promise.race([
+      publishQueue.getWorkers(),
+      new Promise<any[]>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout checking BullMQ workers')), 1500)
+      ),
+    ]);
+
+    if (workers && workers.length > 0) {
+      await publishQueue.add('publish', { postId }, {
+        jobId: `publish-${postId}-${Date.now()}`,
+      });
+      queuedToWorker = true;
+      console.log(`[Queue] Đã chuyển bài viết ${postId} vào hàng đợi cho BullMQ Worker xử lý.`);
+    } else {
+      console.log(`[Queue] Không phát hiện BullMQ Worker nào đang lắng nghe. Tự động xuất bản trực tiếp ngay lập tức cho bài: ${postId}`);
+    }
   } catch (err: any) {
-    console.warn(`[Queue] Không thể kết nối Redis (${err.message}). Tự động xuất bản trực tiếp cho bài: ${postId}`);
+    console.warn(`[Queue] Không thể kết nối hoặc truy vấn Redis worker (${err.message}). Tự động xuất bản trực tiếp cho bài: ${postId}`);
+  }
+
+  if (!queuedToWorker) {
     const { publishPostDirectly } = await import('./publisher-service');
     publishPostDirectly(postId).catch((directErr) => {
       console.error(`[Queue] Lỗi khi xuất bản trực tiếp cho bài ${postId}:`, directErr);

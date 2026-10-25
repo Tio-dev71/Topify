@@ -87,6 +87,51 @@ describe('Evergreen & Recycle Content API (F083)', () => {
       expect(data.suggestions[0].id).toBe('post_evergreen_1');
       expect(data.suggestions[0].isDue).toBe(true);
       expect(data.suggestions[0].daysOverdue).toBeGreaterThanOrEqual(14);
+      expect(data.suggestions[0].nextRecycleDate).toBeDefined();
+    });
+
+    it('calculates nextRecycleDate and daysUntilRecycle for newly published 2-day evergreen post', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'user_1', workspaceId: 'ws_1' },
+      } as any);
+
+      const now = new Date();
+
+      // Post published today with 2-day recycle interval
+      vi.mocked(prisma.post.findMany)
+        .mockResolvedValueOnce([
+          {
+            id: 'post_evergreen_new',
+            title: 'Bài viết đăng ngay kèm Evergreen 2 ngày',
+            caption: 'Nội dung luôn tươi mới',
+            status: 'PUBLISHED',
+            isEvergreen: true,
+            recycleIntervalDays: 2,
+            publishedAt: now,
+            lastRecycledAt: null,
+            createdAt: now,
+            recycleCount: 0,
+            media: [],
+            platforms: [{ platform: 'TIKTOK_VIDEO', status: 'PUBLISHED' }],
+            createdBy: { name: 'Admin', email: 'admin@test.com' },
+          },
+        ] as any)
+        .mockResolvedValueOnce([] as any); // no recycled children yet
+
+      const req = new NextRequest('http://localhost/api/content/evergreen?tab=all');
+      const res = await GET(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(data.metrics.totalEvergreen).toBe(1);
+      expect(data.metrics.dueCount).toBe(0);
+      expect(data.library.length).toBe(1);
+      expect(data.library[0].id).toBe('post_evergreen_new');
+      expect(data.library[0].isDue).toBe(false);
+      expect(data.library[0].daysUntilRecycle).toBe(2);
+      expect(data.library[0].nextRecycleDate).toBeDefined();
+      const nextDate = new Date(data.library[0].nextRecycleDate);
+      expect(nextDate.getTime()).toBeGreaterThan(now.getTime());
     });
   });
 

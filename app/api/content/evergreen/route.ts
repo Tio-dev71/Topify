@@ -77,6 +77,24 @@ export async function GET(req: NextRequest) {
     const suggestions: any[] = [];
     const library: any[] = [];
 
+    const evergreenPostIds = evergreenPosts.map((p) => p.id);
+    const recycledPosts = evergreenPostIds.length > 0
+      ? await prisma.post.findMany({
+          where: {
+            originalPostId: { in: evergreenPostIds },
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            publishedAt: true,
+            createdAt: true,
+            originalPostId: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+
     for (const post of evergreenPosts) {
       totalRecycledCount += post.recycleCount || 0;
 
@@ -90,6 +108,12 @@ export async function GET(req: NextRequest) {
       const isDue = post.status === 'PUBLISHED' && daysSinceLastPublished >= interval;
       const daysOverdue = isDue ? daysSinceLastPublished - interval : 0;
 
+      const nextRecycleTime = referenceDate + (interval * 24 * 60 * 60 * 1000);
+      const nextRecycleDate = new Date(nextRecycleTime).toISOString();
+      const daysUntilRecycle = Math.max(0, Math.ceil((nextRecycleTime - now) / (1000 * 60 * 60 * 24)));
+
+      const postRecycledChildren = recycledPosts.filter((rp) => rp.originalPostId === post.id);
+
       const postWithMeta = {
         ...post,
         media: post.media?.map((m: any) => ({
@@ -100,6 +124,9 @@ export async function GET(req: NextRequest) {
         daysSinceLastPublished,
         isDue,
         daysOverdue,
+        nextRecycleDate,
+        daysUntilRecycle,
+        recycledPosts: postRecycledChildren,
       };
 
       library.push(postWithMeta);

@@ -324,32 +324,114 @@ export async function checkAndPublishDuePosts(): Promise<{
       take: 20,
     });
 
-    if (duePosts.length === 0) {
-      return { processedCount: 0, results: [] };
-    }
-
-    console.log(`⏰ [SCHEDULE-CRON] Phát hiện ${duePosts.length} bài viết đến hạn cần xuất bản!`);
-
     const results: Array<{ id: string; title: string; status: string }> = [];
 
-    for (const post of duePosts) {
-      console.log(`⏰ [SCHEDULE-CRON] Đang kích hoạt đăng bài hẹn giờ: ${post.id} ("${post.title}")`);
+    // 1. Process scheduled posts and rescue stuck publishing posts
+    if (duePosts.length > 0) {
+      console.log(`⏰ [SCHEDULE-CRON] Phát hiện ${duePosts.length} bài viết đến hạn cần xuất bản!`);
 
-      try {
-        const res = await publishPostDirectly(post.id);
-        results.push({
-          id: post.id,
-          title: post.title,
-          status: res.status,
-        });
-      } catch (postErr: any) {
-        console.error(`❌ [SCHEDULE-CRON] Lỗi khi xử lý bài hẹn giờ ${post.id}:`, postErr);
-        results.push({
-          id: post.id,
-          title: post.title,
-          status: 'ERROR: ' + postErr.message,
-        });
+      for (const post of duePosts) {
+        console.log(`⏰ [SCHEDULE-CRON] Đang kích hoạt đăng bài hẹn giờ: ${post.id} ("${post.title}")`);
+
+        try {
+          const res = await publishPostDirectly(post.id);
+          results.push({
+            id: post.id,
+            title: post.title,
+            status: res.status,
+          });
+        } catch (postErr: any) {
+          console.error(`❌ [SCHEDULE-CRON] Lỗi khi xử lý bài hẹn giờ ${post.id}:`, postErr);
+          results.push({
+            id: post.id,
+            title: post.title,
+            status: 'ERROR: ' + postErr.message,
+          });
+        }
       }
+    }
+
+    // 2. Process Evergreen posts that have reached their recycling cycle (F083)
+    try {
+      const dueEvergreenCandidates = await prisma.post.findMany({
+        where: {
+          isEvergreen: true,
+          status: 'PUBLISHED',
+        },
+        include: {
+          platforms: true,
+          media: true,
+        },
+        take: 20,
+      });
+
+      const nowMs = now.getTime();
+      for (const egPost of dueEvergreenCandidates) {
+        const referenceDate = egPost.lastRecycledAt
+          ? new Date(egPost.lastRecycledAt).getTime()
+          : (egPost.publishedAt ? new Date(egPost.publishedAt).getTime() : new Date(egPost.createdAt).getTime());
+
+        const intervalDays = egPost.recycleIntervalDays || 30;
+        const intervalMs = intervalDays * 24 * 60 * 60 * 1000;
+
+        if (nowMs - referenceDate >= intervalMs) {
+          console.log(`♻️ [EVERGREEN-AUTO] Bài viết Evergreen ${egPost.id} ("${egPost.title}") đã đến chu kỳ ${intervalDays} ngày. Đang tự động tạo bài tái đăng mới...`);
+          try {
+            // Create the recycled child post
+            const recycledPost = await prisma.post.create({
+              data: {
+                title: egPost.title,
+                caption: egPost.caption,
+                firstComment: egPost.firstComment,
+                hashtags: egPost.hashtags,
+                videoAssetId: egPost.videoAssetId,
+                postType: egPost.postType,
+                createdById: egPost.createdById,
+                workspaceId: egPost.workspaceId,
+                status: 'PUBLISHING',
+                scheduledAt: now,
+                originalPostId: egPost.id,
+                isEvergreen: false,
+                platforms: {
+                  create: egPost.platforms.map((p) => ({
+                    platform: p.platform,
+                    status: 'PENDING',
+                  })),
+                },
+                media: egPost.media && egPost.media.length > 0 ? {
+                  create: egPost.media.map((m) => ({
+                    mediaAssetId: m.mediaAssetId,
+                    sortOrder: m.sortOrder,
+                    caption: m.caption,
+                  })),
+                } : undefined,
+              },
+            });
+
+            // Update the original evergreen post stats
+            await prisma.post.update({
+              where: { id: egPost.id },
+              data: {
+                lastRecycledAt: now,
+                recycleCount: { increment: 1 },
+              },
+            });
+
+            // Publish recycled post immediately
+            const res = await publishPostDirectly(recycledPost.id);
+            results.push({
+              id: recycledPost.id,
+              title: `[Evergreen Recycle] ${recycledPost.title}`,
+              status: res.status,
+            });
+            console.log(`✅ [EVERGREEN-AUTO] Tự động tái xuất bản bài viết ${recycledPost.id} thành công với trạng thái: ${res.status}`);
+          } catch (recycleErr: any) {
+            console.error(`❌ [EVERGREEN-AUTO] Lỗi khi tự động tái đăng bài ${egPost.id}:`, recycleErr);
+          }
+        }
+      }
+    } catch (egErr: any) {
+      console.warn('⚠️ [EVERGREEN-AUTO] Lỗi kiểm tra bài viết Evergreen:', egErr.message);
     }
 
     return { processedCount: results.length, results };

@@ -12,6 +12,39 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] (v1.3.20) — Khắc Phục Lỗi Đăng Ngay Kèm Bật Evergreen Không Đăng Ngay & Tự Động Tái Đăng Theo Chu Kỳ (F083)
+
+### Phân hệ M2. Quản lý bài viết & Content Studio (Chế độ đăng ngay kết hợp Evergreen Content F083):
+- **[F083] Khắc phục lỗi bài viết "Đăng ngay" kèm Evergreen bị treo không đăng ngay và hệ thống tự động tái xuất bản khi đến chu kỳ:**
+  - **Vấn đề ghi nhận từ Tester:**
+    - Khi người dùng ở trang Tạo bài viết chọn "Chế độ đăng bài: Đăng ngay", đồng thời bật tùy chọn "Nội dung Evergreen (Tái đăng định kỳ)" với Chu kỳ tái xuất bản 2 ngày, sau đó bấm "Đăng ngay 1 Video".
+    - Thực tế bài viết không được xuất bản ngay lập tức mà bị treo ở trạng thái "Đang đăng..." hoặc người dùng lầm tưởng hệ thống chờ đến chu kỳ 2 ngày mới đăng. Đồng thời khi đến hạn 2 ngày, không có bài viết mới nào được tự động lên lịch đăng.
+    - Vào menu "Nội dung Evergreen", tab mặc định "Cần tái đăng" hiển thị trống "Chưa có bài viết nào" vì bài viết mới tạo chưa quá hạn chu kỳ.
+  - **Nguyên nhân gốc rễ:**
+    1. Khi chọn `publishMode === 'now'`, endpoint `POST /api/posts` gọi `enqueuePublish(post.id)`. Hàm này đẩy job vào hàng đợi Redis BullMQ `publishQueue.add`. Tuy nhiên trong môi trường Electron App (hoặc khi chạy Next.js dev thông thường), không có tiến trình BullMQ worker (`worker.ts`) chạy nền độc lập để bốc job từ Redis. Job nằm chờ vô thời hạn trong Redis và bài viết không bao giờ được xuất bản ngay.
+    2. Tiến trình quét ngầm `checkAndPublishDuePosts` (`publisher-service.ts`) trước đây chỉ xử lý bài `SCHEDULED` và bài bị kẹt, hoàn toàn không có logic kiểm tra chu kỳ của các bài Evergreen (`isEvergreen: true, status: 'PUBLISHED'`). Do đó khi chu kỳ (ví dụ 2 ngày) trôi qua, không có hành động tự động nhân bản hay tái đăng bài viết mới nào được kích hoạt.
+    3. Trang quản lý Evergreen (`Evergreen.tsx`) mở mặc định ở tab `suggestions` ("🔥 Cần tái đăng"). Khi một bài Evergreen vừa được tạo thì `dueCount === 0`, dẫn đến màn hình thông báo trống, gây hiểu lầm là bài viết chưa được ghi nhận vào kho Evergreen. Thẻ bài viết cũng chỉ ghi chu kỳ mà chưa hiển thị ngày dự kiến tái bản tự động tiếp theo.
+  - **Giải pháp xử lý:**
+    1. **Đảm bảo bài "Đăng ngay" luôn được xuất bản ngay lập tức ([`lib/queue/index.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/queue/index.ts)):**
+       - Hàm `enqueuePublish` kiểm tra `publishQueue.getWorkers()`.
+       - Nếu có BullMQ worker đang lắng nghe thì chuyển job cho Worker xử lý như bình thường.
+       - Nếu không có worker nào (môi trường Electron app / dev không chạy `worker.ts`) hoặc Redis bị ngắt kết nối/quá thời gian phản hồi, hệ thống tự động fallback gọi trực tiếp `publishPostDirectly(postId)` chạy ngầm không chặn. Nhờ tính chất idempotent của `publishPostDirectly` (kiểm tra `platform.status === 'PUBLISHED'`), bài viết được đăng ngay lập tức an toàn 100%.
+    2. **Tự động quét và tái xuất bản theo chu kỳ Evergreen ([`lib/queue/publisher-service.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/queue/publisher-service.ts)):**
+       - Trong tiến trình định kỳ `checkAndPublishDuePosts` (chạy mỗi 20 giây và mỗi lần mở danh sách bài viết), bổ sung bước quét các bài viết Evergreen `status === 'PUBLISHED'`.
+       - So sánh thời gian hiện tại với mốc tham chiếu `referenceDate` (`lastRecycledAt || publishedAt || createdAt`). Khi `now - referenceDate >= recycleIntervalDays * 86400000`, hệ thống tự động:
+         - Tạo bài viết con tái bản mang `originalPostId: egPost.id`, sao chép toàn bộ thông tin nền tảng, media, video, caption.
+         - Cập nhật bài Evergreen gốc: gán `lastRecycledAt = now`, tăng số lần tái bản `recycleCount += 1`.
+         - Kích hoạt đăng bài trực tiếp ngay lập tức cho bài viết con vừa được nhân bản.
+    3. **Tính toán lịch tái bản dự kiến và lịch sử tái đăng ([`app/api/content/evergreen/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/content/evergreen/route.ts)):**
+       - Bổ sung trường `nextRecycleDate` (chuẩn ISO) và `daysUntilRecycle` (số ngày còn lại đến chu kỳ tái bản).
+       - Truy vấn và trả về danh sách các bài viết con đã được tái sinh (`recycledPosts`).
+    4. **Cải tiến trải nghiệm người dùng trong Menu Nội dung Evergreen ([`Evergreen.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Evergreen.tsx) & [`page.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/app/%28dashboard%29/dashboard/content/evergreen/page.tsx)):**
+       - Tự động chuyển thông minh sang tab "📚 Thư viện bài" nếu tab "🔥 Cần tái đăng" chưa có bài đến hạn (`dueCount === 0 && totalEvergreen > 0`), giúp người dùng thấy ngay bài viết vừa tạo.
+       - Trên thẻ bài viết hiển thị rõ: *"Đăng gần nhất: Vừa mới đăng hôm nay"*, badge *"Chu kỳ 2 ngày"*, và khung *"Tự động tái đăng: dd/MM/yyyy (còn 2 ngày)"*.
+       - Hiển thị danh sách các bài đã tái đăng thành công bên dưới bài gốc.
+    5. **Kiểm thử tự động hóa ([`__tests__/api/content/evergreen.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content/evergreen.test.ts)):**
+       - Bổ sung test case kiểm thử tính toán `nextRecycleDate` và `daysUntilRecycle` cho bài đăng ngay kèm Evergreen chu kỳ 2 ngày. Tất cả 4/4 test cases đều Passed 100%.
+
 ## 🚀 [2026-10-26] (v1.3.19) — Sửa Lỗi Random Trong Khung: Khung Giờ Đã Qua Vẫn Chọn Được & Mốc Random Nhỏ Hơn Giờ Hiện Tại (F022)
 
 ### Phân hệ M2. Quản lý bài viết & Content Studio (Chế độ đăng ngẫu nhiên trong khung F022):

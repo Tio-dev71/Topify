@@ -43,10 +43,21 @@ interface EvergreenPost {
   daysSinceLastPublished: number;
   isDue: boolean;
   daysOverdue: number;
+  status?: string;
+  nextRecycleDate?: string;
+  daysUntilRecycle?: number;
+  recycledPosts?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    publishedAt: string | null;
+    createdAt: string;
+  }>;
 }
 
 export default function Evergreen() {
   const [tab, setTab] = useState<'suggestions' | 'library'>('suggestions');
+  const [hasUserSwitchedTab, setHasUserSwitchedTab] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<EvergreenPost[]>([]);
@@ -76,6 +87,10 @@ export default function Evergreen() {
         setPosts(res.data.items || []);
         if (res.data.metrics) {
           setMetrics(res.data.metrics);
+          // If on suggestions tab and no posts are due yet, but library has evergreen posts, smart-switch to library tab
+          if (tab === 'suggestions' && res.data.metrics.dueCount === 0 && res.data.metrics.totalEvergreen > 0 && !hasUserSwitchedTab) {
+            setTab('library');
+          }
         }
       }
     } catch (err: any) {
@@ -265,7 +280,10 @@ export default function Evergreen() {
         <div className="flex items-center p-1 bg-gray-100 rounded-xl w-full sm:w-auto">
           <button
             type="button"
-            onClick={() => setTab('suggestions')}
+            onClick={() => {
+              setTab('suggestions');
+              setHasUserSwitchedTab(true);
+            }}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               tab === 'suggestions'
                 ? 'bg-white text-gray-900 shadow-2xs'
@@ -276,7 +294,10 @@ export default function Evergreen() {
           </button>
           <button
             type="button"
-            onClick={() => setTab('library')}
+            onClick={() => {
+              setTab('library');
+              setHasUserSwitchedTab(true);
+            }}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               tab === 'library'
                 ? 'bg-white text-gray-900 shadow-2xs'
@@ -359,10 +380,48 @@ export default function Evergreen() {
                       {post.title || 'Bài viết không tên'}
                     </h4>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      Đăng gần nhất: {post.daysSinceLastPublished} ngày trước
+                      {post.daysSinceLastPublished === 0
+                        ? 'Đăng gần nhất: Vừa mới đăng hôm nay'
+                        : `Đăng gần nhất: ${post.daysSinceLastPublished} ngày trước`}
                     </p>
                   </div>
                 </div>
+
+                {/* Next Recycle Schedule Info */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50/90 px-3 py-2 rounded-xl border border-gray-100">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  <span className="truncate">
+                    {post.isDue
+                      ? 'Đã đến thời điểm tái đăng định kỳ'
+                      : `Tự động tái đăng: ${post.nextRecycleDate ? new Date(post.nextRecycleDate).toLocaleDateString('vi-VN') : ''} (còn ${post.daysUntilRecycle ?? post.recycleIntervalDays} ngày)`}
+                  </span>
+                </div>
+
+                {/* Recent Recycled Child Posts if any */}
+                {post.recycledPosts && post.recycledPosts.length > 0 && (
+                  <div className="pt-0.5 space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-400">
+                      <span>Bài tái đăng gần nhất:</span>
+                      <span className="text-indigo-600">{post.recycledPosts.length} bài</span>
+                    </div>
+                    <div className="space-y-1">
+                      {post.recycledPosts.slice(0, 2).map((rp) => (
+                        <div key={rp.id} className="text-[11px] text-gray-600 flex items-center justify-between bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                          <span className="truncate max-w-[150px] font-medium">{rp.title}</span>
+                          <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                            rp.status === 'PUBLISHED'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : rp.status === 'PUBLISHING'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {rp.status === 'PUBLISHED' ? 'Đã đăng' : rp.status === 'PUBLISHING' ? 'Đang đăng' : rp.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Caption Snippet */}
                 {post.caption && (

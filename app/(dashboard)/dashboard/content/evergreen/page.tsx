@@ -46,8 +46,16 @@ type EvergreenPost = {
   publishedAt: string | null;
   daysSinceLastPublished: number;
   isDue: boolean;
-  daysOverdue: number;
   createdBy: { name: string | null; email: string };
+  nextRecycleDate?: string;
+  daysUntilRecycle?: number;
+  recycledPosts?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    publishedAt: string | null;
+    createdAt: string;
+  }>;
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -72,6 +80,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 
 export default function EvergreenContentPage() {
   const [activeTab, setActiveTab] = useState<'suggestions' | 'library'>('suggestions');
+  const [hasUserSwitchedTab, setHasUserSwitchedTab] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [metrics, setMetrics] = useState({
@@ -103,6 +112,9 @@ export default function EvergreenContentPage() {
         setMetrics(data.metrics || { totalEvergreen: 0, dueCount: 0, totalRecycled: 0 });
         setSuggestions(data.suggestions || []);
         setLibrary(data.library || []);
+        if (activeTab === 'suggestions' && data.metrics?.dueCount === 0 && data.metrics?.totalEvergreen > 0 && !hasUserSwitchedTab) {
+          setActiveTab('library');
+        }
       } else {
         toast.error('Không thể tải danh sách nội dung Evergreen');
       }
@@ -340,7 +352,10 @@ export default function EvergreenContentPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveTab('suggestions')}
+              onClick={() => {
+                setActiveTab('suggestions');
+                setHasUserSwitchedTab(true);
+              }}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'suggestions'
                   ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
@@ -359,7 +374,10 @@ export default function EvergreenContentPage() {
             </button>
 
             <button
-              onClick={() => setActiveTab('library')}
+              onClick={() => {
+                setActiveTab('library');
+                setHasUserSwitchedTab(true);
+              }}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'library'
                   ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
@@ -547,10 +565,22 @@ export default function EvergreenContentPage() {
                         <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
                           {post.caption || 'Không có caption'}
                         </p>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
-                          <span>Đã đăng: {post.daysSinceLastPublished} ngày trước</span>
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 mt-1">
+                          <span>
+                            {post.daysSinceLastPublished === 0
+                              ? 'Đăng gần nhất: Vừa mới đăng hôm nay'
+                              : `Đã đăng: ${post.daysSinceLastPublished} ngày trước`}
+                          </span>
                           <span>•</span>
                           <span>Đã tái bản: {post.recycleCount} lần</span>
+                          {post.nextRecycleDate && (
+                            <>
+                              <span>•</span>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                                Tự động tái bản: {new Date(post.nextRecycleDate).toLocaleDateString('vi-VN')} (còn {post.daysUntilRecycle ?? post.recycleIntervalDays} ngày)
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
