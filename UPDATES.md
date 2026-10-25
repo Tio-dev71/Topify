@@ -12,6 +12,28 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] (v1.3.17) — Sửa Lỗi UI Quản Lý Bài Viết: Khắc Phục Xung Đột Sticky Filter Bar & Đè Lớp Card Bài Viết
+
+### Phân hệ M2. Quản lý bài viết (Posts Management - Grid/List View):
+- **Khắc phục lỗi thanh lọc (Filter Bar) đè lên và xung đột hiển thị với danh sách bài viết:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Khi cuộn trang tại màn hình *Quản lý bài viết*, thanh lọc (`Filter & Search Bar`) bị dính (`sticky top-4`) nhưng các thẻ bài viết (post cards) lại trôi bên dưới và các phần tử con bên trong thẻ bị nổi đè lên trên thanh lọc:
+      - Huy hiệu trạng thái và nút xem chi tiết `[⏰ Đã lên lịch] [👁]`, `[Bản nháp] [👁]` nổi lơ lửng ngay giữa thanh lọc (bên cạnh nút xem chế độ Lưới/Danh sách).
+      - Tiêu đề và thumbnail thẻ bài viết bên dưới (`[SPECIAL CLIP] BTS...`) chèn trực tiếp vào các ô chọn `LỌC THEO KÊNH`, `LỌC THEO THỜI GIAN`, `TÌM KIẾM NỘI DUNG`.
+      - Thanh lọc có lớp nền mờ bán trong suốt (`bg-white/80 backdrop-blur-xl`) khiến các thẻ tối màu bên dưới bị lem màu, gây cảm giác đè lớp vỡ giao diện.
+      - Chế độ xem `Lưới / Danh sách` bị rớt xuống dòng riêng trên các màn hình có chiều rộng < 1280px (`xl`), tạo khoảng trống kỳ dị.
+  - **Nguyên nhân gốc rễ:**
+    1. Thuộc tính `sticky top-4 z-10` trên thanh lọc kết hợp với `z-10` ở các phần tử bên trong thẻ bài viết (`Top Action Bar`, `Play Button`, `Bottom Info`) khiến các thẻ phía sau trong DOM có cùng hoặc cao hơn z-index đè lên thanh lọc khi cuộn.
+    2. Nền bán trong suốt `bg-white/80 backdrop-blur-xl` làm lộ nội dung cuộn bên dưới.
+    3. Điểm ngắt `xl:flex-row` quá lớn khiến nút chuyển chế độ xem `Lưới / Danh sách` rớt dòng trên các màn hình laptop và cửa sổ Desktop App thông thường.
+  - **Giải pháp xử lý:**
+    1. **Bỏ `sticky top-4 z-10` trên Filter Bar** tại [`electron-app/frontend/src/pages/Posts.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Posts.tsx): Thanh lọc nằm tự nhiên trong luồng hiển thị (`relative z-0`), với nền trắng thuần `bg-white` để cuộn mượt mà cùng toàn trang mà không bao giờ bị đè lớp hay xung đột giao diện.
+    2. **Hạ phạm vi z-index nội bộ của thẻ bài viết:** Đổi `z-10` thành `z-[2]` cho `Top Action Bar`, `Play Button`, `Bottom Info` bên trong thẻ media, vừa đủ đè lên lớp phủ gradient nhưng không bao giờ xung đột với các thành phần cấp trang.
+    3. **Tối ưu responsive hàng điều khiển:** Đổi sang `flex-col sm:flex-row`, đưa các tab trạng thái và cụm nút `Lưới / Danh sách` nằm gọn gàng trên cùng 1 hàng từ màn hình `sm` trở lên.
+  - **File thay đổi:**
+    - [`electron-app/frontend/src/pages/Posts.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Posts.tsx)
+  - **Kiểm thử:** Rebuild electron frontend (`npm run build --prefix electron-app/frontend`) thành công 100%, 51/51 tests liên quan pass.
+
 ## 🚀 [2026-10-26] (v1.3.16) — Sửa Lỗi Import Bài Viết Hàng Loạt: Báo Lỗi Ngay Khi Thiếu Field Bắt Buộc Hoặc Dữ Liệu Không Hợp Lệ (F019)
 
 ### Phân hệ M2. Content Studio (Import bài viết hàng loạt Excel & Google Drive - F019):

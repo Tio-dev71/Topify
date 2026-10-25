@@ -259,10 +259,10 @@ export default function Posts() {
       </div>
 
       {/* Filter & Search Bar - F026: Multi-filter by Status, Channel, Time + View Mode */}
-      <div className="space-y-4 p-5 bg-white/80 backdrop-blur-xl rounded-[2rem] border border-black/[0.04] shadow-[0_4px_20px_rgb(0,0,0,0.02)] sticky top-4 z-10">
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+      <div className="space-y-4 p-5 bg-white rounded-[2rem] border border-black/[0.04] shadow-[0_4px_20px_rgb(0,0,0,0.02)] relative z-0">
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
           {/* Status Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide w-full xl:w-auto px-1">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide flex-1 min-w-0 px-1">
             {filterTabs.map((tab) => (
               <button
                 key={tab.value}
@@ -287,7 +287,7 @@ export default function Posts() {
           </div>
 
           {/* View Mode Toggle (Grid vs Table List View) */}
-          <div className="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-xl self-end xl:self-auto shrink-0">
+          <div className="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-xl self-end sm:self-center shrink-0">
             <button
               type="button"
               onClick={() => setViewMode('grid')}
@@ -593,7 +593,7 @@ export default function Posts() {
                       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80 pointer-events-none" />
                       
                       {/* Top Action Bar */}
-                      <div className="absolute top-3 left-3 right-3 flex justify-between items-start z-10">
+                      <div className="absolute top-3 left-3 right-3 flex justify-between items-start z-[2]">
                         <div className={`px-2.5 py-1 rounded-xl border backdrop-blur-md flex items-center gap-1.5 text-xs font-bold shadow-sm ${
                           post.status === 'PUBLISHED' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-100' :
                           post.status === 'FAILED' ? 'bg-rose-500/20 border-rose-500/30 text-rose-100' :
@@ -617,14 +617,14 @@ export default function Posts() {
                       </div>
 
                       {/* Play Button */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-[2]">
                         <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/40 shadow-2xl">
                           <PlayCircle className="w-7 h-7 text-white ml-0.5" />
                         </div>
                       </div>
 
                       {/* Bottom Info inside media */}
-                      <div className="absolute bottom-3 left-3 right-3 z-10">
+                      <div className="absolute bottom-3 left-3 right-3 z-[2]">
                         <h3 className="font-bold text-white text-[15px] leading-tight line-clamp-2 drop-shadow-md">
                           {post.title || 'Chưa đặt tiêu đề'}
                         </h3>
