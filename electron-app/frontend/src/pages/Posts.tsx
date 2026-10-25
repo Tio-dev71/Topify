@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import api from '../lib/axios';
+import api, { getMediaUrl } from '../lib/axios';
 import { ImportPostsModal } from '../components/content-studio/ImportPostsModal';
 import { 
   STATUS_CONFIG, 
@@ -440,7 +440,7 @@ export default function Posts() {
                         <td className="py-3 px-4">
                           <div className="w-12 h-14 rounded-xl bg-gray-900 overflow-hidden relative flex-shrink-0 shadow-xs">
                             {post.videoAsset?.storageUrl ? (
-                              <video src={post.videoAsset.storageUrl} className="w-full h-full object-cover" muted />
+                              <video src={getMediaUrl(post.videoAsset.storageUrl)} className="w-full h-full object-cover" muted />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-white/40">
                                 <Film className="w-5 h-5" />
@@ -573,7 +573,7 @@ export default function Posts() {
                     <div className="relative aspect-[4/5] bg-gray-900 rounded-[1.5rem] overflow-hidden mb-4">
                       {post.videoAsset?.storageUrl ? (
                         <video
-                          src={post.videoAsset.storageUrl}
+                          src={getMediaUrl(post.videoAsset.storageUrl)}
                           className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105"
                           muted
                           loop
@@ -771,7 +771,7 @@ export default function Posts() {
               <div className="aspect-[9/16] max-h-[460px] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
                 {selectedPost.videoAsset?.storageUrl ? (
                   <video
-                    src={selectedPost.videoAsset.storageUrl}
+                    src={getMediaUrl(selectedPost.videoAsset.storageUrl)}
                     controls
                     className="w-full h-full object-contain"
                   />

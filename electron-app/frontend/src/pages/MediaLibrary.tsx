@@ -14,7 +14,7 @@ import {
   Tag
 } from 'lucide-react';
 import { toast } from 'sonner';
-import api from '../lib/axios';
+import api, { getMediaUrl } from '../lib/axios';
 
 export type MediaAssetItem = {
   id: string;
@@ -35,6 +35,7 @@ export default function MediaLibrary() {
   const [filterType, setFilterType] = useState<string>('ALL');
   const [isUploading, setIsUploading] = useState(false);
   const [viewingAsset, setViewingAsset] = useState<MediaAssetItem | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAssets = async () => {
@@ -99,7 +100,8 @@ export default function MediaLibrary() {
   };
 
   const handleCopyUrl = (url: string) => {
-    navigator.clipboard.writeText(url);
+    const fullUrl = getMediaUrl(url);
+    navigator.clipboard.writeText(fullUrl);
     toast.success('Đã sao chép link file vào bộ nhớ tạm');
   };
 
@@ -205,12 +207,20 @@ export default function MediaLibrary() {
                   onClick={() => setViewingAsset(asset)}
                   className="aspect-square bg-gray-50 relative flex items-center justify-center cursor-pointer overflow-hidden border-b border-gray-100"
                 >
-                  {isImg ? (
+                  {isImg && !failedImages[asset.id] ? (
                     <img
-                      src={asset.storageUrl}
+                      src={getMediaUrl(asset.storageUrl)}
                       alt={asset.fileName}
+                      onError={() => {
+                        setFailedImages(prev => ({ ...prev, [asset.id]: true }));
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
+                  ) : isImg ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 p-2 text-center group-hover:bg-gray-100 transition">
+                      <ImageIcon className="w-8 h-8 text-indigo-400 mb-1" />
+                      <span className="text-[10px] text-gray-500 font-medium truncate max-w-full px-1">{asset.fileName}</span>
+                    </div>
                   ) : isVid ? (
                     <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white group-hover:bg-gray-800 transition">
                       <Video className="w-8 h-8 text-indigo-400" />
@@ -273,13 +283,13 @@ export default function MediaLibrary() {
             <div className="p-6 overflow-y-auto flex-1 flex items-center justify-center bg-gray-950">
               {viewingAsset.mediaType === 'IMAGE' || viewingAsset.mimeType?.startsWith('image/') ? (
                 <img
-                  src={viewingAsset.storageUrl}
+                  src={getMediaUrl(viewingAsset.storageUrl)}
                   alt={viewingAsset.fileName}
                   className="max-h-[60vh] max-w-full object-contain rounded-xl"
                 />
               ) : viewingAsset.mediaType === 'VIDEO' || viewingAsset.mimeType?.startsWith('video/') ? (
                 <video
-                  src={viewingAsset.storageUrl}
+                  src={getMediaUrl(viewingAsset.storageUrl)}
                   controls
                   className="max-h-[60vh] max-w-full rounded-xl"
                 />
@@ -293,23 +303,23 @@ export default function MediaLibrary() {
 
             <div className="p-4 border-t border-gray-100 flex items-center justify-between text-xs bg-gray-50">
               <div className="font-mono text-gray-500 truncate max-w-md">
-                {viewingAsset.storageUrl}
+                {getMediaUrl(viewingAsset.storageUrl)}
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleCopyUrl(viewingAsset.storageUrl)}
-                  className="px-3 py-1.5 rounded-xl border border-gray-200 bg-white font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl border border-gray-200 bg-white font-semibold text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span>Copy Link</span>
                 </button>
                 <a
-                  href={viewingAsset.storageUrl}
+                  href={getMediaUrl(viewingAsset.storageUrl)}
                   target="_blank"
                   rel="noreferrer"
                   download={viewingAsset.fileName}
-                  className="btn-primary px-4 py-1.5 rounded-xl font-semibold inline-flex items-center gap-1.5"
+                  className="btn-primary px-4 py-1.5 rounded-xl font-semibold inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Tải Về</span>

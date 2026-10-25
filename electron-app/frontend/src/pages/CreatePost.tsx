@@ -27,7 +27,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import api from '../lib/axios';
+import api, { getMediaUrl } from '../lib/axios';
 import { PLATFORM_CONFIG, safeFormatDate } from '../lib/utils';
 import {
   GOLDEN_HOUR_PRESETS,
@@ -1067,7 +1067,7 @@ export default function CreatePost() {
                       </button>
                     ) : (
                       <div className="w-20 h-20 rounded-2xl bg-black flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md ring-1 ring-black/5 relative">
-                        <video src={v.storageUrl} className="w-full h-full object-cover" muted />
+                        <video src={getMediaUrl(v.storageUrl)} className="w-full h-full object-cover" muted />
                         <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none">
                           <Film className="w-6 h-6 text-white/80" />
                         </div>

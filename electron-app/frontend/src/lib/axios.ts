@@ -39,10 +39,27 @@ api.interceptors.response.use(
 );
 
 export const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+    return BASE_URL;
+  }
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return window.location.origin;
   }
   return BASE_URL;
+};
+
+export const getMediaUrl = (url?: string | null): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  let base = BASE_URL;
+  if (import.meta.env.DEV && typeof window !== 'undefined' && window.location.protocol !== 'file:') {
+    base = window.location.origin;
+  }
+  const cleanBase = base.replace(/\/+$/, '');
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${cleanBase}${cleanPath}`;
 };
 
 export default api;

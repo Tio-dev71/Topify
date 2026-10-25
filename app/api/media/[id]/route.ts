@@ -25,7 +25,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!asset || !canAccessAsset(asset, session)) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    return NextResponse.json(asset);
+    let finalStorageUrl = asset.storageUrl;
+    if (finalStorageUrl && !finalStorageUrl.startsWith('http://') && !finalStorageUrl.startsWith('https://')) {
+      const requestHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'topify.vn';
+      const requestProto = req.headers.get('x-forwarded-proto') || (requestHost.includes('localhost') ? 'http' : 'https');
+      finalStorageUrl = `${requestProto}://${requestHost}${finalStorageUrl.startsWith('/') ? '' : '/'}${finalStorageUrl}`;
+    }
+    return NextResponse.json({ ...asset, storageUrl: finalStorageUrl });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -17,7 +17,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import api from '../lib/axios';
+import api, { getMediaUrl } from '../lib/axios';
 import { 
   STATUS_CONFIG, 
   PLATFORM_CONFIG, 
@@ -311,7 +311,7 @@ export default function PostDetail() {
             <div className="aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-lg border border-black/10 relative max-h-[580px] flex items-center justify-center">
               {post.videoAsset?.storageUrl ? (
                 <video
-                  src={post.videoAsset.storageUrl}
+                  src={getMediaUrl(post.videoAsset.storageUrl)}
                   controls
                   className="w-full h-full object-contain"
                 />

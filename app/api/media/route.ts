@@ -67,7 +67,22 @@ export async function GET(req: NextRequest) {
       prisma.mediaAsset.count({ where }),
     ]);
 
-    return NextResponse.json({ assets, total });
+    const requestHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'topify.vn';
+    const requestProto = req.headers.get('x-forwarded-proto') || (requestHost.includes('localhost') ? 'http' : 'https');
+    const baseUrl = `${requestProto}://${requestHost}`;
+
+    const formattedAssets = assets.map((asset) => {
+      let finalStorageUrl = asset.storageUrl;
+      if (finalStorageUrl && !finalStorageUrl.startsWith('http://') && !finalStorageUrl.startsWith('https://')) {
+        finalStorageUrl = `${baseUrl}${finalStorageUrl.startsWith('/') ? '' : '/'}${finalStorageUrl}`;
+      }
+      return {
+        ...asset,
+        storageUrl: finalStorageUrl,
+      };
+    });
+
+    return NextResponse.json({ assets: formattedAssets, total });
   } catch (error: any) {
     console.error('List media error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -156,7 +171,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(asset, { status: 201 });
+    let finalStorageUrl = asset.storageUrl;
+    if (finalStorageUrl && !finalStorageUrl.startsWith('http://') && !finalStorageUrl.startsWith('https://')) {
+      const requestHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'topify.vn';
+      const requestProto = req.headers.get('x-forwarded-proto') || (requestHost.includes('localhost') ? 'http' : 'https');
+      finalStorageUrl = `${requestProto}://${requestHost}${finalStorageUrl.startsWith('/') ? '' : '/'}${finalStorageUrl}`;
+    }
+
+    return NextResponse.json({ ...asset, storageUrl: finalStorageUrl }, { status: 201 });
   } catch (error: any) {
     console.error('Create media error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

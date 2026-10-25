@@ -12,7 +12,7 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
-## 🚀 [2026-10-26] (v1.3.21) — Sửa Lỗi Tải Video Lên Thư Viện Media (Tệp tin) Báo Lỗi Server (F114)
+## 🚀 [2026-10-26] (v1.3.22) — Tối Ưu Hiển Thị URL Media & Sửa Lỗi Tải Video Thư Viện Media (F114)
 
 ### Phân hệ M2. Thư viện Media & Tệp tin (F114) [Electron App & Backend API]:
 - **[F114] Khắc phục lỗi tải file video lên Thư viện Media (Tệp tin) bị báo "Lỗi khi tải file lên server":**
@@ -29,16 +29,22 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
     1. **Sửa endpoint tải file trong Electron App ([`MediaLibrary.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/MediaLibrary.tsx)):**
        - Đổi lời gọi tải file sang `api.post('/media', formData)` để lưu đúng vào thực thể `MediaAsset`.
        - Bỏ header `Content-Type` thủ công để trình duyệt tự động sinh multipart boundary hợp lệ.
-       - Cập nhật state danh sách `assets` ngay lập tức khi tải lên thành công, đồng thời bóc tách chi tiết thông báo lỗi từ server nếu có sự cố mạng/quyền truy cập.
+       - Cập nhật state danh sách `assets` ngay lập tức khi tải lên thành công, đồng thời bóc tách chi tiết thông báo lỗi từ server nếu có sự cố mạng/quyền truy cập (`err?.response?.data?.error`).
        - Đồng bộ hóa logic upload trong [`CarouselEditorTab.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/CarouselEditorTab.tsx) sang endpoint `/media` thay vì `/upload`.
+       - Bổ sung `getMediaUrl` và `onError` fallback trên card thumbnail hình ảnh/video để hiển thị placeholder đẹp mắt nếu tệp chưa đồng bộ về máy local.
     2. **Tối ưu Backend API Media ([`app/api/media/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/media/route.ts)):**
        - Bổ sung cơ chế tự động suy luận MIME type theo phần mở rộng đuôi file (`.mp4`, `.mov`, `.webm`, `.mkv`, `.avi`, v.v.) khi `file.type` trống.
        - Tự động nhận diện chính xác `mediaType: 'VIDEO'` cho toàn bộ các định dạng video phổ biến.
        - Truyền `mimeType` vào `storage.upload(buffer, fileName, mimeType)` để các bộ lưu trữ (Supabase/S3/Local) thiết lập Content-Type chính xác.
        - Tự động fallback tìm `workspaceId` từ cơ sở dữ liệu nếu thông tin phiên đăng nhập chưa có `workspaceId`.
+       - Chuẩn hóa trường `storageUrl` trả về trong `GET /api/media` và `POST /api/media` thành full URL tuyệt đối (kèm Host) để ứng dụng Desktop luôn hiển thị được video/hình ảnh.
     3. **Tương thích ngược & Bảo vệ phân quyền ([`app/api/upload/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/upload/route.ts), [`app/api/media/[id]/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/media/[id]/route.ts)):**
        - Cho phép `/api/upload` nhận cả key `'video'` lẫn key `'file'` để tránh lỗi 400 nếu client gửi khác tên field.
        - Bổ sung hàm kiểm tra quyền truy cập `canAccessAsset` trong `GET/PUT/DELETE /api/media/[id]` hỗ trợ Super Admin, người sở hữu file và thành viên cùng Workspace.
+    4. **Tối ưu hóa hiển thị Media trên Electron Desktop App ([`axios.ts`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/lib/axios.ts), [`Posts.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Posts.tsx), [`CreatePost.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/CreatePost.tsx), [`PostDetail.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/PostDetail.tsx)):**
+       - Xây dựng hàm tiện ích `getMediaUrl` chuyển đổi an toàn các đường dẫn tương đối `/api/uploads/...` thành URL tuyệt đối trỏ tới máy chủ `topify.vn` hoặc cấu hình máy chủ hiện tại.
+       - Tích hợp `getMediaUrl` cho toàn bộ các thành phần hiển thị video và ảnh trên Desktop App (Danh sách bài viết, Chi tiết bài viết, Tạo bài viết mới, Thư viện media).
+       - Bổ sung đầy đủ MIME types (ảnh, âm thanh, video), tiêu đề CORS và endpoint `OPTIONS` trong [`app/api/uploads/[...path]/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/uploads/[...path]/route.ts).
 
 ## 🚀 [2026-10-26] (v1.3.20) — Khắc Phục Lỗi Đăng Ngay Kèm Bật Evergreen Không Đăng Ngay & Tự Động Tái Đăng Theo Chu Kỳ (F083)
 
