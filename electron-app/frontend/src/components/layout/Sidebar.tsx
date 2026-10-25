@@ -30,39 +30,94 @@ import {
   Target,
   Gift,
   PieChart,
+  Layers,
+  LayoutTemplate,
+  Hash,
+  CheckCircle2,
+  Link2,
+  Image as ImageIcon,
+  Kanban,
 } from 'lucide-react';
 
-const navigation = [
-  { key: 'Tổng quan (Dashboard)', href: '/dashboard', icon: LayoutDashboard },
-  { key: 'Hộp thư hợp nhất', href: '/inbox', icon: MessageSquare },
-  { key: 'Khách hàng (CRM)', href: '/customers', icon: Users },
-  { key: 'Quản lý công việc (Tasks)', href: '/tasks', icon: CheckSquare },
-  { key: 'Chiến dịch (Campaigns)', href: '/campaigns', icon: Rocket },
-  { key: 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
-  { key: 'Thám tử xu hướng (MXH)', href: '/intelligence/social-search', icon: Search },
-  { key: 'Cảnh báo bùng nổ', href: '/intelligence/alerts', icon: Flame },
-  { key: 'Theo dõi đối thủ (Fanpages)', href: '/competitors', icon: Target },
-  { key: 'Media Studio AI', href: '/media/studio', icon: Film },
-  { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play },
-  { key: 'Quản lý bài viết', href: '/posts', icon: Calendar },
-  { key: 'Studio Nội dung & Spin', href: '/content-studio', icon: Wand2 },
-  { key: 'Nội dung Evergreen', href: '/evergreen', icon: Repeat },
-  { key: 'Tải video / media', href: '/downloader', icon: Download },
-  { key: 'Tài khoản Facebook', href: '/accounts', icon: Users },
-  { key: 'Quản lý Proxy', href: '/proxies', icon: Globe },
-  { key: 'Tự động hóa', href: '/automation', icon: Play },
-  { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart },
-  { key: 'Ví & Hoa hồng (Wallet)', href: '/wallet', icon: Wallet },
-  { key: 'Tiếp thị liên kết (Referral)', href: '/referral', icon: Gift },
-  { key: 'Thành viên & Nhóm (F116/F117)', href: '/team', icon: Users },
-  { key: 'Gói cước & Quota (M8)', href: '/settings?tab=quota', icon: PieChart },
-  { key: 'Topify AI Hub', href: '/ai', icon: Sparkles },
-  { key: 'Bảo mật & Tích hợp', href: '/security', icon: ShieldCheck },
-  { key: 'Nhật ký hoạt động', href: '/history', icon: Activity },
-  { key: 'Cài đặt hệ thống', href: '/settings', icon: Settings },
-];
+interface NavSection {
+  title: string;
+  items: {
+    key: string;
+    href: string;
+    icon: any;
+    badge?: string;
+  }[];
+}
 
-const adminNavigation: any[] = [];
+const navSections: NavSection[] = [
+  {
+    title: 'TỔNG QUAN',
+    items: [
+      { key: 'Tổng quan (Dashboard)', href: '/dashboard', icon: LayoutDashboard },
+      { key: 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'NỘI DUNG & SÁNG TẠO',
+    items: [
+      { key: 'Quản lý bài viết', href: '/posts', icon: Calendar },
+      { key: 'Lịch nội dung (Calendar)', href: '/calendar', icon: Calendar },
+      { key: 'Chủ đề nội dung (Pillars)', href: '/pillars', icon: Layers, badge: 'F073' },
+      { key: 'Mẫu bài viết (Templates)', href: '/templates', icon: LayoutTemplate },
+      { key: 'Hashtags & Mẫu CTA', href: '/hashtags', icon: Hash },
+      { key: 'Phê duyệt bài viết', href: '/approval', icon: CheckCircle2 },
+      { key: 'Tạo liên kết UTM', href: '/utm', icon: Link2 },
+      { key: 'Thư viện Media (Tệp tin)', href: '/media/library', icon: ImageIcon },
+      { key: 'Media Studio AI', href: '/media/studio', icon: Film },
+      { key: 'Studio Nội dung & Spin', href: '/content-studio', icon: Wand2 },
+      { key: 'Nội dung Evergreen', href: '/evergreen', icon: Repeat },
+      { key: 'Tải video / media', href: '/downloader', icon: Download },
+    ],
+  },
+  {
+    title: 'MẠNG XÃ HỘI & TỰ ĐỘNG HÓA',
+    items: [
+      { key: 'Tự động hóa', href: '/automation', icon: Play },
+      { key: 'Tài khoản Facebook', href: '/accounts', icon: Users },
+      { key: 'Quản lý Proxy', href: '/proxies', icon: Globe },
+      { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart },
+      { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play },
+      { key: 'Thám tử xu hướng (MXH)', href: '/intelligence/social-search', icon: Search },
+      { key: 'Theo dõi từ khóa (Keywords)', href: '/intelligence/keywords', icon: Hash },
+      { key: 'Cảnh báo bùng nổ', href: '/intelligence/alerts', icon: Flame },
+      { key: 'Theo dõi đối thủ (Fanpages)', href: '/competitors', icon: Target },
+    ],
+  },
+  {
+    title: 'GIAO TIẾP & BÁN HÀNG (CRM)',
+    items: [
+      { key: 'Hộp thư hợp nhất', href: '/inbox', icon: MessageSquare },
+      { key: 'Khách hàng (CRM)', href: '/customers', icon: Users },
+      { key: 'Cơ hội bán hàng (Deals)', href: '/deals', icon: Target },
+      { key: 'Kênh bán hàng (Pipelines)', href: '/pipelines', icon: Kanban },
+      { key: 'Quản lý công việc (Tasks)', href: '/tasks', icon: CheckSquare },
+      { key: 'Chiến dịch (Campaigns)', href: '/campaigns', icon: Rocket },
+    ],
+  },
+  {
+    title: 'TÀI CHÍNH & TĂNG TRƯỞNG',
+    items: [
+      { key: 'Ví & Hoa hồng (Wallet)', href: '/wallet', icon: Wallet },
+      { key: 'Tiếp thị liên kết (Referral)', href: '/referral', icon: Gift },
+    ],
+  },
+  {
+    title: 'HỆ THỐNG & CÀI ĐẶT',
+    items: [
+      { key: 'Thành viên & Nhóm (F116/F117)', href: '/team', icon: Users },
+      { key: 'Gói cước & Quota (M8)', href: '/settings?tab=quota', icon: PieChart },
+      { key: 'Topify AI Hub', href: '/ai', icon: Sparkles },
+      { key: 'Bảo mật & Tích hợp', href: '/security', icon: ShieldCheck },
+      { key: 'Nhật ký hoạt động', href: '/history', icon: Activity },
+      { key: 'Cài đặt hệ thống', href: '/settings', icon: Settings },
+    ],
+  },
+];
 
 const superAdminNavigation = [
   { key: 'Không gian làm việc (Workspaces)', href: '/super-admin', icon: Building2 },
@@ -84,14 +139,13 @@ export function Sidebar() {
   }
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const isAdmin = user?.role === 'ADMIN' || isSuperAdmin;
-  
-  let allNavItems = [...navigation];
-  if (isAdmin) allNavItems = [...allNavItems, ...adminNavigation];
-  if (isSuperAdmin) allNavItems = [...allNavItems, ...superAdminNavigation];
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
+    if (href.includes('?')) {
+      const [path, query] = href.split('?');
+      return location.pathname === path && location.search.includes(query);
+    }
     return location.pathname.startsWith(href);
   };
 
@@ -162,77 +216,58 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 overflow-y-auto">
-          <div className="space-y-1">
-            {navigation.map((item) => {
-              const active = isActive(item.href);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
-                    transition-all duration-200 group
-                    ${active
-                      ? 'bg-blue-50 text-[var(--color-primary)] font-semibold'
-                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                    }
-                    ${collapsed ? 'justify-center px-2' : ''}
-                  `}
-                  title={collapsed ? item.key : undefined}
-                >
-                  <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-primary)]' : ''}`} />
-                  {!collapsed && <span>{item.key}</span>}
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* Admin section */}
-          {isAdmin && (
-            <div className="mt-5 pt-5 border-t border-[var(--color-border)]">
+        <nav className="flex-1 py-4 px-3 overflow-y-auto space-y-5">
+          {navSections.map((section, idx) => (
+            <div key={section.title} className={idx > 0 ? 'pt-4 border-t border-gray-100' : ''}>
               {!collapsed && (
-                <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                  Quản trị
+                <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  {section.title}
                 </p>
               )}
               <div className="space-y-1">
-                {adminNavigation.map((item) => {
+                {section.items.map((item) => {
                   const active = isActive(item.href);
                   const Icon = item.icon;
                   return (
                     <Link
-                      key={item.href}
+                      key={item.key}
                       to={item.href}
                       onClick={() => setMobileOpen(false)}
                       className={`
-                        flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
-                        transition-all duration-200
+                        flex items-center gap-3 px-3 py-2 rounded-xl text-[12.5px] font-medium
+                        transition-all duration-200 group
                         ${active
-                          ? 'bg-blue-50 text-[var(--color-primary)] font-semibold'
-                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'bg-blue-50 text-[var(--color-primary)] font-bold'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                         }
                         ${collapsed ? 'justify-center px-2' : ''}
                       `}
                       title={collapsed ? item.key : undefined}
                     >
-                      <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-primary)]' : ''}`} />
-                      {!collapsed && <span>{item.key}</span>}
+                      <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--color-primary)]' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                      {!collapsed && (
+                        <div className="flex items-center justify-between flex-1 min-w-0">
+                          <span className="truncate">{item.key}</span>
+                          {item.badge && (
+                            <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700">
+                              {item.badge}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </Link>
                   );
                 })}
               </div>
             </div>
-          )}
+          ))}
 
           {/* Super Admin section */}
           {isSuperAdmin && (
-            <div className="mt-5 pt-5 border-t border-[var(--color-border)]">
+            <div className="pt-4 border-t border-gray-100">
               {!collapsed && (
-                <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                  Hệ thống
+                <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  HỆ THỐNG
                 </p>
               )}
               <div className="space-y-1">
@@ -245,17 +280,17 @@ export function Sidebar() {
                       to={item.href}
                       onClick={() => setMobileOpen(false)}
                       className={`
-                        flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium
+                        flex items-center gap-3 px-3 py-2 rounded-xl text-[12.5px] font-medium
                         transition-all duration-200
                         ${active
-                          ? 'bg-blue-50 text-[var(--color-primary)] font-semibold'
-                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'bg-blue-50 text-[var(--color-primary)] font-bold'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                         }
                         ${collapsed ? 'justify-center px-2' : ''}
                       `}
                       title={collapsed ? item.key : undefined}
                     >
-                      <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--color-primary)]' : ''}`} />
+                      <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--color-primary)]' : 'text-gray-400'}`} />
                       {!collapsed && <span>{item.key}</span>}
                     </Link>
                   );

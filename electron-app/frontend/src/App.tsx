@@ -29,6 +29,16 @@ import WalletEarnings from './pages/WalletEarnings';
 import TopifyAI from './pages/TopifyAI';
 import SecurityIntegrations from './pages/SecurityIntegrations';
 import Competitors from './pages/Competitors';
+import ContentPillars from './pages/ContentPillars';
+import ContentTemplates from './pages/ContentTemplates';
+import Hashtags from './pages/Hashtags';
+import Approval from './pages/Approval';
+import UTMBuilder from './pages/UTMBuilder';
+import CalendarView from './pages/CalendarView';
+import MediaLibrary from './pages/MediaLibrary';
+import Deals from './pages/Deals';
+import Pipelines from './pages/Pipelines';
+import Keywords from './pages/Keywords';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -45,12 +55,19 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/deals" element={<Deals />} />
+          <Route path="/crm/deals" element={<Deals />} />
+          <Route path="/pipelines" element={<Pipelines />} />
+          <Route path="/crm/pipelines" element={<Pipelines />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/intelligence/social-search" element={<SocialSearch />} />
           <Route path="/intelligence/alerts" element={<ViralAlerts />} />
           <Route path="/intelligence/competitors" element={<Competitors />} />
           <Route path="/competitors" element={<Competitors />} />
+          <Route path="/intelligence/keywords" element={<Keywords />} />
+          <Route path="/keywords" element={<Keywords />} />
           <Route path="/media/studio" element={<MediaStudio />} />
+          <Route path="/media/library" element={<MediaLibrary />} />
           <Route path="/accounts" element={<FacebookAccounts />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/campaigns" element={<Campaigns />} />
@@ -58,6 +75,18 @@ function App() {
           <Route path="/live" element={<Live />} />
           <Route path="/posts" element={<Posts />} />
           <Route path="/posts/:id" element={<PostDetail />} />
+          <Route path="/calendar" element={<CalendarView />} />
+          <Route path="/content/calendar" element={<CalendarView />} />
+          <Route path="/pillars" element={<ContentPillars />} />
+          <Route path="/content/pillars" element={<ContentPillars />} />
+          <Route path="/templates" element={<ContentTemplates />} />
+          <Route path="/content/templates" element={<ContentTemplates />} />
+          <Route path="/hashtags" element={<Hashtags />} />
+          <Route path="/content/hashtags" element={<Hashtags />} />
+          <Route path="/approval" element={<Approval />} />
+          <Route path="/content/approval" element={<Approval />} />
+          <Route path="/utm" element={<UTMBuilder />} />
+          <Route path="/content/utm" element={<UTMBuilder />} />
           <Route path="/create" element={<CreatePost />} />
           <Route path="/evergreen" element={<Evergreen />} />
           <Route path="/content-studio" element={<ContentStudio />} />
