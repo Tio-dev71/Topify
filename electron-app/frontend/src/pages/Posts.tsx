@@ -18,6 +18,11 @@ import {
   AlignLeft,
   Repeat,
   FileSpreadsheet,
+  Calendar,
+  LayoutGrid,
+  List,
+  Filter,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,6 +37,8 @@ import {
 } from '../lib/utils';
 
 type StatusFilter = 'ALL' | 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED';
+type PlatformFilter = 'ALL' | 'FACEBOOK' | 'YOUTUBE' | 'TIKTOK' | 'INSTAGRAM' | 'ZALO';
+type TimeFilter = 'ALL' | 'TODAY' | '7_DAYS' | '30_DAYS' | 'THIS_MONTH';
 
 interface PostItem {
   id: string;
@@ -77,6 +84,9 @@ export default function Posts() {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StatusFilter>('ALL');
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('ALL');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('ALL');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState('');
   const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -158,10 +168,39 @@ export default function Posts() {
     const title = (post.title || '').toLowerCase();
     const tags = normalizeHashtags(post.hashtags).toLowerCase();
     const query = (search || '').toLowerCase().trim();
-    if (!query) return true;
-    return title.includes(query) || tags.includes(query);
-  });
+    if (query && !title.includes(query) && !tags.includes(query)) return false;
 
+    if (platformFilter !== 'ALL') {
+      const matchPlat = Array.isArray(post.platforms) && post.platforms.some(pl => {
+        const pName = (pl.platform || '').toUpperCase();
+        return pName.includes(platformFilter);
+      });
+      if (!matchPlat) return false;
+    }
+
+    if (timeFilter !== 'ALL') {
+      const dateStr = post.scheduledAt || post.publishedAt || post.createdAt;
+      if (!dateStr) return false;
+      const d = new Date(dateStr).getTime();
+      const now = Date.now();
+      if (timeFilter === 'TODAY') {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        if (d < todayStart.getTime()) return false;
+      } else if (timeFilter === '7_DAYS') {
+        if (now - d > 7 * 24 * 3600 * 1000) return false;
+      } else if (timeFilter === '30_DAYS') {
+        if (now - d > 30 * 24 * 3600 * 1000) return false;
+      } else if (timeFilter === 'THIS_MONTH') {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        if (d < startOfMonth.getTime()) return false;
+      }
+    }
+
+    return true;
+  });
 
   return (
     <motion.div 
@@ -184,6 +223,17 @@ export default function Posts() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/calendar"
+              className="group relative inline-flex items-center justify-center gap-2.5 px-5 py-4 text-sm font-semibold text-purple-700 transition-all duration-300 bg-purple-50 border border-purple-200 rounded-2xl hover:bg-purple-100 hover:border-purple-300 shadow-sm hover:shadow hover:-translate-y-0.5"
+              title="Chuyển sang Calendar View xem trực quan theo tuần/tháng (F025)"
+            >
+              <div className="p-1.5 bg-purple-100 text-purple-700 rounded-lg group-hover:scale-110 transition-transform">
+                <Calendar className="w-4 h-4" />
+              </div>
+              Lịch đăng (Calendar - F025)
+            </Link>
+
             <button
               type="button"
               onClick={() => setIsImportModalOpen(true)}
@@ -208,47 +258,122 @@ export default function Posts() {
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 p-4 bg-white/60 backdrop-blur-xl rounded-[2rem] border border-black/[0.04] shadow-[0_4px_20px_rgb(0,0,0,0.02)] sticky top-4 z-10">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide w-full xl:w-auto px-2">
-          {filterTabs.map((tab) => (
+      {/* Filter & Search Bar - F026: Multi-filter by Status, Channel, Time + View Mode */}
+      <div className="space-y-4 p-5 bg-white/80 backdrop-blur-xl rounded-[2rem] border border-black/[0.04] shadow-[0_4px_20px_rgb(0,0,0,0.02)] sticky top-4 z-10">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+          {/* Status Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide w-full xl:w-auto px-1">
+            {filterTabs.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setFilter(tab.value)}
+                className={`relative px-5 py-2.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all duration-300 flex-shrink-0 ${
+                  filter === tab.value
+                    ? 'text-gray-900 shadow-sm border border-black/5 bg-white'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-black/5 border border-transparent'
+                }`}
+              >
+                {filter === tab.value && (
+                  <motion.div 
+                    layoutId="filter-indicator"
+                    className="absolute inset-0 border border-black/5 rounded-xl pointer-events-none"
+                    initial={false}
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* View Mode Toggle (Grid vs Table List View) */}
+          <div className="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-xl self-end xl:self-auto shrink-0">
             <button
-              key={tab.value}
-              onClick={() => setFilter(tab.value)}
-              className={`relative px-6 py-3 text-sm font-semibold rounded-2xl whitespace-nowrap transition-all duration-300 flex-shrink-0 ${
-                filter === tab.value
-                  ? 'text-gray-900 shadow-sm border border-black/5 bg-white'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-black/5 border border-transparent'
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                viewMode === 'grid' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
               }`}
+              title="Xem dạng thẻ lưới (Grid View)"
             >
-              {filter === tab.value && (
-                <motion.div 
-                  layoutId="filter-indicator"
-                  className="absolute inset-0 border border-black/5 rounded-2xl pointer-events-none"
-                  initial={false}
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
-              <span className="relative z-10">{tab.label}</span>
+              <LayoutGrid className="w-4 h-4" />
+              <span className="hidden sm:inline">Lưới</span>
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                viewMode === 'table' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
+              }`}
+              title="Xem danh sách chi tiết (List View - F026)"
+            >
+              <List className="w-4 h-4" />
+              <span className="hidden sm:inline">Danh sách</span>
+            </button>
+          </div>
         </div>
 
-        <div className="relative w-full xl:w-[380px]">
-          <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+        {/* Sub-Filters: Channel + Time + Search */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-3 border-t border-gray-100">
+          {/* Platform Filter */}
+          <div className="lg:col-span-3">
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              Lọc theo Kênh (Channel)
+            </label>
+            <select
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value as PlatformFilter)}
+              className="w-full py-2.5 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/20 focus:bg-white"
+            >
+              <option value="ALL">🌐 Tất cả các kênh</option>
+              <option value="YOUTUBE">🔴 YouTube Shorts / Video</option>
+              <option value="FACEBOOK">🔵 Facebook Feed & Reels</option>
+              <option value="TIKTOK">⚫ TikTok Video</option>
+              <option value="INSTAGRAM">🟣 Instagram Reels / Post</option>
+              <option value="ZALO">🔷 Zalo OA & Feed</option>
+            </select>
           </div>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm kiếm theo tiêu đề hoặc hashtag..."
-            className="block w-full pl-12 pr-6 py-4 bg-gray-50/50 border border-black/[0.04] rounded-2xl text-[15px] font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/20 focus:border-[#5B3DF5]/30 focus:bg-white transition-all"
-          />
+
+          {/* Time Filter */}
+          <div className="lg:col-span-3">
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              Lọc theo Thời gian (Time)
+            </label>
+            <select
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
+              className="w-full py-2.5 px-3 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/20 focus:bg-white"
+            >
+              <option value="ALL">⏱️ Toàn bộ thời gian</option>
+              <option value="TODAY">📅 Hôm nay</option>
+              <option value="7_DAYS">⚡ 7 ngày gần nhất</option>
+              <option value="30_DAYS">📊 30 ngày gần nhất</option>
+              <option value="THIS_MONTH">🗓️ Trong tháng này</option>
+            </select>
+          </div>
+
+          {/* Search Box */}
+          <div className="sm:col-span-2 lg:col-span-6">
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+              Tìm kiếm nội dung
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm bài viết theo tiêu đề, hashtag hoặc nội dung..."
+                className="block w-full pl-10 pr-4 py-2.5 bg-gray-50/80 border border-gray-200 rounded-xl text-xs font-medium placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]/20 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Content Grid */}
+      {/* Content Display: Grid vs Table List View (F026) */}
       <div className="pt-2">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
@@ -275,20 +400,156 @@ export default function Posts() {
               <Film className="w-12 h-12 text-gray-300" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">
-              {filter !== 'ALL' ? `Không tìm thấy nội dung` : 'Chưa có bài viết nào'}
+              {filter !== 'ALL' || platformFilter !== 'ALL' || timeFilter !== 'ALL' ? `Không tìm thấy nội dung` : 'Chưa có bài viết nào'}
             </h3>
             <p className="text-gray-500 text-center text-lg max-w-md mb-10 leading-relaxed">
-              {filter !== 'ALL'
-                ? 'Không có bài viết nào phù hợp với bộ lọc hiện tại.'
+              {filter !== 'ALL' || platformFilter !== 'ALL' || timeFilter !== 'ALL'
+                ? 'Không có bài viết nào phù hợp với bộ lọc hiện tại. Thử thay đổi điều kiện lọc trạng thái, kênh hoặc thời gian.'
                 : 'Bắt đầu ngay bằng cách tạo bài viết đầu tiên và phân phối nội dung của bạn.'}
             </p>
-            {filter === 'ALL' && (
+            {filter === 'ALL' && platformFilter === 'ALL' && timeFilter === 'ALL' && (
               <Link to="/create" className="px-8 py-4 bg-gray-900 hover:bg-black text-white text-sm font-semibold rounded-2xl shadow-lg transition-colors flex items-center gap-2">
                 Bắt đầu ngay
               </Link>
             )}
           </motion.div>
+        ) : viewMode === 'table' ? (
+          /* F026: Table List View */
+          <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden animate-fade-in">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-500 uppercase tracking-wider font-bold">
+                    <th className="py-3.5 px-4 w-16">Media</th>
+                    <th className="py-3.5 px-4 min-w-[240px]">Tiêu đề & Nội dung</th>
+                    <th className="py-3.5 px-4 min-w-[150px]">Kênh phân phối</th>
+                    <th className="py-3.5 px-4 w-32">Trạng thái</th>
+                    <th className="py-3.5 px-4 w-40">Thời gian</th>
+                    <th className="py-3.5 px-4 w-28 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredPosts.map((post) => {
+                    const statusConfig = STATUS_CONFIG[post.status as keyof typeof STATUS_CONFIG];
+                    return (
+                      <tr 
+                        key={post.id}
+                        onClick={() => setSelectedPost(post)}
+                        className="hover:bg-gray-50/70 transition-colors cursor-pointer group"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="w-12 h-14 rounded-xl bg-gray-900 overflow-hidden relative flex-shrink-0 shadow-xs">
+                            {post.videoAsset?.storageUrl ? (
+                              <video src={post.videoAsset.storageUrl} className="w-full h-full object-cover" muted />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-white/40">
+                                <Film className="w-5 h-5" />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <p className="font-bold text-gray-900 line-clamp-1 group-hover:text-purple-600 transition-colors">
+                            {post.title || 'Không có tiêu đề'}
+                          </p>
+                          <p className="text-gray-500 line-clamp-1 mt-0.5 text-[11px]">
+                            {post.caption || 'Chưa có caption'}
+                          </p>
+                          {post.hashtags && (
+                            <p className="text-purple-600 font-medium text-[11px] mt-0.5 line-clamp-1">
+                              {normalizeHashtags(post.hashtags)}
+                            </p>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-wrap gap-1">
+                            {post.platforms && post.platforms.length > 0 ? (
+                              post.platforms.map((pl, pIdx) => {
+                                const norm = normalizePlatform(pl);
+                                const platConfig = PLATFORM_CONFIG[norm.platform as keyof typeof PLATFORM_CONFIG];
+                                return (
+                                  <span 
+                                    key={pIdx}
+                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold"
+                                    style={{
+                                      backgroundColor: platConfig ? `${platConfig.color}15` : '#f3f4f6',
+                                      color: platConfig ? platConfig.color : '#374151'
+                                    }}
+                                  >
+                                    {platConfig ? platConfig.name.split(' ')[0] : norm.platform}
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">Chưa chọn kênh</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span 
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${statusConfig?.color || 'bg-gray-100 text-gray-700'}`}
+                          >
+                            {getStatusIcon(post.status)}
+                            {statusConfig?.label || post.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 text-[11px]">
+                          {post.scheduledAt ? (
+                            <div>
+                              <p className="font-medium text-indigo-600">Lên lịch:</p>
+                              <p>{safeFormatDate(post.scheduledAt, 'dd/MM/yyyy HH:mm')}</p>
+                            </div>
+                          ) : post.publishedAt ? (
+                            <div>
+                              <p className="font-medium text-emerald-600">Đã đăng:</p>
+                              <p>{safeFormatDate(post.publishedAt, 'dd/MM/yyyy HH:mm')}</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-gray-400">Tạo ngày:</p>
+                              <p>{safeFormatDate(post.createdAt, 'dd/MM/yyyy')}</p>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPost(post)}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors"
+                              title="Xem chi tiết"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {post.status === 'FAILED' && (
+                              <button
+                                type="button"
+                                onClick={() => retryPost(post.id)}
+                                className="p-1.5 rounded-lg hover:bg-purple-50 text-purple-600 transition-colors"
+                                title="Thử lại bài viết"
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => deletePost(post.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors"
+                              title="Xoá bài viết"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
+          /* Grid Card View */
           <motion.div 
             layout
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8"

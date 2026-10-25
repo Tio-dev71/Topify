@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import {
   Upload,
   Film,
@@ -23,6 +23,7 @@ import {
   Dices,
   Sun,
   Moon,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -1269,9 +1270,19 @@ export default function CreatePost() {
             
             {/* Platform Selection */}
             <div>
-              <label className="block text-[15px] font-bold text-gray-900 mb-3">
-                1. Chọn nền tảng phân phối
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <label className="block text-[15px] font-bold text-gray-900">
+                  1. Chọn nền tảng phân phối
+                </label>
+                <Link
+                  to="/settings"
+                  className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold inline-flex items-center gap-1.5 transition-colors shadow-2xs"
+                  title="Mở Cài đặt hệ thống để kết nối thêm Facebook Fanpage, TikTok, YouTube, Zalo"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Kết nối thêm kênh mạng xã hội (Settings)
+                </Link>
+              </div>
               <div className="flex flex-wrap gap-4">
                 {(Object.entries(PLATFORM_CONFIG) as [Platform, typeof PLATFORM_CONFIG[keyof typeof PLATFORM_CONFIG]][]).map(
                   ([key, config]) => {

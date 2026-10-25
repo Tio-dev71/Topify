@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import api, { getApiBaseUrl } from '../lib/axios';
 import SePayPaymentModal from '../components/payment/SePayPaymentModal';
 import ExpirationBanner, { type SubscriptionStatusInfo } from '../components/subscription/ExpirationBanner';
+import { ChannelGroupsManager } from '../components/ChannelGroupsManager';
 
 interface QuotaUsageData {
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
@@ -841,6 +842,9 @@ export default function Settings() {
               )}
             </div>
           </div>
+
+          {/* F010: Channel Groups Management */}
+          <ChannelGroupsManager socialAccounts={socialAccounts} />
         </div>
       )}
 

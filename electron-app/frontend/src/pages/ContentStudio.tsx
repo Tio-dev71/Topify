@@ -38,6 +38,8 @@ import { ContentTemplatesTab } from '../components/content-studio/ContentTemplat
 import { ContentBriefsTab } from '../components/content-studio/ContentBriefsTab';
 import { PrePublishChecklistTab } from '../components/content-studio/PrePublishChecklistTab';
 import { DuplicateDetectionTab } from '../components/content-studio/DuplicateDetectionTab';
+import { CarouselEditorTab } from '../components/content-studio/CarouselEditorTab';
+import { Images } from 'lucide-react';
 import {
   generateSpinVariantsClient,
   parseSpintaxClient,
@@ -81,7 +83,7 @@ const FORMATS = [
 export default function ContentStudio() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
-    'ai_writer' | 'spin_tool' | 'pillars' | 'templates' | 'briefs' | 'checklist' | 'duplicate_check' | 'import_posts' | 'resize_asset'
+    'ai_writer' | 'spin_tool' | 'carousel' | 'pillars' | 'templates' | 'briefs' | 'checklist' | 'duplicate_check' | 'import_posts' | 'resize_asset'
   >('ai_writer');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSpinModalOpen, setIsSpinModalOpen] = useState(false);
@@ -89,7 +91,9 @@ export default function ContentStudio() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    if (tabParam === 'resize' || tabParam === 'resize_asset' || tabParam === 'f113') {
+    if (tabParam === 'carousel' || tabParam === 'f013') {
+      setActiveTab('carousel');
+    } else if (tabParam === 'resize' || tabParam === 'resize_asset' || tabParam === 'f113') {
       setActiveTab('resize_asset');
     } else if (tabParam === 'spin') {
       setActiveTab('spin_tool');
@@ -294,6 +298,18 @@ export default function ContentStudio() {
             >
               <Repeat className="w-3.5 h-3.5" />
               Spin Nội Dung Chống Spam (F015)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('carousel')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'carousel'
+                  ? 'bg-white text-purple-900 shadow-md ring-2 ring-pink-300'
+                  : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
+            >
+              <Images className="w-3.5 h-3.5 text-pink-300" />
+              Soạn Carousel Nhiều Ảnh (F013)
             </button>
             <button
               type="button"
@@ -1050,6 +1066,9 @@ export default function ContentStudio() {
           </div>
         </div>
       )}
+
+      {/* TAB: CAROUSEL POST CREATOR (F013) */}
+      {activeTab === 'carousel' && <CarouselEditorTab />}
 
       {/* TAB: CONTENT PILLARS & MONTHLY/QUARTERLY PLAN (F073 & F074) */}
       {activeTab === 'pillars' && <ContentPillarsTab />}
