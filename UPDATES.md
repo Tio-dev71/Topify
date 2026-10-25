@@ -12,6 +12,33 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] — Bỏ Chặn Lỗi YouTube Shorts Quá 180s, Chuyển Thành Warning Cho Phép Đăng/Lên Lịch Bình Thường
+
+### Phân hệ M2. Content Studio (Quản lý bài viết - F014: Đăng Video Ngắn YouTube Shorts):
+- **[F014] Cho phép xuất bản & lên lịch video YouTube Shorts dài hơn 180s kèm cảnh báo:**
+  - **Vấn đề ghi nhận từ Tester & Ảnh chụp:**
+    - Người dùng chọn 1 video dài hơn 180s (cụ thể video BTS dài 211s), chọn nền tảng YouTube Shorts, chọn *"Lên lịch chính xác"* và bấm *"Lên lịch hẹn giờ 1 Video"*.
+    - **Expected:** Chỉ hiển thị warning rằng video dài hơn 180s nên YouTube sẽ tự chuyển thành video thường, và vẫn cho phép đăng/lên lịch bình thường.
+    - **Actual:** Hệ thống chặn cứng bằng thông báo lỗi: *"Lỗi tạo bài viết cho ...: Video cho YouTube Shorts có thời lượng tối đa 3 phút (180 giây). Video hiện tại dài 211s nên sẽ bị YouTube tự động chuyển thành video thường."* Bài viết không được tạo.
+  - **Nguyên nhân gốc rễ:**
+    1. Trong [`app/api/posts/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/posts/route.ts) dòng 191-196, có điều kiện chặn cứng: `if (platforms.includes('YOUTUBE_SHORTS') && videoAsset.duration > 180)` trả về `HTTP 400 Bad Request`.
+    2. Trong khi đó, module publisher [`lib/publishers/youtube.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/publishers/youtube.ts) thực tế đã có cơ chế cảnh báo và upload lên YouTube bình thường (YouTube API tự động xử lý các video dài hơn 180s thành video thông thường).
+    3. Trên giao diện [`CreatePost.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/CreatePost.tsx), hộp cảnh báo thời lượng trước đó có giao diện màu đỏ (`bg-rose-50`) như một thông báo lỗi.
+  - **Giải pháp xử lý triệt để:**
+    1. **Bỏ chặn 400 tại Backend API ([`POST /api/posts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/posts/route.ts)):**
+       - Thay thế mã chặn 400 bằng việc tạo bài viết và lên lịch bình thường, đồng thời trả về thuộc tính `warning: "Video cho YouTube Shorts có thời lượng ${duration}s (> 180s). YouTube sẽ tự động chuyển thành video thường."`.
+    2. **Đồng bộ hóa trong Engine Import Bảng tính ([`lib/content-studio/import-engine.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts)):**
+       - Thêm cột `duration` (thời lượng) vào `HEADER_ALIASES`.
+       - Đối với cả luồng Excel và Google Sheets: nếu phát hiện video YouTube Shorts có thời lượng > 180s, hệ thống chỉ đẩy vào danh sách `warnings` (Có cảnh báo) để người dùng nắm thông tin, tuyệt đối không tính là `errors`, hàng vẫn hợp lệ 100% (`isValid = true`) và được phép lưu/lên lịch.
+    3. **Tối ưu trải nghiệm Frontend ([`CreatePost.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/CreatePost.tsx)):**
+       - Chuyển hộp thông báo thời lượng YouTube Shorts sang màu vàng cảnh báo (`bg-amber-50 border-amber-200 text-amber-800`), nội dung ghi rõ: *"YouTube Shorts chỉ phân loại dạng Shorts đối với video tối đa 3 phút (180 giây). Video này dài ...s nên sẽ được YouTube tự động xuất bản dưới dạng Video thông thường. Hệ thống vẫn hỗ trợ đăng và lên lịch hẹn giờ bình thường!"*.
+       - Khi lên lịch thành công, hệ thống hiển thị Toast cảnh báo nhẹ nhàng (`toast.warning(warning)`) để người dùng lưu ý mà không làm gián đoạn luồng tạo bài.
+    4. **Kiểm thử tự động:**
+       - Bổ sung test case trong [`__tests__/api/posts/route.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/posts/route.test.ts): `allows YouTube Shorts post creation when video duration > 180s and returns warning` $\rightarrow$ Pass 12/12 tests.
+       - Bổ sung test case trong [`__tests__/api/content-studio/import.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/import.test.ts): `allows YouTube Shorts with duration > 180s as valid with a warning instead of blocking` $\rightarrow$ Pass 6/6 tests.
+
+---
+
 ## 🚀 [2026-10-26] — Sửa Lỗi Import Bài Viết Excel & Google Sheets Báo Hợp Lệ Dù Nền Tảng Chưa Kết Nối (F019)
 
 ### Phân hệ M2. Content Studio (Quản lý bài viết - F019: Import Bài Viết Hàng Loạt):

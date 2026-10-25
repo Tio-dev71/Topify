@@ -252,5 +252,33 @@ describe('Posts API Route', () => {
       expect(res.status).toBe(201);
       expect(schedulePublish).toHaveBeenCalledWith('post-random-1', expect.any(Date));
     });
+
+    it('allows YouTube Shorts post creation when video duration > 180s and returns warning', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-bts-1', workspaceId: 'ws-1', duration: 211 } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'YOUTUBE' } as any]);
+
+      const mockPost = { id: 'post-bts-1', status: 'SCHEDULED' };
+      vi.mocked(prisma.post.create).mockResolvedValue(mockPost as any);
+
+      const req = new NextRequest('http://localhost/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: "[SPECIAL CLIP] BTS 'Life Goes On'",
+          videoAssetId: 'video-bts-1',
+          platforms: ['YOUTUBE_SHORTS'],
+          publishMode: 'schedule',
+          scheduledAt: '2026-10-28T20:26:00.000Z',
+        }),
+      });
+      const res = await POST(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(json.warning).toBeDefined();
+      expect(json.warning).toContain('211s');
+      expect(json.warning).toContain('video thường');
+      expect(schedulePublish).toHaveBeenCalledWith('post-bts-1', expect.any(Date));
+    });
   });
 });

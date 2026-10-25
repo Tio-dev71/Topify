@@ -188,11 +188,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Video asset not found in your workspace' }, { status: 404 });
     }
 
+    let youtubeDurationWarning: string | undefined = undefined;
     if (platforms.includes('YOUTUBE_SHORTS') && videoAsset.duration && videoAsset.duration > 180) {
-      return NextResponse.json(
-        { error: `Video cho YouTube Shorts có thời lượng tối đa 3 phút (180 giây). Video hiện tại dài ${videoAsset.duration}s nên sẽ bị YouTube tự động chuyển thành video thường.` },
-        { status: 400 }
-      );
+      youtubeDurationWarning = `Video cho YouTube Shorts có thời lượng ${videoAsset.duration}s (> 180s). YouTube sẽ tự động chuyển thành video thường.`;
+      console.warn(`[PostsAPI] ${youtubeDurationWarning}`);
     }
 
     // Validate that user/workspace has connected accounts for all selected platforms
@@ -305,7 +304,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(post, { status: 201 });
+    return NextResponse.json({ ...post, warning: youtubeDurationWarning }, { status: 201 });
   } catch (error: any) {
     console.error('Create post error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

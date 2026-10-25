@@ -812,6 +812,9 @@ export default function CreatePost() {
 
         if (res.status === 200 || res.status === 201) {
           successCount++;
+          if (res.data?.warning) {
+            toast.warning(res.data.warning, { duration: 6000 });
+          }
         }
       } catch (error: any) {
         toast.error(`Lỗi tạo bài viết cho ${video.originalFileName}: ${error.response?.data?.error || 'Lỗi không xác định'}`);
@@ -1117,12 +1120,12 @@ export default function CreatePost() {
                   )}
 
                   {platforms.includes('YOUTUBE_SHORTS') && v.duration && v.duration > 180 && (
-                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 animate-fade-in">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+                    <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-800 animate-fade-in">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                       <div>
-                        <p className="font-bold text-rose-900">Cảnh báo thời lượng: Video quá dài ({v.duration}s)</p>
-                        <p className="mt-0.5 text-rose-700 leading-relaxed">
-                          YouTube Shorts chỉ hỗ trợ video tối đa 3 phút (180 giây). Video dài hơn sẽ bị YouTube xuất bản dưới dạng Video thông thường.
+                        <p className="font-bold text-amber-900">Lưu ý thời lượng: Video dài {v.duration}s (&gt; 180s)</p>
+                        <p className="mt-0.5 text-amber-700 leading-relaxed">
+                          YouTube Shorts chỉ phân loại dạng Shorts đối với video tối đa 3 phút (180 giây). Video này dài {v.duration}s nên sẽ được YouTube tự động xuất bản dưới dạng <strong>Video thông thường</strong>. Hệ thống vẫn hỗ trợ đăng và lên lịch hẹn giờ bình thường!
                         </p>
                       </div>
                     </div>
@@ -1335,7 +1338,7 @@ export default function CreatePost() {
                       • <strong>Tỷ lệ khung hình:</strong> Bắt buộc là video dọc (9:16) hoặc vuông (1:1). Video ngang (16:9) sẽ bị YouTube đưa vào danh mục Video thường.
                     </p>
                     <p className="text-xs text-amber-700">
-                      • <strong>Thời lượng:</strong> Tối đa 60 giây (hoặc tối đa 180 giây cho video dọc/vuông).
+                      • <strong>Thời lượng:</strong> Tối đa 60 giây (hoặc tối đa 180 giây cho video dọc/vuông). Video dài hơn 180 giây vẫn được đăng/hẹn giờ bình thường và YouTube sẽ tự động phân loại thành Video thông thường.
                     </p>
                     <p className="text-xs text-amber-700">
                       • <strong>Hashtag:</strong> Hệ thống tự động thêm thẻ <code>#Shorts</code> vào tiêu đề và mô tả để YouTube lập chỉ mục ngay.

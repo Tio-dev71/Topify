@@ -69,6 +69,7 @@ const HEADER_ALIASES = {
   platforms: ['nền tảng', 'nen tang', 'platform', 'platforms', 'kênh', 'kenh', 'mạng xã hội', 'mang xa hoi'],
   scheduledAt: ['thời gian lên lịch', 'thoi gian len lich', 'thời gian đăng', 'thoi gian dang', 'scheduled at', 'scheduled time', 'ngày đăng', 'ngay dang', 'thời gian', 'thoi gian', 'time', 'schedule'],
   mediaUrl: ['đường dẫn media', 'duong dan media', 'media url', 'media', 'video url', 'video', 'ảnh', 'anh', 'image url', 'link video', 'link media', 'tệp media'],
+  duration: ['thời lượng', 'thoi luong', 'duration', 'độ dài', 'do dai', 'thời lượng video', 'thoi luong video'],
 };
 
 function normalizeKey(rawKey: string): string {
@@ -251,6 +252,14 @@ export function parseExcelOrCsvBuffer(
         warnings.push(dateWarning);
       } else if (!scheduledAt) {
         warnings.push('Không có lịch hẹn -> Bài viết sẽ lưu dưới dạng Bản Thảo (Draft).');
+      }
+
+      // YouTube Shorts duration > 180s: add warning, do NOT block
+      if (platforms.includes('YOUTUBE_SHORTS') && normalizedRow.duration) {
+        const durNum = parseInt(String(normalizedRow.duration).replace(/[^\d]/g, ''), 10);
+        if (!isNaN(durNum) && durNum > 180) {
+          warnings.push(`Video YouTube Shorts dài ${durNum}s (> 180s) sẽ được YouTube tự động xuất bản dưới dạng Video thông thường.`);
+        }
       }
 
       const isValid = errors.length === 0;

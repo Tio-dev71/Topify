@@ -124,5 +124,32 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     expect(result.rows[0].isValid).toBe(true);
     expect(result.rows[0].unconnectedPlatforms).toBeUndefined();
   });
+
+  it('allows YouTube Shorts with duration > 180s as valid with a warning instead of blocking', () => {
+    const rows = [
+      {
+        'Tiêu đề': "[SPECIAL CLIP] BTS 'Life Goes On'",
+        'Nội dung': 'Special clip Life Goes On',
+        'Nền tảng': 'YOUTUBE_SHORTS',
+        'Thời lượng': '211s',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['YOUTUBE', 'GOOGLE']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(1);
+    expect(result.invalidRows).toBe(0);
+
+    const first = result.rows[0];
+    expect(first.isValid).toBe(true);
+    expect(first.warnings.some((w) => w.includes('YouTube') && w.toLowerCase().includes('video thông thường'))).toBe(true);
+  });
 });
 
