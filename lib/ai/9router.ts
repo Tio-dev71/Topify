@@ -217,21 +217,21 @@ export async function analyzeContentScore(params: {
   platform?: string;
   brandVoice?: string;
 }): Promise<ContentScoreResult> {
-  const { title = '', caption, platform = 'TIKTOK', brandVoice } = params;
+  const { title = '', caption, platform: rawPlatform, brandVoice } = params;
+  const hasPlatform = Boolean(rawPlatform && rawPlatform.trim().length > 0 && rawPlatform !== 'ALL');
+  const platform = hasPlatform ? rawPlatform!.trim() : '';
   const hasBrandVoice = Boolean(brandVoice && brandVoice.trim().length > 0);
   const cleanBrandVoice = hasBrandVoice ? brandVoice!.trim() : undefined;
   const cleanTitle = cleanVideoTitle(title);
 
-  // 0. Meaningless / Gibberish Caption Fast Path (Give very low scores and ZERO fake strengths)
+  // 0. Meaningless / Gibberish Caption Fast Path (Give 0 scores and ZERO fake strengths)
   const gibberishCheck = isMeaninglessOrGibberish(caption);
   if (gibberishCheck.isGibberish) {
-    const hookScore = 10;
-    const ctaScore = 5;
-    const platformFitScore = 10;
-    const brandVoiceScore = hasBrandVoice ? 5 : undefined;
-    const overallScore = hasBrandVoice
-      ? Math.round(hookScore * 0.35 + ctaScore * 0.25 + platformFitScore * 0.20 + brandVoiceScore! * 0.20)
-      : Math.round(hookScore * 0.45 + ctaScore * 0.30 + platformFitScore * 0.25);
+    const hookScore = 0;
+    const ctaScore = 0;
+    const platformFitScore = 0;
+    const brandVoiceScore = hasBrandVoice ? 0 : undefined;
+    const overallScore = 0;
 
     let suggestedCaption = '';
     if (cleanTitle && cleanTitle.length > 2) {
@@ -240,23 +240,30 @@ export async function analyzeContentScore(params: {
       suggestedCaption = `🔥 Bật mí bí quyết giữ chân người xem cực đỉnh mà ít ai nói cho bạn biết! Lưu lại ngay video này để áp dụng nhé.\n\n👉 Bạn nghĩ sao về điều này? Comment ngay bên dưới để cùng thảo luận!\n\n#trending #viral #chiase #kinhnghiem #topify`;
     }
 
+    const improvements = [
+      `Nội dung hiện tại là chuỗi ký tự vô nghĩa hoặc quá sơ sài (${gibberishCheck.reason || 'chưa có thông điệp'}), khó giữ chân khán giả.`,
+      'Cần viết câu mở đầu (Hook) gây chú ý trong 3 giây đầu (vd: đặt câu hỏi tò mò, bí quyết hoặc cảnh báo sai lầm).',
+      'Bổ sung lời kêu gọi hành động (CTA) cụ thể ở cuối bài (vd: "Lưu lại ngay khi cần", "Comment để nhận file").',
+      'Thêm từ 3 - 5 hashtag thịnh hành liên quan đến chủ đề video để tăng lượt hiển thị.',
+    ];
+    if (!hasPlatform) {
+      improvements.unshift('Vui lòng chọn ít nhất một nền tảng xuất bản (TikTok, Reels, Shorts) để tối ưu định dạng.');
+    }
+
     return {
-      overallScore,
-      hookScore,
-      ctaScore,
+      overallScore: 0,
+      hookScore: 0,
+      ctaScore: 0,
       brandVoiceScore,
-      platformFitScore,
+      platformFitScore: 0,
       hookAnalysis: 'Nội dung vô nghĩa hoặc quá ngắn, hoàn toàn không có yếu tố giữ chân người xem trong 3s đầu.',
       ctaAnalysis: 'Hoàn toàn thiếu lời kêu gọi hành động (CTA).',
       brandVoiceAnalysis: hasBrandVoice ? 'Nội dung vô nghĩa, không thể hiện được giọng điệu thương hiệu.' : undefined,
-      platformFitAnalysis: `Chưa đạt chuẩn định dạng của ${platform}, thiếu hashtag và thông điệp rõ ràng.`,
+      platformFitAnalysis: hasPlatform
+        ? `Chưa đạt chuẩn định dạng của ${platform}, thiếu hashtag và thông điệp rõ ràng.`
+        : 'Chưa chọn nền tảng xuất bản để đánh giá chuẩn định dạng.',
       strengths: [],
-      improvements: [
-        `Nội dung hiện tại là chuỗi ký tự vô nghĩa hoặc quá sơ sài (${gibberishCheck.reason || 'chưa có thông điệp'}), khó giữ chân khán giả.`,
-        'Cần viết câu mở đầu (Hook) gây chú ý trong 3 giây đầu (vd: đặt câu hỏi tò mò, bí quyết hoặc cảnh báo sai lầm).',
-        'Bổ sung lời kêu gọi hành động (CTA) cụ thể ở cuối bài (vd: "Lưu lại ngay khi cần", "Comment để nhận file").',
-        'Thêm từ 3 - 5 hashtag thịnh hành liên quan đến chủ đề video để tăng lượt hiển thị.',
-      ],
+      improvements,
       suggestedCaption,
       isAiGenerated: false,
       modelUsed: 'Heuristic Gibberish-Detector',
@@ -381,26 +388,35 @@ function calculateHeuristicContentScore(params: {
   platform?: string;
   brandVoice?: string;
 }): ContentScoreResult {
-  const { title = '', caption, platform = 'TIKTOK', brandVoice } = params;
+  const { title = '', caption, platform: rawPlatform, brandVoice } = params;
+  const hasPlatform = Boolean(rawPlatform && rawPlatform.trim().length > 0 && rawPlatform !== 'ALL');
+  const platform = hasPlatform ? rawPlatform!.trim() : '';
   const hasBrandVoice = Boolean(brandVoice && brandVoice.trim().length > 0);
   const cleanTitle = cleanVideoTitle(title);
   const trimmedCaption = caption.trim();
   const lowerCaption = trimmedCaption.toLowerCase();
+  const charLength = trimmedCaption.length;
+  const hashtagCount = (trimmedCaption.match(/#[a-zA-Z0-9_\p{L}]+/gu) || []).length;
 
   // 1. Hook Score calculation (evaluated on the actual caption's opening)
-  let hookScore = trimmedCaption.length >= 25 ? 40 : 20;
+  let hookScore = 0;
+  if (trimmedCaption.length >= 25) {
+    hookScore = 30;
+  } else if (trimmedCaption.length >= 10) {
+    hookScore = 15;
+  }
   const hookKeywords = [
     'bí quyết', 'bật mí', 'tại sao', 'làm thế nào', 'cảnh báo', 'đừng', 'sai lầm',
     'bạn có biết', 'top', 'bí mật', 'check ngay', 'sốc', 'kinh nghiệm', 'sự thật',
     'hướng dẫn', 'cách để', 'ai cũng', 'nguy hiểm', 'chú ý'
   ];
   const hasHookKeyword = hookKeywords.some(kw => lowerCaption.includes(kw));
-  if (hasHookKeyword) hookScore += 30;
+  if (hasHookKeyword) hookScore += 35;
 
   // Check if caption contains meaningful number hook (e.g. 5 bước, 3 cách, top 10)
   const hasNumberHook = /(?:top\s*)?\d+\s*(?:bước|cách|mẹo|sai lầm|bí quyết|ngày|lý do|phút|giây|%)/i.test(lowerCaption) ||
     (/\b\d+\b/.test(trimmedCaption.slice(0, 80)) && !/\d+p\b/i.test(trimmedCaption.slice(0, 80)));
-  if (hasNumberHook) hookScore += 10;
+  if (hasNumberHook) hookScore += 15;
 
   if (trimmedCaption.includes('?') || trimmedCaption.includes('!')) hookScore += 10;
   if (/[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(trimmedCaption)) hookScore += 5; // Has emojis
@@ -413,27 +429,29 @@ function calculateHeuristicContentScore(params: {
     'tag bạn bè', 'xem thêm', 'liên hệ', 'bấm vào', 'nhận ngay', 'đăng ký'
   ];
   const foundCta = ctaKeywords.filter(kw => lowerCaption.includes(kw));
-  let ctaScore = 20;
-  if (foundCta.length >= 1) ctaScore = 65;
+  let ctaScore = 0;
   if (foundCta.length >= 2) ctaScore = 85;
-  if (lowerCaption.includes('ngay') || lowerCaption.includes('nhé') || lowerCaption.includes('nha')) ctaScore += 5;
+  else if (foundCta.length === 1) ctaScore = 65;
+  else if (lowerCaption.includes('ngay') || lowerCaption.includes('nhé') || lowerCaption.includes('nha')) ctaScore = 20;
+  else ctaScore = 0;
   ctaScore = Math.min(95, ctaScore);
 
-  // 3. Platform Fit Score (evaluated on caption length & hashtags)
-  let platformFitScore = 30;
-  const charLength = trimmedCaption.length;
-  const hashtagCount = (trimmedCaption.match(/#[a-zA-Z0-9_\p{L}]+/gu) || []).length;
+  // 3. Platform Fit Score (evaluated on platform selection, caption length & hashtags)
+  let platformFitScore = 0;
+  if (hasPlatform) {
+    platformFitScore = 30;
 
-  if (charLength >= 20 && charLength < 50) platformFitScore = 50;
-  else if (charLength >= 50 && charLength <= 400) platformFitScore = 75;
-  else if (charLength > 400) platformFitScore = 60;
+    if (charLength >= 20 && charLength < 50) platformFitScore = 50;
+    else if (charLength >= 50 && charLength <= 400) platformFitScore = 75;
+    else if (charLength > 400) platformFitScore = 60;
 
-  if (hashtagCount >= 3 && hashtagCount <= 8) {
-    platformFitScore += 15;
-  } else if (hashtagCount >= 1) {
-    platformFitScore += 10;
+    if (hashtagCount >= 3 && hashtagCount <= 8) {
+      platformFitScore += 15;
+    } else if (hashtagCount >= 1) {
+      platformFitScore += 10;
+    }
+    platformFitScore = Math.min(95, platformFitScore);
   }
-  platformFitScore = Math.min(95, platformFitScore);
 
   // 4. Brand Voice Score (Only if brand voice was configured)
   let brandVoiceScore: number | undefined = undefined;
@@ -479,6 +497,10 @@ function calculateHeuristicContentScore(params: {
     improvements.push('Điều chỉnh câu từ để thể hiện rõ hơn phong cách giọng điệu thương hiệu.');
   }
 
+  if (!hasPlatform) {
+    improvements.unshift('Vui lòng chọn ít nhất một nền tảng xuất bản (TikTok, Reels, Shorts) để tối ưu định dạng.');
+  }
+
   if (improvements.length === 0) {
     improvements.push('Có thể test thử thêm emoji ở các đầu mục để bài viết thoáng mắt hơn.');
   }
@@ -512,7 +534,9 @@ function calculateHeuristicContentScore(params: {
     brandVoiceAnalysis: hasBrandVoice
       ? 'Văn phong tự nhiên, phù hợp với định hướng thương hiệu.'
       : undefined,
-    platformFitAnalysis: `Định dạng tương thích tốt với ${platform}, độ dài vừa vặn với thói quen đọc nhanh.`,
+    platformFitAnalysis: hasPlatform
+      ? `Định dạng tương thích tốt với ${platform}, độ dài vừa vặn với thói quen đọc nhanh.`
+      : 'Chưa chọn nền tảng xuất bản để đánh giá chuẩn định dạng.',
     strengths,
     improvements,
     suggestedCaption: suggested,

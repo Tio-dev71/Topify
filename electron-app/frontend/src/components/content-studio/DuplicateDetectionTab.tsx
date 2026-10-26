@@ -39,8 +39,8 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
           toast.success('Nội dung độc bản (Unique 100%), không phát hiện trùng lặp trong không gian làm việc!');
         }
       }
-    } catch {
-      toast.error('Lỗi khi kiểm tra trùng lặp');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Lỗi khi kiểm tra trùng lặp');
     } finally {
       setChecking(false);
     }

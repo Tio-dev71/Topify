@@ -43,18 +43,18 @@ describe('AI Content Score (F084)', () => {
   });
 
   describe('Content Score Engine Behavior', () => {
-    it('gives very low scores and ZERO fake strengths for gibberish caption (dsfsdfdsf)', async () => {
+    it('gives 0 scores and ZERO fake strengths for gibberish caption (dsfsdfdsf)', async () => {
       const result = await analyzeContentScore({
         title: "[SPECIAL CLIP] BTS (방탄소년단) 'Life Goes On' (in the -mp4_(360p)",
         caption: 'dsfsdfdsf',
         platform: 'TIKTOK',
       });
 
-      // Overall score must be very low (< 20)
-      expect(result.overallScore).toBeLessThanOrEqual(15);
-      expect(result.hookScore).toBeLessThanOrEqual(15);
-      expect(result.ctaScore).toBeLessThanOrEqual(10);
-      expect(result.platformFitScore).toBeLessThanOrEqual(15);
+      // Overall score must be 0
+      expect(result.overallScore).toBe(0);
+      expect(result.hookScore).toBe(0);
+      expect(result.ctaScore).toBe(0);
+      expect(result.platformFitScore).toBe(0);
 
       // Must NOT contain Brand Voice when unconfigured
       expect(result.brandVoiceScore).toBeUndefined();
@@ -70,6 +70,17 @@ describe('AI Content Score (F084)', () => {
 
       // Suggested caption should leverage clean title
       expect(result.suggestedCaption).toContain("BTS (방탄소년단) 'Life Goes On'");
+    });
+
+    it('sets platformFitScore to 0 when platform is unselected or ALL', async () => {
+      const result = await analyzeContentScore({
+        caption: 'Bí quyết nấu ăn ngon cho cả nhà, lưu lại ngay nhé!',
+        platform: 'ALL',
+      });
+
+      expect(result.platformFitScore).toBe(0);
+      expect(result.improvements.some(imp => imp.includes('nền tảng xuất bản'))).toBe(true);
+      expect(result.platformFitAnalysis).toContain('Chưa chọn nền tảng');
     });
 
     it('calculates score with Brand Voice when configured', async () => {

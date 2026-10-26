@@ -402,7 +402,7 @@ export default function CreatePost() {
       const res = await api.post('/content/ai-score', {
         title: video.title || video.titleFromFileName || '',
         caption: video.caption || '',
-        platform: platforms[0] || 'TIKTOK_VIDEO',
+        platform: platforms[0] || '',
       });
 
       if (res?.data?.data) {

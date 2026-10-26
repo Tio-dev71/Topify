@@ -12,6 +12,28 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 2. Nêu rõ phân hệ: `[Backend]`, `[Web Dashboard]`, `[Electron App]`, hoặc `[Database]`.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-26] (v1.3.23) — Chuẩn Hóa Chấm Điểm AI Content Score (F084) & Sửa Lỗi Kiểm Tra Trùng Lặp (F082)
+
+### Phân hệ M2. Quản lý bài viết & Content Studio (AI Content Score F084 & Duplicate Check F082) [Electron App & Backend API]:
+- **[F084] Chuẩn hóa thang điểm AI Content Score cho chuỗi ký tự vô nghĩa và trạng thái chưa chọn nền tảng:**
+  - **Vấn đề giải quyết:**
+    - Khi người dùng nhập nội dung vô nghĩa/spam (ví dụ: `"dsfsdfdsf"`), hệ thống trước đây vẫn cho điểm tối thiểu và có thể sinh các nhận xét tích cực không phù hợp.
+    - Khi người dùng chưa chọn nền tảng đăng bài (TikTok, Reels, Shorts), hệ thống tự động gán mặc định là TikTok hoặc cho điểm tương thích mà không nhắc người dùng chọn nền tảng cụ thể.
+  - **Giải pháp kỹ thuật:**
+    - Cập nhật hàm [`analyzeContentScore`](file:///Users/tiodev/Desktop/Topify.nosync/lib/ai/9router.ts) và `calculateHeuristicContentScore`:
+      - Khi phát hiện chuỗi ký tự vô nghĩa (gibberish/random string), toàn bộ các điểm thành phần (Overall, Hook, CTA, Platform Fit) đều được đặt về **0 điểm**, danh sách ưu điểm (`strengths`) hoàn toàn rỗng và danh sách cải thiện (`improvements`) giải thích rõ nội dung vô nghĩa/sơ sài.
+      - Khi chưa chọn nền tảng xuất bản (`platform` rỗng hoặc `'ALL'`), điểm tương thích nền tảng (`platformFitScore`) trả về **0 điểm**, phần phân tích định dạng nêu rõ "Chưa chọn nền tảng xuất bản để đánh giá chuẩn định dạng" và danh sách gợi ý nhắc người dùng chọn ít nhất một nền tảng (TikTok, Reels, Shorts).
+      - Thang điểm CTA heuristic được siết chặt: Trả về 0 điểm nếu nội dung hoàn toàn không có từ khóa kêu gọi hành động hoặc ngữ cảnh khẩn cấp.
+    - Tại giao diện [`CreatePost.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/CreatePost.tsx): Gửi giá trị nền tảng thực tế người dùng đã chọn (`platforms[0] || ''`) thay vì hardcode mặc định `'TIKTOK_VIDEO'`.
+    - Bổ sung bộ kiểm thử tự động toàn diện trong [`__tests__/api/content/ai-score.test.ts`](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content/ai-score.test.ts).
+
+- **[F082] Khắc phục lỗi 500 khi quét trùng lặp nội dung đa phương tiện trong Workspace:**
+  - **Vấn đề giải quyết:**
+    - Khi gọi API kiểm tra trùng lặp `POST /api/content/duplicate-check`, Prisma ORM báo lỗi do quan hệ giữa model `Post` và `PostMedia` có tên là `media`, nhưng câu lệnh `findMany` lại truy vấn `postMedia: { select: ... }`.
+  - **Giải pháp kỹ thuật:**
+    - Cập nhật [`app/api/content/duplicate-check/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/content/duplicate-check/route.ts) sử dụng đúng tên quan hệ `media: { select: { mediaAsset: { select: { storageUrl: true } } } }`.
+    - Cải tiến thông báo Toast trong [`DuplicateDetectionTab.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/DuplicateDetectionTab.tsx) để bóc tách thông điệp chi tiết từ server thay vì hiển thị lỗi chung chung.
+
 ## 🚀 [2026-10-26] (v1.3.22) — Tối Ưu Hiển Thị URL Media & Sửa Lỗi Tải Video Thư Viện Media (F114)
 
 ### Phân hệ M2. Thư viện Media & Tệp tin (F114) [Electron App & Backend API]:
