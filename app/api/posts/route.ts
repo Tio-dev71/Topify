@@ -98,10 +98,23 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         videoAsset: {
-          select: { originalFileName: true, storageUrl: true },
+          select: {
+            id: true,
+            originalFileName: true,
+            storageUrl: true,
+            duration: true,
+            size: true,
+            mimeType: true,
+          },
         },
         platforms: {
-          select: { platform: true, status: true },
+          select: {
+            id: true,
+            platform: true,
+            status: true,
+            errorMessage: true,
+            externalPostId: true,
+          },
         },
         createdBy: {
           select: { name: true, email: true },
@@ -115,8 +128,12 @@ export async function GET(req: NextRequest) {
     const safePosts = posts.map((p) => ({
       ...p,
       videoAsset: p.videoAsset || {
+        id: '',
         originalFileName: p.title || 'Untitled',
         storageUrl: '',
+        duration: null,
+        size: 0,
+        mimeType: 'video/mp4',
       },
       platforms: p.platforms || [],
     }));
@@ -260,35 +277,108 @@ export async function POST(req: NextRequest) {
     }
 
     // Create post with platforms (safely sanitized against lone surrogate pairs)
-    const post = await prisma.post.create({
-      data: {
-        title: sanitizeUtf8(title) || 'Untitled Post',
-        caption: sanitizeUtf8Nullable(caption),
-        firstComment: sanitizeUtf8Nullable(firstComment),
-        hashtags: sanitizeUtf8Nullable(hashtags),
-        videoAssetId,
-        createdById: session.user.id,
-        workspaceId: (session.user as any).workspaceId,
-        status: publishMode === 'request_approval' ? 'PENDING_REVIEW' : publishMode === 'now' ? 'PUBLISHING' : 'SCHEDULED',
-        scheduledAt: finalScheduledAt,
-        isEvergreen: !!isEvergreen,
-        recycleIntervalDays: recycleIntervalDays || 30,
-        platforms: {
-          create: platforms.map((platform) => ({
-            platform,
-            status: 'PENDING',
-          })),
+    const postData: any = {
+      title: sanitizeUtf8(title) || 'Untitled Post',
+      caption: sanitizeUtf8Nullable(caption),
+      firstComment: sanitizeUtf8Nullable(firstComment),
+      hashtags: sanitizeUtf8Nullable(hashtags),
+      videoAssetId,
+      createdById: session.user.id,
+      workspaceId: (session.user as any).workspaceId,
+      status: publishMode === 'request_approval' ? 'PENDING_REVIEW' : publishMode === 'now' ? 'PUBLISHING' : 'SCHEDULED',
+      scheduledAt: finalScheduledAt,
+      isEvergreen: !!isEvergreen,
+      recycleIntervalDays: recycleIntervalDays || 30,
+      platforms: {
+        create: platforms.map((platform) => ({
+          platform,
+          status: 'PENDING',
+        })),
+      },
+    };
+
+    let post;
+    try {
+      post = await prisma.post.create({
+        data: postData,
+        include: {
+          platforms: true,
         },
-      },
-      include: {
-        platforms: true,
-      },
-    });
+      });
+    } catch (createErr: any) {
+      if (createErr?.message && (createErr.message.includes('surrogate') || createErr.message.includes('hex escape'))) {
+        console.warn('[PostsAPI] Detected surrogate error during post.create, applying deep sanitization retry...', createErr.message);
+        postData.title = sanitizeUtf8(postData.title).replace(/[\uD800-\uDFFF]/g, '') || 'Untitled Post';
+        postData.caption = postData.caption ? sanitizeUtf8(postData.caption).replace(/[\uD800-\uDFFF]/g, '') : null;
+        postData.firstComment = postData.firstComment ? sanitizeUtf8(postData.firstComment).replace(/[\uD800-\uDFFF]/g, '') : null;
+        postData.hashtags = postData.hashtags ? sanitizeUtf8(postData.hashtags).replace(/[\uD800-\uDFFF]/g, '') : null;
+        post = await prisma.post.create({
+          data: postData,
+          include: {
+            platforms: true,
+          },
+        });
+      } else {
+        throw createErr;
+      }
+    }
+
+    // If Evergreen is enabled, pre-schedule the next recycled child post according to recycleIntervalDays
+    let scheduledRecycledPost: any = null;
+    if (isEvergreen) {
+      try {
+        const intervalDays = recycleIntervalDays || 30;
+        const baseTime = (publishMode === 'schedule' || publishMode === 'random_window') && finalScheduledAt
+          ? finalScheduledAt.getTime()
+          : Date.now();
+        const scheduledRecycleDate = new Date(baseTime + intervalDays * 24 * 60 * 60 * 1000);
+
+        scheduledRecycledPost = await prisma.post.create({
+          data: {
+            title: post.title,
+            caption: post.caption,
+            firstComment: post.firstComment,
+            hashtags: post.hashtags,
+            videoAssetId: post.videoAssetId,
+            postType: post.postType,
+            createdById: post.createdById,
+            workspaceId: post.workspaceId,
+            status: 'SCHEDULED',
+            scheduledAt: scheduledRecycleDate,
+            originalPostId: post.id,
+            isEvergreen: false,
+            platforms: {
+              create: platforms.map((platform) => ({
+                platform,
+                status: 'PENDING',
+              })),
+            },
+          },
+          include: {
+            platforms: true,
+          },
+        });
+
+        // Enqueue schedule for the recycled child post
+        await schedulePublish(scheduledRecycledPost.id, scheduledRecycleDate);
+      } catch (egScheduleErr: any) {
+        console.warn('[PostsAPI] Warning pre-scheduling evergreen recycled post:', egScheduleErr.message);
+      }
+    }
 
     try {
       // Enqueue job if not requesting approval
       if (publishMode === 'now') {
         await enqueuePublish(post.id);
+        if (typeof prisma.post.findUnique === 'function') {
+          const updated = await prisma.post.findUnique({
+            where: { id: post.id },
+            include: { platforms: true },
+          });
+          if (updated) {
+            post = updated;
+          }
+        }
       } else if ((publishMode === 'schedule' || publishMode === 'random_window') && finalScheduledAt) {
         await schedulePublish(post.id, finalScheduledAt);
         if (finalScheduledAt <= new Date()) {

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { getNineRouterClient, isNineRouterConfigured, cleanJsonOutput } from '../ai/9router';
+import { sanitizeUtf8, safeSlice } from '../utils';
 
 // =========================================================================
 // TYPES & ENUMS FOR CONTENT STUDIO (M2: F015 & F016)
@@ -458,12 +459,15 @@ export function generateSpinVariants(
     const rawVariants = expandSpintaxMultiple(originalCaption, count);
     const variants: SpinVariant[] = rawVariants.map((cap, i) => {
       const uniqueness = calculateUniquenessScore(originalCaption, cap);
-      const safeCap = typeof cap.toWellFormed === 'function' ? cap.toWellFormed() : cap;
-      const hookText = Array.from(safeCap).slice(0, 45).join('') + '...';
+      const safeCap = sanitizeUtf8(cap);
+      const hookText = safeSlice(safeCap, 45) + '...';
+      const safeVariantTitle = sanitizeUtf8(
+        originalTitle ? `${originalTitle} (Biến thể #${i + 1})` : `Biến thể #${i + 1}`
+      );
       return {
         id: `spin-var-${Date.now()}-${i + 1}`,
         index: i + 1,
-        title: originalTitle ? `${originalTitle} (Biến thể #${i + 1})` : `Biến thể #${i + 1}`,
+        title: safeVariantTitle,
         caption: safeCap,
         uniquenessScore: uniqueness,
         hook: hookText,
@@ -477,7 +481,7 @@ export function generateSpinVariants(
     );
 
     return {
-      originalCaption,
+      originalCaption: sanitizeUtf8(originalCaption),
       variants,
       averageUniqueness: avgUnique,
       isSpintax: true,
@@ -487,8 +491,8 @@ export function generateSpinVariants(
 
   // Nếu là Caption văn bản thông thường, áp dụng kỹ thuật AI/Heuristic Transformation
   // Sử dụng cờ /u để regex xử lý đúng ký tự Unicode 32-bit (surrogate pairs) và không cắt đứt emoji
-  const cleanBase = originalCaption.replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/u, '').trim();
-  const safeBase = typeof cleanBase.toWellFormed === 'function' ? cleanBase.toWellFormed() : cleanBase;
+  const cleanBase = sanitizeUtf8(originalCaption).replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/u, '').trim();
+  const safeBase = sanitizeUtf8(cleanBase);
   const variants: SpinVariant[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -508,16 +512,19 @@ export function generateSpinVariants(
     // Cấu trúc biến thể theo các template độc nhất
     const builder = TEMPLATE_BUILDERS[i % TEMPLATE_BUILDERS.length];
     const rawCaption = builder(hook, transformedBody, cta);
-    const finalCaption = typeof rawCaption.toWellFormed === 'function' ? rawCaption.toWellFormed() : rawCaption;
+    const finalCaption = sanitizeUtf8(rawCaption);
 
     const uniqueness = calculateUniquenessScore(originalCaption, finalCaption);
+    const safeVariantTitle = sanitizeUtf8(
+      originalTitle
+        ? `${originalTitle} - Bản ${String.fromCharCode(65 + i)}`
+        : `Biến thể caption #${i + 1}`
+    );
 
     variants.push({
       id: `spin-var-${Date.now()}-${i + 1}`,
       index: i + 1,
-      title: originalTitle
-        ? `${originalTitle} - Bản ${String.fromCharCode(65 + i)}`
-        : `Biến thể caption #${i + 1}`,
+      title: safeVariantTitle,
       caption: finalCaption,
       uniquenessScore: Math.max(uniqueness, 68 + ((i * 7) % 25)),
       hook: hook.trim(),

@@ -11,7 +11,8 @@ import {
   X, 
   Copy, 
   Download,
-  Tag
+  Tag,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getMediaUrl } from '../lib/axios';
@@ -36,10 +37,13 @@ export default function MediaLibrary() {
   const [isUploading, setIsUploading] = useState(false);
   const [viewingAsset, setViewingAsset] = useState<MediaAssetItem | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [retryUrls, setRetryUrls] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAssets = async () => {
     setLoading(true);
+    setFailedImages({});
+    setRetryUrls({});
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -79,7 +83,8 @@ export default function MediaLibrary() {
       }
     } catch (err: any) {
       console.error('Lỗi khi tải file media lên server:', err);
-      const msg = err?.response?.data?.error || err?.message || 'Vui lòng kiểm tra kết nối mạng';
+      const serverErr = err?.response?.data?.error;
+      const msg = serverErr || (err?.message === 'Network Error' ? 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.' : err?.message) || 'Vui lòng kiểm tra kết nối mạng';
       toast.error(`Lỗi khi tải file lên server: ${msg}`);
     } finally {
       setIsUploading(false);
@@ -128,14 +133,18 @@ export default function MediaLibrary() {
             ref={fileInputRef}
             onChange={handleFileUpload}
             className="hidden"
-            accept="image/*,video/*,audio/*"
+            accept="image/*,video/*,audio/*,.mp4,.mov,.webm,.mkv,.avi,.flv,.wmv,.m4v,.3gp,.png,.jpg,.jpeg,.gif,.webp,.svg,.mp3,.wav,.ogg,.m4a"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="btn-primary flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-xs"
+            className="btn-primary flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-xs cursor-pointer disabled:opacity-50"
           >
-            <Upload className="w-4 h-4" />
+            {isUploading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
             <span>{isUploading ? 'Đang tải lên...' : 'Tải File Mới'}</span>
           </button>
         </div>
@@ -209,10 +218,16 @@ export default function MediaLibrary() {
                 >
                   {isImg && !failedImages[asset.id] ? (
                     <img
-                      src={getMediaUrl(asset.storageUrl)}
+                      src={retryUrls[asset.id] || getMediaUrl(asset.storageUrl)}
                       alt={asset.fileName}
                       onError={() => {
-                        setFailedImages(prev => ({ ...prev, [asset.id]: true }));
+                        const originalUrl = getMediaUrl(asset.storageUrl);
+                        if (!retryUrls[asset.id]) {
+                          const separator = originalUrl.includes('?') ? '&' : '?';
+                          setRetryUrls(prev => ({ ...prev, [asset.id]: `${originalUrl}${separator}t=${Date.now()}` }));
+                        } else {
+                          setFailedImages(prev => ({ ...prev, [asset.id]: true }));
+                        }
                       }}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
@@ -283,7 +298,7 @@ export default function MediaLibrary() {
             <div className="p-6 overflow-y-auto flex-1 flex items-center justify-center bg-gray-950">
               {viewingAsset.mediaType === 'IMAGE' || viewingAsset.mimeType?.startsWith('image/') ? (
                 <img
-                  src={getMediaUrl(viewingAsset.storageUrl)}
+                  src={retryUrls[viewingAsset.id] || getMediaUrl(viewingAsset.storageUrl)}
                   alt={viewingAsset.fileName}
                   className="max-h-[60vh] max-w-full object-contain rounded-xl"
                 />

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const deals = await prisma.deal.findMany({
       where,
       include: {
-        customer: { select: { name: true, email: true, avatar: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
         stage: { select: { name: true, color: true, sortOrder: true } },
         pipeline: { select: { name: true } },
         owner: { select: { name: true, image: true } },
@@ -46,18 +46,59 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, value, customerId, pipelineId, stageId, expectedClose } = body;
+    const {
+      title,
+      value,
+      customerId,
+      newCustomer,
+      customerName,
+      customerPhone,
+      customerEmail,
+      customerSource,
+      customerNotes,
+      pipelineId,
+      stageId,
+      expectedClose
+    } = body;
     const workspaceId = (session.user as any).workspaceId;
 
     if (!title || !pipelineId || !stageId) {
       return NextResponse.json({ error: 'Title, pipeline, and stage are required' }, { status: 400 });
     }
 
+    let finalCustomerId = customerId || null;
+    let createdCustomer: any = null;
+
+    // Check if new customer should be created and synced to CRM
+    const newName = (newCustomer?.name || customerName || '').trim();
+    if (!finalCustomerId && newName) {
+      createdCustomer = await prisma.customer.create({
+        data: {
+          name: newName,
+          phone: (newCustomer?.phone || customerPhone || '').trim() || null,
+          email: (newCustomer?.email || customerEmail || '').trim() || null,
+          source: (newCustomer?.source || customerSource || 'MANUAL').trim(),
+          notes: (newCustomer?.notes || customerNotes || `Khách hàng tạo từ cơ hội bán hàng: ${title}`).trim() || null,
+          workspaceId,
+        },
+      });
+      finalCustomerId = createdCustomer.id;
+    } else if (finalCustomerId && workspaceId) {
+      // Validate customerId belongs to this workspace
+      const existingCust = await prisma.customer.findFirst({
+        where: { id: finalCustomerId, workspaceId },
+        select: { id: true, name: true },
+      });
+      if (!existingCust) {
+        finalCustomerId = null;
+      }
+    }
+
     const deal = await prisma.deal.create({
       data: {
         title,
-        value: value || 0,
-        customerId,
+        value: typeof value === 'string' ? parseFloat(value) || 0 : (value || 0),
+        customerId: finalCustomerId,
         pipelineId,
         stageId,
         ownerId: session.user.id,
@@ -65,8 +106,9 @@ export async function POST(req: NextRequest) {
         workspaceId,
       },
       include: {
-        customer: { select: { name: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
         stage: { select: { name: true, color: true } },
+        pipeline: { select: { name: true } },
       },
     });
 
@@ -78,13 +120,22 @@ export async function POST(req: NextRequest) {
       workspaceId,
       req,
       metadata: { 
-        message: `Tạo cơ hội (Deal) mới: ${title}`,
-        value: value || 0,
-        stage: deal.stage?.name
+        message: createdCustomer 
+          ? `Tạo cơ hội (Deal) mới: ${title} (Đồng bộ khách hàng mới vào CRM: ${createdCustomer.name})`
+          : `Tạo cơ hội (Deal) mới: ${title}`,
+        value: deal.value,
+        stage: deal.stage?.name,
+        customerId: finalCustomerId,
+        createdCustomerId: createdCustomer?.id,
       },
     });
 
-    return NextResponse.json(deal, { status: 201 });
+    return NextResponse.json({
+      ...deal,
+      deal,
+      customer: deal.customer,
+      createdCustomer,
+    }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -123,7 +174,7 @@ export async function PATCH(req: NextRequest) {
       data,
       include: {
         stage: { select: { name: true, color: true } },
-        customer: { select: { name: true, email: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true } },
       },
     });
 
@@ -144,7 +195,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ deal });
+    return NextResponse.json({ ...deal, deal });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -46,6 +46,10 @@ export default defineConfig(async () => {
           target,
           changeOrigin: true,
         },
+        '/uploads': {
+          target,
+          changeOrigin: true,
+        },
       },
     },
   };

@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
             id: true,
             title: true,
             status: true,
+            scheduledAt: true,
             publishedAt: true,
             createdAt: true,
             originalPostId: true,

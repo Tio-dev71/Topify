@@ -30,22 +30,49 @@ export interface ImportParseResult {
 export const PLATFORM_PROVIDER_INFO: Record<string, { name: string; provider: string }> = {
   FACEBOOK_REELS: { name: 'Facebook Reels', provider: 'META' },
   FACEBOOK_POST: { name: 'Facebook Post', provider: 'META' },
+  FACEBOOK: { name: 'Facebook', provider: 'META' },
   INSTAGRAM_REELS: { name: 'Instagram Reels', provider: 'META' },
   INSTAGRAM_CAROUSEL: { name: 'Instagram Carousel', provider: 'META' },
   INSTAGRAM_STORY: { name: 'Instagram Story', provider: 'META' },
+  INSTAGRAM: { name: 'Instagram', provider: 'META' },
   YOUTUBE_SHORTS: { name: 'YouTube Shorts', provider: 'YOUTUBE' },
+  YOUTUBE: { name: 'YouTube', provider: 'YOUTUBE' },
   TIKTOK_VIDEO: { name: 'TikTok', provider: 'TIKTOK' },
+  TIKTOK: { name: 'TikTok', provider: 'TIKTOK' },
   ZALO_POST: { name: 'Zalo Post', provider: 'ZALO' },
   ZALO_ARTICLE: { name: 'Zalo Article', provider: 'ZALO' },
+  ZALO: { name: 'Zalo', provider: 'ZALO' },
+  TELEGRAM: { name: 'Telegram', provider: 'TELEGRAM' },
 };
 
 export function isPlatformProviderConnected(platform: string, connectedSet: Set<string>): boolean {
-  const info = PLATFORM_PROVIDER_INFO[platform];
-  if (!info) return true;
+  if (!connectedSet) return false;
+  const clean = String(platform || '').trim().toUpperCase();
+  const info =
+    PLATFORM_PROVIDER_INFO[clean] ||
+    PLATFORM_PROVIDER_INFO[`${clean}_VIDEO`] ||
+    PLATFORM_PROVIDER_INFO[`${clean}_POST`] ||
+    PLATFORM_PROVIDER_INFO[`${clean}_REELS`] ||
+    PLATFORM_PROVIDER_INFO[`${clean}_SHORTS`];
+
+  if (!info) {
+    if (clean.includes('TIKTOK')) return connectedSet.has('TIKTOK');
+    if (clean.includes('YOUTUBE') || clean.includes('SHORTS')) return connectedSet.has('YOUTUBE') || connectedSet.has('GOOGLE');
+    if (clean.includes('META') || clean.includes('FB') || clean.includes('FACEBOOK') || clean.includes('INSTA')) {
+      return connectedSet.has('META') || connectedSet.has('FACEBOOK') || connectedSet.has('INSTAGRAM');
+    }
+    if (clean.includes('ZALO')) return connectedSet.has('ZALO');
+    if (clean.includes('TELEGRAM')) return connectedSet.has('TELEGRAM');
+    return false;
+  }
+
   const provider = info.provider;
   if (connectedSet.has(provider)) return true;
-  if (provider === 'META' && (connectedSet.has('FACEBOOK') || connectedSet.has('INSTAGRAM'))) return true;
-  if (provider === 'YOUTUBE' && connectedSet.has('GOOGLE')) return true;
+  if (provider === 'META' && (connectedSet.has('FACEBOOK') || connectedSet.has('INSTAGRAM') || connectedSet.has('META'))) return true;
+  if (provider === 'YOUTUBE' && (connectedSet.has('GOOGLE') || connectedSet.has('YOUTUBE'))) return true;
+  if (provider === 'TIKTOK' && connectedSet.has('TIKTOK')) return true;
+  if (provider === 'ZALO' && connectedSet.has('ZALO')) return true;
+  if (provider === 'TELEGRAM' && connectedSet.has('TELEGRAM')) return true;
   return false;
 }
 
@@ -59,21 +86,58 @@ const VALID_PLATFORMS = [
   'TIKTOK_VIDEO',
   'ZALO_POST',
   'ZALO_ARTICLE',
+  'TELEGRAM',
 ];
 
 const HEADER_ALIASES = {
-  title: ['tiêu đề', 'tieu de', 'title', 'tiêu đề bài viết', 'tieu de bai viet', 'tên bài viết', 'ten bai viet', 'headline', 'name'],
-  caption: ['nội dung', 'noi dung', 'caption', 'mô tả', 'mo ta', 'content', 'description', 'bài viết', 'bai viet', 'body'],
-  firstComment: ['bình luận đầu', 'binh luan dau', 'first comment', 'comment đầu', 'comment dau', 'bình luận', 'binh luan', 'comment'],
+  title: [
+    'tiêu đề bài viết', 'tieu de bai viet', 'tiêu đề', 'tieu de', 'title',
+    'tên bài viết', 'ten bai viet', 'headline', 'name', 'chủ đề', 'chu de',
+    'topic', 'tên clip', 'ten clip', 'tiêu đề video', 'tieu de video',
+    'tên video', 'ten video'
+  ],
+  caption: [
+    'nội dung caption', 'noi dung caption', 'nội dung bài viết', 'noi dung bai viet',
+    'nội dung', 'noi dung', 'caption', 'mô tả', 'mo ta', 'content',
+    'description', 'bài viết', 'bai viet', 'body'
+  ],
+  firstComment: [
+    'bình luận đầu', 'binh luan dau', 'first comment', 'comment đầu',
+    'comment dau', 'bình luận', 'binh luan', 'comment'
+  ],
   hashtags: ['hashtags', 'hashtag', 'thẻ', 'the', 'tag', 'tags', 'bộ hashtag'],
-  platforms: ['nền tảng', 'nen tang', 'platform', 'platforms', 'kênh', 'kenh', 'mạng xã hội', 'mang xa hoi'],
-  scheduledAt: ['thời gian lên lịch', 'thoi gian len lich', 'thời gian đăng', 'thoi gian dang', 'scheduled at', 'scheduled time', 'ngày đăng', 'ngay dang', 'thời gian', 'thoi gian', 'time', 'schedule'],
-  mediaUrl: ['đường dẫn media', 'duong dan media', 'media url', 'media', 'video url', 'video', 'ảnh', 'anh', 'image url', 'link video', 'link media', 'tệp media'],
-  duration: ['thời lượng', 'thoi luong', 'duration', 'độ dài', 'do dai', 'thời lượng video', 'thoi luong video'],
+  platforms: [
+    'nền tảng', 'nen tang', 'platform', 'platforms', 'kênh đăng bài', 'kenh dang bai',
+    'kênh xuất bản', 'kenh xuat ban', 'kênh phân phối', 'kenh phan phoi', 'kênh đăng', 'kenh dang',
+    'kênh', 'kenh', 'mạng xã hội', 'mang xa hoi', 'social'
+  ],
+  scheduledAt: [
+    'thời gian lên lịch', 'thoi gian len lich', 'thời gian đăng bài', 'thoi gian dang bai',
+    'thời gian đăng', 'thoi gian dang', 'thời điểm đăng', 'thoi diem dang',
+    'thời gian xuất bản', 'thoi gian xuat ban', 'lịch đăng bài', 'lich dang bai',
+    'lịch đăng', 'lich dang', 'ngày giờ đăng', 'ngay gio dang', 'ngày giờ', 'ngay gio',
+    'hẹn giờ đăng', 'hen gio dang', 'hẹn giờ', 'hen gio', 'lịch', 'lich',
+    'ngày đăng', 'ngay dang', 'giờ đăng', 'gio dang', 'thời gian', 'thoi gian',
+    'scheduled at', 'scheduled time', 'time', 'schedule'
+  ],
+  mediaUrl: [
+    'đường dẫn media', 'duong dan media', 'media url', 'media', 'video url',
+    'video', 'ảnh', 'anh', 'image url', 'link video', 'link media', 'tệp media'
+  ],
+  duration: [
+    'thời lượng video', 'thoi luong video', 'thời lượng', 'thoi luong',
+    'duration', 'độ dài', 'do dai'
+  ],
 };
 
 function normalizeKey(rawKey: string): string {
-  const clean = String(rawKey || '').trim().toLowerCase().replace(/[\t\r\n]+/g, ' ');
+  const clean = String(rawKey || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\uFEFF\u200B\u200C\u200D]/g, '')
+    .replace(/[\t\r\n*():]/g, ' ')
+    .replace(/\s+/g, ' ');
+
   for (const [standardKey, aliases] of Object.entries(HEADER_ALIASES)) {
     if (aliases.some(alias => clean === alias || clean.startsWith(alias) || clean.includes(alias))) {
       return standardKey;
@@ -82,7 +146,7 @@ function normalizeKey(rawKey: string): string {
   return clean;
 }
 
-function parsePlatformList(raw: string | undefined | null): string[] {
+export function parsePlatformList(raw: string | undefined | null): string[] {
   if (!raw) return [];
   const text = String(raw).toUpperCase().replace(/[;/|]/g, ',');
   const parts = text.split(',').map(s => s.trim()).filter(Boolean);
@@ -99,13 +163,14 @@ function parsePlatformList(raw: string | undefined | null): string[] {
     else if (part.includes('INSTAGRAM') || part.includes('INSTA')) matched.push('INSTAGRAM_REELS');
     else if (part.includes('ZALO')) matched.push('ZALO_POST');
     else if (part.includes('FACEBOOK') || part.includes('FB')) matched.push('FACEBOOK_REELS');
+    else if (part.includes('TELEGRAM')) matched.push('TELEGRAM');
   }
 
   const unique = Array.from(new Set(matched));
   return unique;
 }
 
-export function parseScheduleDateTime(val: any): { iso: string | null; warning?: string; error?: string; isNow?: boolean } {
+export function parseScheduleDateTime(val: any): { iso: string | null; warning?: string; error?: string; isNow?: boolean; isDraft?: boolean } {
   if (val === undefined || val === null || val === '') return { iso: null, isNow: true };
 
   // Handle Date objects (e.g. from XLSX cellDates: true)
@@ -155,6 +220,16 @@ export function parseScheduleDateTime(val: any): { iso: string | null; warning?:
     return { iso: null, isNow: true };
   }
 
+  if (
+    lower === 'draft' ||
+    lower === 'bản thảo' ||
+    lower === 'ban thao' ||
+    lower === 'bản nháp' ||
+    lower === 'ban nhap'
+  ) {
+    return { iso: null, isDraft: true };
+  }
+
   const currentYear = new Date().getFullYear();
 
   // Pattern 1: Time first, then date (e.g. "11:59 11/11", "11:59 (11/11)", "11:59 11/11/2026", "11:59 11-11")
@@ -183,7 +258,7 @@ export function parseScheduleDateTime(val: any): { iso: string | null; warning?:
         return { iso: dateObj.toISOString() };
       }
     }
-    return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
+    return { iso: null, error: `Thời gian sai định dạng: "${str}" hoặc ngày không tồn tại.` };
   }
 
   // Pattern 2: Date first (DD/MM/YYYY or DD/MM), then time (optional) (e.g. "11/11/2026 11:59", "11/11 11:59", "11/11/2026", "11/11")
@@ -212,7 +287,7 @@ export function parseScheduleDateTime(val: any): { iso: string | null; warning?:
         return { iso: dateObj.toISOString() };
       }
     }
-    return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
+    return { iso: null, error: `Thời gian sai định dạng: "${str}" hoặc ngày không tồn tại.` };
   }
 
   // Pattern 3: ISO / YYYY-MM-DD or YYYY/MM/DD (e.g. "2026-11-11 11:59", "2026-11-11T11:59:00", "2026/11/11 11:59")
@@ -234,7 +309,7 @@ export function parseScheduleDateTime(val: any): { iso: string | null; warning?:
         return { iso: dateObj.toISOString() };
       }
     }
-    return { iso: null, error: `Thời gian "${str}" sai định dạng hoặc ngày không tồn tại.` };
+    return { iso: null, error: `Thời gian sai định dạng: "${str}" hoặc ngày không tồn tại.` };
   }
 
   // ISO / Standard JS Date fallback parsing
@@ -250,6 +325,71 @@ export function parseScheduleDateTime(val: any): { iso: string | null; warning?:
   }
 
   return { iso: null, error: `Thời gian sai định dạng: "${str}" (Ví dụ đúng: 11:59 11/11, 28/10/2026 20:30 hoặc 2026-10-28 20:30).` };
+}
+
+/**
+ * Format raw error messages into clean, user-friendly Vietnamese messages.
+ * Prevents technical ORM/database queries, IDs, and stack traces from leaking to end users.
+ */
+export function formatFriendlyImportError(rawError: any, fallbackMessage: string = 'Lỗi phân tích tệp bảng tính.'): string {
+  if (!rawError) return fallbackMessage;
+  const msg = typeof rawError === 'string' ? rawError : String(rawError?.message || rawError);
+  const lower = msg.toLowerCase();
+
+  // 1. Detect internal database / ORM / query / model / stack trace leakage
+  if (
+    lower.includes('prisma') ||
+    lower.includes('findmany') ||
+    lower.includes('findunique') ||
+    lower.includes('findfirst') ||
+    lower.includes('invocation') ||
+    lower.includes('socialaccountstatus') ||
+    lower.includes('invalid value for argument') ||
+    lower.includes('workspaceid') ||
+    lower.includes('userid') ||
+    lower.includes('syntax error') ||
+    lower.includes('relation') ||
+    lower.includes('foreign key') ||
+    lower.includes('unique constraint') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('assertionerror') ||
+    lower.includes('undici') ||
+    lower.includes('webidl') ||
+    lower.includes('typeerror') ||
+    lower.includes('rangeerror') ||
+    lower.includes('cannot read propert') ||
+    lower.includes('internal server error') ||
+    lower.includes('500') ||
+    lower.includes('cmu') // CUID prefix
+  ) {
+    return 'Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu. Vui lòng thử lại sau giây lát hoặc liên hệ hỗ trợ.';
+  }
+
+  // 2. Google Sheets errors
+  if (lower.includes('google sheet') || lower.includes('spreadsheets') || lower.includes('docs.google.com')) {
+    if (lower.includes('403') || lower.includes('permission') || lower.includes('quyền') || lower.includes('private')) {
+      return 'Không có quyền truy cập Google Sheets. Vui lòng bật quyền "Bất kỳ ai có đường liên kết đều có thể xem" (Viewer) và thử lại.';
+    }
+    if (lower.includes('404') || lower.includes('not found') || lower.includes('không tìm thấy')) {
+      return 'Không tìm thấy liên kết Google Sheets. Vui lòng kiểm tra lại đường dẫn chia sẻ.';
+    }
+    if (lower.includes('fetch') || lower.includes('network') || lower.includes('kết nối')) {
+      return 'Không thể kết nối đến Google Sheets. Vui lòng kiểm tra lại đường truyền mạng và đường dẫn công khai.';
+    }
+  }
+
+  // 3. File corrupted / wrong format errors
+  if (lower.includes('corrupt') || lower.includes('central directory') || lower.includes('end of stream') || lower.includes('zip') || lower.includes('hỏng')) {
+    return 'Tệp dữ liệu bị hỏng, bị khóa mật khẩu hoặc không đúng chuẩn Excel/CSV. Vui lòng kiểm tra và lưu lại tệp.';
+  }
+
+  // 4. Empty / missing rows
+  if (lower.includes('empty') || lower.includes('rỗng')) {
+    return 'Tệp bảng tính không có dữ liệu hàng bài viết. Vui lòng điền nội dung vào tệp mẫu rồi tải lên lại.';
+  }
+
+  return msg.trim() || fallbackMessage;
 }
 
 /**
@@ -278,7 +418,7 @@ export function parseExcelOrCsvBuffer(
         invalidRows: 0,
         warningRows: 0,
         rows: [],
-        error: 'Tệp không chứa bảng tính (sheet) nào.',
+        error: 'Tệp không chứa bảng tính (sheet) nào. Vui lòng kiểm tra lại file.',
       };
     }
 
@@ -294,7 +434,25 @@ export function parseExcelOrCsvBuffer(
         invalidRows: 0,
         warningRows: 0,
         rows: [],
-        error: 'Tệp rỗng hoặc không có dữ liệu hàng bài viết.',
+        error: 'Tệp rỗng hoặc không có dữ liệu hàng bài viết. Vui lòng tải "File mẫu Excel (.xlsx)" để điền nội dung chuẩn.',
+      };
+    }
+
+    // Verify if spreadsheet contains at least one standard recognizable column
+    const sampleRow = rawRows[0] || {};
+    const normalizedKeys = Object.keys(sampleRow).map(normalizeKey);
+    const hasRecognizedColumn = normalizedKeys.some(k => ['title', 'caption', 'platforms', 'scheduledAt'].includes(k));
+
+    if (!hasRecognizedColumn) {
+      return {
+        success: false,
+        source,
+        totalRows: rawRows.length,
+        validRows: 0,
+        invalidRows: rawRows.length,
+        warningRows: 0,
+        rows: [],
+        error: 'Tệp bảng tính không đúng mẫu quy định. Không tìm thấy các cột bắt buộc: "Tiêu đề", "Nền tảng", "Thời gian đăng". Vui lòng tải "File mẫu Excel (.xlsx)" để điền đúng định dạng.',
       };
     }
 
@@ -322,10 +480,6 @@ export function parseExcelOrCsvBuffer(
         errors.push('Thiếu tiêu đề bài viết (Bắt buộc).');
       }
 
-      if (!caption) {
-        warnings.push('Chưa có nội dung mô tả (Caption).');
-      }
-
       const rawPlatformStr = normalizedRow.platforms !== undefined && normalizedRow.platforms !== null
         ? String(normalizedRow.platforms).trim()
         : '';
@@ -349,12 +503,17 @@ export function parseExcelOrCsvBuffer(
         }
       }
 
-      const { iso: scheduledAt, error: dateError, warning: dateWarning } = parseScheduleDateTime(normalizedRow.scheduledAt);
+      const rawScheduleStr = normalizedRow.scheduledAt !== undefined && normalizedRow.scheduledAt !== null
+        ? String(normalizedRow.scheduledAt).trim()
+        : '';
+      const { iso: scheduledAtIso, error: dateError, warning: dateWarning, isNow, isDraft } = parseScheduleDateTime(normalizedRow.scheduledAt);
       if (dateError) {
         errors.push(dateError);
       } else if (dateWarning) {
         warnings.push(dateWarning);
       }
+
+      const scheduledAt = dateError ? rawScheduleStr : isDraft ? 'DRAFT' : isNow ? 'NOW' : scheduledAtIso;
 
       // YouTube Shorts duration > 180s: add warning, do NOT block
       if (platforms.includes('YOUTUBE_SHORTS') && normalizedRow.duration) {
@@ -365,9 +524,12 @@ export function parseExcelOrCsvBuffer(
       }
 
       const isValid = errors.length === 0;
-      if (isValid) validRows++;
-      else invalidRows++;
-      if (warnings.length > 0) warningRows++;
+      if (isValid) {
+        validRows++;
+        if (warnings.length > 0) warningRows++;
+      } else {
+        invalidRows++;
+      }
 
       rows.push({
         rowNumber: index + 1,
@@ -396,6 +558,7 @@ export function parseExcelOrCsvBuffer(
       connectedProviders: connectedSet ? Array.from(connectedSet) : undefined,
     };
   } catch (err: any) {
+    console.error('[import-engine] Lỗi đọc tệp bảng tính:', err);
     return {
       success: false,
       source,
@@ -404,7 +567,7 @@ export function parseExcelOrCsvBuffer(
       invalidRows: 0,
       warningRows: 0,
       rows: [],
-      error: `Lỗi đọc tệp bảng tính: ${err.message}`,
+      error: formatFriendlyImportError(err, 'Không thể đọc nội dung tệp. Tệp có thể bị hỏng, bị khóa hoặc không đúng định dạng .xlsx, .xls, .csv.'),
     };
   }
 }
@@ -455,7 +618,7 @@ export async function fetchAndParseGoogleSheet(
         invalidRows: 0,
         warningRows: 0,
         rows: [],
-        error: `Không thể tải dữ liệu từ Google Sheets (HTTP ${response.status}). Vui lòng đảm bảo bạn đã bật quyền chia sẻ "Bất kỳ ai có liên kết đều có thể xem".`,
+        error: `Không thể tải dữ liệu từ Google Sheets (Mã lỗi ${response.status}). Vui lòng đảm bảo bạn đã bật quyền chia sẻ "Bất kỳ ai có liên kết đều có thể xem" (Viewer).`,
       };
     }
 
@@ -463,6 +626,7 @@ export async function fetchAndParseGoogleSheet(
     const buffer = Buffer.from(arrayBuffer);
     return parseExcelOrCsvBuffer(buffer, 'CSV', connectedProviders);
   } catch (err: any) {
+    console.error('[import-engine] Lỗi kết nối Google Sheets:', err);
     return {
       success: false,
       source: 'GOOGLE_SHEETS',
@@ -471,7 +635,7 @@ export async function fetchAndParseGoogleSheet(
       invalidRows: 0,
       warningRows: 0,
       rows: [],
-      error: `Lỗi kết nối Google Sheets: ${err.message}. Hãy kiểm tra kết nối mạng và quyền chia sẻ tệp.`,
+      error: formatFriendlyImportError(err, 'Lỗi kết nối Google Sheets. Hãy kiểm tra kết nối mạng và quyền chia sẻ tệp.'),
     };
   }
 }

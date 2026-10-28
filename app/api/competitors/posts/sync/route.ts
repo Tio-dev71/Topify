@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
-import { getFacebookPagePosts, getRealTimeNews, getTiktokUserPosts } from '@/lib/rapidapi/client';
+import { getFacebookDeepPosts, getRealTimeNews, getTiktokUserPosts } from '@/lib/rapidapi/client';
 import axios from 'axios';
 import { recordAuditLog } from '@/lib/audit-log';
 
@@ -59,13 +59,21 @@ export async function POST(req: NextRequest) {
     const isFacebook = targetUrl.includes('facebook.com') || targetUrl.includes('fb.com') || targetUrl.includes('fb.watch') || isNumericId;
     const isTiktok = targetUrl.includes('tiktok.com') || isTiktokHandle;
 
+    // Calculate start of today in Asia/Ho_Chi_Minh for post filtering
+    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const startOfTodayVN = new Date(vnNow);
+    startOfTodayVN.setHours(0, 0, 0, 0);
+
     // -------------------------------------------------------------
-    // CASE 1: FACEBOOK FANPAGE
+    // CASE 1: FACEBOOK FANPAGE / GROUP
     // -------------------------------------------------------------
     if (isFacebook) {
       try {
-        const rawData = await getFacebookPagePosts(targetUrl);
-        const fbItems = rawData?.results || rawData?.data || rawData?.posts || [];
+        const { posts: fbItems } = await getFacebookDeepPosts(targetUrl, {
+          maxPages: 12,
+          minPosts: 20,
+          stopBeforeDate: startOfTodayVN,
+        });
 
         for (const item of fbItems) {
           const externalId = (item.post_id || item.id || '').toString();
@@ -332,6 +340,7 @@ export async function POST(req: NextRequest) {
     }
 
     const totalPosts = await prisma.competitorPost.count({ where: { pageId } });
+    const todayPostsCount = collectedPosts.filter(p => p.postedAt >= startOfTodayVN).length;
 
     await recordAuditLog({
       action: 'COMPETITOR.SYNC_POSTS',
@@ -344,7 +353,8 @@ export async function POST(req: NextRequest) {
         message: `Quét và đồng bộ bài viết đối thủ: ${page.name || targetUrl}`,
         url: targetUrl,
         addedCount,
-        totalFetched: collectedPosts.length
+        totalFetched: collectedPosts.length,
+        todayPostsCount
       },
     });
 
@@ -352,7 +362,8 @@ export async function POST(req: NextRequest) {
       success: true,
       addedCount,
       totalCount: totalPosts,
-      message: `Đã cào và cập nhật thành công ${collectedPosts.length} bài viết mới từ nguồn đối thủ!`
+      todayPostsCount,
+      message: `Đã cào và cập nhật thành công ${collectedPosts.length} bài viết (${todayPostsCount > 0 ? `${todayPostsCount} bài hôm nay` : 'mới nhất'}) từ nguồn đối thủ!`
     });
   } catch (error) {
     console.error('[COMPETITOR_POSTS_SYNC]', error);

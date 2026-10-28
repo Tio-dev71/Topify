@@ -34,6 +34,8 @@ interface CalendarPost {
   title: string;
   status: string;
   scheduledAt: string | null;
+  publishedAt?: string | null;
+  start?: string | null;
   createdAt: string;
   platform?: string;
   content?: string;
@@ -69,47 +71,65 @@ export default function CalendarView() {
       const monthStr = format(currentDate, 'yyyy-MM');
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
-      const [postsRes, notesRes] = await Promise.all([
+      const [postsResult, notesResult] = await Promise.allSettled([
         api.get(`/posts/calendar?month=${monthStr}&start=${startIso}&end=${endIso}`),
         api.get(`/calendar/notes?month=${monthStr}&start=${startIso}&end=${endIso}`)
       ]);
 
-      if (postsRes.data) {
+      if (postsResult.status === 'fulfilled' && postsResult.value?.data) {
+        const postsRes = postsResult.value;
         const rawList = postsRes.data.posts || postsRes.data.events || (Array.isArray(postsRes.data) ? postsRes.data : []);
-        const formatted: CalendarPost[] = rawList.map((p: any) => ({
-          id: p.id,
-          title: p.title || p.caption?.substring(0, 50) || 'Chưa có tiêu đề',
-          status: p.status,
-          scheduledAt: p.scheduledAt || p.start || null,
-          createdAt: p.createdAt || p.scheduledAt || p.start || new Date().toISOString(),
-          platform: Array.isArray(p.platforms) ? p.platforms.join(', ') : p.platform,
-          content: p.caption || p.content || '',
-        }));
+        const formatted: CalendarPost[] = rawList
+          .filter((p: any) => p.status !== 'FAILED' && p.status !== 'PARTIAL_FAILED' && p.status !== 'DRAFT')
+          .map((p: any) => {
+            const effectiveDate = p.scheduledAt || p.publishedAt || p.start || p.createdAt || null;
+            return {
+              id: p.id,
+              title: p.title || p.caption?.substring(0, 50) || 'Chưa có tiêu đề',
+              status: p.status,
+              scheduledAt: p.scheduledAt || null,
+              publishedAt: p.publishedAt || null,
+              start: effectiveDate,
+              createdAt: p.createdAt || effectiveDate || new Date().toISOString(),
+              platform: Array.isArray(p.platforms) ? p.platforms.join(', ') : p.platform,
+              content: p.caption || p.content || '',
+            };
+          });
         setPosts(formatted);
-      }
-      if (notesRes.data) {
-        setNotes(notesRes.data.notes || []);
-      }
-    } catch {
-      // Fallback: fetch from general posts if calendar endpoint is filtered
-      try {
-        const res = await api.get('/posts');
-        if (res.data) {
-          const rawList = Array.isArray(res.data) ? res.data : res.data.posts || [];
-          const formatted: CalendarPost[] = rawList.map((p: any) => ({
-            id: p.id,
-            title: p.title || p.caption?.substring(0, 50) || 'Chưa có tiêu đề',
-            status: p.status,
-            scheduledAt: p.scheduledAt || p.publishedAt || null,
-            createdAt: p.createdAt,
-            platform: Array.isArray(p.platforms) ? p.platforms.map((pl: any) => pl.platform || pl).join(', ') : p.platform,
-            content: p.caption || '',
-          }));
-          setPosts(formatted);
+      } else {
+        // Fallback: fetch from general posts if calendar endpoint failed
+        try {
+          const res = await api.get('/posts?limit=100');
+          if (res.data) {
+            const rawList = Array.isArray(res.data) ? res.data : res.data.posts || [];
+            const formatted: CalendarPost[] = rawList
+              .filter((p: any) => p.status !== 'FAILED' && p.status !== 'PARTIAL_FAILED' && p.status !== 'DRAFT')
+              .map((p: any) => {
+                const effectiveDate = p.scheduledAt || p.publishedAt || p.createdAt || null;
+                return {
+                  id: p.id,
+                  title: p.title || p.caption?.substring(0, 50) || 'Chưa có tiêu đề',
+                  status: p.status,
+                  scheduledAt: p.scheduledAt || null,
+                  publishedAt: p.publishedAt || null,
+                  start: effectiveDate,
+                  createdAt: p.createdAt || effectiveDate || new Date().toISOString(),
+                  platform: Array.isArray(p.platforms) ? p.platforms.map((pl: any) => pl.platform || pl).join(', ') : p.platform,
+                  content: p.caption || '',
+                };
+              });
+            setPosts(formatted);
+          }
+        } catch (e) {
+          console.error('Fallback /posts error in CalendarView:', e);
         }
-      } catch (e) {
-        console.error(e);
       }
+
+      if (notesResult.status === 'fulfilled' && notesResult.value?.data) {
+        setNotes(notesResult.value.data.notes || []);
+      }
+    } catch (err) {
+      console.error('Fetch calendar data error:', err);
     } finally {
       setLoading(false);
     }
@@ -187,10 +207,26 @@ export default function CalendarView() {
               {format(currentDate, 'MMMM yyyy', { locale: vi })}
             </h2>
             <p className="text-xs text-gray-400">
-              {posts.filter(p => {
-                const target = p.scheduledAt || (p as any).start;
-                return target && isSameMonth(new Date(target), monthStart);
-              }).length} bài viết đã xếp lịch trong tháng này
+              {loading ? (
+                'Đang tải lịch bài viết...'
+              ) : (() => {
+                const monthPosts = posts.filter(p => {
+                  if (p.status === 'FAILED' || p.status === 'PARTIAL_FAILED' || p.status === 'DRAFT') return false;
+                  const target = p.scheduledAt || p.publishedAt || p.start;
+                  return target && isSameMonth(new Date(target), monthStart);
+                });
+                const scheduledCount = monthPosts.filter(p => p.status === 'SCHEDULED').length;
+                const publishedCount = monthPosts.filter(p => p.status === 'PUBLISHED').length;
+
+                if (monthPosts.length === 0) return '0 bài viết trong tháng này';
+                if (publishedCount > 0 && scheduledCount > 0) {
+                  return `${monthPosts.length} bài viết trong tháng này (${publishedCount} đã đăng, ${scheduledCount} đã lên lịch)`;
+                }
+                if (publishedCount > 0) {
+                  return `${publishedCount} bài viết đã đăng trong tháng này`;
+                }
+                return `${scheduledCount} bài viết đã lên lịch trong tháng này`;
+              })()}
             </p>
           </div>
         </div>
@@ -238,7 +274,8 @@ export default function CalendarView() {
             const isCurrentMonth = isSameMonth(day, monthStart);
             const isCurrentDay = isToday(day);
             const dayPosts = posts.filter(p => {
-              const targetDate = p.scheduledAt || (p as any).start;
+              if (p.status === 'FAILED' || p.status === 'PARTIAL_FAILED' || p.status === 'DRAFT') return false;
+              const targetDate = p.scheduledAt || p.publishedAt || p.start;
               return targetDate && isSameDay(new Date(targetDate), day);
             });
             const dayNotes = notes.filter(n => isSameDay(new Date(n.date), day));
@@ -287,7 +324,7 @@ export default function CalendarView() {
                   ))}
 
                   {dayPosts.map(post => {
-                    const postTime = post.scheduledAt || (post as any).start;
+                    const postTime = post.scheduledAt || post.start || post.publishedAt;
                     const timeFormatted = postTime ? format(new Date(postTime), 'HH:mm') : null;
 
                     return (
@@ -299,6 +336,8 @@ export default function CalendarView() {
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
                             : post.status === 'SCHEDULED'
                             ? 'bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100'
+                            : post.status === 'FAILED'
+                            ? 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                         title={`${timeFormatted ? `[${timeFormatted}] ` : ''}${post.title}`}
@@ -396,9 +435,17 @@ export default function CalendarView() {
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     : selectedPost.status === 'SCHEDULED'
                     ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    : selectedPost.status === 'FAILED'
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
                     : 'bg-gray-100 text-gray-600'
                 }`}>
-                  {selectedPost.status === 'PUBLISHED' ? 'Đã xuất bản' : selectedPost.status === 'SCHEDULED' ? 'Đã lên lịch' : selectedPost.status}
+                  {selectedPost.status === 'PUBLISHED'
+                    ? 'Đã xuất bản'
+                    : selectedPost.status === 'SCHEDULED'
+                    ? 'Đã lên lịch'
+                    : selectedPost.status === 'FAILED'
+                    ? 'Đăng thất bại'
+                    : selectedPost.status}
                 </span>
               </div>
               {selectedPost.scheduledAt && (
@@ -406,6 +453,22 @@ export default function CalendarView() {
                   <span className="font-bold text-gray-500 block mb-0.5">Thời gian lên lịch:</span>
                   <p className="font-mono text-indigo-600 font-semibold">
                     {format(new Date(selectedPost.scheduledAt), 'HH:mm - dd/MM/yyyy')}
+                  </p>
+                </div>
+              )}
+              {selectedPost.publishedAt && (
+                <div>
+                  <span className="font-bold text-gray-500 block mb-0.5">Thời gian xuất bản:</span>
+                  <p className="font-mono text-emerald-600 font-semibold">
+                    {format(new Date(selectedPost.publishedAt), 'HH:mm - dd/MM/yyyy')}
+                  </p>
+                </div>
+              )}
+              {!selectedPost.scheduledAt && !selectedPost.publishedAt && selectedPost.start && (
+                <div>
+                  <span className="font-bold text-gray-500 block mb-0.5">Thời gian:</span>
+                  <p className="font-mono text-indigo-600 font-semibold">
+                    {format(new Date(selectedPost.start), 'HH:mm - dd/MM/yyyy')}
                   </p>
                 </div>
               )}

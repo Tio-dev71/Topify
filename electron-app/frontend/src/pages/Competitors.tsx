@@ -91,7 +91,7 @@ export default function Competitors() {
   const fetchPosts = async (pageId: string) => {
     setLoadingPosts(true);
     try {
-      const res = await api.get(`/competitors/posts?pageId=${pageId}`);
+      const res = await api.get(`/competitors/posts?pageId=${pageId}&limit=100`);
       if (res.data) {
         setPosts(res.data.posts || []);
       }
@@ -193,6 +193,15 @@ export default function Competitors() {
   };
 
   const selectedPageObj = pages.find(p => p.id === selectedPage);
+
+  const isPostToday = (postedAtStr: string | null) => {
+    if (!postedAtStr) return false;
+    const pDate = new Date(postedAtStr);
+    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    return pDate.toLocaleDateString('vi-VN') === vnNow.toLocaleDateString('vi-VN');
+  };
+
+  const todayPostsCount = posts.filter(p => isPostToday(p.postedAt)).length;
 
   const filteredPosts = posts.filter(p => {
     if (!searchPost.trim()) return true;
@@ -340,9 +349,16 @@ export default function Competitors() {
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
-                    <p className="text-xs text-gray-500 font-mono mt-0.5">
-                      Đã quét {posts.length} bài viết gần nhất
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-gray-500 font-mono">
+                        Đã quét {posts.length} bài viết gần nhất
+                      </p>
+                      {todayPostsCount > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200">
+                          {todayPostsCount} bài hôm nay
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -400,6 +416,11 @@ export default function Competitors() {
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
                           {post.postedAt ? new Date(post.postedAt).toLocaleString('vi-VN') : 'Mới cập nhật'}
+                          {isPostToday(post.postedAt) && (
+                            <span className="ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Hôm nay
+                            </span>
+                          )}
                         </span>
                         <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-gray-50 text-gray-600 border border-gray-100">
                           ID: {post.id.slice(0, 8)}

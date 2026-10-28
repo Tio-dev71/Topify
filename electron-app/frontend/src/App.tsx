@@ -41,10 +41,12 @@ import Pipelines from './pages/Pipelines';
 import Keywords from './pages/Keywords';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ScrollToTop } from './components/layout/ScrollToTop';
 
 function App() {
   return (
     <HashRouter>
+      <ScrollToTop />
       <Toaster position="top-right" richColors />
       <ErrorBoundary>
         <Routes>

@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Edit3,
   Settings,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/axios';
@@ -36,44 +37,74 @@ export interface ParsedImportRow {
   unconnectedPlatforms?: string[];
 }
 
-export const PLATFORM_PROVIDER_MAP: Record<string, string> = {
+const PLATFORM_PROVIDER_MAP: Record<string, string> = {
   FACEBOOK_REELS: 'META',
   FACEBOOK_POST: 'META',
+  FACEBOOK: 'META',
   INSTAGRAM_REELS: 'META',
   INSTAGRAM_CAROUSEL: 'META',
   INSTAGRAM_STORY: 'META',
+  INSTAGRAM: 'META',
   YOUTUBE_SHORTS: 'YOUTUBE',
+  YOUTUBE: 'YOUTUBE',
   TIKTOK_VIDEO: 'TIKTOK',
+  TIKTOK: 'TIKTOK',
   ZALO_POST: 'ZALO',
   ZALO_ARTICLE: 'ZALO',
+  ZALO: 'ZALO',
+  TELEGRAM: 'TELEGRAM',
 };
 
-export const PLATFORM_NAMES: Record<string, string> = {
+const PLATFORM_NAMES: Record<string, string> = {
   FACEBOOK_REELS: 'Facebook Reels',
   FACEBOOK_POST: 'Facebook Post',
+  FACEBOOK: 'Facebook',
   INSTAGRAM_REELS: 'Instagram Reels',
   INSTAGRAM_CAROUSEL: 'Instagram Carousel',
   INSTAGRAM_STORY: 'Instagram Story',
+  INSTAGRAM: 'Instagram',
   YOUTUBE_SHORTS: 'YouTube Shorts',
+  YOUTUBE: 'YouTube',
   TIKTOK_VIDEO: 'TikTok',
+  TIKTOK: 'TikTok',
   ZALO_POST: 'Zalo Post',
   ZALO_ARTICLE: 'Zalo Article',
+  ZALO: 'Zalo',
+  TELEGRAM: 'Telegram',
 };
 
-export function isPlatformConnected(platform: string, connectedMap: Record<string, boolean>): boolean {
+function isPlatformConnected(platform: string, connectedMap: Record<string, boolean>): boolean {
   if (!connectedMap) return false;
-  const required = PLATFORM_PROVIDER_MAP[platform] || 'META';
+  const clean = String(platform || '').trim().toUpperCase();
+  const required =
+    PLATFORM_PROVIDER_MAP[clean] ||
+    (clean.includes('TIKTOK')
+      ? 'TIKTOK'
+      : clean.includes('YOUTUBE') || clean.includes('SHORTS')
+      ? 'YOUTUBE'
+      : clean.includes('ZALO')
+      ? 'ZALO'
+      : clean.includes('TELEGRAM')
+      ? 'TELEGRAM'
+      : clean.includes('FB') || clean.includes('FACEBOOK') || clean.includes('INSTA')
+      ? 'META'
+      : null);
+
+  if (!required) return false;
   if (connectedMap[required]) return true;
-  if (required === 'META' && (connectedMap['FACEBOOK'] || connectedMap['INSTAGRAM'])) return true;
-  if (required === 'YOUTUBE' && connectedMap['GOOGLE']) return true;
+  if (required === 'META' && (connectedMap['FACEBOOK'] || connectedMap['INSTAGRAM'] || connectedMap['META'])) return true;
+  if (required === 'YOUTUBE' && (connectedMap['GOOGLE'] || connectedMap['YOUTUBE'])) return true;
+  if (required === 'TIKTOK' && connectedMap['TIKTOK']) return true;
+  if (required === 'ZALO' && connectedMap['ZALO']) return true;
+  if (required === 'TELEGRAM' && connectedMap['TELEGRAM']) return true;
   return false;
 }
 
-export function validateScheduleDate(str: string): { isValid: boolean; error?: string } {
+function validateScheduleDate(str: string): { isValid: boolean; error?: string } {
   const clean = String(str || '').trim();
-  if (!clean || clean === 'NOW') return { isValid: true };
+  if (!clean || clean === 'NOW' || clean === 'DRAFT') return { isValid: true };
   const lower = clean.toLowerCase();
-  if (['now', 'đăng ngay', 'dang ngay', 'đăng luôn', 'dang luon', 'publish now', 'immediate'].includes(lower)) {
+  if (['now', 'đăng ngay', 'dang ngay', 'đăng luôn', 'dang luon', 'publish now', 'immediate', 'draft', 'bản thảo', 'ban thao', 'bản nháp', 'ban nhap'].includes(lower)) {
     return { isValid: true };
   }
 
@@ -103,7 +134,7 @@ export function validateScheduleDate(str: string): { isValid: boolean; error?: s
         return { isValid: true };
       }
     }
-    return { isValid: false, error: `Thời gian "${clean}" sai định dạng hoặc ngày không tồn tại.` };
+    return { isValid: false, error: `Thời gian sai định dạng: "${clean}" hoặc ngày không tồn tại.` };
   }
 
   // Pattern 2: Date first (e.g. 11/11/2026 11:59, 11/11 11:59, 11/11)
@@ -130,7 +161,7 @@ export function validateScheduleDate(str: string): { isValid: boolean; error?: s
         return { isValid: true };
       }
     }
-    return { isValid: false, error: `Thời gian "${clean}" sai định dạng hoặc ngày không tồn tại.` };
+    return { isValid: false, error: `Thời gian sai định dạng: "${clean}" hoặc ngày không tồn tại.` };
   }
 
   // Pattern 3: ISO / Standard Date fallback
@@ -145,7 +176,72 @@ export function validateScheduleDate(str: string): { isValid: boolean; error?: s
   return { isValid: false, error: `Thời gian sai định dạng: "${clean}" (Ví dụ đúng: 11:59 11/11, 28/10/2026 20:30 hoặc 2026-10-28 20:30).` };
 }
 
-export function validateRow(
+/**
+ * Format raw error messages into clean, user-friendly Vietnamese messages.
+ * Prevents technical ORM/database queries, IDs, and stack traces from leaking to end users.
+ */
+function formatFriendlyImportError(rawError: any, fallbackMessage: string = 'Lỗi phân tích tệp bảng tính.'): string {
+  if (!rawError) return fallbackMessage;
+  const msg = typeof rawError === 'string' ? rawError : String(rawError?.message || rawError);
+  const lower = msg.toLowerCase();
+
+  // 1. Detect internal database / ORM / query / model / stack trace leakage
+  if (
+    lower.includes('prisma') ||
+    lower.includes('findmany') ||
+    lower.includes('findunique') ||
+    lower.includes('findfirst') ||
+    lower.includes('invocation') ||
+    lower.includes('socialaccountstatus') ||
+    lower.includes('invalid value for argument') ||
+    lower.includes('workspaceid') ||
+    lower.includes('userid') ||
+    lower.includes('syntax error') ||
+    lower.includes('relation') ||
+    lower.includes('foreign key') ||
+    lower.includes('unique constraint') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('assertionerror') ||
+    lower.includes('undici') ||
+    lower.includes('webidl') ||
+    lower.includes('typeerror') ||
+    lower.includes('rangeerror') ||
+    lower.includes('cannot read propert') ||
+    lower.includes('internal server error') ||
+    lower.includes('500') ||
+    lower.includes('cmu')
+  ) {
+    return 'Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu. Vui lòng thử lại sau giây lát hoặc liên hệ hỗ trợ.';
+  }
+
+  // 2. Google Sheets errors
+  if (lower.includes('google sheet') || lower.includes('spreadsheets') || lower.includes('docs.google.com')) {
+    if (lower.includes('403') || lower.includes('permission') || lower.includes('quyền') || lower.includes('private')) {
+      return 'Không có quyền truy cập Google Sheets. Vui lòng bật quyền "Bất kỳ ai có đường liên kết đều có thể xem" (Viewer) và thử lại.';
+    }
+    if (lower.includes('404') || lower.includes('not found') || lower.includes('không tìm thấy')) {
+      return 'Không tìm thấy liên kết Google Sheets. Vui lòng kiểm tra lại đường dẫn chia sẻ.';
+    }
+    if (lower.includes('fetch') || lower.includes('network') || lower.includes('kết nối')) {
+      return 'Không thể kết nối đến Google Sheets. Vui lòng kiểm tra lại đường truyền mạng và đường dẫn công khai.';
+    }
+  }
+
+  // 3. File corrupted / wrong format errors
+  if (lower.includes('corrupt') || lower.includes('central directory') || lower.includes('end of stream') || lower.includes('zip') || lower.includes('hỏng')) {
+    return 'Tệp dữ liệu bị hỏng, bị khóa mật khẩu hoặc không đúng chuẩn Excel/CSV. Vui lòng kiểm tra và lưu lại tệp.';
+  }
+
+  // 4. Empty / missing rows
+  if (lower.includes('empty') || lower.includes('rỗng')) {
+    return 'Tệp bảng tính không có dữ liệu hàng bài viết. Vui lòng điền nội dung vào tệp mẫu rồi tải lên lại.';
+  }
+
+  return msg.trim() || fallbackMessage;
+}
+
+function validateRow(
   row: ParsedImportRow,
   connectedMap: Record<string, boolean>,
   hasConnectionsLoaded: boolean = true
@@ -171,15 +267,28 @@ export function validateRow(
   }
 
   // Check scheduledAt format if provided
-  if (row.scheduledAt && row.scheduledAt !== 'NOW') {
+  if (row.scheduledAt && row.scheduledAt !== 'NOW' && row.scheduledAt !== 'DRAFT') {
     const dateCheck = validateScheduleDate(String(row.scheduledAt));
     if (!dateCheck.isValid && dateCheck.error) {
       errors.push(dateCheck.error);
     }
   }
 
-  // Merge with any errors previously identified by backend (deduplicated)
-  const combinedErrors = Array.from(new Set([...(row.errors || []), ...errors]));
+  // Filter out any previously attached errors that are now resolved by user edit
+  const prevErrors = (row.errors || []).filter((prevErr) => {
+    if (titleStr && prevErr.includes('tiêu đề')) return false;
+    if (row.platforms && row.platforms.length > 0 && prevErr.includes('Thiếu nền tảng')) return false;
+    if (
+      row.scheduledAt &&
+      (row.scheduledAt === 'NOW' || row.scheduledAt === 'DRAFT' || validateScheduleDate(String(row.scheduledAt)).isValid) &&
+      (prevErr.includes('Thời gian') || prevErr.includes('quá khứ') || prevErr.includes('định dạng'))
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const combinedErrors = Array.from(new Set([...prevErrors, ...errors]));
 
   return {
     isValid: combinedErrors.length === 0,
@@ -217,28 +326,87 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
     if (!isOpen) return;
     const fetchSocialStatus = async () => {
       try {
-        const res = await api.get('/social/status');
-        if (res.data?.connections) {
-          const map: Record<string, boolean> = {};
-          res.data.connections.forEach((conn: any) => {
-            if (conn.provider && conn.connected !== false) {
-              const p = String(conn.provider).toUpperCase();
-              map[p] = true;
-              if (p === 'META') {
-                map['FACEBOOK'] = true;
-                map['INSTAGRAM'] = true;
+        const map: Record<string, boolean> = {};
+
+        try {
+          const res = await api.get('/social/status');
+          if (res.data?.connections && Array.isArray(res.data.connections)) {
+            res.data.connections.forEach((conn: any) => {
+              if (conn.provider && conn.connected !== false) {
+                const p = String(conn.provider).toUpperCase();
+                map[p] = true;
+                if (p === 'META' || p === 'FACEBOOK') {
+                  map['META'] = true;
+                  map['FACEBOOK'] = true;
+                  map['INSTAGRAM'] = true;
+                }
+                if (p === 'INSTAGRAM') {
+                  map['META'] = true;
+                  map['INSTAGRAM'] = true;
+                }
+                if (p === 'GOOGLE' || p === 'YOUTUBE') {
+                  map['YOUTUBE'] = true;
+                  map['GOOGLE'] = true;
+                }
+                if (p === 'TIKTOK') {
+                  map['TIKTOK'] = true;
+                }
+                if (p === 'ZALO') {
+                  map['ZALO'] = true;
+                }
+                if (p === 'TELEGRAM') {
+                  map['TELEGRAM'] = true;
+                }
               }
-              if (p === 'GOOGLE' || p === 'YOUTUBE') {
-                map['YOUTUBE'] = true;
-                map['GOOGLE'] = true;
-              }
-            }
-          });
-          setConnectedProviders(map);
-          setHasLoadedSocialStatus(true);
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to load /social/status', e);
         }
+
+        // Secondary fallback to /workspace/social
+        try {
+          const wsRes = await api.get('/workspace/social');
+          const wsAccounts = wsRes.data?.accounts || wsRes.data || [];
+          if (Array.isArray(wsAccounts)) {
+            wsAccounts.forEach((acc: any) => {
+              if (acc.provider && acc.status === 'CONNECTED') {
+                const p = String(acc.provider).toUpperCase();
+                map[p] = true;
+                if (p === 'META' || p === 'FACEBOOK') {
+                  map['META'] = true;
+                  map['FACEBOOK'] = true;
+                  map['INSTAGRAM'] = true;
+                }
+                if (p === 'INSTAGRAM') {
+                  map['META'] = true;
+                  map['INSTAGRAM'] = true;
+                }
+                if (p === 'GOOGLE' || p === 'YOUTUBE') {
+                  map['YOUTUBE'] = true;
+                  map['GOOGLE'] = true;
+                }
+                if (p === 'TIKTOK') {
+                  map['TIKTOK'] = true;
+                }
+                if (p === 'ZALO') {
+                  map['ZALO'] = true;
+                }
+                if (p === 'TELEGRAM') {
+                  map['TELEGRAM'] = true;
+                }
+              }
+            });
+          }
+        } catch {
+          // optional fallback
+        }
+
+        setConnectedProviders(map);
+        setHasLoadedSocialStatus(true);
       } catch (e) {
         console.warn('Failed to load social status in ImportPostsModal', e);
+        setHasLoadedSocialStatus(true);
       }
     };
     fetchSocialStatus();
@@ -299,6 +467,9 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
             if (prov === 'ZALO') {
               map['ZALO'] = true;
             }
+            if (prov === 'TELEGRAM') {
+              map['TELEGRAM'] = true;
+            }
           });
           setConnectedProviders(map);
         }
@@ -315,17 +486,33 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
         setParsedRows(rows);
         setSelectedRowNumbers(rows.filter((r) => r.isValid).map((r) => r.rowNumber));
 
-        const invalidCount = rows.filter((r) => !r.isValid).length;
+        const invalidRows = rows.filter((r) => !r.isValid);
+        const invalidCount = invalidRows.length;
         if (invalidCount > 0) {
-          toast.warning(`Đã phân tích ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối, sai định dạng hoặc thiếu thông tin!`);
+          if (invalidCount === rows.length) {
+            const errorDetails = invalidRows
+              .slice(0, 3)
+              .map((r) => `Dòng ${r.rowNumber}: ${r.errors[0] || 'Lỗi dữ liệu'}`)
+              .join('; ');
+            const moreText = invalidCount > 3 ? ` và ${invalidCount - 3} dòng khác` : '';
+            toast.error(`Toàn bộ ${rows.length} bài viết không hợp lệ (${errorDetails}${moreText}). Vui lòng sửa lại dữ liệu hoặc tải file mẫu.`);
+          } else {
+            const sampleErrors = invalidRows
+              .slice(0, 2)
+              .map((r) => `Dòng ${r.rowNumber}: ${r.errors[0] || 'Lỗi dữ liệu'}`)
+              .join('; ');
+            const moreText = invalidCount > 2 ? ` và ${invalidCount - 2} dòng khác` : '';
+            toast.warning(`Đã phân tích ${rows.length} bài. Có ${invalidCount} bài cần sửa lỗi (${sampleErrors}${moreText}). Vui lòng kiểm tra bảng xem trước.`);
+          }
         } else {
           toast.success(`Đã phân tích thành công ${rows.length} bài viết từ tệp!`);
         }
       } else {
-        toast.error(res.data?.error || 'Lỗi khi phân tích tệp bảng tính.');
+        toast.error(formatFriendlyImportError(res.data?.error, 'Lỗi khi phân tích tệp bảng tính.'));
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Không thể đọc tệp bảng tính.');
+      const raw = err.response?.data?.error || err.message || 'Không thể đọc tệp bảng tính.';
+      toast.error(formatFriendlyImportError(raw, 'Không thể đọc tệp bảng tính. Vui lòng kiểm tra lại định dạng tệp.'));
     } finally {
       setIsParsing(false);
     }
@@ -366,6 +553,9 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
             if (prov === 'ZALO') {
               map['ZALO'] = true;
             }
+            if (prov === 'TELEGRAM') {
+              map['TELEGRAM'] = true;
+            }
           });
           setConnectedProviders(map);
         }
@@ -382,17 +572,33 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
         setParsedRows(rows);
         setSelectedRowNumbers(rows.filter((r) => r.isValid).map((r) => r.rowNumber));
 
-        const invalidCount = rows.filter((r) => !r.isValid).length;
+        const invalidRows = rows.filter((r) => !r.isValid);
+        const invalidCount = invalidRows.length;
         if (invalidCount > 0) {
-          toast.warning(`Đã nạp ${rows.length} bài. Có ${invalidCount} bài KHÔNG HỢP LỆ do nền tảng chưa kết nối, sai định dạng hoặc thiếu thông tin!`);
+          if (invalidCount === rows.length) {
+            const errorDetails = invalidRows
+              .slice(0, 3)
+              .map((r) => `Dòng ${r.rowNumber}: ${r.errors[0] || 'Lỗi dữ liệu'}`)
+              .join('; ');
+            const moreText = invalidCount > 3 ? ` và ${invalidCount - 3} dòng khác` : '';
+            toast.error(`Toàn bộ ${rows.length} bài viết không hợp lệ (${errorDetails}${moreText}). Vui lòng sửa lại dữ liệu hoặc tải file mẫu.`);
+          } else {
+            const sampleErrors = invalidRows
+              .slice(0, 2)
+              .map((r) => `Dòng ${r.rowNumber}: ${r.errors[0] || 'Lỗi dữ liệu'}`)
+              .join('; ');
+            const moreText = invalidCount > 2 ? ` và ${invalidCount - 2} dòng khác` : '';
+            toast.warning(`Đã nạp ${rows.length} bài. Có ${invalidCount} bài cần sửa lỗi (${sampleErrors}${moreText}). Vui lòng kiểm tra bảng xem trước.`);
+          }
         } else {
           toast.success(`Đã nạp ${rows.length} bài viết từ Google Sheets!`);
         }
       } else {
-        toast.error(res.data?.error || 'Không thể lấy dữ liệu từ Google Sheets.');
+        toast.error(formatFriendlyImportError(res.data?.error, 'Không thể lấy dữ liệu từ Google Sheets.'));
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Lỗi kết nối Google Sheets.');
+      const raw = err.response?.data?.error || err.message || 'Lỗi kết nối Google Sheets.';
+      toast.error(formatFriendlyImportError(raw, 'Lỗi kết nối Google Sheets. Vui lòng kiểm tra lại đường dẫn và quyền chia sẻ.'));
     } finally {
       setIsParsing(false);
     }
@@ -492,8 +698,12 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
 
     const invalidSelected = selectedPosts.filter((r) => !r.isValid);
     if (invalidSelected.length > 0) {
-      const firstError = invalidSelected[0].errors[0] || 'Lỗi dữ liệu';
-      toast.error(`Có ${invalidSelected.length} bài viết không hợp lệ (${firstError}). Vui lòng sửa hoặc bỏ chọn trước khi lưu.`);
+      const details = invalidSelected
+        .slice(0, 3)
+        .map((r) => `Dòng ${r.rowNumber} (${r.errors[0] || 'Lỗi dữ liệu'})`)
+        .join(', ');
+      const more = invalidSelected.length > 3 ? ` và ${invalidSelected.length - 3} bài khác` : '';
+      toast.error(`Không thể lưu: có ${invalidSelected.length} bài viết chưa hợp lệ [${details}${more}]. Vui lòng sửa lỗi hoặc bỏ tích chọn các bài này.`);
       return;
     }
 
@@ -517,18 +727,19 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
         onSuccess?.();
         onClose();
       } else {
-        toast.error(res.data?.error || 'Lỗi khi lưu bài viết.');
+        toast.error(formatFriendlyImportError(res.data?.error, 'Lỗi khi lưu bài viết.'));
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Lỗi kết nối khi lưu bài viết.');
+      const raw = err.response?.data?.error || err.message || 'Lỗi kết nối khi lưu bài viết.';
+      toast.error(formatFriendlyImportError(raw, 'Lỗi khi lưu bài viết. Vui lòng kiểm tra lại kết nối và thử lại.'));
     } finally {
       setIsSaving(false);
     }
   };
 
-  const validCount = parsedRows ? parsedRows.filter((r) => r.isValid).length : 0;
+  const validCount = parsedRows ? parsedRows.filter((r) => r.isValid && r.warnings.length === 0).length : 0;
+  const warningCount = parsedRows ? parsedRows.filter((r) => r.isValid && r.warnings.length > 0).length : 0;
   const errorCount = parsedRows ? parsedRows.filter((r) => !r.isValid).length : 0;
-  const warningCount = parsedRows ? parsedRows.filter((r) => r.warnings.length > 0).length : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -718,28 +929,49 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
 
               {/* Unconnected Platforms / Invalid Alert Banner */}
               {errorCount > 0 && (
-                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-rose-800">
-                  <div className="flex items-start gap-2.5">
-                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-rose-900">
-                        Phát hiện {errorCount} bài viết KHÔNG HỢP LỆ vì nền tảng chưa được kết nối với tài khoản hoặc thiếu thông tin!
-                      </p>
-                      <p className="text-[11px] text-rose-700 mt-0.5">
-                        Bạn có thể nhấn dấu <strong>[×]</strong> trên nhãn nền tảng đỏ để gỡ bỏ kênh chưa kết nối, hoặc mở <strong>Cài đặt</strong> để liên kết tài khoản mạng xã hội.
-                      </p>
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-3 shadow-xs">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-rose-900 text-sm">
+                          Phát hiện {errorCount} bài viết KHÔNG HỢP LỆ cần chỉnh sửa:
+                        </p>
+                        <p className="text-xs text-rose-700 mt-0.5">
+                          Các dòng này thiếu thông tin bắt buộc, sai định dạng hoặc sử dụng kênh mạng xã hội chưa được kết nối.
+                        </p>
+                      </div>
                     </div>
+                    <a
+                      href="#/settings"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 text-xs font-bold shrink-0 transition-colors shadow-xs"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      Mở Cài đặt kênh
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
                   </div>
-                  <a
-                    href="#/settings"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 text-xs font-bold shrink-0 transition-colors shadow-xs"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                    Mở Cài đặt kênh
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+
+                  {/* Chi tiết danh sách các dòng và trường lỗi cụ thể */}
+                  <div className="bg-white/80 rounded-xl p-3 border border-rose-200/80 max-h-36 overflow-y-auto space-y-1.5 text-[11px]">
+                    <p className="font-bold text-rose-950 uppercase tracking-wider text-[10px]">
+                      Danh sách chi tiết lỗi theo từng dòng:
+                    </p>
+                    {parsedRows
+                      .filter((r) => !r.isValid)
+                      .map((r) => (
+                        <div key={r.rowNumber} className="flex items-start gap-2 text-rose-900">
+                          <span className="font-mono font-bold bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded text-[10px] shrink-0">
+                            Dòng {r.rowNumber}
+                          </span>
+                          <span className="flex-1">
+                            {r.errors.join(' • ')}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
 
@@ -796,10 +1028,19 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                                 value={row.title}
                                 onChange={(e) => handleUpdateRowCell(row.rowNumber, 'title', e.target.value)}
                                 className={`w-full px-2 py-1 rounded border text-xs font-semibold focus:outline-none focus:ring-1 ${
-                                  hasErrors ? 'border-rose-300 bg-rose-50/50 text-rose-900' : 'border-transparent hover:border-gray-300'
+                                  !row.title.trim()
+                                    ? 'border-rose-300 bg-rose-50/70 text-rose-900 placeholder:text-rose-400 focus:ring-rose-400'
+                                    : hasErrors
+                                    ? 'border-rose-200 bg-rose-50/30 text-gray-900 focus:ring-purple-400'
+                                    : 'border-transparent hover:border-gray-300 focus:border-purple-400'
                                 }`}
-                                placeholder="Nhập tiêu đề bài viết..."
+                                placeholder="⚠️ Bắt buộc nhập tiêu đề..."
                               />
+                              {!row.title.trim() && (
+                                <span className="text-[10px] text-rose-600 font-bold block mt-1">
+                                  ⚠️ Lỗi: Thiếu tiêu đề (Bắt buộc)
+                                </span>
+                              )}
                             </td>
                             <td className="p-3 text-gray-700">
                               <textarea
@@ -811,50 +1052,83 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                               />
                             </td>
                             <td className="p-3">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {row.platforms.map((p, idx) => {
-                                  const isConnected = isPlatformConnected(p, connectedProviders);
-                                  return (
-                                    <span
-                                      key={idx}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
-                                        isConnected
-                                          ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
-                                          : 'bg-rose-50 text-rose-700 border-rose-300 shadow-xs'
-                                      }`}
-                                      title={
-                                        isConnected
-                                          ? undefined
-                                          : `Nền tảng ${PLATFORM_NAMES[p] || p} chưa được kết nối với tài khoản!`
-                                      }
-                                    >
-                                      {p.replace('_REELS', '').replace('_POST', '').replace('_VIDEO', '')}
-                                      {!isConnected && (
-                                        <span className="text-[9px] text-rose-600 font-bold">
-                                          (Chưa connect)
-                                        </span>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleRemovePlatform(row.rowNumber, p);
-                                        }}
-                                        className="hover:text-rose-900 hover:bg-rose-200/60 rounded px-0.5 ml-0.5 font-bold leading-none"
-                                        title={`Gỡ bỏ ${PLATFORM_NAMES[p] || p}`}
+                              {row.platforms.length === 0 ? (
+                                <div className="space-y-1">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-300 shadow-xs cursor-help"
+                                    title={row.errors.find((e) => e.includes('nền tảng') || e.includes('Nền tảng')) || 'Chưa chọn nền tảng đăng bài (Bắt buộc)'}
+                                  >
+                                    <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                                    Chưa chọn nền tảng
+                                  </span>
+                                  <span className="text-[10px] text-rose-600 font-bold block">
+                                    ⚠️ Lỗi: Thiếu kênh đăng (Bắt buộc)
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {row.platforms.map((p, idx) => {
+                                    const isConnected = isPlatformConnected(p, connectedProviders);
+                                    return (
+                                      <span
+                                        key={idx}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                          isConnected
+                                            ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                            : 'bg-rose-50 text-rose-700 border-rose-300 shadow-xs'
+                                        }`}
+                                        title={
+                                          isConnected
+                                            ? undefined
+                                            : `Nền tảng ${PLATFORM_NAMES[p] || p} chưa được kết nối với tài khoản!`
+                                        }
                                       >
-                                        ×
-                                      </button>
-                                    </span>
-                                  );
-                                })}
-                              </div>
+                                        {p.replace('_REELS', '').replace('_POST', '').replace('_VIDEO', '')}
+                                        {!isConnected && (
+                                          <span className="text-[9px] text-rose-600 font-bold">
+                                            (Chưa connect)
+                                          </span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRemovePlatform(row.rowNumber, p);
+                                          }}
+                                          className="hover:text-rose-900 hover:bg-rose-200/60 rounded px-0.5 ml-0.5 font-bold leading-none"
+                                          title={`Gỡ bỏ ${PLATFORM_NAMES[p] || p}`}
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </td>
                             <td className="p-3 whitespace-nowrap text-gray-600 font-mono">
-                              {row.scheduledAt && row.scheduledAt !== 'NOW' ? (
+                              {row.errors.some((e) => e.includes('Thời gian') || e.includes('quá khứ') || e.includes('định dạng')) ? (
+                                <div className="space-y-0.5">
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 cursor-help"
+                                    title={row.errors.find((e) => e.includes('Thời gian') || e.includes('quá khứ') || e.includes('định dạng')) || 'Thời gian không hợp lệ'}
+                                  >
+                                    <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                                    <span className="max-w-[130px] truncate">{row.scheduledAt || 'Sai định dạng'}</span>
+                                  </span>
+                                  <span className="text-[9px] text-rose-600 font-bold block leading-tight max-w-[130px]">
+                                    ⚠️ Sai định dạng thời gian
+                                  </span>
+                                </div>
+                              ) : row.scheduledAt && row.scheduledAt !== 'NOW' && row.scheduledAt !== 'DRAFT' ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700">
                                   <Calendar className="w-3 h-3 text-purple-600" />
                                   {safeFormatDate(row.scheduledAt, 'HH:mm (dd/MM)')}
+                                </span>
+                              ) : row.scheduledAt === 'DRAFT' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                                  <FileText className="w-3 h-3 text-gray-400" />
+                                  Bản thảo (Draft)
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">

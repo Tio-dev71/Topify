@@ -55,6 +55,16 @@ export async function GET(req: NextRequest) {
       andConditions.push({ createdById: session.user.id });
     }
 
+    // Filter by status if provided, or default to SCHEDULED, PUBLISHED, PUBLISHING (exclude FAILED and DRAFT)
+    const statusParam = url.searchParams.get('status');
+    if (statusParam && statusParam !== 'ALL') {
+      andConditions.push({ status: statusParam });
+    } else if (!statusParam) {
+      andConditions.push({
+        status: { in: ['SCHEDULED', 'PUBLISHED', 'PUBLISHING'] },
+      });
+    }
+
     // Date range filter
     if (startDate && endDate) {
       const startD = new Date(startDate);
@@ -63,7 +73,13 @@ export async function GET(req: NextRequest) {
         OR: [
           { scheduledAt: { gte: startD, lte: endD } },
           { publishedAt: { gte: startD, lte: endD } },
-          { createdAt: { gte: startD, lte: endD }, scheduledAt: null },
+          {
+            AND: [
+              { createdAt: { gte: startD, lte: endD } },
+              { scheduledAt: null },
+              { publishedAt: null },
+            ],
+          },
         ],
       });
     }
@@ -89,40 +105,51 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      orderBy: { scheduledAt: 'asc' },
+      orderBy: [
+        { scheduledAt: 'asc' },
+        { publishedAt: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
 
     // Format for calendar (both events for web FullCalendar and posts for Desktop app)
-    const events = posts.map((post) => ({
-      id: post.id,
-      title: post.title || post.caption?.substring(0, 50) || 'Chưa có tiêu đề',
-      start: post.scheduledAt?.toISOString() || post.publishedAt?.toISOString() || post.createdAt?.toISOString(),
-      scheduledAt: post.scheduledAt?.toISOString() || null,
-      publishedAt: post.publishedAt?.toISOString() || null,
-      createdAt: post.createdAt?.toISOString(),
-      status: post.status,
-      type: post.postType,
-      caption: post.caption || '',
-      content: post.caption || '',
-      platforms: post.platforms.map((t) => t.platform),
-      platformStatuses: post.platforms.map((t) => ({
-        platform: t.platform,
-        status: t.status,
-      })),
-    }));
+    const events = posts.map((post) => {
+      const effectiveDate = post.scheduledAt?.toISOString() || post.publishedAt?.toISOString() || post.createdAt?.toISOString();
+      return {
+        id: post.id,
+        title: post.title || post.caption?.substring(0, 50) || 'Chưa có tiêu đề',
+        start: effectiveDate,
+        scheduledAt: post.scheduledAt?.toISOString() || null,
+        publishedAt: post.publishedAt?.toISOString() || null,
+        createdAt: post.createdAt?.toISOString(),
+        status: post.status,
+        type: post.postType,
+        caption: post.caption || '',
+        content: post.caption || '',
+        platforms: post.platforms.map((t) => t.platform),
+        platformStatuses: post.platforms.map((t) => ({
+          platform: t.platform,
+          status: t.status,
+        })),
+      };
+    });
 
-    const safePosts = posts.map((post) => ({
-      id: post.id,
-      title: post.title || post.caption?.substring(0, 50) || 'Chưa có tiêu đề',
-      status: post.status,
-      scheduledAt: post.scheduledAt?.toISOString() || null,
-      publishedAt: post.publishedAt?.toISOString() || null,
-      createdAt: post.createdAt?.toISOString(),
-      content: post.caption || '',
-      caption: post.caption || '',
-      platform: post.platforms.map((t) => t.platform).join(', '),
-      platforms: post.platforms.map((t) => t.platform),
-    }));
+    const safePosts = posts.map((post) => {
+      const effectiveDate = post.scheduledAt?.toISOString() || post.publishedAt?.toISOString() || post.createdAt?.toISOString();
+      return {
+        id: post.id,
+        title: post.title || post.caption?.substring(0, 50) || 'Chưa có tiêu đề',
+        status: post.status,
+        start: effectiveDate,
+        scheduledAt: post.scheduledAt?.toISOString() || null,
+        publishedAt: post.publishedAt?.toISOString() || null,
+        createdAt: post.createdAt?.toISOString(),
+        content: post.caption || '',
+        caption: post.caption || '',
+        platform: post.platforms.map((t) => t.platform).join(', '),
+        platforms: post.platforms.map((t) => t.platform),
+      };
+    });
 
     return NextResponse.json({ events, posts: safePosts });
   } catch (error: any) {

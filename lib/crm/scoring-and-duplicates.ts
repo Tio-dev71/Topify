@@ -4,8 +4,9 @@ import { recordAuditLog } from '@/lib/audit-log';
 export interface LeadScoreBreakdown {
   profileScore: number;
   engagementScore: number;
-  aiIntentScore: number;
-  decayScore: number;
+  purchaseScore: number;
+  aiIntentScore?: number;
+  decayScore?: number;
   reasons: string[];
 }
 
@@ -78,6 +79,21 @@ export function normalizePhoneNumber(phone: string | null | undefined): string {
 
 /**
  * Calculate Lead Score & Temperature for a customer (F100)
+ *
+ * Tiêu chí F100 chuẩn hóa:
+ * 1. Hồ sơ đầy đủ (Tối đa 30đ):
+ *    - Có Họ tên (+10đ)
+ *    - Có SĐT xác thực (+10đ)
+ *    - Có Email hợp lệ (+10đ)
+ * 2. Tương tác thực tế (Tối đa 30đ):
+ *    - Có tin nhắn/hội thoại hỏi mua, hỏi giá hoặc tư vấn qua hộp thư / ghi chú (+30đ)
+ * 3. Lịch sử mua hàng (Tối đa 40đ):
+ *    - Có đơn hàng thành công trong hệ thống (+40đ)
+ *
+ * Phân hạng độ nóng (Temperature):
+ * - HOT 🔥: Điểm >= 70
+ * - WARM ⚡: Điểm 40 - 69
+ * - COLD ❄️: Điểm < 40
  */
 export function calculateCustomerScore(
   customer: any,
@@ -96,28 +112,27 @@ export function calculateCustomerScore(
 } {
   let profileScore = 0;
   let engagementScore = 0;
-  let aiIntentScore = 0;
-  let decayScore = 0;
+  let purchaseScore = 0;
   const reasons: string[] = [];
 
-  // 1. Profile Completeness (Max 50)
+  // 1. Hồ sơ đầy đủ (Tối đa 30đ)
+  if (customer.name && customer.name.trim().length > 0) {
+    profileScore += 10;
+    reasons.push('Hồ sơ: Có họ tên khách hàng (+10đ)');
+  }
+
   const normPhone = normalizePhoneNumber(customer.phone);
   if (normPhone && normPhone.length >= 10) {
-    profileScore += 25;
-    reasons.push('Có số điện thoại liên hệ xác thực (+25đ)');
+    profileScore += 10;
+    reasons.push('Hồ sơ: Có số điện thoại liên hệ xác thực (+10đ)');
   }
 
   if (customer.email && customer.email.includes('@')) {
-    profileScore += 15;
-    reasons.push('Có địa chỉ email hợp lệ (+15đ)');
-  }
-
-  if (customer.notes || customer.customData?.address || customer.source) {
     profileScore += 10;
-    reasons.push('Đầy đủ thông tin nguồn và ghi chú (+10đ)');
+    reasons.push('Hồ sơ: Có địa chỉ email hợp lệ (+10đ)');
   }
 
-  // 2. Engagement & Interaction (Max 35)
+  // 2. Tương tác thực tế (Tối đa 30đ: hỏi mua / hỏi giá +30)
   const deals = relatedData?.deals || customer.deals || [];
   const conversations = relatedData?.conversations || customer.conversations || [];
   const activities = relatedData?.activities || customer.activities || [];
@@ -125,9 +140,7 @@ export function calculateCustomerScore(
   const dealsCount = deals.length;
   const totalDealValue = deals.reduce((sum: number, d: any) => sum + (Number(d.value) || 0), 0);
 
-  // Check recent conversation message in last 24h
-  let hasRecentChat = false;
-  let totalMsgCount = 0;
+  let hasConversationInteraction = false;
   let latestMsgDate: Date | null = null;
 
   for (const conv of conversations) {
@@ -136,72 +149,72 @@ export function calculateCustomerScore(
       if (!latestMsgDate || msgDate > latestMsgDate) {
         latestMsgDate = msgDate;
       }
-      const hoursAgo = (Date.now() - msgDate.getTime()) / (1000 * 60 * 60);
-      if (hoursAgo <= 24) {
-        hasRecentChat = true;
-      }
     }
-    if (conv.messages) {
-      totalMsgCount += conv.messages.length;
+    if ((conv.messages && conv.messages.length > 0) || conv.lastMessageAt) {
+      hasConversationInteraction = true;
     }
   }
 
-  if (hasRecentChat) {
-    engagementScore += 20;
-    reasons.push('Có tin nhắn tương tác trong 24 giờ qua (+20đ)');
-  }
+  // Kiểm tra từ khóa hỏi mua, hỏi giá trong ghi chú hoặc tags
+  const textToCheck = `${customer.notes || ''} ${customer.tags || ''}`.toLowerCase();
+  const inquiryKeywords = [
+    'hỏi mua',
+    'hỏi giá',
+    'báo giá',
+    'giá sỉ',
+    'xin giá',
+    'tư vấn',
+    'hỏi size',
+    'đặt cọc',
+    'chốt đơn',
+    'ship cod',
+    'số lượng lớn',
+    'hỏi thêm',
+    'hỏi hàng',
+    'quan tâm',
+    'mua sỉ',
+    'xin số tài khoản',
+    'xin tài khoản',
+    'xin stk',
+    'chuyển khoản',
+    'đặt mua',
+  ];
 
-  if (totalMsgCount >= 3 || conversations.length >= 2) {
-    engagementScore += 15;
-    reasons.push('Tương tác thường xuyên qua hộp thư (+15đ)');
-  }
-
-  const hasOpenDeal = deals.some((d: any) => d.status === 'OPEN');
-  if (hasOpenDeal) {
-    engagementScore += 15;
-    reasons.push('Có giao dịch/Deal đang mở trong quy trình bán hàng (+15đ)');
-  }
-
+  const hasInquiryKeyword = inquiryKeywords.some((kw) => textToCheck.includes(kw));
   const hasCompletedActivity = activities.some((a: any) => a.isDone);
-  if (hasCompletedActivity) {
-    engagementScore += 10;
-    reasons.push('Đã hoàn thành cuộc gọi hoặc buổi tư vấn (+10đ)');
+  const hasDirectInteractionFlag = Boolean(
+    customer.hasInteraction || customer.customData?.hasInteraction || customer.customData?.hasInquiry
+  );
+
+  if (hasConversationInteraction || hasInquiryKeyword || hasCompletedActivity || hasDirectInteractionFlag) {
+    engagementScore = 30;
+    reasons.push('Tương tác thực tế: Có tương tác hỏi mua, hỏi giá hoặc tư vấn qua hộp thư/ghi chú (+30đ)');
   }
 
-  // 3. AI Intent Scoring (Max 15)
-  const notesLower = (customer.notes || '').toLowerCase();
-  if (
-    notesLower.includes('giá sỉ') ||
-    notesLower.includes('đặt cọc') ||
-    notesLower.includes('chốt đơn') ||
-    notesLower.includes('số lượng lớn')
-  ) {
-    aiIntentScore += 15;
-    reasons.push('Phát hiện ý định mua hàng / mua sỉ khẩn cấp (+15đ)');
+  // 3. Lịch sử mua hàng (Tối đa 40đ: có đơn thành công +40)
+  const hasSuccessfulOrder =
+    deals.length > 0 &&
+    deals.some((d: any) => d.status === 'WON' || d.status === 'OPEN' || !d.status);
+
+  if (hasSuccessfulOrder || (customer.ordersCount && customer.ordersCount > 0)) {
+    purchaseScore = 40;
+    reasons.push('Lịch sử mua hàng: Có đơn hàng thành công trong hệ thống (+40đ)');
   }
 
-  // 4. Decay (Penalties for inactivity)
-  const lastActive = latestMsgDate || customer.updatedAt || customer.createdAt;
-  const daysInactive = (Date.now() - new Date(lastActive).getTime()) / (1000 * 60 * 60 * 24);
+  // Tổng điểm Lead Score (0 - 100đ)
+  const leadScore = Math.min(100, Math.max(0, profileScore + engagementScore + purchaseScore));
 
-  if (daysInactive > 30) {
-    decayScore -= 25;
-    reasons.push('Hơn 30 ngày không có tương tác mới (-25đ)');
-  } else if (daysInactive > 7) {
-    decayScore -= 10;
-    reasons.push('Hơn 7 ngày không có tương tác mới (-10đ)');
-  }
-
-  // Final Score (Clamped between 5 and 100)
-  const rawScore = profileScore + engagementScore + aiIntentScore + decayScore;
-  const leadScore = Math.min(100, Math.max(5, rawScore));
-
+  // Phân hạng Temperature: HOT >= 70, WARM 40-69, COLD < 40
   let temperature: 'HOT' | 'WARM' | 'COLD' = 'COLD';
-  if (leadScore >= 80) {
+  if (leadScore >= 70) {
     temperature = 'HOT';
-  } else if (leadScore >= 50) {
+  } else if (leadScore >= 40) {
     temperature = 'WARM';
+  } else {
+    temperature = 'COLD';
   }
+
+  const lastActive = latestMsgDate || customer.updatedAt || customer.createdAt;
 
   return {
     leadScore,
@@ -209,8 +222,7 @@ export function calculateCustomerScore(
     breakdown: {
       profileScore,
       engagementScore,
-      aiIntentScore,
-      decayScore,
+      purchaseScore,
       reasons,
     },
     dealsCount,

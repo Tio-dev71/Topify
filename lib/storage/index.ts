@@ -83,20 +83,30 @@ class SupabaseStorageAdapter implements StorageAdapter {
     const ext = path.extname(filename);
     const uniqueName = `${uuidv4()}${ext}`;
     
-    const { error } = await this.supabase.storage
-      .from(this.bucket)
-      .upload(uniqueName, file, {
-        upsert: false,
-        contentType: contentType || 'application/octet-stream'
-      });
+    try {
+      const { error } = await this.supabase.storage
+        .from(this.bucket)
+        .upload(uniqueName, file, {
+          upsert: false,
+          contentType: contentType || 'application/octet-stream'
+        });
+        
+      if (error) {
+        console.warn('[Storage] Supabase storage upload error, falling back to local storage:', error.message || error);
+        const local = new LocalStorageAdapter();
+        return await local.upload(file, filename, contentType);
+      }
       
-    if (error) throw error;
-    
-    const { data: publicUrlData } = this.supabase.storage
-      .from(this.bucket)
-      .getPublicUrl(uniqueName);
-      
-    return publicUrlData.publicUrl;
+      const { data: publicUrlData } = this.supabase.storage
+        .from(this.bucket)
+        .getPublicUrl(uniqueName);
+        
+      return publicUrlData.publicUrl;
+    } catch (uploadErr: any) {
+      console.warn('[Storage] Supabase storage upload exception, falling back to local storage:', uploadErr?.message || uploadErr);
+      const local = new LocalStorageAdapter();
+      return await local.upload(file, filename, contentType);
+    }
   }
 
   async delete(url: string): Promise<void> {

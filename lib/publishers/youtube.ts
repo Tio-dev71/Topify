@@ -119,7 +119,25 @@ export class YouTubeShortsPublisher implements Publisher {
             errorMessage: 'Tài khoản Google này chưa tạo Kênh YouTube (YouTube Channel). Vui lòng vào https://youtube.com hoặc YouTube Studio để tạo kênh cho tài khoản này trước khi đăng bài.'
           };
         }
-        return { success: false, errorMessage: `Failed to init upload: ${initRes.status} ${initRes.statusText}. Details: ${errorText}` };
+        if (errorText.includes('uploadLimitExceeded') || errorText.includes('exceeded the number of videos')) {
+          return {
+            success: false,
+            errorMessage: 'Kênh YouTube đã đạt giới hạn số lượng video được phép tải lên trong ngày của YouTube (Daily Upload Limit). Vui lòng thử lại sau 24 giờ hoặc vào YouTube Studio xác minh Kênh (Tính năng nâng cao) để tăng hạn mức đăng video.'
+          };
+        }
+        if (errorText.includes('quotaExceeded') || errorText.includes('quota')) {
+          return {
+            success: false,
+            errorMessage: 'Hạn mức YouTube API trong ngày đã hết (Quota Exceeded). Hạn mức sẽ tự động được đặt lại vào 14:00 giờ Việt Nam (00:00 PST).'
+          };
+        }
+        if (errorText.includes('videoTitleTooLong')) {
+          return {
+            success: false,
+            errorMessage: 'Tiêu đề video vượt quá giới hạn tối đa 100 ký tự của YouTube. Vui lòng rút ngắn tiêu đề bài viết.'
+          };
+        }
+        return { success: false, errorMessage: `Lỗi khởi tạo tải lên YouTube (${initRes.status}): ${errorText}` };
       }
 
       // Step 2: Upload video binary
@@ -174,9 +192,29 @@ export class YouTubeShortsPublisher implements Publisher {
         return { success: true, externalPostId: uploadData.id };
       }
 
-      return { success: false, errorMessage: `Upload failed: ${JSON.stringify(uploadData)}` };
+      const rawUploadErr = JSON.stringify(uploadData);
+      if (rawUploadErr.includes('uploadLimitExceeded') || rawUploadErr.includes('exceeded the number of videos')) {
+        return {
+          success: false,
+          errorMessage: 'Kênh YouTube đã đạt giới hạn số lượng video được phép tải lên trong ngày của YouTube (Daily Upload Limit). Vui lòng thử lại sau 24 giờ hoặc vào YouTube Studio xác minh Kênh (Tính năng nâng cao) để tăng hạn mức đăng video.'
+        };
+      }
+      return { success: false, errorMessage: `Tải video lên YouTube không thành công: ${rawUploadErr}` };
     } catch (error: unknown) {
-      return { success: false, errorMessage: `YouTube Shorts error: ${error instanceof Error ? error.message : String(error)}` };
+      const errMsg = error instanceof Error ? error.message : String(error);
+      if (errMsg.includes('uploadLimitExceeded') || errMsg.includes('exceeded the number of videos')) {
+        return {
+          success: false,
+          errorMessage: 'Kênh YouTube đã đạt giới hạn số lượng video được phép tải lên trong ngày của YouTube (Daily Upload Limit). Vui lòng thử lại sau 24 giờ hoặc vào YouTube Studio xác minh Kênh (Tính năng nâng cao) để tăng hạn mức đăng video.'
+        };
+      }
+      if (errMsg.includes('Token is expired') || errMsg.includes('invalid_grant')) {
+        return {
+          success: false,
+          errorMessage: 'Phiên đăng nhập YouTube/Google đã hết hạn hoặc bị thu hồi quyền. Vui lòng kết nối lại tài khoản YouTube tại mục Cài đặt -> Mạng xã hội.'
+        };
+      }
+      return { success: false, errorMessage: `Lỗi YouTube Shorts: ${errMsg}` };
     }
   }
 

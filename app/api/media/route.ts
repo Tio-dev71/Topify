@@ -3,12 +3,29 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { getStorage } from '@/lib/storage';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+};
+
+// OPTIONS /api/media — Handle CORS preflight
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 // GET /api/media — List media assets
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     }
 
     const url = new URL(req.url);
@@ -76,16 +93,20 @@ export async function GET(req: NextRequest) {
       if (finalStorageUrl && !finalStorageUrl.startsWith('http://') && !finalStorageUrl.startsWith('https://')) {
         finalStorageUrl = `${baseUrl}${finalStorageUrl.startsWith('/') ? '' : '/'}${finalStorageUrl}`;
       }
+      if (finalStorageUrl && finalStorageUrl.includes('/api/uploads/') && !finalStorageUrl.includes('?')) {
+        const timeKey = asset.updatedAt ? new Date(asset.updatedAt).getTime() : '1';
+        finalStorageUrl = `${finalStorageUrl}?v=${timeKey}`;
+      }
       return {
         ...asset,
         storageUrl: finalStorageUrl,
       };
     });
 
-    return NextResponse.json({ assets: formattedAssets, total });
+    return NextResponse.json({ assets: formattedAssets, total }, { headers: corsHeaders });
   } catch (error: any) {
     console.error('List media error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders });
   }
 }
 
@@ -94,14 +115,14 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     }
 
     const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const file = (formData.get('file') || formData.get('video') || formData.get('media')) as File;
     
     if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+      return NextResponse.json({ error: 'No file provided' }, { status: 400, headers: corsHeaders });
     }
 
     const tags = formData.get('tags') as string || null;
@@ -112,7 +133,11 @@ export async function POST(req: NextRequest) {
     const fileName = file.name;
     const ext = (fileName.split('.').pop() || '').toLowerCase();
 
-    // Fallback MIME mapping if not provided by client/browser
+    const videoExts = ['mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'wmv', 'm4v', '3gp', 'ts', 'ogv'];
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+    const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+
+    // Fallback MIME mapping if not provided or generic
     if (!mimeType || mimeType === 'application/octet-stream') {
       const mimeMap: Record<string, string> = {
         mp4: 'video/mp4',
@@ -120,16 +145,23 @@ export async function POST(req: NextRequest) {
         webm: 'video/webm',
         mkv: 'video/x-matroska',
         avi: 'video/x-msvideo',
+        flv: 'video/x-flv',
+        wmv: 'video/x-ms-wmv',
+        m4v: 'video/x-m4v',
+        '3gp': 'video/3gpp',
         jpg: 'image/jpeg',
         jpeg: 'image/jpeg',
         png: 'image/png',
         gif: 'image/gif',
         webp: 'image/webp',
         svg: 'image/svg+xml',
+        bmp: 'image/bmp',
+        ico: 'image/x-icon',
         mp3: 'audio/mpeg',
         wav: 'audio/wav',
         ogg: 'audio/ogg',
         m4a: 'audio/mp4',
+        aac: 'audio/aac',
         pdf: 'application/pdf',
       };
       if (mimeMap[ext]) {
@@ -138,14 +170,26 @@ export async function POST(req: NextRequest) {
     }
     
     let mediaType: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' = 'DOCUMENT';
-    if (mimeType.startsWith('image/')) mediaType = 'IMAGE';
-    else if (mimeType.startsWith('video/') || ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)) mediaType = 'VIDEO';
-    else if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) mediaType = 'AUDIO';
+    if (mimeType.startsWith('image/') || imageExts.includes(ext)) mediaType = 'IMAGE';
+    else if (mimeType.startsWith('video/') || videoExts.includes(ext)) mediaType = 'VIDEO';
+    else if (mimeType.startsWith('audio/') || audioExts.includes(ext)) mediaType = 'AUDIO';
     
     const buffer = Buffer.from(await file.arrayBuffer());
     
     const storage = getStorage();
-    const storageUrl = await storage.upload(buffer, fileName, mimeType);
+    let storageUrl: string;
+    try {
+      storageUrl = await storage.upload(buffer, fileName, mimeType);
+    } catch (storageErr: any) {
+      console.warn('Primary storage upload failed, attempting local fallback:', storageErr?.message || storageErr);
+      const { LocalStorageAdapter } = await import('@/lib/storage') as any;
+      if (LocalStorageAdapter) {
+        const local = new LocalStorageAdapter();
+        storageUrl = await local.upload(buffer, fileName, mimeType);
+      } else {
+        throw storageErr;
+      }
+    }
 
     // Resolve workspaceId if missing from session
     let workspaceId = (session.user as any).workspaceId;
@@ -178,9 +222,9 @@ export async function POST(req: NextRequest) {
       finalStorageUrl = `${requestProto}://${requestHost}${finalStorageUrl.startsWith('/') ? '' : '/'}${finalStorageUrl}`;
     }
 
-    return NextResponse.json({ ...asset, storageUrl: finalStorageUrl }, { status: 201 });
+    return NextResponse.json({ ...asset, storageUrl: finalStorageUrl }, { status: 201, headers: corsHeaders });
   } catch (error: any) {
     console.error('Create media error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders });
   }
 }

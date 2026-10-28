@@ -14,6 +14,7 @@
 | **[F019](#f019---import-bài-từ-google-drive--excel)** | M2. Content Studio | Import từ Excel / Google Drive | Nhập bài hàng loạt từ .xlsx, .csv, Google Drive, preview & inline edit, lên lịch tự động | Không dùng | ✅ Đã sẵn sàng test |
 | **[F022](#f022---đăng-ngẫu-nhiên-giờ-trong-khung-random-time-window)** | M2. Content Studio | Đăng ngẫu nhiên giờ trong khung | Random Time Window, 4 preset khung giờ vàng, live preview, rải lịch video | Không dùng | ✅ Đã sẵn sàng test |
 | **[F050](#f050---so-sánh-hiệu-suất-theo-khoảng-thời-gian-period-comparison)** | M5. Analytics | So sánh hiệu suất theo khoảng thời gian | Checkbox so sánh kỳ trước (MoM / WoW / YoY), % tăng trưởng, biểu đồ 2 đường nét liền/đứt | Analytics Engine | ✅ Đã sẵn sàng test |
+| **[F051](#f051---theo-dõi-đối-thủ-fanpages--quét-bài-viết-đầy-đủ-trong-ngày-deep-pagination)** | M6. Intelligence | Theo dõi đối thủ (Fanpages) | Deep pagination cào sâu bài viết Facebook Fanpage/Group/Web, đảm bảo >=90% bài trong ngày | Scraper Engine | ✅ Đã sẵn sàng test |
 | **[F082](#f082---duplicate-content-detection-kiểm-tra-trùng-lặp-nội-dung)** | M2. Content Studio | Duplicate Content Detection | Phát hiện trùng lặp tiêu đề, caption, media | Hỗ trợ Spin | ✅ Đã sẵn sàng test |
 | **[F083](#f083---evergreen-content--auto-recycle-nội-dung-bất-hủ--tái-đăng)** | M2. Content Studio | Evergreen Content & Auto-Recycle | Quản lý bài viết bất hủ & Tái bản định kỳ | Hỗ trợ Spin | ✅ Đã sẵn sàng test |
 | **[F084](#f084---ai-content-score-chấm-điểm-nội-dung-chuẩn-viral)** | M2. Content Studio | AI Content Score | Chấm điểm Hook, độ rõ CTA, Brand Voice, Nền tảng | 🤖 9router | ✅ Đã sẵn sàng test |
@@ -23,8 +24,17 @@
 | **[F088](#f088---ai-conversation-summary-tóm-tắt-hội-thoại--next-action)** | M3. Unified Inbox | AI Conversation Summary | Tóm tắt hội thoại dài & đề xuất hành động tiếp theo | 🤖 9router | ✅ Đã sẵn sàng test |
 | **[F089](#f089---lead-detection-từ-hội-thoại-phát-hiện-khách-tiềm-năng)** | M3. Unified Inbox | Lead Detection từ hội thoại | Phát hiện tín hiệu mua hàng & 1-click tạo Lead CRM | 🤖 9router | ✅ Đã sẵn sàng test |
 | **[F091](#f091---spamblacklist-chặn-spam--danh-sách-đen)** | M3. Unified Inbox | Spam/Blacklist Policy | Chặn spam, blacklist user / keyword theo policy | Rule / AI | ✅ Đã sẵn sàng test |
-| **[F100](#f100---lead-scoring-chấm-điểm-khách-hàng-tiềm-năng)** | M4. Customer & Lead CRM | Lead Scoring | Chấm điểm lead theo hành vi / tương tác / quy tắc | 🤖 9router + Rule | 📋 Đã lên Test Plan |
-| **[F101](#f101---duplicate-detection--merge-phát-hiện-trùng--hợp-nhất-hồ-sơ)** | M4. Customer & Lead CRM | Duplicate Detection & Merge | Phát hiện trùng và hợp nhất hồ sơ có kiểm soát | Thuật toán + Fuzzy | 📋 Đã lên Test Plan |
+| **[F093](#f093---contact--company-hồ-sơ-liên-hệ-và-doanh-nghiệp)** | M4. Customer & Lead CRM | Contact & Company | Hồ sơ liên hệ và doanh nghiệp (Họ tên, SĐT, Email, Công ty) | CRM Database | ✅ Đã sẵn sàng test |
+| **[F094](#f094---pipeline-quản-lý-pipeline-bán-hàng-theo-workspaceteam)** | M4. Customer & Lead CRM | Pipeline | Quản lý pipeline bán hàng theo workspace/team | CRM Engine | ✅ Đã sẵn sàng test |
+| **[F095](#f095---stage-tùy-biến-các-giai-đoạn-của-pipeline)** | M4. Customer & Lead CRM | Stage | Tùy biến các giai đoạn của pipeline (Tên, màu sắc, thứ tự) | CRM Engine | ✅ Đã sẵn sàng test |
+| **[F096](#f096---deal-cơ-hội-bán-hàng-giá-trị-xác-suất-owner-dự-kiến-chốt)** | M4. Customer & Lead CRM | Deal | Cơ hội bán hàng: giá trị, xác suất, owner, dự kiến chốt | CRM Engine | ✅ Đã sẵn sàng test |
+| **[F097](#f097---lead-source--owner-theo-dõi-nguồn-lead-và-người-phụ-trách)** | M4. Customer & Lead CRM | Lead Source & Owner | Theo dõi nguồn lead và người phụ trách | CRM Engine | ✅ Đã sẵn sàng test |
+| **[F098](#f098---activity--follow-up-callmeetingmessagetaskreminder-liên-quan-khách-hàng)** | M4. Customer & Lead CRM | Activity & Follow-up | Call/meeting/message/task/reminder liên quan khách hàng | CRM Activity | ✅ Đã sẵn sàng test |
+| **[F099](#f099---custom-field-tạo-trường-dữ-liệu-tùy-biến-cho-crm)** | M4. Customer & Lead CRM | Custom Field | Tạo trường dữ liệu tùy biến cho CRM (customData) | CRM Engine | ✅ Đã sẵn sàng test |
+| **[F100](#f100---lead-scoring-chấm-điểm-khách-hàng-tiềm-năng)** | M4. Customer & Lead CRM | Lead Scoring | Chấm điểm lead theo hành vi / tương tác / quy tắc | 🤖 9router + Rule | ✅ Đã sẵn sàng test |
+| **[F101](#f101---duplicate-detection--merge-phát-hiện-trùng--hợp-nhất-hồ-sơ)** | M4. Customer & Lead CRM | Duplicate Detection & Merge | Phát hiện trùng và hợp nhất hồ sơ có kiểm soát | Thuật toán + Fuzzy | ✅ Đã sẵn sàng test |
+| **[F102](#f102---nhúng-form-thu-lead-website--landing-page-đổ-trực-tiếp-crm)** | M4. Customer & Lead CRM | Embed Form & Webhook | Nhúng form thu lead website/landing page đổ trực tiếp CRM | Webhook / HTML | ✅ Đã sẵn sàng test |
+| **[F109](#f109---theo-dõi-từ-khóa-keywords--đo-lường-xu-hướng-thị-trường)** | M6. Intelligence | Theo dõi từ khóa (Keywords) | Theo dõi dung lượng tìm kiếm, tăng trưởng, lượt thảo luận & phân tích tiềm năng | Scraper / News API | ✅ Đã sẵn sàng test |
 | **[F110](#f110---trending--viral-content-detection-nội-dung-thịnh-hành--bùng-nổ)** | M6. Intelligence | Trending & Viral Velocity | Đo lường vận tốc bùng nổ (Velocity) & 1-click Remix | Thuật toán Velocity | ✅ Đã sẵn sàng test |
 | **[F112](#f112---keyword--viral-alert-cảnh-báo-ngưỡng-viral--từ-khóa)** | M6. Intelligence | Keyword & Viral Alert | Quy tắc cảnh báo ngưỡng điểm viral & In-App notification | Rule Engine | ✅ Đã sẵn sàng test |
 | **[F113](#f113---resize-đa-nền-tảng-multi-aspect-ratio-video--image)** | M7. Media Studio | Multi-Aspect Ratio Resize | Resize 9:16, 1:1, 16:9, 4:5 kèm Fit Blur / Center Crop | Web Canvas / Studio | ✅ Đã sẵn sàng test |
@@ -291,26 +301,94 @@ Hệ thống thiết kế một lớp Adapter chuẩn hóa duy nhất (`lib/ai/9
 
 ---
 
+## [F093] - Contact & Company (Hồ sơ liên hệ và doanh nghiệp)
+
+* **Phân hệ:** M4. Customer & Lead CRM (Màn hình `Hồ sơ Khách hàng & Doanh nghiệp` `/customers` trên Electron App & Web Dashboard).
+* **Mục tiêu:** Quản lý tập trung hồ sơ khách hàng cá nhân và doanh nghiệp, lưu trữ đầy đủ Họ và tên, Số điện thoại, Email, Công ty, Avatar, thẻ Tags phân loại và ghi chú nhu cầu tư vấn.
+* **Môi trường test:** Electron Desktop App (`/customers`), Backend API (`/api/crm/customers`).
+
+### 📋 Bảng Test Cases F093
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F093-01** | Tạo mới hồ sơ khách hàng liên hệ cá nhân & doanh nghiệp | 1. Mở app Topify $\rightarrow$ Khách hàng (CRM).<br>2. Bấm nút *"Thêm khách hàng"*.<br>3. Nhập Họ và tên, SĐT, Email, Nguồn tiếp cận, Thẻ tags, Ghi chú doanh nghiệp.<br>4. Bấm *"Thêm khách hàng"*. | Tên: *"Nguyễn Minh Tuấn"*, SĐT: *"0988223344"*, Email: *"tuan.nguyen@ctytech.vn"* | • Tạo thành công khách hàng mới trong cơ sở dữ liệu.<br>• Hiển thị ngay lập tức trên bảng danh sách.<br>• Tự động tính điểm Lead Score khởi tạo. | [x] |
+| **TC-F093-02** | Xem chi tiết hồ sơ liên hệ, công ty & lịch sử giao dịch | 1. Nhấp vào dòng khách hàng hoặc bấm biểu tượng con mắt (👁️).<br>2. Quan sát popup chi tiết hồ sơ. | Click dòng khách hàng | • Modal chi tiết hiển thị đầy đủ: Avatar, Họ tên, Nhiệt độ Lead, Kênh nguồn, SĐT & Email (có nút sao chép nhanh), Thẻ tags.<br>• Bảng phân tích Lead Score, Lịch sử giao dịch và Ghi chú tư vấn. | [x] |
+| **TC-F093-03** | Chỉnh sửa thông tin hồ sơ khách hàng | 1. Trong modal chi tiết hoặc danh sách, bấm *"Chỉnh sửa"* (icon bút).<br>2. Cập nhật số điện thoại hoặc email mới $\rightarrow$ Bấm *"Lưu thay đổi"*. | Cập nhật SĐT mới | • Cập nhật thông tin thành công.<br>• Tự động tính toán lại điểm Lead Score nếu bổ sung đủ hồ sơ. | [x] |
+
+---
+
+## [F094] - Pipeline & [F095] - Stage (Quản lý Kênh bán hàng & Tùy biến giai đoạn)
+
+* **Phân hệ:** M4. Customer & Lead CRM (Màn hình `Kênh bán hàng (Pipelines)` `/pipelines` trên Electron App & Web Dashboard).
+* **Mục tiêu:**
+  * **F094 (Pipeline):** Quản lý quy trình phễu bán hàng theo từng Workspace/Team (ví dụ: Quy trình B2B, Bán lẻ sỉ, Đào tạo khóa học).
+  * **F095 (Stage):** Tùy biến các bước/giai đoạn của từng Pipeline (Thêm giai đoạn mới, chỉnh sửa tên, mã màu sắc nhận diện, thứ tự bước).
+* **Môi trường test:** Electron Desktop App (`/pipelines`), Backend API (`/api/crm/pipelines`).
+
+### 📋 Bảng Test Cases F094 & F095
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F094-01** | Xem quy trình kênh bán hàng Pipeline mặc định | 1. Mở app Topify $\rightarrow$ Kênh bán hàng (Pipelines).<br>2. Quan sát danh sách các giai đoạn trong quy trình. | Truy cập `/pipelines` | • Hiển thị đầy đủ quy trình chuyển đổi chuẩn với các Stage mặc định: *Tiếp cận ban đầu $\rightarrow$ Tư vấn & Báo giá $\rightarrow$ Đàm phán chốt hợp đồng $\rightarrow$ Thành công (Won)*.<br>• Hiển thị số lượng giai đoạn và thẻ màu sắc trực quan. | [x] |
+| **TC-F095-01** | Tùy biến thêm giai đoạn (Stage) mới vào Pipeline | 1. Bấm nút *"Thêm Giai Đoạn"*.<br>2. Nhập tên giai đoạn (ví dụ: *"Gửi hàng mẫu / Dùng thử"*).<br>3. Chọn mã màu sắc $\rightarrow$ Bấm *"Lưu"*. | Tên Stage: *"Gửi hàng mẫu"*, Màu: `#8B5CF6` | • Giai đoạn mới được thêm vào cuối quy trình với mã màu tương ứng.<br>• Cột giai đoạn mới tự động xuất hiện trên Kanban Board của màn hình Deals. | [x] |
+| **TC-F095-02** | Xóa giai đoạn khỏi Pipeline an toàn | 1. Tại giai đoạn không còn sử dụng, bấm icon thùng rác.<br>2. Xác nhận xóa. | Click xóa Stage | • Giai đoạn được gỡ bỏ khỏi quy trình.<br>• Hiển thị Toast thông báo: *"Đã xóa giai đoạn"*. | [x] |
+
+---
+
+## [F096] - Deal & [F097] - Lead Source & Owner (Cơ hội bán hàng, Nguồn Lead & Người phụ trách)
+
+* **Phân hệ:** M4. Customer & Lead CRM (Màn hình `Cơ hội bán hàng (Deals)` `/deals` trên Electron App).
+* **Mục tiêu:**
+  * **F096 (Deal):** Quản lý cơ hội bán hàng với đầy đủ giá trị hợp đồng, xác suất chốt, người phụ trách (Owner), ngày dự kiến chốt và giai đoạn Kanban.
+  * **F097 (Lead Source & Owner):** Theo dõi xuất xứ nguồn lead (Facebook, TikTok, Landing Page, Manual) và phân công người phụ trách chăm sóc Deal.
+  * Đồng bộ dữ liệu 2 chiều với màn hình Khách hàng CRM (Two-Way Sync).
+* **Môi trường test:** Electron Desktop App (`/deals`), Backend API (`/api/crm/deals`).
+
+### 📋 Bảng Test Cases F096 & F097
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F096-01** | Chọn khách hàng có sẵn từ CRM khi tạo Deal mới | 1. Mở app Topify $\rightarrow$ Cơ hội bán hàng (Deals).<br>2. Bấm *"Thêm Deal Mới"*.<br>3. Tại trường *"Khách hàng liên hệ"*, bấm tab *"Chọn từ CRM"*.<br>4. Tìm kiếm và chọn một khách hàng có sẵn. | Tên Deal: *"Hợp đồng triển khai nội dung"*, Chọn khách hàng CRM | • Danh sách khách hàng hiển thị đầy đủ Họ tên, SĐT, Email và badge nhiệt độ Lead Score F100.<br>• Sau khi chọn, hiển thị Card khách hàng kèm avatar và nút đổi lựa chọn.<br>• Deal tạo thành công được gắn trực tiếp `customerId`. | [x] |
+| **TC-F096-02** | Thêm khách hàng mới ngay trong popup Deal và tự động đồng bộ sang CRM (Two-Way Sync) | 1. Bấm *"Thêm Deal Mới"*.<br>2. Chọn tab *"Thêm khách mới"*.<br>3. Điền Tên cơ hội, Giá trị hợp đồng, Họ tên khách hàng \*, SĐT, Email, Nguồn tiếp cận (F097), Ghi chú.<br>4. Bấm *"Tạo Deal"*. | Họ tên: *"Anh Hoàng Minh - GĐ Kinh Doanh"*, SĐT: *"0912888999"*, Email: *"hoangminh@topify.com"*, Nguồn: `TIKTOK` | • Hệ thống tạo Deal và tạo mới bản ghi `Customer` trong CRM trong cùng 1 luồng.<br>• Nguồn lead `TIKTOK` được lưu chính xác (F097).<br>• Hiển thị Toast thông báo thành công: *"Đã tạo Deal và đồng bộ khách hàng [Tên] vào CRM thành công!"*.<br>• Mở màn Khách hàng (CRM) thấy khách hàng mới xuất hiện ngay với số lượng đơn hàng và giá trị tương ứng. | [x] |
+| **TC-F096-03** | Tự động tính điểm Lead Score F100 cho khách hàng mới tạo từ Deal | 1. Xem khách hàng mới tạo từ Deal trong màn Khách hàng (CRM).<br>2. Bấm vào dòng khách hàng để mở Modal xem chi tiết. | Khách hàng mới có đủ Họ tên, SĐT, Email + 1 Deal giá trị 25.000.000 đ | • Khách hàng tự động đạt: 30đ (Hồ sơ đầy đủ) + 40đ (Lịch sử có 1 đơn hàng Deals) = **70/100 điểm**.<br>• Tự động xếp loại: `HOT 🔥 (70đ)` (F100).<br>• Khối Lịch sử giao dịch hiển thị đúng 1 đơn hàng với giá trị tương ứng. | [x] |
+| **TC-F096-04** | Chuyển giai đoạn (Stage) của Deal trên Kanban Board & Xóa Deal an toàn | 1. Tại card Deal trên Kanban board, chọn dropdown giai đoạn.<br>2. Chuyển sang giai đoạn khác (ví dụ: *"Đàm phán chốt hợp đồng"* hoặc *"Thành công (Won)"*).<br>3. Bấm icon thùng rác để xóa Deal. | Chuyển giai đoạn / Xóa | • Gửi API PATCH cập nhật stageId và status của Deal, di chuyển card sang cột tương ứng.<br>• Xóa deal gửi API DELETE an toàn và cập nhật giao diện ngay lập tức. | [x] |
+
+---
+
+## [F098] - Activity & Follow-up & [F099] - Custom Field
+
+* **Phân hệ:** M4. Customer & Lead CRM (Tích hợp trong Chi tiết Khách hàng & Cơ hội bán hàng).
+* **Mục tiêu:**
+  * **F098 (Activity & Follow-up):** Ghi nhận lịch sử cuộc gọi (Call), lịch hẹn/gặp mặt (Meeting), tin nhắn (Message), công việc (Task) và lời nhắc (Reminder) gắn với từng khách hàng.
+  * **F099 (Custom Field):** Lưu trữ các trường dữ liệu tùy biến theo đặc thù ngành hàng (Lĩnh vực kinh doanh, Quy mô nhân sự, Ngân sách dự kiến) qua trường JSON `customData`.
+
+---
+
 ## [F100] - Lead Scoring (Chấm điểm khách hàng tiềm năng)
 
 * **Phân hệ:** M4. Customer & Lead CRM (Danh sách Khách hàng & Chi tiết Lead trên Electron App).
-* **Mục tiêu:** Tự động tính toán điểm số tiềm năng (Lead Score từ 0 - 100) và phân loại độ nóng (`HOT 🔥`, `WARM ⚡`, `COLD ❄️`) dựa trên mức độ hoàn thiện hồ sơ, tần suất tương tác đa kênh qua Unified Inbox, và đánh giá ý định chốt đơn từ AI 9router.
-* **Cơ chế tính điểm:**
-  * **Hồ sơ (Profile):** Có SĐT hợp lệ (+25đ), Có Email (+15đ), Có Địa chỉ giao hàng (+10đ).
-  * **Tương tác (Engagement):** Nhắn tin trong 24h qua (+20đ), Tương tác > 3 tin nhắn (+15đ), Có Deal đang mở (+15đ).
-  * **AI Intent (9router):** AI phân tích hội thoại phát hiện ý định mua sắm khẩn cấp / mua sỉ (+20đ).
-  * **Điểm trừ suy giảm (Decay):** Không tương tác > 7 ngày (-10đ), Không tương tác > 30 ngày (-25đ).
+* **Mục tiêu:** Tự động tính toán điểm số tiềm năng (Lead Score từ 0 - 100) và phân loại độ nóng (`HOT 🔥`, `WARM ⚡`, `COLD ❄️`) minh bạch dựa trên 3 nhóm tiêu chí chuẩn: Hồ sơ đầy đủ, Tương tác thực tế, và Lịch sử mua hàng.
+* **Cơ chế tính điểm chuẩn F100:**
+  * **Hồ sơ đầy đủ (Tối đa 30đ):** Họ tên (+10đ), SĐT xác thực (+10đ), Email hợp lệ (+10đ).
+  * **Tương tác thực tế (Tối đa 30đ):** Có tin nhắn/hội thoại hỏi mua, hỏi giá hoặc tư vấn qua Hộp thư / ghi chú (+30đ).
+  * **Lịch sử mua hàng (Tối đa 40đ):** Có đơn hàng thành công trong hệ thống (+40đ).
+* **Phân loại độ nóng (Temperature):**
+  * `HOT 🔥`: Điểm ≥ 70 (Ưu tiên chốt đơn ngay).
+  * `WARM ⚡`: Điểm từ 40 - 69 (Khách tiềm năng, cần tiếp tục chăm sóc).
+  * `COLD ❄️`: Điểm < 40 (Khách mới hoặc chỉ có thông tin cơ bản, chưa có tương tác/mua hàng).
 
 ### 📋 Bảng Test Cases F100
 
 | ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
 | :--- | :--- | :--- | :--- | :--- | :---: |
-| **TC-F100-01** | Tính điểm khởi tạo khi khách để lại SĐT và Email | 1. Tạo mới hoặc chuyển đổi Lead từ Inbox với đầy đủ Tên, SĐT và Email.<br>2. Xem thẻ khách hàng trong CRM. | Tên: *"Nguyễn Tuấn"*, SĐT: *"0988776655"*, Email: *"tuan@gmail.com"* | • Điểm cơ bản tự động đạt: **40/100 điểm** (SĐT +25, Email +15).<br>• Phân loại tạm thời: `WARM ⚡` (Khách tiềm năng). | [ ] |
-| **TC-F100-02** | Cộng điểm tương tác khi khách nhắn tin gần đây | 1. Khách hàng nhắn tin qua Hộp thư Inbox trong ngày hôm nay.<br>2. Mở hồ sơ khách trong CRM. | Tin nhắn mới trong vòng 24h qua | • Tự động cộng **+20 điểm** tương tác gần.<br>• Huy hiệu hiển thị: *"Tương tác gần đây (24h)"*. | [ ] |
-| **TC-F100-03** | Khách đạt ngưỡng HOT LEAD (🔥 Điểm &gt; 80) | 1. Khách có SĐT (+25), Email (+15), vừa nhắn tin (+20), và có 1 Deal đang mở (+15) + AI Intent (+15). | Tổng điểm = 90 điểm | • Hiển thị huy hiệu đỏ rực: **"HOT LEAD 🔥 (90/100)"**.<br>• Được tự động đưa lên nhóm ưu tiên cao nhất trong danh sách cần gọi điện chốt đơn. | [ ] |
-| **TC-F100-04** | Trừ điểm khi khách không tương tác lâu ngày (Decay) | 1. Khách hàng đã hơn 30 ngày không có bất kỳ tin nhắn hay hoạt động nào. | Lần tương tác cuối > 30 ngày | • Bị trừ tự động **-25 điểm** suy giảm.<br>• Trạng thái hạ xuống **"COLD ❄️"** kèm cảnh báo: *"Khách nguội lạnh, cần tái kích hoạt"*. | [ ] |
-| **TC-F100-05** | Bộ lọc danh sách khách theo mức độ Lead Score | 1. Trên trang Khách hàng CRM, bấm lọc theo mức: `Tất cả`, `HOT (>80)`, `WARM (50-79)`, `COLD (<50)`. | Chọn tab lọc HOT | • Danh sách chỉ hiển thị đúng các khách hàng đạt ngưỡng điểm tương ứng. | [ ] |
+| **TC-F100-01** | Tính điểm khi khách chỉ có hồ sơ đầy đủ (không tương tác, 0 đơn) | 1. Tạo mới khách hàng có đầy đủ Họ tên, SĐT và Email.<br>2. Chưa có tương tác inbox/bình luận hỏi mua và 0 đơn hàng.<br>3. Xem cột Lead Score trong CRM. | Tên: *"Nguyễn Minh Anh"*, SĐT: *"09983746222"*, Email: *"minhanhnguyen@mail.com"* | • Điểm đạt đúng: **30/100 điểm** (Họ tên +10, SĐT +10, Email +10).<br>• Phân loại: `COLD ❄️` (Điểm < 40). Không cộng điểm các nhóm khác khi không có dữ liệu. | [x] |
+| **TC-F100-02** | Cộng điểm tương tác thực tế khi khách hỏi mua / hỏi giá | 1. Khách hàng có đầy đủ hồ sơ.<br>2. Có tương tác inbox hỏi mua/hỏi giá hoặc ghi chú hỏi tư vấn mua hàng.<br>3. Xem Lead Score trong CRM. | Hồ sơ đầy đủ + Tin nhắn/ghi chú: *"Hỏi mua số lượng lớn, báo giá sỉ"* | • Tự động cộng: 30 (hồ sơ) + 30 (tương tác) = **60/100 điểm**.<br>• Phân loại: `WARM ⚡` (40 - 69đ). | [x] |
+| **TC-F100-03** | Khách đạt ngưỡng HOT LEAD khi có 1 đơn hàng thành công | 1. Khách hàng có hồ sơ đầy đủ (30đ).<br>2. Khách có 1 đơn hàng thành công (Giao dịch Deals).<br>3. Xem Lead Score trong CRM. | Tên: *"Nguyễn AAA"*, SĐT, Email, 1 đơn hàng 3.000.000 ₫ | • Điểm đạt tối thiểu: 30 (hồ sơ) + 40 (đơn thành công) = **70/100 điểm**.<br>• Phân loại đạt ngay: `HOT 🔥` (Điểm ≥ 70). | [x] |
+| **TC-F100-04** | Khách đạt điểm tối đa (VIP Lead - 100đ) | 1. Khách có đầy đủ hồ sơ (30đ), vừa hỏi mua sỉ (30đ), và có đơn hàng thành công (40đ). | Khách sỉ Nguyễn Văn Minh | • Tổng điểm = **100/100 điểm**.<br>• Hiển thị huy hiệu: **"HOT (100đ)"** đỏ rực. | [x] |
+| **TC-F100-05** | Bộ lọc danh sách khách & Thẻ thống kê theo ngưỡng điểm F100 | 1. Quan sát thẻ thống kê: HOT Leads (≥70đ), WARM Leads (40-69đ).<br>2. Bấm lọc theo tab: `Tất cả`, `HOT Leads`, `WARM Leads`, `COLD Leads`. | Chọn các tab lọc | • Thẻ tổng quan ghi đúng ngưỡng: `HOT Leads (≥70đ)` và `WARM Leads (40-69đ)`.<br>• Danh sách hiển thị đúng các khách hàng đạt ngưỡng điểm tương ứng. | [x] |
 | **TC-F100-06** | Giao diện Header & Thanh tab lọc không bị xuống dòng hay cắt chữ (UI/UX Responsiveness) | 1. Mở app Topify $\rightarrow$ Khách hàng (CRM).<br>2. Quan sát cụm nút header (*"Nạp mẫu test F100/F101"*, *"Quét trùng (0)"*, *"Thêm khách hàng"*).<br>3. Quan sát thanh tab lọc (*"Tất cả"*, *"HOT Leads"*, *"WARM Leads"*, *"COLD Leads"*, *"Nghi trùng lặp"*). | Màn hình máy tính các độ phân giải phổ thông | • Cả 3 nút header hiển thị thẳng hàng trên 1 dòng duy nhất, đồng đều chiều cao h-9 (36px), không ngắt dòng chữ.<br>• Các tab lọc hiển thị đầy đủ nhãn và số lượng, không bị ép thành hình tròn hay cắt mất chữ; hỗ trợ cuộn ngang mượt mà nếu thiếu chỗ. | [x] |
+| **TC-F100-07** | Xem chi tiết hồ sơ khách hàng & Phân tích chi tiết Lead Score F100 | 1. Mở app Topify $\rightarrow$ Khách hàng (CRM).<br>2. Nhấp chuột vào một dòng khách hàng (ví dụ *"Nguyễn Minh Anh"*) hoặc bấm nút biểu tượng con mắt (👁️ Xem chi tiết) ở cột "Thao tác". | Click dòng hoặc nút 👁️ của khách hàng *"Nguyễn Minh Anh"* | • Mở Modal chi tiết hồ sơ: hiển thị Avatar, Họ tên, Nhiệt độ Lead F100 (`COLD ❄️`), Kênh nguồn, SĐT và Email (có nút sao chép nhanh), Thẻ Tags.<br>• Khối phân tích Lead Score F100: Thanh tiến trình trực quan, điểm chi tiết từng nhóm (Hồ sơ đầy đủ X/30đ, Tương tác thực tế X/30đ, Lịch sử mua hàng X/40đ), danh sách căn cứ tính điểm rõ ràng.<br>• Khối Lịch sử giao dịch (Deals/Đơn hàng) và Ghi chú tư vấn & Nhu cầu.<br>• Footer hỗ trợ nút Đóng, Xóa và Chỉnh sửa thông tin. | [x] |
+| **TC-F100-08** | Chỉnh sửa thông tin khách hàng & Cập nhật tức thì (Full CRUD Update) | 1. Tại cột "Thao tác" của dòng khách hàng, bấm nút biểu tượng chiếc bút (✏️ Chỉnh sửa) hoặc bấm nút "Chỉnh sửa thông tin" từ Modal xem chi tiết.<br>2. Thay đổi các thông tin (Họ tên, SĐT, Email, Nguồn, Thẻ tags, Ghi chú).<br>3. Bấm *"Lưu thay đổi"*. | Chỉnh sửa SĐT, Email, Nguồn hoặc Ghi chú | • Mở Modal "Chỉnh sửa thông tin khách hàng" với dữ liệu điền sẵn đầy đủ, chính xác.<br>• Khi bấm Lưu: hiển thị loading spinner, gửi PATCH/PUT `/api/crm/customers`, hiển thị Toast thông báo thành công.<br>• Danh sách khách hàng và dữ liệu chi tiết tự động cập nhật ngay trên giao diện mà không cần reload trang. | [x] |
 
 ---
 
@@ -1433,6 +1511,43 @@ Sau khi lần lượt hoàn thành các module, bạn chỉ cần mở App Elect
 | **TC-F050-02** | Kích hoạt checkbox và tự động tính toán mốc thời gian kỳ trước | 1. Tích chọn checkbox "So sánh với kỳ trước".<br>2. Đổi qua lại giữa các mốc 7 ngày, 30 ngày, Tháng này. | Toggle checkbox. | • Hiển thị Banner trạng thái đối chiếu thời gian tương đương (VD: chọn 7 ngày $\rightarrow$ Kỳ trước: 7 ngày trước đó WoW; chọn 30 ngày $\rightarrow$ Kỳ trước: 30 ngày trước đó MoM).<br>• Cho phép chuyển đổi giữa "Kỳ trước (MoM/WoW)" và "Cùng kỳ năm ngoái (YoY)". | [x] |
 | **TC-F050-03** | Thẻ chỉ số KPI hiển thị huy hiệu % tăng trưởng trực quan | 1. Quan sát 4 thẻ KPI (Lượt xem, Tiếp cận, Tương tác, Leads CRM). | Chế độ so sánh đang bật. | • Mỗi thẻ hiển thị giá trị kỳ này kèm huy hiệu tăng trưởng `🟩 +%` (xanh nếu tăng) hoặc `🟥 -%` (đỏ nếu giảm).<br>• Dòng phụ chú ghi rõ số liệu kỳ đối ứng trước đó để so sánh. | [x] |
 | **TC-F050-04** | Biểu đồ trực quan hóa 2 đường nét liền và nét đứt chồng lên nhau | 1. Quan sát biểu đồ xu hướng hiệu suất.<br>2. Hover chuột vào các điểm dữ liệu trên biểu đồ. | Chế độ so sánh đang bật. | • Biểu đồ hiển thị 2 đường: Đường nét liền xanh dương = Kỳ này, Đường nét đứt xám = Kỳ trước.<br>• Có các tab chuyển đổi thước đo: Lượt xem, Tiếp cận, Tương tác, Leads CRM.<br>• Tooltip khi hover hiển thị chi tiết giá trị cả 2 kỳ và % chênh lệch tương ứng. | [x] |
+
+---
+
+## [F051] - Theo Dõi Đối Thủ (Fanpages) & Quét Bài Viết Đầy Đủ Trong Ngày (Deep Pagination)
+
+* **Phân hệ:** M6. Intelligence (Màn hình `/competitors` trên Electron App & Web Dashboard).
+* **Mục tiêu:** Giám sát động thái content, tần suất đăng và lượng tương tác của các đối thủ cùng ngành từ các liên kết Facebook Fanpage, Facebook Group hoặc Website/Tin tức. Cơ chế phân trang cào sâu (Deep Pagination) đảm bảo thu thập đầy đủ ít nhất 90% số bài viết đã đăng trong ngày hiện tại và tối thiểu 20-30 bài viết gần nhất.
+* **Môi trường test:** Electron Desktop App (`/competitors`), Backend API (`/api/competitors/posts/sync`, `/api/competitors/posts`).
+
+### 📋 Bảng Test Cases F051
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F051-01** | Quét bài viết mới từ liên kết Fanpage Facebook với Deep Pagination | 1. Mở app Topify $\rightarrow$ Chọn **"Theo dõi đối thủ (Fanpages)"**.<br>2. Chọn fanpage (ví dụ: *"Phở"* `https://www.facebook.com/PhoTeam`).<br>3. Bấm **"Quét Bài Viết Mới"**.<br>4. Quan sát số bài viết quét được. | Link Fanpage Facebook | • Hệ thống duyệt qua các con trỏ phân trang `cursor` tự động.<br>• Thu thập đầy đủ ít nhất 90% số bài viết đã đăng trong ngày (đạt 100% các bài từ 00:00:00 đến thời điểm quét).<br>• Hiển thị Toast thông báo: *"Đã cào và cập nhật thành công X bài viết (Y bài hôm nay) từ nguồn đối thủ!"*.<br>• Phụ đề hiển thị: *"Đã quét X bài viết gần nhất"* kèm badge xanh *"Y bài hôm nay"*. | [x] |
+| **TC-F051-02** | Nhận diện và gắn huy hiệu "Hôm nay" trên từng bài viết | 1. Quan sát danh sách bài viết trong feed bên phải.<br>2. Kiểm tra các bài viết có mốc ngày giờ trong ngày hiện tại. | Feed bài viết | • Các bài viết đăng trong ngày có huy hiệu xanh lá nổi bật: `[Hôm nay]`.<br>• Hiển thị đầy đủ thông số đo lường: Likes, Bình luận, Chia sẻ, ngày giờ đăng định dạng chuẩn tiếng Việt. | [x] |
+| **TC-F051-03** | Quét bài viết từ nhóm Facebook (Facebook Group) | 1. Chọn hoặc thêm đối thủ có link Group (ví dụ: *"Không sợ chó"* `https://www.facebook.com/groups/170667840008977/`).<br>2. Bấm **"Quét Bài Viết Mới"**. | Link Facebook Group | • Hệ thống tự động nhận diện dạng Group URL và kích hoạt endpoint scraper nhóm chuyên biệt `group/posts`.<br>• Phân trang thu thập hàng chục bài thảo luận kèm tương tác Likes, Comments, Shares thực tế. | [x] |
+| **TC-F051-04** | Khử trùng lặp và cập nhật chỉ số tương tác bài cũ | 1. Bấm quét lại một Fanpage đã có bài trong hệ thống.<br>2. So sánh ID và số lượng bài viết. | Re-scan page | • Các bài viết đã tồn tại (`externalId` trùng khớp) không bị nhân bản mà được cập nhật lại Likes, Comments, Shares mới nhất.<br>• Tổng số lượng bài không bị trùng lặp rác trong Database. | [x] |
+| **TC-F051-05** | Tìm kiếm tức thời nội dung bài viết đối thủ | 1. Nhập từ khóa vào ô *"Tìm kiếm nội dung bài viết đối thủ..."*. | Từ khóa tìm kiếm | • Feed bài viết lọc tức thì, chỉ hiển thị các bài viết có nội dung chứa từ khóa tương ứng. | [x] |
+
+---
+
+## [F109] - Theo Dõi Từ Khóa (Keywords) & Đo Lường Xu Hướng Thị Trường
+
+* **Phân hệ:** M6. Intelligence (Màn hình `/intelligence/keywords` trên Electron App & Web Dashboard).
+* **Mục tiêu:** Giám sát từ khóa ngành hàng, đo lường dung lượng tìm kiếm (search volume), vận tốc tăng trưởng xu hướng (trend percentage), và tổng hợp số lượt thảo luận xã hội (mention alerts) kèm khuyến nghị phân tích tiềm năng thị trường.
+* **Môi trường test:** Electron Desktop App (`/#/intelligence/keywords`), Backend API (`/api/keywords`).
+
+### 📋 Bảng Test Cases F109
+
+| ID | Tên kịch bản | Các bước thực hiện (Steps) | Dữ liệu đầu vào (Input) | Kết quả kỳ vọng (Expected Output) | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **TC-F109-01** | Thêm từ khóa mới thành công không bị crash màn hình | 1. Mở app Topify $\rightarrow$ Click **"Theo dõi từ khóa (Keywords)"**.<br>2. Click **"Thêm Từ Khóa"**.<br>3. Nhập từ khóa (ví dụ: *"nội thất thông minh 2026"*).<br>4. Click nút **"Thêm từ khóa (Add)"**. | Từ khóa: `"nội thất thông minh 2026"` | • Modal tự động đóng.<br>• Hiển thị Toast thông báo: *"Đã thêm từ khóa \"nội thất thông minh 2026\" để theo dõi"*.<br>• Thẻ từ khóa mới hiển thị ngay lập tức đầu danh sách kèm các chỉ số Lượng tìm kiếm, Tăng trưởng, Số lượt nhắc tới.<br>• Màn hình hoạt động bình thường, không xảy ra crash ErrorBoundary hay lỗi `toLowerCase()`. | [x] |
+| **TC-F109-02** | Khả năng phòng thủ đa lớp (Defensive Filter) khi tìm kiếm từ khóa | 1. Thêm một số từ khóa vào danh sách.<br>2. Nhập từ khóa vào ô *"Tìm từ khóa đang theo dõi..."* (ví dụ: *"nội thất"*). | Từ khóa tìm kiếm | • Bộ lọc hoạt động tức thời, hiển thị chính xác các từ khóa có tên chứa cụm từ tìm kiếm.<br>• Không bao giờ phát sinh lỗi `Cannot read properties of undefined (reading 'toLowerCase')` ngay cả khi dữ liệu có phần tử dạng chuỗi hoặc rỗng. | [x] |
+| **TC-F109-03** | Mở popup phân tích chi tiết từ khóa thị trường | 1. Trên thẻ từ khóa bất kỳ, click nút **"Phân tích"**.<br>2. Quan sát popup hiển thị. | Click "Phân tích" | • Mở modal chi tiết: *"Chi tiết từ khóa: [Tên từ khóa]"*.<br>• Hiển thị đánh giá tiềm năng thị trường, tốc độ lan truyền, mức độ cạnh tranh rõ ràng, có nút đóng popup. | [x] |
+| **TC-F109-04** | Dừng theo dõi / Xóa từ khóa | 1. Rê chuột vào thẻ từ khóa, click biểu tượng thùng rác màu đỏ.<br>2. Xác nhận hộp thoại dừng theo dõi. | Click icon xóa | • Thẻ từ khóa được gỡ bỏ khỏi giao diện ngay lập tức.<br>• Hiển thị Toast thông báo: *"Đã xóa từ khóa"*. | [x] |
+
+
 
 
 

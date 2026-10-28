@@ -31,6 +31,36 @@ export function getLocalDateString(d: Date = new Date()): string {
 }
 
 /**
+ * Normalizes various date string formats into standard YYYY-MM-DD.
+ * Supports:
+ * - DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (e.g. "25/10/2026", "25-10-2026", "25.10.2026")
+ * - YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD (e.g. "2026/10/25", "2026-10-25")
+ * - ISO string with T (e.g. "2026-10-25T...")
+ */
+export function normalizeDateStringToYMD(dateStr: string): string {
+  if (!dateStr) return '';
+  const clean = dateStr.trim();
+  if (clean.includes('T')) {
+    return clean.split('T')[0];
+  }
+  const dmyMatch = clean.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+  const ymdMatch = clean.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+  if (ymdMatch) {
+    const year = ymdMatch[1];
+    const month = ymdMatch[2].padStart(2, '0');
+    const day = ymdMatch[3].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return clean;
+}
+
+/**
  * Check if a preset is disabled (has already passed compared to current time)
  */
 export function isPresetDisabled(
@@ -41,11 +71,12 @@ export function isPresetDisabled(
   if (preset.id === 'custom') return false;
   if (!randomDate) return false;
 
+  const normDate = normalizeDateStringToYMD(randomDate);
   const todayStr = getLocalDateString(currentTime);
-  if (randomDate < todayStr) return true; // Past date -> all presets disabled
-  if (randomDate > todayStr) return false; // Future date -> all presets enabled
+  if (normDate < todayStr) return true; // Past date -> all presets disabled
+  if (normDate > todayStr) return false; // Future date -> all presets enabled
 
-  // randomDate === todayStr: Check if preset end time has already elapsed
+  // normDate === todayStr: Check if preset end time has already elapsed
   const [endH, endM] = preset.end.split(':').map(Number);
   const presetEnd = new Date(
     currentTime.getFullYear(),
@@ -82,9 +113,10 @@ export function getWindowStatus(
     return { isExpired: true, isInProgress: false, effectiveStartMs: 0, endMs: 0, remainingDurationMs: 0 };
   }
 
+  const normDate = normalizeDateStringToYMD(randomDate);
   const [startH, startM] = startTime.split(':').map(Number);
   const [endH, endM] = endTime.split(':').map(Number);
-  const [yr, mo, da] = randomDate.split('-').map(Number);
+  const [yr, mo, da] = normDate.split('-').map(Number);
 
   const startDate = new Date(yr, mo - 1, da, startH, startM, 0, 0);
   const endDate = new Date(yr, mo - 1, da, endH, endM, 0, 0);
@@ -97,8 +129,8 @@ export function getWindowStatus(
   }
 
   const todayStr = getLocalDateString(currentTime);
-  const isToday = randomDate === todayStr;
-  const isPastDate = randomDate < todayStr;
+  const isToday = normDate === todayStr;
+  const isPastDate = normDate < todayStr;
 
   if (isPastDate || (isToday && endMs <= nowMs)) {
     return { isExpired: true, isInProgress: false, effectiveStartMs: startMs, endMs, remainingDurationMs: 0 };
@@ -142,7 +174,8 @@ export function computeRandomWindowTimes(params: {
     currentTime = new Date(),
   } = params;
 
-  const status = getWindowStatus(randomDate, startTime, endTime, currentTime);
+  const normDate = normalizeDateStringToYMD(randomDate);
+  const status = getWindowStatus(normDate, startTime, endTime, currentTime);
   if (status.isExpired || status.remainingDurationMs <= 0) {
     return {};
   }

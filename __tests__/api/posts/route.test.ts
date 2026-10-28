@@ -10,6 +10,7 @@ vi.mock('@/lib/db', () => {
   const mockPrisma = {
     post: {
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       create: vi.fn(),
     },
     videoAsset: {
@@ -343,6 +344,126 @@ describe('Posts API Route', () => {
       expect(json.warning).toContain('211s');
       expect(json.warning).toContain('video thường');
       expect(schedulePublish).toHaveBeenCalledWith('post-bts-1', expect.any(Date));
+    });
+
+    it('safely cleans lone surrogate characters from title and caption without throwing error', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-grandma-1', workspaceId: 'ws-1', duration: 30 } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'YOUTUBE' } as any]);
+
+      const mockPost = { id: 'post-grandma-1', status: 'PUBLISHING' };
+      vi.mocked(prisma.post.create).mockResolvedValue(mockPost as any);
+
+      const badTitle = 'Mom Took My Money... Then Grandma Arrived #funnycats #grandma \uD800';
+      const badCaption = '✨ Caption with spin variant and lone surrogate \uD83D\uD83D here!';
+
+      const req = new NextRequest('http://localhost/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: badTitle,
+          caption: badCaption,
+          videoAssetId: 'video-grandma-1',
+          platforms: ['YOUTUBE_SHORTS'],
+          publishMode: 'now',
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(201);
+
+      // Verify that prisma.post.create was called with sanitized strings without lone surrogates
+      expect(prisma.post.create).toHaveBeenCalled();
+      const callData = vi.mocked(prisma.post.create).mock.calls[0][0].data;
+      expect(callData.title).not.toContain('\uD800');
+      expect(callData.caption).not.toContain('\uD83D\uD83D');
+      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(callData.title as string)).toBe(false);
+      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(callData.caption as string)).toBe(false);
+    });
+
+    it('recovers from Prisma lone leading surrogate invocation error via automatic deep sanitization retry', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-retry-1', workspaceId: 'ws-1', duration: 15 } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'YOUTUBE' } as any]);
+
+      const mockPost = { id: 'post-retry-1', status: 'PUBLISHING' };
+      // First call throws the exact Prisma lone leading surrogate error
+      // Second call (retry) succeeds
+      vi.mocked(prisma.post.create)
+        .mockRejectedValueOnce(new Error('Invalid `prisma.post.create()` invocation: lone leading surrogate in hex escape at line 1 column 262'))
+        .mockResolvedValueOnce(mockPost as any);
+
+      const req = new NextRequest('http://localhost/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Mom Took My Money... Then Grandma Arrived #funnycats #catmemes #grandma.mp4',
+          caption: '🔥 Bí quyết triệu view #grandma',
+          videoAssetId: 'video-retry-1',
+          platforms: ['YOUTUBE_SHORTS'],
+          publishMode: 'now',
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.id).toBe('post-retry-1');
+      expect(prisma.post.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('creates post with publishMode now and isEvergreen: true, enqueues immediate publish and pre-schedules recycled child post', async () => {
+      vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1', workspaceId: 'ws-1' }, expires: '1' } as any);
+      vi.mocked(prisma.videoAsset.findUnique).mockResolvedValue({ id: 'video-1', workspaceId: 'ws-1', duration: 30 } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([{ provider: 'META' } as any]);
+
+      const mockParentPost = {
+        id: 'parent-eg-1',
+        title: 'Evergreen Video',
+        status: 'PUBLISHING',
+        isEvergreen: true,
+        recycleIntervalDays: 2,
+        platforms: [{ platform: 'FACEBOOK_REELS', status: 'PENDING' }],
+      };
+      const mockChildPost = {
+        id: 'child-recycled-1',
+        title: 'Evergreen Video',
+        status: 'SCHEDULED',
+        originalPostId: 'parent-eg-1',
+        isEvergreen: false,
+        platforms: [{ platform: 'FACEBOOK_REELS', status: 'PENDING' }],
+      };
+
+      vi.mocked(prisma.post.create)
+        .mockResolvedValueOnce(mockParentPost as any)
+        .mockResolvedValueOnce(mockChildPost as any);
+
+      vi.mocked(prisma.post.findUnique).mockResolvedValue({
+        ...mockParentPost,
+        status: 'PUBLISHED',
+      } as any);
+
+      const req = new NextRequest('http://localhost/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Evergreen Video',
+          videoAssetId: 'video-1',
+          platforms: ['FACEBOOK_REELS'],
+          publishMode: 'now',
+          isEvergreen: true,
+          recycleIntervalDays: 2,
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.id).toBe('parent-eg-1');
+      expect(json.status).toBe('PUBLISHED');
+      expect(enqueuePublish).toHaveBeenCalledWith('parent-eg-1');
+      expect(schedulePublish).toHaveBeenCalledWith(
+        'child-recycled-1',
+        expect.any(Date)
+      );
+      expect(prisma.post.create).toHaveBeenCalledTimes(2);
     });
   });
 });

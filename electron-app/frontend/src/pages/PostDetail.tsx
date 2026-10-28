@@ -15,6 +15,7 @@ import {
   MessageSquare,
   AlignLeft,
   Calendar,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getMediaUrl } from '../lib/axios';
@@ -23,7 +24,11 @@ import {
   PLATFORM_CONFIG, 
   safeFormatDate, 
   normalizePlatform, 
-  normalizeHashtags 
+  normalizeHashtags,
+  formatFileSize,
+  formatVideoDuration,
+  checkShortsCriteria,
+  formatFriendlyPublishError,
 } from '../lib/utils';
 
 interface PostDetailData {
@@ -36,7 +41,14 @@ interface PostDetailData {
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
-  videoAsset?: { originalFileName?: string; storageUrl?: string } | null;
+  videoAsset?: {
+    id?: string;
+    originalFileName?: string;
+    storageUrl?: string;
+    duration?: number | null;
+    size?: number | null;
+    mimeType?: string | null;
+  } | null;
   platforms: {
     id: string;
     platform: string;
@@ -63,10 +75,12 @@ export default function PostDetail() {
   const [editFirstComment, setEditFirstComment] = useState('');
   const [editScheduledAt, setEditScheduledAt] = useState('');
 
-  // Version History State (F081)
+  // Version History State & Tabs (F081)
+  const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
   const [versions, setVersions] = useState<any[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
+  const [creatingSnapshot, setCreatingSnapshot] = useState(false);
 
   const fetchVersions = async () => {
     try {
@@ -82,17 +96,38 @@ export default function PostDetail() {
     }
   };
 
+  const handleCreateSnapshot = async () => {
+    if (!post) return;
+    try {
+      setCreatingSnapshot(true);
+      const res = await api.post(`/posts/${id}/versions`, {
+        title: post.title,
+        caption: post.caption,
+        hashtags: post.hashtags,
+      });
+      if (res.data?.success) {
+        toast.success('Đã lưu bản sao phiên bản hiện tại thành công!');
+        fetchVersions();
+      }
+    } catch (e: any) {
+      toast.error('Lỗi khi lưu bản sao: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setCreatingSnapshot(false);
+    }
+  };
+
   const handleRestoreVersion = async (v: any) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn khôi phục về phiên bản ngày ${new Date(v.createdAt).toLocaleString('vi-VN')}?`)) {
+    const versionName = `v${versions.length - versions.findIndex(item => item.id === v.id)}`;
+    const formattedDate = new Date(v.createdAt).toLocaleString('vi-VN');
+    if (!window.confirm(`Bạn có chắc chắn muốn khôi phục bài viết về phiên bản ${versionName} (${formattedDate})?\n\nTiêu đề: ${v.title || '(Không có)'}`)) {
       return;
     }
     try {
       setRestoringVersionId(v.id);
       const res = await api.post(`/posts/${id}/versions`, { versionId: v.id });
       if (res.data?.success) {
-        toast.success(res.data.message || 'Khôi phục phiên bản thành công!');
-        fetchPost();
-        fetchVersions();
+        toast.success(res.data.message || `Đã khôi phục thành công về phiên bản ${versionName}!`);
+        await Promise.all([fetchPost(), fetchVersions()]);
       }
     } catch (e: any) {
       toast.error('Lỗi khi khôi phục phiên bản: ' + (e.response?.data?.error || e.message));
@@ -304,10 +339,43 @@ export default function PostDetail() {
           )}
         </div>
 
-        {/* Content Layout: Video on Left, Info on Right */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Video Preview */}
-          <div className="lg:col-span-5 w-full max-w-[340px] xl:max-w-[360px] mx-auto self-start">
+        {/* Navigation Tabs (F081: Details & Version History) */}
+        <div className="flex items-center gap-2 border-b border-gray-100 pb-px">
+          <button
+            type="button"
+            onClick={() => setActiveTab('details')}
+            className={`pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'details'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <AlignLeft className="w-4 h-4" />
+            <span>Nội dung & Nền tảng</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`pb-3 px-4 text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'history'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Lịch sử phiên bản (Version History)</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-mono font-semibold">
+              {versions.length}
+            </span>
+          </button>
+        </div>
+
+        {activeTab === 'details' ? (
+          <div className="space-y-8 animate-fade-in">
+            {/* Content Layout: Video on Left, Info on Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Video Preview & Specs */}
+          <div className="lg:col-span-5 w-full max-w-[340px] xl:max-w-[360px] mx-auto self-start space-y-4">
             <div className="aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-lg border border-black/10 relative max-h-[580px] flex items-center justify-center">
               {post.videoAsset?.storageUrl ? (
                 <video
@@ -322,6 +390,63 @@ export default function PostDetail() {
                 </div>
               )}
             </div>
+
+            {/* Video Technical Specs Card */}
+            {post.videoAsset && (
+              <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4 text-xs space-y-2.5 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                    <Film className="w-4 h-4 text-purple-600" />
+                    Thông số kỹ thuật Video
+                  </span>
+                  {(() => {
+                    const shortsCheck = checkShortsCriteria(post.videoAsset.duration, post.videoAsset.mimeType);
+                    return (
+                      <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
+                        shortsCheck.isEligible ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}>
+                        {shortsCheck.badge}
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200/60 font-mono text-xs">
+                  <div>
+                    <span className="text-gray-400 block text-[10px] font-sans">Thời lượng:</span>
+                    <span className="font-bold text-gray-900">{formatVideoDuration(post.videoAsset.duration)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] font-sans">Dung lượng:</span>
+                    <span className="font-bold text-gray-900">{formatFileSize(post.videoAsset.size)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] font-sans">Định dạng:</span>
+                    <span className="font-bold text-gray-900 uppercase">{post.videoAsset.mimeType?.replace('video/', '') || 'MP4'}</span>
+                  </div>
+                </div>
+
+                {(() => {
+                  const shortsCheck = checkShortsCriteria(post.videoAsset.duration, post.videoAsset.mimeType);
+                  return (
+                    <div className={`p-2.5 rounded-xl border text-[11px] leading-relaxed ${
+                      shortsCheck.isEligible 
+                        ? 'bg-emerald-50/70 border-emerald-200/80 text-emerald-800' 
+                        : 'bg-amber-50/70 border-amber-200/80 text-amber-800'
+                    }`}>
+                      <p className="font-semibold">{shortsCheck.isEligible ? '✅ Thỏa mãn tiêu chuẩn YouTube Shorts:' : '⚠️ Lưu ý định dạng:'}</p>
+                      <p className="mt-0.5">{shortsCheck.note}</p>
+                    </div>
+                  );
+                })()}
+
+                {post.videoAsset.originalFileName && (
+                  <p className="text-[10px] text-gray-400 truncate pt-1 border-t border-gray-200/40" title={post.videoAsset.originalFileName}>
+                    Tên file: {post.videoAsset.originalFileName}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Details Section */}
@@ -329,13 +454,14 @@ export default function PostDetail() {
             {/* Platforms Status */}
             <div>
               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
-                Nền tảng xuất bản
+                Nền tảng xuất bản & Trạng thái chi tiết
               </h3>
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {(post.platforms || []).map(normalizePlatform).map((pl, idx) => {
                   const cfg = PLATFORM_CONFIG[pl.platform as keyof typeof PLATFORM_CONFIG];
                   const isSuccess = pl.status === 'PUBLISHED';
                   const isFail = pl.status === 'FAILED';
+                  const friendlyErr = isFail ? formatFriendlyPublishError(pl.errorMessage, pl.platform) : null;
 
                   let linkUrl = '';
                   if (pl.externalPostId) {
@@ -349,45 +475,67 @@ export default function PostDetail() {
                   return (
                     <div
                       key={pl.externalPostId || pl.platform + idx}
-                      className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-gray-50/50"
+                      className="p-4 rounded-2xl border border-gray-200/80 bg-gray-50/70 space-y-2.5"
                     >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: cfg?.color || '#6366f1' }}
-                        />
-                        <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-3.5 h-3.5 rounded-full"
+                            style={{ backgroundColor: cfg?.color || '#6366f1' }}
+                          />
                           <p className="text-sm font-bold text-gray-900">
                             {cfg?.name || (pl.platform ? pl.platform.replace(/_/g, ' ') : 'Nền tảng')}
                           </p>
-                          {pl.errorMessage && (
-                            <p className="text-xs text-red-600 mt-0.5 line-clamp-2">
-                              {pl.errorMessage}
-                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                            isSuccess ? 'bg-emerald-100 text-emerald-700' :
+                            isFail ? 'bg-rose-100 text-rose-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {isSuccess ? 'Đã đăng thành công' : isFail ? 'Thất bại' : 'Đang xử lý'}
+                          </span>
+                          {linkUrl && (
+                            <a
+                              href={linkUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 transition-colors shadow-2xs"
+                              title="Mở xem video trên nền tảng"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                          isSuccess ? 'bg-emerald-100 text-emerald-700' :
-                          isFail ? 'bg-rose-100 text-rose-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {isSuccess ? 'Thành công' : isFail ? 'Thất bại' : 'Đang xử lý'}
-                        </span>
-                        {linkUrl && (
-                          <a
-                            href={linkUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 transition-colors shadow-2xs"
-                            title="Mở xem video trên nền tảng"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        )}
-                      </div>
+                      {/* If FAILED, render detailed friendly error + guide */}
+                      {friendlyErr && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 space-y-2 text-xs">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="font-bold text-rose-950">
+                                Lý do thất bại: <span className="font-semibold text-rose-800">{friendlyErr.reason}</span>
+                              </p>
+                              {friendlyErr.guide && (
+                                <p className="text-[11px] text-rose-800 leading-relaxed bg-white/80 p-2.5 rounded-lg border border-rose-100">
+                                  💡 <strong>Hướng dẫn khắc phục:</strong> {friendlyErr.guide}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {pl.errorMessage && (
+                            <details className="mt-1 text-[10px] text-gray-500">
+                              <summary className="cursor-pointer hover:text-gray-700 font-mono">Chi tiết kỹ thuật (Raw Log)</summary>
+                              <pre className="mt-1 p-2 bg-gray-900 text-gray-100 rounded-md font-mono text-[9px] overflow-x-auto whitespace-pre-wrap max-h-36">
+                                {pl.errorMessage}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -518,51 +666,181 @@ export default function PostDetail() {
               </div>
             )}
           </div>
+        </div>
 
-          {/* Lịch sử phiên bản bài viết (F081: Version History & Restore) */}
-          <div className="card-apple p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-gray-900 text-sm">
-                  Lịch sử phiên bản (Version History - F081)
-                </h3>
+            {/* Lịch sử phiên bản bài viết (Bottom Summary in Details Tab) */}
+            <div className="card-apple p-6 space-y-4 w-full">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-bold text-gray-900 text-sm">
+                    Lịch sử phiên bản (Version History - F081)
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold font-mono">
+                    {versions.length} phiên bản đã lưu
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('history')}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    Xem toàn bộ Tab Lịch sử →
+                  </button>
+                </div>
               </div>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold font-mono">
-                {versions.length} phiên bản đã lưu
-              </span>
+
+              {loadingVersions ? (
+                <div className="py-6 text-center text-xs text-gray-400">Đang tải lịch sử phiên bản...</div>
+              ) : versions.length === 0 ? (
+                <div className="py-6 text-center text-xs text-gray-500 bg-gray-50/50 rounded-2xl border border-gray-100 p-4">
+                  Chưa có phiên bản cũ nào được ghi nhận. Các chỉnh sửa mới sẽ tự động lưu lại bản sao lịch sử tại đây.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {versions.map((ver, idx) => {
+                    const isCurrent = idx === 0;
+                    const versionNumber = `v${versions.length - idx}`;
+                    return (
+                      <div
+                        key={ver.id}
+                        className={`p-4 rounded-2xl border transition space-y-2.5 shadow-2xs ${
+                          isCurrent ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-100 bg-white hover:border-indigo-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center font-mono ${
+                              isCurrent ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-700'
+                            }`}>
+                              {versionNumber}
+                            </span>
+                            <span className="text-xs font-semibold text-gray-800">
+                              {new Date(ver.createdAt).toLocaleString('vi-VN')}
+                            </span>
+                            {ver.editedBy?.name && (
+                              <span className="text-[11px] text-gray-500">
+                                bởi <span className="font-medium text-gray-700">{ver.editedBy.name}</span>
+                              </span>
+                            )}
+                            {isCurrent && (
+                              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Bản hiện tại
+                              </span>
+                            )}
+                          </div>
+
+                          {!isCurrent && (
+                            <button
+                              type="button"
+                              disabled={restoringVersionId === ver.id}
+                              onClick={() => handleRestoreVersion(ver)}
+                              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                              title={`Khôi phục bài viết về ${versionNumber}`}
+                            >
+                              <RotateCcw className={`w-3.5 h-3.5 ${restoringVersionId === ver.id ? 'animate-spin' : ''}`} />
+                              <span>{restoringVersionId === ver.id ? 'Đang khôi phục...' : 'Khôi phục'}</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Version content snapshot */}
+                        <div className="text-xs text-gray-600 bg-gray-50/70 p-3 rounded-xl border border-gray-100 space-y-1">
+                          <div className="font-semibold text-gray-900 truncate">
+                            Tiêu đề: {ver.title || '(Không có tiêu đề)'}
+                          </div>
+                          {ver.caption && (
+                            <p className="line-clamp-2 text-gray-600 italic">
+                              "{ver.caption}"
+                            </p>
+                          )}
+                          {ver.hashtags && (
+                            <div className="text-[11px] font-mono text-indigo-600">
+                              {ver.hashtags}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Dedicated Version History Tab (F081) */
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-indigo-50/60 border border-indigo-100">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-bold text-indigo-950 text-sm">
+                    Lịch sử các phiên bản sửa đổi nội dung (F081)
+                  </h3>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold font-mono">
+                    {versions.length} phiên bản
+                  </span>
+                </div>
+                <p className="text-xs text-indigo-700/80">
+                  Hệ thống tự động lưu trữ các bản sửa đổi nội dung. Nhấp nút "Khôi phục" tại bất kỳ phiên bản nào bên dưới để đưa nội dung bài viết quay lại trạng thái đó.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={creatingSnapshot}
+                onClick={handleCreateSnapshot}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{creatingSnapshot ? 'Đang lưu bản sao...' : 'Lưu bản sao hiện tại (Snapshot)'}</span>
+              </button>
             </div>
 
             {loadingVersions ? (
-              <div className="py-6 text-center text-xs text-gray-400">Đang tải lịch sử phiên bản...</div>
+              <div className="py-12 text-center text-xs text-gray-400">Đang tải lịch sử phiên bản...</div>
             ) : versions.length === 0 ? (
-              <div className="py-6 text-center text-xs text-gray-500 bg-gray-50/50 rounded-2xl border border-gray-100 p-4">
+              <div className="py-12 text-center text-xs text-gray-500 bg-gray-50/50 rounded-2xl border border-gray-100 p-6">
                 Chưa có phiên bản cũ nào được ghi nhận. Các chỉnh sửa mới sẽ tự động lưu lại bản sao lịch sử tại đây.
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {versions.map((ver, idx) => {
-                  const isCurrent = idx === 0 && ver.caption === post.caption && ver.title === post.title;
+                  const isCurrent = idx === 0;
+                  const versionNumber = `v${versions.length - idx}`;
                   return (
                     <div
                       key={ver.id}
-                      className="p-4 rounded-2xl border border-gray-100 bg-white hover:border-indigo-200 transition space-y-2.5 shadow-2xs"
+                      className={`p-5 rounded-2xl border transition space-y-3.5 shadow-2xs ${
+                        isCurrent
+                          ? 'border-emerald-200 bg-emerald-50/20'
+                          : 'border-gray-200 bg-white hover:border-indigo-200'
+                      }`}
                     >
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center font-mono">
-                            v{versions.length - idx}
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center font-mono ${
+                            isCurrent ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-700'
+                          }`}>
+                            {versionNumber}
                           </span>
-                          <span className="text-xs font-semibold text-gray-800">
+                          <span className="text-xs font-bold text-gray-900">
                             {new Date(ver.createdAt).toLocaleString('vi-VN')}
                           </span>
                           {ver.editedBy?.name && (
-                            <span className="text-[11px] text-gray-500">
-                              bởi <span className="font-medium text-gray-700">{ver.editedBy.name}</span>
+                            <span className="text-xs text-gray-500">
+                              bởi <span className="font-semibold text-gray-700">{ver.editedBy.name}</span>
+                            </span>
+                          )}
+                          {ver.snapshot?.reason && (
+                            <span className="text-[11px] text-gray-500 italic">
+                              • {ver.snapshot.reason}
                             </span>
                           )}
                           {isCurrent && (
-                            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                            <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
                               Bản hiện tại
                             </span>
                           )}
@@ -573,27 +851,33 @@ export default function PostDetail() {
                             type="button"
                             disabled={restoringVersionId === ver.id}
                             onClick={() => handleRestoreVersion(ver)}
-                            className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-600 text-xs font-semibold border border-indigo-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                            title={`Khôi phục bài viết về ${versionNumber}`}
                           >
                             <RotateCcw className={`w-3.5 h-3.5 ${restoringVersionId === ver.id ? 'animate-spin' : ''}`} />
-                            <span>{restoringVersionId === ver.id ? 'Đang khôi phục...' : 'Khôi phục bản này'}</span>
+                            <span>{restoringVersionId === ver.id ? 'Đang khôi phục...' : 'Khôi phục'}</span>
                           </button>
                         )}
                       </div>
 
-                      {/* Version content snapshot */}
-                      <div className="text-xs text-gray-600 bg-gray-50/70 p-3 rounded-xl border border-gray-100 space-y-1">
-                        <div className="font-semibold text-gray-900 truncate">
-                          Tiêu đề: {ver.title || '(Không có tiêu đề)'}
+                      {/* Full Content Snapshot Box */}
+                      <div className="text-xs text-gray-700 bg-gray-50/80 p-4 rounded-xl border border-gray-100 space-y-2.5">
+                        <div>
+                          <span className="font-bold text-gray-900">Tiêu đề: </span>
+                          <span className="font-medium text-gray-800">{ver.title || '(Không có tiêu đề)'}</span>
                         </div>
                         {ver.caption && (
-                          <p className="line-clamp-2 text-gray-600 italic">
-                            "{ver.caption}"
-                          </p>
+                          <div>
+                            <span className="font-bold text-gray-900">Nội dung Caption: </span>
+                            <p className="mt-1 text-gray-700 whitespace-pre-line bg-white p-3 rounded-lg border border-gray-200/80 font-mono leading-relaxed text-[11px]">
+                              {ver.caption}
+                            </p>
+                          </div>
                         )}
                         {ver.hashtags && (
-                          <div className="text-[11px] font-mono text-indigo-600">
-                            {ver.hashtags}
+                          <div>
+                            <span className="font-bold text-gray-900">Hashtags: </span>
+                            <span className="font-mono text-indigo-600 font-semibold">{ver.hashtags}</span>
                           </div>
                         )}
                       </div>
@@ -603,7 +887,7 @@ export default function PostDetail() {
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

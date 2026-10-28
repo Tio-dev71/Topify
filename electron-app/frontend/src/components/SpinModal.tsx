@@ -20,6 +20,7 @@ import {
   generateSpinVariantsClient,
   parseSpintaxClient,
 } from '../lib/spinEngine';
+import { sanitizeUtf8 } from '../lib/utils';
 
 export type { SpinVariantItem };
 
@@ -140,14 +141,19 @@ export function SpinModal({
   };
 
   const handleApplySingle = (variant: SpinVariantItem) => {
-    onApplyVariant(variant.caption, variant.title);
+    onApplyVariant(sanitizeUtf8(variant.caption), sanitizeUtf8(variant.title));
     toast.success(`Đã áp dụng Biến thể #${variant.index} vào bài viết!`);
     onClose();
   };
 
   const handleDistributeAll = () => {
     if (onDistributeToAllVideos && variants.length > 0) {
-      onDistributeToAllVideos(variants);
+      const safeVariants = variants.map((v) => ({
+        ...v,
+        caption: sanitizeUtf8(v.caption),
+        title: sanitizeUtf8(v.title),
+      }));
+      onDistributeToAllVideos(safeVariants);
       toast.success(`Đã tự động phân bổ ${variants.length} biến thể cho các video!`);
       onClose();
     }

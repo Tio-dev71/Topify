@@ -19,11 +19,16 @@ import {
   ArrowRight,
   ShieldAlert,
   SlidersHorizontal,
-  ChevronDown,
   Info,
   Code2,
   Globe,
   Send,
+  Eye,
+  Edit3,
+  Calendar,
+  Tag,
+  FileText,
+  ShoppingBag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -134,6 +139,80 @@ export default function Customers() {
     notes: '',
   });
   const [creating, setCreating] = useState(false);
+
+  // Customer Detail & Edit states
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerItem | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    id: '',
+    name: '',
+    phone: '',
+    email: '',
+    source: 'TIKTOK',
+    tags: '',
+    notes: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // View customer detail
+  const handleViewDetail = (c: CustomerItem) => {
+    setSelectedCustomer(c);
+    setShowDetailModal(true);
+  };
+
+  // Open edit modal
+  const handleOpenEdit = (c: CustomerItem) => {
+    setEditFormData({
+      id: c.id,
+      name: c.name || '',
+      phone: c.phone || '',
+      email: c.email || '',
+      source: c.source || 'MANUAL',
+      tags: c.tags || '',
+      notes: c.notes || '',
+    });
+    setSelectedCustomer(c);
+    setShowEditModal(true);
+  };
+
+  // Save edit customer
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editFormData.id) return;
+    if (!editFormData.name.trim()) {
+      toast.error('Vui lòng nhập họ và tên khách hàng');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const res = await api.patch('/crm/customers', editFormData);
+      if (res.data) {
+        toast.success('Cập nhật thông tin khách hàng thành công!');
+        setShowEditModal(false);
+        setSelectedCustomer((prev) =>
+          prev && prev.id === editFormData.id
+            ? {
+                ...prev,
+                name: editFormData.name,
+                phone: editFormData.phone,
+                email: editFormData.email,
+                source: editFormData.source,
+                tags: editFormData.tags,
+                notes: editFormData.notes,
+              }
+            : prev
+        );
+        fetchCustomers();
+      }
+    } catch (err: any) {
+      console.error('Failed to update customer', err);
+      toast.error(err.response?.data?.error || 'Lỗi khi cập nhật thông tin khách hàng');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   // Fetch customer list
   const fetchCustomers = async () => {
@@ -335,11 +414,11 @@ export default function Customers() {
               <Users className="w-5 h-5" />
             </div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-              Khách hàng & Lead CRM (M4. CRM)
+              Hồ sơ Khách hàng & Doanh nghiệp (Contact & Company - F093)
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Quản lý tập trung, Chấm điểm tiềm năng Lead Scoring (F100) & Hợp nhất hồ sơ trùng (F101).
+            Quản lý hồ sơ liên hệ & doanh nghiệp (F093), nguồn lead & người phụ trách (F097), chăm sóc & nhắc việc (F098), trường tùy biến (F099), Lead Scoring (F100) & Quét trùng (F101).
           </p>
         </div>
 
@@ -415,7 +494,7 @@ export default function Customers() {
           }`}
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-rose-600">HOT Leads 🔥 (&gt;80đ)</span>
+            <span className="text-xs font-semibold text-rose-600">HOT Leads 🔥 (≥70đ)</span>
             <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
               <Flame className="w-4 h-4 fill-rose-500" />
             </div>
@@ -432,7 +511,7 @@ export default function Customers() {
           }`}
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-amber-600">WARM Leads ⚡ (50-79đ)</span>
+            <span className="text-xs font-semibold text-amber-600">WARM Leads ⚡ (40-69đ)</span>
             <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
               <Zap className="w-4 h-4" />
             </div>
@@ -577,15 +656,28 @@ export default function Customers() {
                 <tr>
                   <th className="py-3 px-4">Khách hàng / Kênh</th>
                   <th className="py-3 px-4">Thông tin liên hệ</th>
-                  <th className="py-3 px-4">Lead Score (F100)</th>
+                  <th
+                    className="py-3 px-4"
+                    title="Tiêu chí F100: Hồ sơ đầy đủ (30đ: Họ tên +10, SĐT +10, Email +10) + Tương tác thực tế (30đ: hỏi mua/hỏi giá) + Lịch sử mua hàng (40đ: có đơn thành công). HOT ≥ 70đ, WARM 40-69đ, COLD < 40đ."
+                  >
+                    <div className="flex items-center gap-1 cursor-help">
+                      <span>Lead Score (F100)</span>
+                      <Info className="w-3 h-3 text-gray-400" />
+                    </div>
+                  </th>
                   <th className="py-3 px-4">Giao dịch (Deals)</th>
                   <th className="py-3 px-4">Ngày tạo</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
+                  <th className="py-3 px-4 text-right min-w-[120px]">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50/70 transition-colors">
+                  <tr
+                    key={c.id}
+                    onClick={() => handleViewDetail(c)}
+                    className="hover:bg-blue-50/40 cursor-pointer transition-colors group"
+                    title="Nhấp để xem chi tiết hồ sơ khách hàng"
+                  >
                     {/* Customer Name & Source */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
@@ -594,12 +686,15 @@ export default function Customers() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-gray-900">
+                            <span className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
                               {c.name || 'Chưa đặt tên'}
                             </span>
                             {c.isDuplicateCandidate && (
                               <span
-                                onClick={() => handleOpenMergeScanner()}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenMergeScanner();
+                                }}
                                 className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-bold cursor-pointer hover:bg-amber-100 transition-colors"
                                 title="Hồ sơ nghi trùng lặp. Click để đối chiếu & hợp nhất"
                               >
@@ -641,7 +736,14 @@ export default function Customers() {
 
                     {/* Lead Score (F100) */}
                     <td className="py-3 px-4">
-                      <div className="space-y-1.5 min-w-[140px]">
+                      <div
+                        className="space-y-1.5 min-w-[140px] cursor-help"
+                        title={
+                          c.breakdown?.reasons && c.breakdown.reasons.length > 0
+                            ? `Chi tiết điểm F100 (${c.leadScore}/100đ - ${c.temperature}):\n• ${c.breakdown.reasons.join('\n• ')}`
+                            : `Điểm tiềm năng F100: ${c.leadScore}/100`
+                        }
+                      >
                         <div className="flex items-center justify-between">
                           {getTempBadge(c.temperature, c.leadScore)}
                           <span className="text-[10px] font-bold text-gray-700">
@@ -682,14 +784,42 @@ export default function Customers() {
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => handleDeleteCustomer(c.id, c.name)}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        title="Xóa khách hàng"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewDetail(c);
+                          }}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                          title="Xem chi tiết hồ sơ"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(c);
+                          }}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                          title="Chỉnh sửa thông tin"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCustomer(c.id, c.name);
+                          }}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Xóa khách hàng"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1104,7 +1234,7 @@ export default function Customers() {
             <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 border border-purple-100 dark:border-purple-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold text-purple-900 dark:text-purple-300">
-                  Kiểm thử trực tiếp Form $\rightarrow$ CRM (Test Flow)
+                  Kiểm thử trực tiếp Form → CRM (Test Flow)
                 </p>
                 <p className="text-[11px] text-purple-700 dark:text-purple-400 mt-0.5">
                   Bấm nút bên cạnh để bắn 1 Lead thử nghiệm từ Landing Page vào CRM ngay lập tức
@@ -1133,6 +1263,471 @@ export default function Customers() {
           </div>
         </div>
       )}
+
+      {/* ────────────────────────────────────────────────────────────────────────
+          MODAL: XEM CHI TIẾT HỒ SƠ KHÁCH HÀNG (CUSTOMER DETAIL MODAL)
+          ──────────────────────────────────────────────────────────────────────── */}
+      {showDetailModal && selectedCustomer && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-lg uppercase shadow-xs shrink-0">
+                  {selectedCustomer.name?.charAt(0) || 'K'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-gray-900">
+                      {selectedCustomer.name || 'Khách hàng chưa đặt tên'}
+                    </h3>
+                    {getTempBadge(selectedCustomer.temperature, selectedCustomer.leadScore)}
+                    {selectedCustomer.isDuplicateCandidate && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                        ⚠️ Nghi trùng lặp
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                    <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 font-mono text-[10px] uppercase font-semibold">
+                      {selectedCustomer.source || 'MANUAL'}
+                    </span>
+                    <span>• ID: <code className="text-[11px] font-mono text-gray-600">{selectedCustomer.id.slice(0, 8)}...</code></span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDetailModal(false)}
+                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                title="Đóng"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50/40">
+              {/* 1. Contact Information Card */}
+              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Thông tin liên hệ & Hồ sơ</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* Phone */}
+                  <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-400 font-medium">Số điện thoại</div>
+                        <div className="font-mono font-semibold text-gray-800">
+                          {selectedCustomer.phone || 'Chưa cập nhật'}
+                        </div>
+                      </div>
+                    </div>
+                    {selectedCustomer.phone && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedCustomer.phone!);
+                          toast.success('Đã sao chép số điện thoại');
+                        }}
+                        className="p-1 text-gray-400 hover:text-blue-600 transition cursor-pointer"
+                        title="Sao chép SĐT"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Email */}
+                  <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] text-gray-400 font-medium">Địa chỉ Email</div>
+                        <div className="font-medium text-gray-800 truncate" title={selectedCustomer.email || ''}>
+                          {selectedCustomer.email || 'Chưa cập nhật'}
+                        </div>
+                      </div>
+                    </div>
+                    {selectedCustomer.email && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedCustomer.email!);
+                          toast.success('Đã sao chép email');
+                        }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 transition shrink-0 cursor-pointer"
+                        title="Sao chép Email"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Source */}
+                  <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <Globe className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-medium">Kênh tiếp cận (Source)</div>
+                      <div className="font-semibold text-gray-800 uppercase font-mono">
+                        {selectedCustomer.source || 'MANUAL'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Created At */}
+                  <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-400 font-medium">Ngày tạo hồ sơ</div>
+                      <div className="font-semibold text-gray-800">
+                        {new Date(selectedCustomer.createdAt).toLocaleDateString('vi-VN', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tags */}
+                {selectedCustomer.tags && (
+                  <div className="pt-2 border-t border-gray-50 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] text-gray-400 flex items-center gap-1 mr-1">
+                      <Tag className="w-3 h-3" /> Thẻ:
+                    </span>
+                    {selectedCustomer.tags.split(',').map((t, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-100"
+                      >
+                        {t.trim()}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Lead Score Breakdown Card (Tiêu chí F100) */}
+              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Đánh giá tiềm năng Lead Score (F100)</span>
+                  </h4>
+                  <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded-lg">
+                    {selectedCustomer.leadScore}/100 điểm
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      selectedCustomer.temperature === 'HOT'
+                        ? 'bg-rose-500'
+                        : selectedCustomer.temperature === 'WARM'
+                        ? 'bg-amber-500'
+                        : 'bg-blue-400'
+                    }`}
+                    style={{ width: `${selectedCustomer.leadScore}%` }}
+                  />
+                </div>
+
+                {/* Criteria Pillars */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                    <div className="text-[10px] text-gray-500 font-semibold">1. Hồ sơ đầy đủ (Tối đa 30đ)</div>
+                    <div className="text-xs font-bold text-gray-800 mt-0.5">
+                      {selectedCustomer.breakdown?.profileScore ?? (
+                        (selectedCustomer.name ? 10 : 0) +
+                        (selectedCustomer.phone ? 10 : 0) +
+                        (selectedCustomer.email ? 10 : 0)
+                      )} / 30đ
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1 space-y-0.5">
+                      <div>• Tên: {selectedCustomer.name ? '✓ +10đ' : '✗ 0đ'}</div>
+                      <div>• SĐT: {selectedCustomer.phone ? '✓ +10đ' : '✗ 0đ'}</div>
+                      <div>• Email: {selectedCustomer.email ? '✓ +10đ' : '✗ 0đ'}</div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                    <div className="text-[10px] text-gray-500 font-semibold">2. Tương tác thực tế (Tối đa 30đ)</div>
+                    <div className="text-xs font-bold text-gray-800 mt-0.5">
+                      {selectedCustomer.breakdown?.engagementScore ?? 0} / 30đ
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1">
+                      {selectedCustomer.breakdown?.engagementScore && selectedCustomer.breakdown.engagementScore > 0
+                        ? '✓ Có tương tác hỏi mua / hỏi giá'
+                        : 'Chưa có tương tác inbox/hỏi giá'}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                    <div className="text-[10px] text-gray-500 font-semibold">3. Lịch sử mua hàng (Tối đa 40đ)</div>
+                    <div className="text-xs font-bold text-gray-800 mt-0.5">
+                      {selectedCustomer.dealsCount > 0 ? 40 : 0} / 40đ
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1">
+                      {selectedCustomer.dealsCount > 0
+                        ? `✓ Đã có ${selectedCustomer.dealsCount} đơn hàng`
+                        : 'Chưa có đơn hàng nào'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Score reasons list */}
+                {selectedCustomer.breakdown?.reasons && selectedCustomer.breakdown.reasons.length > 0 && (
+                  <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 text-xs space-y-1">
+                    <div className="font-semibold text-amber-900 flex items-center gap-1.5 text-[11px]">
+                      <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Căn cứ tính điểm F100:</span>
+                    </div>
+                    <ul className="space-y-1 text-[11px] text-amber-800 pl-4 list-disc">
+                      {selectedCustomer.breakdown.reasons.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Deals / Transactions Card */}
+              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Lịch sử giao dịch (Deals / Đơn hàng)</span>
+                  </h4>
+                  <span className="text-xs font-semibold text-emerald-600">
+                    {selectedCustomer.dealsCount > 0 ? `${selectedCustomer.dealsCount} đơn hàng` : '0 đơn hàng'}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] text-gray-400">Tổng doanh thu từ khách</div>
+                    <div className="text-base font-bold text-emerald-600 font-mono">
+                      {selectedCustomer.totalDealValue > 0
+                        ? `${selectedCustomer.totalDealValue.toLocaleString('vi-VN')} ₫`
+                        : '0 ₫'}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-gray-400">Trạng thái</div>
+                    <div className="text-xs font-semibold text-gray-700">
+                      {selectedCustomer.dealsCount > 0 ? 'Khách đã từng mua hàng' : 'Chưa phát sinh giao dịch'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Notes Card */}
+              <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-2">
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Ghi chú tư vấn & Nhu cầu</span>
+                </h4>
+                <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-700 whitespace-pre-line leading-relaxed">
+                  {selectedCustomer.notes || (
+                    <span className="italic text-gray-400">Chưa có ghi chú nào cho khách hàng này.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDetailModal(false);
+                  handleDeleteCustomer(selectedCustomer.id, selectedCustomer.name);
+                }}
+                className="px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xóa khách hàng</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDetailModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition cursor-pointer"
+                >
+                  Đóng
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    handleOpenEdit(selectedCustomer);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Chỉnh sửa thông tin</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────────
+          MODAL: CHỈNH SỬA THÔNG TIN KHÁCH HÀNG (CUSTOMER EDIT MODAL)
+          ──────────────────────────────────────────────────────────────────────── */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    Chỉnh sửa thông tin khách hàng
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Cập nhật hồ sơ, liên hệ và ghi chú nhu cầu
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveEdit} className="p-5 space-y-3.5 text-xs bg-white overflow-y-auto">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">
+                  Họ và tên khách hàng *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  placeholder="Ví dụ: Nguyễn Minh Anh"
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">
+                  Số điện thoại
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                  placeholder="Ví dụ: 0988112233"
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-mono transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">
+                  Địa chỉ Email
+                </label>
+                <input
+                  type="email"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                  placeholder="Ví dụ: minhanh@gmail.com"
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-1">
+                    Nguồn khách hàng
+                  </label>
+                  <select
+                    value={editFormData.source}
+                    onChange={(e) => setEditFormData({ ...editFormData, source: e.target.value })}
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    <option value="TIKTOK">TikTok</option>
+                    <option value="FACEBOOK">Facebook</option>
+                    <option value="ZALO">Zalo</option>
+                    <option value="INSTAGRAM">Instagram</option>
+                    <option value="LANDING_PAGE">Landing Page</option>
+                    <option value="MANUAL">Nhập tay</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-1">
+                    Thẻ (Tags)
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.tags}
+                    onChange={(e) => setEditFormData({ ...editFormData, tags: e.target.value })}
+                    placeholder="Ví dụ: VIP, Khách sỉ"
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-1">
+                  Ghi chú tư vấn & Nhu cầu
+                </label>
+                <textarea
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                  rows={3}
+                  placeholder="Ghi chú sở thích, nhu cầu, tình trạng tư vấn..."
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none transition-all"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-3.5 py-2 rounded-xl text-gray-600 hover:bg-gray-100 font-medium cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                >
+                  {savingEdit && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Lưu cập nhật</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

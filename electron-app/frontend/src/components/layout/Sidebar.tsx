@@ -92,11 +92,12 @@ const navSections: NavSection[] = [
     title: 'GIAO TIẾP & BÁN HÀNG (CRM)',
     items: [
       { key: 'Hộp thư hợp nhất', href: '/inbox', icon: MessageSquare },
-      { key: 'Khách hàng (CRM)', href: '/customers', icon: Users },
-      { key: 'Cơ hội bán hàng (Deals)', href: '/deals', icon: Target },
-      { key: 'Kênh bán hàng (Pipelines)', href: '/pipelines', icon: Kanban },
+      { key: 'Hồ sơ khách hàng (F093)', href: '/customers', icon: Users },
+      { key: 'Cơ hội bán hàng (F096)', href: '/deals', icon: Target },
+      { key: 'Kênh bán hàng (F094/F095)', href: '/pipelines', icon: Kanban },
       { key: 'Quản lý công việc (Tasks)', href: '/tasks', icon: CheckSquare },
       { key: 'Chiến dịch (Campaigns)', href: '/campaigns', icon: Rocket },
+      { key: 'Thành viên & Nhóm (F116/F117)', href: '/team', icon: Users },
     ],
   },
   {
@@ -185,12 +186,19 @@ export function Sidebar() {
       >
         {/* Header */}
         <div className={`flex items-center h-16 px-4 border-b border-[var(--color-border)] ${collapsed ? 'justify-center' : 'justify-between'}`}>
-          <Link to="/dashboard" className={`flex items-center min-w-0 overflow-hidden transition-all ${collapsed ? 'justify-center w-10' : 'w-[160px]'}`}>
+          <Link to="/dashboard" className={`flex items-center gap-2.5 min-w-0 overflow-hidden transition-all ${collapsed ? 'justify-center w-10' : 'w-[170px]'}`}>
             <img 
-              src="./Topify-logo.png" 
-              alt="Topify Logo" 
-              className={`h-10 w-auto object-contain object-left ${collapsed ? 'max-w-none' : ''}`} 
+              src="./topify-app-mark-1024x1024.png" 
+              alt="Topify" 
+              className="w-8 h-8 rounded-lg shadow-2xs object-cover flex-shrink-0" 
             />
+            {!collapsed && (
+              <img 
+                src="./Topify-logo.png" 
+                alt="Topify Logo" 
+                className="h-7 w-auto object-contain object-left" 
+              />
+            )}
           </Link>
           
           {/* Desktop collapse */}
@@ -331,6 +339,14 @@ export function Sidebar() {
               </div>
             )}
           </div>
+          {!collapsed && (
+            <div className="mt-2.5 pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[11px] text-gray-600 px-1">
+              <span>Topify Desktop</span>
+              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-[#5B3DF5] font-semibold border border-[#5B3DF5]/20">
+                v1.3.59
+              </span>
+            </div>
+          )}
         </div>
       </aside>
     </>

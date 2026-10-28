@@ -85,8 +85,23 @@ describe('GET /api/uploads/[...path]', () => {
     response = await GET(req, { params });
     expect(response.headers.get('Content-Type')).toBe('video/quicktime');
     
-    // Test unknown extension
+    // Test .png image
+    params = Promise.resolve({ path: ['test.png'] });
+    response = await GET(req, { params });
+    expect(response.headers.get('Content-Type')).toBe('image/png');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+
+    // Test magic bytes detection for PNG when extension is unknown
+    params = Promise.resolve({ path: ['test_no_ext'] });
+    const pngHeaderBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00]);
+    vi.mocked(fs.readFileSync).mockReturnValueOnce(pngHeaderBuffer);
+    vi.mocked(fs.statSync).mockReturnValueOnce({ size: pngHeaderBuffer.length } as any);
+    response = await GET(req, { params });
+    expect(response.headers.get('Content-Type')).toBe('image/png');
+
+    // Test unknown extension without magic bytes
     params = Promise.resolve({ path: ['test.xyz'] });
+    vi.mocked(fs.readFileSync).mockReturnValueOnce(Buffer.from('plain data'));
     response = await GET(req, { params });
     expect(response.headers.get('Content-Type')).toBe('application/octet-stream');
   });

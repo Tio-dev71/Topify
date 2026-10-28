@@ -5,12 +5,39 @@ import {
   getWindowStatus,
   computeRandomWindowTimes,
   getLocalDateString,
+  normalizeDateStringToYMD,
 } from '@/lib/content-studio/random-window';
 
 describe('Random Time Window (F022) Logic', () => {
   // Fix reference date/time matching user's reproduction: Sun 25 Oct 2026 21:14:00 GMT+7
   const fixedNow = new Date('2026-10-25T21:14:00');
   const todayStr = '2026-10-25';
+  const vietnameseDateStr = '25/10/2026';
+
+  describe('normalizeDateStringToYMD', () => {
+    it('normalizes DD/MM/YYYY to YYYY-MM-DD', () => {
+      expect(normalizeDateStringToYMD('25/10/2026')).toBe('2026-10-25');
+      expect(normalizeDateStringToYMD('05/06/2026')).toBe('2026-06-05');
+      expect(normalizeDateStringToYMD('5/6/2026')).toBe('2026-06-05');
+    });
+
+    it('normalizes DD-MM-YYYY to YYYY-MM-DD', () => {
+      expect(normalizeDateStringToYMD('25-10-2026')).toBe('2026-10-25');
+    });
+
+    it('normalizes DD.MM.YYYY to YYYY-MM-DD', () => {
+      expect(normalizeDateStringToYMD('25.10.2026')).toBe('2026-10-25');
+    });
+
+    it('normalizes YYYY/MM/DD and keeps YYYY-MM-DD intact', () => {
+      expect(normalizeDateStringToYMD('2026/10/25')).toBe('2026-10-25');
+      expect(normalizeDateStringToYMD('2026-10-25')).toBe('2026-10-25');
+    });
+
+    it('normalizes ISO string with T', () => {
+      expect(normalizeDateStringToYMD('2026-10-25T14:30:00.000Z')).toBe('2026-10-25');
+    });
+  });
 
   describe('isPresetDisabled', () => {
     it('disables presets that have already passed when date is today', () => {
@@ -146,6 +173,47 @@ describe('Random Time Window (F022) Logic', () => {
       });
 
       expect(Object.keys(result)).toHaveLength(0);
+    });
+
+    it('correctly handles DD/MM/YYYY date format (25/10/2026) in presets, window status, and random calculation', () => {
+      const morning = GOLDEN_HOUR_PRESETS.find((p) => p.id === 'morning')!;
+      const noon = GOLDEN_HOUR_PRESETS.find((p) => p.id === 'noon')!;
+      const afternoon = GOLDEN_HOUR_PRESETS.find((p) => p.id === 'afternoon')!;
+      const evening = GOLDEN_HOUR_PRESETS.find((p) => p.id === 'evening')!;
+
+      // 1. Presets must be disabled when date is 25/10/2026 and time is 21:14
+      expect(isPresetDisabled(morning, vietnameseDateStr, fixedNow)).toBe(true);
+      expect(isPresetDisabled(noon, vietnameseDateStr, fixedNow)).toBe(true);
+      expect(isPresetDisabled(afternoon, vietnameseDateStr, fixedNow)).toBe(true);
+      expect(isPresetDisabled(evening, vietnameseDateStr, fixedNow)).toBe(false);
+
+      // 2. Window status must detect in-progress evening window
+      const status = getWindowStatus(vietnameseDateStr, '19:30', '22:30', fixedNow);
+      expect(status.isExpired).toBe(false);
+      expect(status.isInProgress).toBe(true);
+      expect(status.effectiveStartMs).toBeGreaterThanOrEqual(fixedNow.getTime() + 60000);
+
+      // 3. Simulated time must strictly be in the future (>= 21:15), never in the past (like 20:29)
+      const nowMs = fixedNow.getTime();
+      const endMs = new Date('2026-10-25T22:30:00').getTime();
+
+      for (let key = 0; key < 25; key++) {
+        const result = computeRandomWindowTimes({
+          randomDate: vietnameseDateStr,
+          startTime: '19:30',
+          endTime: '22:30',
+          itemIds: ['video-1'],
+          shuffleKey: key,
+          currentTime: fixedNow,
+        });
+
+        const scheduledTime = result['video-1'];
+        expect(scheduledTime).toBeDefined();
+        const scheduledMs = scheduledTime.getTime();
+
+        expect(scheduledMs).toBeGreaterThan(nowMs);
+        expect(scheduledMs).toBeLessThanOrEqual(endMs);
+      }
     });
   });
 });

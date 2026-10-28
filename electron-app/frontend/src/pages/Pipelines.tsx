@@ -60,8 +60,8 @@ export default function Pipelines() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Kênh bán hàng & Giai đoạn (Pipelines - F099)</h1>
-          <p className="text-sm text-gray-500 mt-1">Tùy biến các bước trong quy trình chuyển đổi khách hàng từ Tiếp cận đến Chốt hợp đồng</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Kênh bán hàng & Giai đoạn (Pipelines - F094 | Stages - F095)</h1>
+          <p className="text-sm text-gray-500 mt-1">Quản lý pipeline bán hàng theo workspace/team (F094) và tùy biến các giai đoạn của quy trình chuyển đổi (F095)</p>
         </div>
 
         <button

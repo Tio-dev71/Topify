@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate file type
-    if (!isAllowedVideoType(file.type)) {
+    if (!isAllowedVideoType(file.type, file.name)) {
       return NextResponse.json(
         { error: 'Invalid file type. Allowed: MP4, MOV, WebM' },
         { status: 400 }

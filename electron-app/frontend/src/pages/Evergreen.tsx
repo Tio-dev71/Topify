@@ -50,6 +50,7 @@ interface EvergreenPost {
     id: string;
     title: string;
     status: string;
+    scheduledAt?: string | null;
     publishedAt: string | null;
     createdAt: string;
   }>;
@@ -348,18 +349,37 @@ export default function Evergreen() {
             >
               <div className="space-y-3">
                 {/* Status Badges */}
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                      post.isDue
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-emerald-50 text-emerald-700'
-                    }`}
-                  >
-                    {post.isDue
-                      ? `Đến hạn tái đăng (+${post.daysOverdue} ngày)`
-                      : `Chu kỳ ${post.recycleIntervalDays} ngày`}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                        post.isDue
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-emerald-50 text-emerald-700'
+                      }`}
+                    >
+                      {post.isDue
+                        ? `Đến hạn tái đăng (+${post.daysOverdue} ngày)`
+                        : `Chu kỳ ${post.recycleIntervalDays} ngày`}
+                    </span>
+
+                    {post.status === 'PUBLISHED' ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Đã đăng ngay
+                      </span>
+                    ) : post.status === 'PUBLISHING' ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                        <RefreshCw className="w-3 h-3 text-blue-600 animate-spin" />
+                        Đang xuất bản
+                      </span>
+                    ) : post.status === 'SCHEDULED' ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                        <Clock className="w-3 h-3 text-purple-600" />
+                        Đã lên lịch
+                      </span>
+                    ) : null}
+                  </div>
 
                   <span className="text-[11px] font-semibold text-gray-400">
                     Đã tái đăng {post.recycleCount || 0} lần
@@ -401,22 +421,31 @@ export default function Evergreen() {
                 {post.recycledPosts && post.recycledPosts.length > 0 && (
                   <div className="pt-0.5 space-y-1">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-gray-400">
-                      <span>Bài tái đăng gần nhất:</span>
-                      <span className="text-indigo-600">{post.recycledPosts.length} bài</span>
+                      <span>Bài tái đăng theo chu kỳ:</span>
+                      <span className="text-indigo-600 font-bold">{post.recycledPosts.length} bài</span>
                     </div>
                     <div className="space-y-1">
-                      {post.recycledPosts.slice(0, 2).map((rp) => (
-                        <div key={rp.id} className="text-[11px] text-gray-600 flex items-center justify-between bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                          <span className="truncate max-w-[150px] font-medium">{rp.title}</span>
-                          <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                            rp.status === 'PUBLISHED'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : rp.status === 'PUBLISHING'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {rp.status === 'PUBLISHED' ? 'Đã đăng' : rp.status === 'PUBLISHING' ? 'Đang đăng' : rp.status}
-                          </span>
+                      {post.recycledPosts.slice(0, 3).map((rp) => (
+                        <div key={rp.id} className="text-[11px] text-gray-600 flex items-center justify-between bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100">
+                          <span className="truncate max-w-[130px] font-medium" title={rp.title}>{rp.title}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {rp.scheduledAt && rp.status === 'SCHEDULED' && (
+                              <span className="text-[10px] text-indigo-600 font-semibold">
+                                Hẹn: {new Date(rp.scheduledAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              rp.status === 'PUBLISHED'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : rp.status === 'PUBLISHING'
+                                ? 'bg-blue-100 text-blue-700'
+                                : rp.status === 'SCHEDULED'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {rp.status === 'PUBLISHED' ? 'Đã đăng' : rp.status === 'PUBLISHING' ? 'Đang đăng' : rp.status === 'SCHEDULED' ? 'Đã lên lịch' : rp.status}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>

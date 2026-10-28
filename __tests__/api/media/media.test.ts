@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { GET, POST } from '@/app/api/media/route';
-import { GET as GET_BY_ID, PUT, DELETE } from '@/app/api/media/[id]/route';
+import { GET, POST, OPTIONS } from '@/app/api/media/route';
+import { GET as GET_BY_ID, PUT, DELETE, OPTIONS as OPTIONS_BY_ID } from '@/app/api/media/[id]/route';
 import prisma from '@/lib/db';
 import { auth } from '@/lib/auth';
 
@@ -271,6 +271,47 @@ describe('Media Library API Routes (/api/media)', () => {
       const req = new NextRequest('http://localhost/api/media/asset-2', { method: 'DELETE' });
       const res = await DELETE(req, { params: Promise.resolve({ id: 'asset-2' }) });
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('CORS & OPTIONS preflight for Desktop App', () => {
+    it('OPTIONS /api/media returns 204 with CORS headers', async () => {
+      const res = await OPTIONS();
+      expect(res.status).toBe(204);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+    });
+
+    it('OPTIONS /api/media/[id] returns 204 with CORS headers', async () => {
+      const res = await OPTIONS_BY_ID();
+      expect(res.status).toBe(204);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(res.headers.get('Access-Control-Allow-Methods')).toContain('DELETE');
+    });
+
+    it('POST /api/media supports "video" or "media" key in FormData and formats .avi/.flv', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'user-1', role: 'USER', workspaceId: 'ws-1' },
+      } as any);
+
+      vi.mocked(prisma.mediaAsset.create).mockImplementation(async (args: any) => ({
+        id: 'asset-avi',
+        ...args.data,
+      }));
+
+      const video = createMockFile('presentation.avi', '');
+      const req = createFormDataRequest({ video });
+
+      const res = await POST(req);
+      expect(res.status).toBe(201);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(prisma.mediaAsset.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          fileName: 'presentation.avi',
+          mimeType: 'video/x-msvideo',
+          mediaType: 'VIDEO',
+        }),
+      });
     });
   });
 });

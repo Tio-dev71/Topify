@@ -50,16 +50,23 @@ export const getApiBaseUrl = () => {
 
 export const getMediaUrl = (url?: string | null): string => {
   if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
-    return url;
+  let fullUrl = url;
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:') && !url.startsWith('blob:')) {
+    let base = BASE_URL;
+    if (import.meta.env.DEV && typeof window !== 'undefined' && window.location.protocol !== 'file:') {
+      base = window.location.origin;
+    }
+    const cleanBase = base.replace(/\/+$/, '');
+    const cleanPath = url.startsWith('/') ? url : `/${url}`;
+    fullUrl = `${cleanBase}${cleanPath}`;
   }
-  let base = BASE_URL;
-  if (import.meta.env.DEV && typeof window !== 'undefined' && window.location.protocol !== 'file:') {
-    base = window.location.origin;
+
+  // Prevent stale Cloudflare CDN octet-stream cached responses for /api/uploads
+  if (fullUrl.includes('/api/uploads/') && !fullUrl.includes('?')) {
+    fullUrl = `${fullUrl}?v=1.3.34`;
   }
-  const cleanBase = base.replace(/\/+$/, '');
-  const cleanPath = url.startsWith('/') ? url : `/${url}`;
-  return `${cleanBase}${cleanPath}`;
+
+  return fullUrl;
 };
 
 export default api;

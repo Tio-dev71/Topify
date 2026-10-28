@@ -276,6 +276,71 @@ export async function publishPostDirectly(postId: string): Promise<{
     },
   });
 
+  // If this was a recycled child post, update the original evergreen parent and schedule the next cycle
+  if (anySuccess && post.originalPostId) {
+    try {
+      const parentPost = await prisma.post.findUnique({
+        where: { id: post.originalPostId },
+        include: { platforms: true, media: true },
+      });
+      if (parentPost && parentPost.isEvergreen) {
+        await prisma.post.update({
+          where: { id: parentPost.id },
+          data: {
+            lastRecycledAt: new Date(),
+            recycleCount: { increment: 1 },
+          },
+        });
+
+        const nextCycleInterval = parentPost.recycleIntervalDays || 30;
+        const nextScheduledDate = new Date(Date.now() + nextCycleInterval * 24 * 60 * 60 * 1000);
+        const existingNext = await prisma.post.findFirst({
+          where: {
+            originalPostId: parentPost.id,
+            status: 'SCHEDULED',
+          },
+        });
+
+        if (!existingNext) {
+          const nextChild = await prisma.post.create({
+            data: {
+              title: parentPost.title,
+              caption: parentPost.caption,
+              firstComment: parentPost.firstComment,
+              hashtags: parentPost.hashtags,
+              videoAssetId: parentPost.videoAssetId,
+              postType: parentPost.postType,
+              createdById: parentPost.createdById,
+              workspaceId: parentPost.workspaceId,
+              status: 'SCHEDULED',
+              scheduledAt: nextScheduledDate,
+              originalPostId: parentPost.id,
+              isEvergreen: false,
+              platforms: {
+                create: parentPost.platforms.map((p) => ({
+                  platform: p.platform,
+                  status: 'PENDING',
+                })),
+              },
+              media: parentPost.media && parentPost.media.length > 0 ? {
+                create: parentPost.media.map((m) => ({
+                  mediaAssetId: m.mediaAssetId,
+                  sortOrder: m.sortOrder,
+                  caption: m.caption,
+                })),
+              } : undefined,
+            },
+          });
+          const { schedulePublish } = await import('@/lib/queue');
+          await schedulePublish(nextChild.id, nextScheduledDate);
+          console.log(`♻️ [PublisherService] Đã tự động lên lịch chu kỳ tiếp theo cho bài Evergreen ${parentPost.id}: bài ${nextChild.id} vào ngày ${nextScheduledDate.toISOString()}`);
+        }
+      }
+    } catch (parentErr: any) {
+      console.warn(`[PublisherService] Warning handling recycled parent update:`, parentErr.message);
+    }
+  }
+
   console.log(`✅ [PublisherService] Hoàn tất bài viết ${postId} với trạng thái: ${finalStatus}`);
   return { success: allSuccess, status: finalStatus };
 }
@@ -373,6 +438,20 @@ export async function checkAndPublishDuePosts(): Promise<{
 
         const intervalDays = egPost.recycleIntervalDays || 30;
         const intervalMs = intervalDays * 24 * 60 * 60 * 1000;
+        const nextCycleDate = new Date(referenceDate + intervalMs);
+
+        // Check if an active scheduled child post already exists for this evergreen post
+        const existingScheduledChild = await prisma.post.findFirst({
+          where: {
+            originalPostId: egPost.id,
+            status: 'SCHEDULED',
+          },
+        });
+
+        if (existingScheduledChild) {
+          // An active scheduled recycle already exists and will be published by Section 1 when due
+          continue;
+        }
 
         if (nowMs - referenceDate >= intervalMs) {
           console.log(`♻️ [EVERGREEN-AUTO] Bài viết Evergreen ${egPost.id} ("${egPost.title}") đã đến chu kỳ ${intervalDays} ngày. Đang tự động tạo bài tái đăng mới...`);
@@ -427,6 +506,44 @@ export async function checkAndPublishDuePosts(): Promise<{
             console.log(`✅ [EVERGREEN-AUTO] Tự động tái xuất bản bài viết ${recycledPost.id} thành công với trạng thái: ${res.status}`);
           } catch (recycleErr: any) {
             console.error(`❌ [EVERGREEN-AUTO] Lỗi khi tự động tái đăng bài ${egPost.id}:`, recycleErr);
+          }
+        } else if (nextCycleDate.getTime() > nowMs) {
+          // Missing scheduled child post (e.g. existing post before fix). Pre-schedule it now for future cycle.
+          try {
+            const scheduledRecycleChild = await prisma.post.create({
+              data: {
+                title: egPost.title,
+                caption: egPost.caption,
+                firstComment: egPost.firstComment,
+                hashtags: egPost.hashtags,
+                videoAssetId: egPost.videoAssetId,
+                postType: egPost.postType,
+                createdById: egPost.createdById,
+                workspaceId: egPost.workspaceId,
+                status: 'SCHEDULED',
+                scheduledAt: nextCycleDate,
+                originalPostId: egPost.id,
+                isEvergreen: false,
+                platforms: {
+                  create: egPost.platforms.map((p) => ({
+                    platform: p.platform,
+                    status: 'PENDING',
+                  })),
+                },
+                media: egPost.media && egPost.media.length > 0 ? {
+                  create: egPost.media.map((m) => ({
+                    mediaAssetId: m.mediaAssetId,
+                    sortOrder: m.sortOrder,
+                    caption: m.caption,
+                  })),
+                } : undefined,
+              },
+            });
+            const { schedulePublish } = await import('@/lib/queue');
+            await schedulePublish(scheduledRecycleChild.id, nextCycleDate);
+            console.log(`♻️ [EVERGREEN-AUTO] Đã tự động lên lịch bài tái đăng tương lai ${scheduledRecycleChild.id} cho bài Evergreen ${egPost.id} vào ngày ${nextCycleDate.toISOString()}`);
+          } catch (preErr: any) {
+            console.warn(`[EVERGREEN-AUTO] Lỗi pre-schedule bài tái đăng:`, preErr.message);
           }
         }
       }

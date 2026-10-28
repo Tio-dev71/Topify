@@ -28,10 +28,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getMediaUrl } from '../lib/axios';
-import { PLATFORM_CONFIG, safeFormatDate } from '../lib/utils';
+import { PLATFORM_CONFIG, safeFormatDate, sanitizeUtf8, sanitizeUtf8Nullable } from '../lib/utils';
 import {
   GOLDEN_HOUR_PRESETS,
   getLocalDateString,
+  normalizeDateStringToYMD,
   isPresetDisabled,
   getWindowStatus,
   computeRandomWindowTimes,
@@ -156,12 +157,21 @@ export default function CreatePost() {
   const [randomPreset, setRandomPreset] = useState<string>('evening');
   const [isEvenlySpaced, setIsEvenlySpaced] = useState<boolean>(true);
   const [randomShuffleKey, setRandomShuffleKey] = useState<number>(0);
+  const [currentClock, setCurrentClock] = useState<Date>(() => new Date());
+
+  // Periodically refresh currentClock to keep disabled presets and random boundaries up to date
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentClock(new Date());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Auto-switch away from expired presets when randomDate changes
   useEffect(() => {
     const currentP = GOLDEN_HOUR_PRESETS.find((p) => p.id === randomPreset);
-    if (currentP && isPresetDisabled(currentP, randomDate)) {
-      const firstAvailable = GOLDEN_HOUR_PRESETS.find((p) => p.id !== 'custom' && !isPresetDisabled(p, randomDate));
+    if (currentP && isPresetDisabled(currentP, randomDate, currentClock)) {
+      const firstAvailable = GOLDEN_HOUR_PRESETS.find((p) => p.id !== 'custom' && !isPresetDisabled(p, randomDate, currentClock));
       if (firstAvailable) {
         setRandomPreset(firstAvailable.id);
         setRandomStartTime(firstAvailable.start);
@@ -171,10 +181,10 @@ export default function CreatePost() {
         setRandomPreset('custom');
       }
     }
-  }, [randomDate, randomPreset]);
+  }, [randomDate, randomPreset, currentClock]);
 
   const handleSelectPreset = (preset: { id: string; start: string; end: string }) => {
-    if (isPresetDisabled(preset, randomDate)) return;
+    if (isPresetDisabled(preset, randomDate, currentClock)) return;
     setRandomPreset(preset.id);
     if (preset.id !== 'custom') {
       setRandomStartTime(preset.start);
@@ -193,12 +203,12 @@ export default function CreatePost() {
       itemIds,
       isEvenlySpaced,
       shuffleKey: randomShuffleKey,
-      currentTime: new Date(),
+      currentTime: currentClock,
     });
-  }, [randomDate, randomStartTime, randomEndTime, videos, isEvenlySpaced, randomShuffleKey]);
+  }, [randomDate, randomStartTime, randomEndTime, videos, isEvenlySpaced, randomShuffleKey, currentClock]);
 
   const computedRandomSchedule = getComputedRandomTimes();
-  const windowStatus = getWindowStatus(randomDate, randomStartTime, randomEndTime, new Date());
+  const windowStatus = getWindowStatus(randomDate, randomStartTime, randomEndTime, currentClock);
   const [submitting, setSubmitting] = useState(false);
   const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});
 
@@ -324,8 +334,8 @@ export default function CreatePost() {
   };
 
   const handleApplySpinVariant = (caption: string, title?: string) => {
-    const safeCaption = typeof caption?.toWellFormed === 'function' ? caption.toWellFormed().replace(/\uFFFD/g, '') : caption;
-    const safeTitle = typeof title?.toWellFormed === 'function' ? title.toWellFormed().replace(/\uFFFD/g, '') : title;
+    const safeCaption = sanitizeUtf8(caption);
+    const safeTitle = sanitizeUtf8(title);
     const targetVideo = activeVideoForModal || (videos.length > 0 ? videos[0] : null);
     if (targetVideo) {
       updateVideoField(targetVideo.id, 'caption', safeCaption);
@@ -354,8 +364,8 @@ export default function CreatePost() {
     setVideos((prev) =>
       prev.map((v, idx) => {
         const variant = variants[idx % variants.length];
-        const safeCaption = typeof variant.caption?.toWellFormed === 'function' ? variant.caption.toWellFormed().replace(/\uFFFD/g, '') : variant.caption;
-        const safeTitle = typeof variant.title?.toWellFormed === 'function' ? variant.title.toWellFormed().replace(/\uFFFD/g, '') : variant.title;
+        const safeCaption = sanitizeUtf8(variant.caption);
+        const safeTitle = sanitizeUtf8(variant.title);
         return {
           ...v,
           caption: safeCaption,
@@ -471,10 +481,9 @@ export default function CreatePost() {
           '✨ Chia sẻ hữu ích hôm nay dành cho bạn: ',
           '🚀 Khám phá ngay mẹo đỉnh cao này: ',
         ];
-        const cleanOriginal = original ? original.replace(/^[🔥💡✨🚀]\s*/u, '').trim() : '';
-        const safeOriginal = typeof cleanOriginal.toWellFormed === 'function' ? cleanOriginal.toWellFormed().replace(/\uFFFD/g, '') : cleanOriginal;
+        const cleanOriginal = sanitizeUtf8(original ? original.replace(/^[🔥💡✨🚀]\s*/u, '') : '');
         const randomHook = hooks[Math.floor(Math.random() * hooks.length)];
-        const newText = safeOriginal ? `${randomHook}${safeOriginal}` : randomHook;
+        const newText = cleanOriginal ? sanitizeUtf8(`${randomHook}${cleanOriginal}`) : randomHook;
         updateVideoField(video.id, 'caption', newText);
         toast.success('Đã làm mới nội dung Caption!');
       }
@@ -759,9 +768,10 @@ export default function CreatePost() {
         toast.error('Vui lòng chọn ngày và khung giờ đăng ngẫu nhiên (F022).');
         return;
       }
+      const normDate = normalizeDateStringToYMD(randomDate);
       const [startH, startM] = randomStartTime.split(':').map(Number);
       const [endH, endM] = randomEndTime.split(':').map(Number);
-      const [yr, mo, da] = randomDate.split('-').map(Number);
+      const [yr, mo, da] = normDate.split('-').map(Number);
       const startMs = new Date(yr, mo - 1, da, startH, startM, 0, 0).getTime();
       const endMs = new Date(yr, mo - 1, da, endH, endM, 0, 0).getTime();
       if (endMs <= startMs) {
@@ -783,16 +793,9 @@ export default function CreatePost() {
     setSubmitting(true);
     let successCount = 0;
 
-    const sanitizeClientText = (val: string | null | undefined): string | null => {
-      if (!val) return null;
-      const wellFormed = typeof val.toWellFormed === 'function' ? val.toWellFormed() : val;
-      const cleaned = wellFormed.replace(/\uFFFD/g, '').trim();
-      return cleaned || null;
-    };
-
     for (const video of videos) {
       try {
-        const payloadTitle = sanitizeClientText(video.title) || sanitizeClientText(video.titleFromFileName) || 'Untitled';
+        const payloadTitle = sanitizeUtf8(video.title) || sanitizeUtf8(video.titleFromFileName) || 'Untitled';
         let payloadScheduledAt: string | null = null;
         let randomStartIso: string | undefined = undefined;
         let randomEndIso: string | undefined = undefined;
@@ -807,18 +810,19 @@ export default function CreatePost() {
             return;
           }
           payloadScheduledAt = vidSched.toISOString();
+          const normDate = normalizeDateStringToYMD(randomDate);
           const [startH, startM] = randomStartTime.split(':').map(Number);
           const [endH, endM] = randomEndTime.split(':').map(Number);
-          const [yr, mo, da] = randomDate.split('-').map(Number);
+          const [yr, mo, da] = normDate.split('-').map(Number);
           randomStartIso = new Date(yr, mo - 1, da, startH, startM, 0, 0).toISOString();
           randomEndIso = new Date(yr, mo - 1, da, endH, endM, 0, 0).toISOString();
         }
 
         const res = await api.post('/posts', {
           title: payloadTitle,
-          caption: sanitizeClientText(video.caption),
-          firstComment: sanitizeClientText(video.firstComment),
-          hashtags: sanitizeClientText(video.hashtags),
+          caption: sanitizeUtf8Nullable(video.caption),
+          firstComment: sanitizeUtf8Nullable(video.firstComment),
+          hashtags: sanitizeUtf8Nullable(video.hashtags),
           videoAssetId: video.id,
           platforms,
           publishMode,
@@ -851,6 +855,9 @@ export default function CreatePost() {
           ? `Đã lên lịch thành công ${successCount} video trong khung ${randomStartTime} - ${randomEndTime}!`
           : `Đã lên lịch ${successCount} video thành công!`
       );
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
       navigate('/posts');
     }
   };
@@ -1492,8 +1499,8 @@ export default function CreatePost() {
                   </label>
                   <input
                     type="date"
-                    value={randomDate}
-                    onChange={(e) => setRandomDate(e.target.value)}
+                    value={normalizeDateStringToYMD(randomDate)}
+                    onChange={(e) => setRandomDate(normalizeDateStringToYMD(e.target.value))}
                     min={getLocalDateString(new Date())}
                     className="w-full py-2.5 px-3.5 text-sm font-medium border border-purple-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-400"
                   />
@@ -1507,7 +1514,7 @@ export default function CreatePost() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {GOLDEN_HOUR_PRESETS.map((p) => {
                       const isSelected = randomPreset === p.id;
-                      const disabled = isPresetDisabled(p, randomDate);
+                      const disabled = isPresetDisabled(p, randomDate, currentClock);
                       return (
                         <button
                           key={p.id}

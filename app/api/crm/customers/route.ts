@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     }
 
     const url = new URL(req.url);
+    const id = url.searchParams.get('id');
     const search = url.searchParams.get('search');
     const tag = url.searchParams.get('tag');
     const temperature = url.searchParams.get('temperature'); // HOT, WARM, COLD
@@ -28,6 +29,9 @@ export async function GET(req: NextRequest) {
     const workspaceId = (session.user as any).workspaceId;
 
     const where: any = { workspaceId };
+    if (id) {
+      where.id = id;
+    }
     if (search && search.trim() !== '') {
       where.OR = [
         { name: { contains: search.trim(), mode: 'insensitive' } },
@@ -48,9 +52,42 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Fetch conversations related to these customers in workspace
+    const customerIds = rawCustomers.map((c) => c.id);
+    const customerPhones = rawCustomers
+      .map((c) => normalizePhoneNumber(c.phone))
+      .filter((p) => p.length >= 10);
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { contactId: { in: customerIds } },
+          ...(customerPhones.length > 0 ? [{ contactPhone: { in: customerPhones } }] : []),
+        ],
+      },
+      select: {
+        id: true,
+        contactId: true,
+        contactPhone: true,
+        lastMessageAt: true,
+        messages: { select: { id: true, content: true }, take: 5 },
+      },
+    });
+
     // Calculate Lead Score & Temperature for each customer (F100)
     let scoredCustomers = rawCustomers.map((customer) => {
-      const scoreResult = calculateCustomerScore(customer);
+      const normP = normalizePhoneNumber(customer.phone);
+      const customerConvs = conversations.filter(
+        (cv) =>
+          (cv.contactId && cv.contactId === customer.id) ||
+          (normP && cv.contactPhone && normalizePhoneNumber(cv.contactPhone) === normP)
+      );
+      const scoreResult = calculateCustomerScore(customer, {
+        deals: customer.deals,
+        activities: customer.activities,
+        conversations: customerConvs,
+      });
       return {
         ...customer,
         leadScore: scoreResult.leadScore,
@@ -412,3 +449,5 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export const PUT = PATCH;

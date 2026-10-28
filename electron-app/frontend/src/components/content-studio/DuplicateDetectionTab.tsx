@@ -3,47 +3,88 @@ import {
   Copy,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
-  Sparkles,
   Search,
-  Wand2,
-  FileText,
-  RotateCcw
+  RotateCcw,
+  Repeat,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/axios';
+import { checkDuplicateClient, type DuplicateCheckResult } from '../../lib/duplicateEngine';
+
+function formatPct(val: number): number {
+  if (typeof val !== 'number' || isNaN(val)) return 0;
+  // If val is decimal (e.g. 0.75), convert to 75. If already 0-100 (e.g. 1 or 75), keep it.
+  return Math.round(val > 0 && val < 1 ? val * 100 : val);
+}
 
 export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: string) => void }) {
   const [caption, setCaption] = useState('');
   const [title, setTitle] = useState('');
   const [checking, setChecking] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<DuplicateCheckResult | any | null>(null);
 
   const handleCheckDuplicate = async () => {
-    if (!caption.trim() && !title.trim()) {
+    const trimmedTitle = title.trim();
+    const trimmedCaption = caption.trim();
+
+    if (!trimmedCaption && !trimmedTitle) {
       toast.error('Vui lòng nhập tiêu đề hoặc caption để quét trùng lặp');
       return;
     }
 
+    setChecking(true);
+    let checkResult: DuplicateCheckResult | null = null;
+
     try {
-      setChecking(true);
+      // 1. First attempt: Call backend API
       const res = await api.post('/content/duplicate-check', {
-        title,
-        caption,
+        title: trimmedTitle,
+        caption: trimmedCaption,
       });
-      if (res.data) {
-        setResult(res.data);
-        if (res.data.hasDuplicates) {
-          toast.warning(`Phát hiện nội dung có độ tương đồng ${Math.round(res.data.maxSimilarity * 100)}% với bài viết cũ!`);
-        } else {
-          toast.success('Nội dung độc bản (Unique 100%), không phát hiện trùng lặp trong không gian làm việc!');
-        }
+
+      if (res?.data) {
+        checkResult = res.data;
       }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Lỗi khi kiểm tra trùng lặp');
-    } finally {
-      setChecking(false);
+    } catch (apiErr: any) {
+      console.warn('Backend duplicate check encountered an issue, falling back to client-side engine:', apiErr);
+
+      // 2. Fallback: Fetch recent posts from workspace or cache to compare client-side
+      let candidatePosts: any[] = [];
+      try {
+        const postsRes = await api.get('/posts?limit=100');
+        candidatePosts = postsRes.data?.posts || postsRes.data || [];
+        if (Array.isArray(candidatePosts) && candidatePosts.length > 0) {
+          try {
+            localStorage.setItem('topify_cached_posts', JSON.stringify(candidatePosts.slice(0, 50)));
+          } catch {}
+        }
+      } catch {
+        try {
+          const cached = localStorage.getItem('topify_cached_posts');
+          if (cached) {
+            candidatePosts = JSON.parse(cached);
+          }
+        } catch {}
+      }
+
+      checkResult = checkDuplicateClient(trimmedTitle, trimmedCaption, candidatePosts);
     }
+
+    if (!checkResult) {
+      // Ultimate safety fallback
+      checkResult = checkDuplicateClient(trimmedTitle, trimmedCaption, []);
+    }
+
+    setResult(checkResult);
+
+    const maxPct = formatPct(checkResult.maxSimilarity);
+    if (checkResult.hasDuplicates && maxPct >= 35) {
+      toast.warning(`Phát hiện nội dung có độ tương đồng ${maxPct}% với bài viết cũ trong Workspace!`);
+    } else {
+      toast.success('Nội dung độc bản (Unique 100%), không phát hiện trùng lặp trong không gian làm việc!');
+    }
+
+    setChecking(false);
   };
 
   return (
@@ -119,7 +160,7 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-2xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                 <h4 className="font-bold text-sm text-gray-900 flex items-center gap-2">
-                  {result.hasDuplicates ? (
+                  {result.hasDuplicates && formatPct(result.maxSimilarity) >= 35 ? (
                     <AlertTriangle className="w-5 h-5 text-amber-500" />
                   ) : (
                     <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -136,7 +177,7 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
                       : 'bg-rose-50 text-rose-700 border-rose-200'
                   }`}
                 >
-                  MỨC ĐỘ: {result.riskLevel}
+                  MỨC ĐỘ: {result.riskLevel === 'SAFE' ? 'AN TOÀN' : result.riskLevel === 'MODERATE' ? 'TRUNG BÌNH' : 'NGUY CƠ CAO'}
                 </span>
               </div>
 
@@ -145,19 +186,19 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-gray-600">Độ tương đồng lớn nhất:</span>
                   <span className="font-bold text-sm text-gray-900">
-                    {Math.round(result.maxSimilarity * 100)}%
+                    {formatPct(result.maxSimilarity)}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-500 ${
-                      result.maxSimilarity > 0.6
+                      formatPct(result.maxSimilarity) >= 70
                         ? 'bg-rose-500'
-                        : result.maxSimilarity > 0.3
+                        : formatPct(result.maxSimilarity) >= 35
                         ? 'bg-amber-500'
                         : 'bg-emerald-500'
                     }`}
-                    style={{ width: `${Math.min(100, Math.round(result.maxSimilarity * 100))}%` }}
+                    style={{ width: `${Math.min(100, Math.max(0, formatPct(result.maxSimilarity)))}%` }}
                   />
                 </div>
               </div>
@@ -165,9 +206,21 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
               {/* Matches List */}
               {result.matches && result.matches.length > 0 ? (
                 <div className="space-y-2 pt-2">
-                  <span className="text-xs font-bold text-gray-700 block">
-                    Các bài viết cũ phát hiện trùng lặp ({result.matches.length}):
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-700 block">
+                      Các bài viết cũ phát hiện trùng lặp ({result.matches.length}):
+                    </span>
+                    {onSendToSpin && (
+                      <button
+                        type="button"
+                        onClick={() => onSendToSpin(caption || title)}
+                        className="text-[11px] font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Repeat className="w-3.5 h-3.5" />
+                        <span>Spin chống spam ngay</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {result.matches.map((m: any, i: number) => (
                       <div
@@ -176,17 +229,17 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-amber-950 truncate max-w-[200px]">
-                            {m.title || 'Bài viết cũ'}
+                            {m.title || 'Bài viết trong Workspace'}
                           </span>
                           <span className="font-mono text-amber-800 font-bold">
-                            {Math.round(m.similarity * 100)}% trùng
+                            {formatPct(m.similarity)}% trùng
                           </span>
                         </div>
-                        {m.caption && (
+                        {m.captionSnippet || m.caption ? (
                           <p className="line-clamp-2 text-gray-600 italic">
-                            "{m.caption}"
+                            "{m.captionSnippet || m.caption}"
                           </p>
-                        )}
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -216,3 +269,4 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
     </div>
   );
 }
+

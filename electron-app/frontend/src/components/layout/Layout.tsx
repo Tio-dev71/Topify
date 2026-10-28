@@ -16,6 +16,14 @@ export default function Layout() {
     }
   }, [navigate]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const mainEl = document.querySelector('main');
+    if (mainEl) mainEl.scrollTop = 0;
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-[var(--color-background)]">
       <Sidebar />

@@ -38,8 +38,8 @@ describe('/api/social/status API', () => {
     vi.mocked(auth).mockResolvedValue({ user: { id: 'u1', workspaceId: 'w1' } } as any);
     
     const accounts = [
-      { id: 'acc1', provider: 'META', accountName: 'Meta Page' },
-      { id: 'acc2', provider: 'GOOGLE', accountName: 'YT Channel' },
+      { id: 'acc1', provider: 'META', accountName: 'Meta Page', status: 'CONNECTED' },
+      { id: 'acc2', provider: 'GOOGLE', accountName: 'YT Channel', status: 'CONNECTED' },
     ];
     vi.mocked(prisma.socialAccount.findMany).mockResolvedValue(accounts as any);
     
@@ -55,7 +55,12 @@ describe('/api/social/status API', () => {
     const data = await res.json();
     
     expect(prisma.socialAccount.findMany).toHaveBeenCalledWith({
-      where: { workspaceId: 'w1' },
+      where: {
+        OR: [
+          { workspaceId: 'w1' },
+          { userId: 'u1' },
+        ],
+      },
       select: {
         id: true,
         provider: true,
@@ -63,11 +68,19 @@ describe('/api/social/status API', () => {
         pageId: true,
         instagramBusinessId: true,
         youtubeChannelId: true,
+        telegramBotUsername: true,
+        telegramBotToken: true,
+        zaloOaId: true,
         expiresAt: true,
-      }
+        status: true,
+        refreshToken: true,
+        accessToken: true,
+        userId: true,
+        workspaceId: true,
+      },
     });
     
-    expect(data.connected).toBe(2);
+    expect(data.connected).toBe(3);
     expect(data.connections[0].connected).toBe(true);
     expect(data.envStatus).toEqual({
       META_APP_ID: true,

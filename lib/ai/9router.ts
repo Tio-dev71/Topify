@@ -59,6 +59,7 @@ export interface LeadDetectionResult {
  * Check if 9router is configured in environment
  */
 export function isNineRouterConfigured(): boolean {
+  if (process.env.NODE_ENV === 'test') return false;
   return Boolean(process.env.NINE_ROUTER_API_KEY && process.env.NINE_ROUTER_API_KEY.trim() !== '');
 }
 
@@ -66,6 +67,7 @@ export function isNineRouterConfigured(): boolean {
  * Get OpenAI client configured with 9router baseURL
  */
 export function getNineRouterClient(): OpenAI | null {
+  if (process.env.NODE_ENV === 'test') return null;
   const apiKey = process.env.NINE_ROUTER_API_KEY?.trim();
   if (!apiKey) return null;
 
@@ -74,6 +76,9 @@ export function getNineRouterClient(): OpenAI | null {
   return new OpenAI({
     apiKey,
     baseURL,
+    timeout: 3000,
+    maxRetries: 0,
+    dangerouslyAllowBrowser: true,
   });
 }
 
@@ -209,6 +214,60 @@ export function isMeaninglessOrGibberish(text?: string): { isGibberish: boolean;
 }
 
 /**
+ * Detect CTA keywords in caption
+ */
+export function detectCta(text?: string): { hasCta: boolean; found: string[] } {
+  if (!text || typeof text !== 'string') return { hasCta: false, found: [] };
+  const lower = text.toLowerCase();
+  const ctaKeywords = [
+    'lưu ngay', 'lưu lại', 'follow', 'theo dõi', 'chia sẻ', 'share', 'comment',
+    'bình luận', 'inbox', 'nhắn tin', 'link bio', 'mua ngay', 'đặt hàng',
+    'tag bạn bè', 'xem thêm', 'liên hệ', 'bấm vào', 'nhận ngay', 'đăng ký',
+    'thả tim', 'để lại bình luận', 'bình luận bên dưới', 'nhấn vào', 'truy cập',
+    'click vào', 'nhắn cho', 'liên hệ ngay', 'check ngay'
+  ];
+  const found = ctaKeywords.filter(kw => lower.includes(kw));
+  return { hasCta: found.length > 0, found };
+}
+
+/**
+ * Detect Hook in caption
+ */
+export function detectHook(text?: string): { hasHook: boolean; score: number } {
+  if (!text || typeof text !== 'string') return { hasHook: false, score: 0 };
+  const trimmed = text.trim();
+  if (trimmed.length < 5) return { hasHook: false, score: 0 };
+  const lower = trimmed.toLowerCase();
+
+  const hookKeywords = [
+    'bí quyết', 'bật mí', 'tại sao', 'làm thế nào', 'cảnh báo', 'đừng', 'sai lầm',
+    'bạn có biết', 'top', 'bí mật', 'check ngay', 'sốc', 'kinh nghiệm', 'sự thật',
+    'hướng dẫn', 'cách để', 'ai cũng', 'nguy hiểm', 'chú ý', 'bất ngờ', 'sự cố',
+    'sự thật về', 'có thể bạn chưa biết', 'dừng lại', 'đừng lướt vội'
+  ];
+  const hasHookKw = hookKeywords.some(kw => lower.includes(kw));
+  const hasNumber = /(?:top\s*)?\d+\s*(?:bước|cách|mẹo|sai lầm|bí quyết|ngày|lý do|phút|giây|%)/i.test(lower) ||
+    (/\b\d+\b/.test(trimmed.slice(0, 80)) && !/\d+p\b/i.test(trimmed.slice(0, 80)));
+  const hasQuestion = trimmed.slice(0, 100).includes('?');
+  const hasExclamation = trimmed.slice(0, 80).includes('!');
+  const hasEmojiHook = /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(trimmed.slice(0, 50));
+
+  if (!hasHookKw && !hasNumber && !hasQuestion && !hasExclamation && !hasEmojiHook) {
+    return { hasHook: false, score: 0 };
+  }
+
+  let score = 0;
+  if (hasHookKw) score += 40;
+  if (hasNumber) score += 25;
+  if (hasQuestion) score += 20;
+  if (hasExclamation) score += 10;
+  if (hasEmojiHook) score += 10;
+  if (trimmed.length >= 25) score += 10;
+
+  return { hasHook: true, score: Math.min(95, score) };
+}
+
+/**
  * Analyze and score content (Hook, CTA, Brand Voice, Platform Fit)
  */
 export async function analyzeContentScore(params: {
@@ -270,6 +329,9 @@ export async function analyzeContentScore(params: {
     };
   }
 
+  const ctaCheck = detectCta(caption);
+  const hookCheck = detectHook(caption);
+
   // 1. Try 9router if configured
   if (isNineRouterConfigured()) {
     try {
@@ -278,10 +340,10 @@ export async function analyzeContentScore(params: {
         const systemPrompt = hasBrandVoice
           ? `Bạn là chuyên gia thẩm định nội dung video ngắn & mạng xã hội hàng đầu (TikTok, Facebook Reels, YouTube Shorts).
 Nhiệm vụ của bạn là chấm điểm nội dung theo thang điểm 100 và 4 trụ cột:
-1. Hook (Câu mở đầu 3s đầu): Đánh giá tính tò mò, số liệu, câu hỏi kích thích, giữ chân người xem.
-2. CTA (Lời kêu gọi hành động): Đánh giá mức độ rõ ràng của hành động mong muốn (comment, lưu, chia sẻ, đặt mua).
+1. Hook (Câu mở đầu 3s đầu): Đánh giá tính tò mò, số liệu, câu hỏi kích thích, giữ chân người xem. BẮT BUỘC: Nếu không có câu mở đầu gây chú ý hoặc nội dung sơ sài, chấm hookScore là 0 điểm.
+2. CTA (Lời kêu gọi hành động): Đánh giá mức độ rõ ràng của hành động mong muốn (comment, lưu, chia sẻ, đặt mua). BẮT BUỘC: Nếu bài viết HOÀN TOÀN KHÔNG có lời kêu gọi hành động (CTA), chấm ctaScore là 0 điểm.
 3. Brand Voice (Giọng điệu thương hiệu): Đánh giá phong cách, cảm xúc so với định hướng: "${cleanBrandVoice}".
-4. Platform Fit (Độ phù hợp nền tảng ${platform}): Đánh giá độ dài, cấu trúc, hashtag, tính viral của nền tảng.
+4. Platform Fit (Độ phù hợp nền tảng ${hasPlatform ? platform : '(Chưa chọn nền tảng)'}): Đánh giá độ dài, cấu trúc, hashtag, tính viral của nền tảng. BẮT BUỘC: Nếu người dùng chưa chọn nền tảng xuất bản, chấm platformFitScore là 0 điểm.
 
 Bạn BẮT BUỘC trả về định dạng JSON thuần túy (không kèm markdown) theo cấu trúc sau:
 {
@@ -300,9 +362,9 @@ Bạn BẮT BUỘC trả về định dạng JSON thuần túy (không kèm mark
 }`
           : `Bạn là chuyên gia thẩm định nội dung video ngắn & mạng xã hội hàng đầu (TikTok, Facebook Reels, YouTube Shorts).
 Nhiệm vụ của bạn là chấm điểm nội dung theo thang điểm 100 và 3 trụ cột (Không có Brand Voice):
-1. Hook (Câu mở đầu 3s đầu): Đánh giá tính tò mò, số liệu, câu hỏi kích thích, giữ chân người xem (Trọng số 45%).
-2. CTA (Lời kêu gọi hành động): Đánh giá mức độ rõ ràng của hành động mong muốn (Trọng số 30%).
-3. Platform Fit (Độ phù hợp nền tảng ${platform}): Đánh giá độ dài, cấu trúc, hashtag, tính viral của nền tảng (Trọng số 25%).
+1. Hook (Câu mở đầu 3s đầu): Đánh giá tính tò mò, số liệu, câu hỏi kích thích, giữ chân người xem (Trọng số 45%). BẮT BUỘC: Nếu không có câu mở đầu gây chú ý hoặc nội dung sơ sài, chấm hookScore là 0 điểm.
+2. CTA (Lời kêu gọi hành động): Đánh giá mức độ rõ ràng của hành động mong muốn (Trọng số 30%). BẮT BUỘC: Nếu không có lời kêu gọi hành động (CTA), chấm ctaScore là 0 điểm.
+3. Platform Fit (Độ phù hợp nền tảng ${hasPlatform ? platform : '(Chưa chọn nền tảng)'}): Đánh giá độ dài, cấu trúc, hashtag, tính viral của nền tảng (Trọng số 25%). BẮT BUỘC: Nếu người dùng chưa chọn nền tảng xuất bản, chấm platformFitScore là 0 điểm.
 
 LƯU Ý: KHÔNG chấm điểm Brand Voice vì không được cấu hình.
 Bạn BẮT BUỘC trả về định dạng JSON thuần túy (không kèm markdown) theo cấu trúc sau:
@@ -320,7 +382,7 @@ Bạn BẮT BUỘC trả về định dạng JSON thuần túy (không kèm mark
 }`;
 
         const userPrompt = `Tiêu đề: ${cleanTitle || title || '(Không có)'}
-Nền tảng: ${platform}
+Nền tảng: ${hasPlatform ? platform : 'Chưa chọn nền tảng'}
 Nội dung Caption cần thẩm định:
 """
 ${caption}
@@ -339,18 +401,54 @@ ${caption}
         const raw = completion.choices[0]?.message?.content?.trim();
         if (raw) {
           const parsed = JSON.parse(cleanJsonOutput(raw));
-          const hookScore = Math.min(100, Math.max(0, Number(parsed.hookScore) || 75));
-          const ctaScore = Math.min(100, Math.max(0, Number(parsed.ctaScore) || 70));
-          const platformFitScore = Math.min(100, Math.max(0, Number(parsed.platformFitScore) || 80));
+          const rawHook = Number(parsed.hookScore);
+          const rawCta = Number(parsed.ctaScore);
+          const rawPlatform = Number(parsed.platformFitScore);
+          const rawBv = Number(parsed.brandVoiceScore);
+
+          const parsedHook = !isNaN(rawHook) ? Math.min(100, Math.max(0, rawHook)) : 0;
+          const parsedCta = !isNaN(rawCta) ? Math.min(100, Math.max(0, rawCta)) : 0;
+          const parsedPlatform = !isNaN(rawPlatform) ? Math.min(100, Math.max(0, rawPlatform)) : 0;
+
+          // Programmatic guardrails:
+          // 1. Chưa chọn nền tảng -> platformFitScore = 0
+          const platformFitScore = hasPlatform ? parsedPlatform : 0;
+
+          // 2. Chưa có CTA -> ctaScore = 0
+          const ctaScore = ctaCheck.hasCta ? parsedCta : 0;
+
+          // 3. Không có Hook -> hookScore = 0
+          const hookScore = hookCheck.hasHook ? parsedHook : 0;
+
           const brandVoiceScore = hasBrandVoice
-            ? Math.min(100, Math.max(0, Number(parsed.brandVoiceScore) || 80))
+            ? (!isNaN(rawBv) ? Math.min(100, Math.max(0, rawBv)) : 0)
             : undefined;
 
-          const overallScore = Math.min(100, Math.max(0, Number(parsed.overallScore) || (
-            hasBrandVoice
-              ? Math.round(hookScore * 0.35 + ctaScore * 0.25 + platformFitScore * 0.20 + brandVoiceScore! * 0.20)
-              : Math.round(hookScore * 0.45 + ctaScore * 0.30 + platformFitScore * 0.25)
-          )));
+          const overallScore = hasBrandVoice
+            ? Math.round(hookScore * 0.35 + ctaScore * 0.25 + platformFitScore * 0.20 + brandVoiceScore! * 0.20)
+            : Math.round(hookScore * 0.45 + ctaScore * 0.30 + platformFitScore * 0.25);
+
+          const improvements: string[] = Array.isArray(parsed.improvements) ? parsed.improvements : [];
+          if (!hasPlatform && !improvements.some(imp => imp.toLowerCase().includes('nền tảng'))) {
+            improvements.unshift('Vui lòng chọn ít nhất một nền tảng xuất bản (TikTok, Reels, Shorts) để tối ưu định dạng.');
+          }
+          if (!ctaCheck.hasCta && !improvements.some(imp => imp.toLowerCase().includes('cta') || imp.toLowerCase().includes('kêu gọi'))) {
+            improvements.push('Bổ sung lời kêu gọi hành động (CTA) cụ thể ở cuối bài (vd: "Lưu lại ngay khi cần", "Comment để nhận file").');
+          }
+          if (!hookCheck.hasHook && !improvements.some(imp => imp.toLowerCase().includes('hook') || imp.toLowerCase().includes('mở đầu'))) {
+            improvements.push('Cần viết câu mở đầu (Hook) gây chú ý trong 3 giây đầu (vd: đặt câu hỏi tò mò, bí quyết hoặc cảnh báo sai lầm).');
+          }
+
+          let strengths: string[] = Array.isArray(parsed.strengths) ? parsed.strengths : [];
+          if (!hasPlatform) {
+            strengths = strengths.filter(s => !s.toLowerCase().includes('nền tảng') && !s.toLowerCase().includes('định dạng'));
+          }
+          if (!ctaCheck.hasCta) {
+            strengths = strengths.filter(s => !s.toLowerCase().includes('cta') && !s.toLowerCase().includes('kêu gọi'));
+          }
+          if (!hookCheck.hasHook) {
+            strengths = strengths.filter(s => !s.toLowerCase().includes('hook') && !s.toLowerCase().includes('mở đầu'));
+          }
 
           return {
             overallScore,
@@ -358,12 +456,18 @@ ${caption}
             ctaScore,
             brandVoiceScore,
             platformFitScore,
-            hookAnalysis: parsed.hookAnalysis || 'Mở đầu tương đối ổn định.',
-            ctaAnalysis: parsed.ctaAnalysis || 'Cần làm rõ lời kêu gọi hành động hơn.',
+            hookAnalysis: hookCheck.hasHook
+              ? (parsed.hookAnalysis || 'Mở đầu tương đối ổn định.')
+              : 'Chưa có câu mở đầu thu hút trong 3 giây đầu để giữ chân khán giả.',
+            ctaAnalysis: ctaCheck.hasCta
+              ? (parsed.ctaAnalysis || 'Có lời kêu gọi hành động.')
+              : 'Hoàn toàn thiếu lời kêu gọi hành động (CTA).',
             brandVoiceAnalysis: hasBrandVoice ? (parsed.brandVoiceAnalysis || 'Giọng văn tự nhiên, đúng định hướng.') : undefined,
-            platformFitAnalysis: parsed.platformFitAnalysis || 'Cấu trúc phù hợp với nền tảng.',
-            strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
-            improvements: Array.isArray(parsed.improvements) ? parsed.improvements : ['Tối ưu thêm câu mở đầu'],
+            platformFitAnalysis: hasPlatform
+              ? (parsed.platformFitAnalysis || 'Cấu trúc phù hợp với nền tảng.')
+              : 'Chưa chọn nền tảng xuất bản để đánh giá chuẩn định dạng.',
+            strengths,
+            improvements,
             suggestedCaption: parsed.suggestedCaption || caption,
             isAiGenerated: true,
             modelUsed: DEFAULT_MODEL,
@@ -398,45 +502,23 @@ function calculateHeuristicContentScore(params: {
   const charLength = trimmedCaption.length;
   const hashtagCount = (trimmedCaption.match(/#[a-zA-Z0-9_\p{L}]+/gu) || []).length;
 
-  // 1. Hook Score calculation (evaluated on the actual caption's opening)
-  let hookScore = 0;
-  if (trimmedCaption.length >= 25) {
-    hookScore = 30;
-  } else if (trimmedCaption.length >= 10) {
-    hookScore = 15;
-  }
-  const hookKeywords = [
-    'bí quyết', 'bật mí', 'tại sao', 'làm thế nào', 'cảnh báo', 'đừng', 'sai lầm',
-    'bạn có biết', 'top', 'bí mật', 'check ngay', 'sốc', 'kinh nghiệm', 'sự thật',
-    'hướng dẫn', 'cách để', 'ai cũng', 'nguy hiểm', 'chú ý'
-  ];
-  const hasHookKeyword = hookKeywords.some(kw => lowerCaption.includes(kw));
-  if (hasHookKeyword) hookScore += 35;
+  // 1. Hook Score calculation (evaluated strictly with detectHook)
+  const hookCheck = detectHook(trimmedCaption);
+  const hookScore = hookCheck.hasHook ? Math.min(95, hookCheck.score) : 0;
 
-  // Check if caption contains meaningful number hook (e.g. 5 bước, 3 cách, top 10)
-  const hasNumberHook = /(?:top\s*)?\d+\s*(?:bước|cách|mẹo|sai lầm|bí quyết|ngày|lý do|phút|giây|%)/i.test(lowerCaption) ||
-    (/\b\d+\b/.test(trimmedCaption.slice(0, 80)) && !/\d+p\b/i.test(trimmedCaption.slice(0, 80)));
-  if (hasNumberHook) hookScore += 15;
-
-  if (trimmedCaption.includes('?') || trimmedCaption.includes('!')) hookScore += 10;
-  if (/[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(trimmedCaption)) hookScore += 5; // Has emojis
-  hookScore = Math.min(95, hookScore);
-
-  // 2. CTA Score calculation (evaluated on caption)
-  const ctaKeywords = [
-    'lưu ngay', 'lưu lại', 'follow', 'theo dõi', 'chia sẻ', 'share', 'comment',
-    'bình luận', 'inbox', 'nhắn tin', 'link bio', 'mua ngay', 'đặt hàng',
-    'tag bạn bè', 'xem thêm', 'liên hệ', 'bấm vào', 'nhận ngay', 'đăng ký'
-  ];
-  const foundCta = ctaKeywords.filter(kw => lowerCaption.includes(kw));
+  // 2. CTA Score calculation (evaluated strictly with detectCta)
+  const ctaCheck = detectCta(trimmedCaption);
   let ctaScore = 0;
-  if (foundCta.length >= 2) ctaScore = 85;
-  else if (foundCta.length === 1) ctaScore = 65;
-  else if (lowerCaption.includes('ngay') || lowerCaption.includes('nhé') || lowerCaption.includes('nha')) ctaScore = 20;
-  else ctaScore = 0;
+  if (ctaCheck.hasCta) {
+    if (ctaCheck.found.length >= 2) ctaScore = 85;
+    else ctaScore = 65;
+  } else {
+    ctaScore = 0;
+  }
   ctaScore = Math.min(95, ctaScore);
 
   // 3. Platform Fit Score (evaluated on platform selection, caption length & hashtags)
+  // BẮT BUỘC: Chưa chọn nền tảng thì không được tính điểm Chuẩn nền tảng (0 điểm)
   let platformFitScore = 0;
   if (hasPlatform) {
     platformFitScore = 30;
@@ -456,49 +538,52 @@ function calculateHeuristicContentScore(params: {
   // 4. Brand Voice Score (Only if brand voice was configured)
   let brandVoiceScore: number | undefined = undefined;
   if (hasBrandVoice) {
-    let bvs = 50;
-    const politeWords = ['dạ', 'ạ', 'mình', 'bạn', 'chúng mình', 'cả nhà', 'các bạn'];
-    if (politeWords.some(w => lowerCaption.includes(w))) bvs += 20;
-    if (charLength >= 40) bvs += 15;
-    if (trimmedCaption.includes('!') || /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(trimmedCaption)) bvs += 10;
+    let bvs = 0;
+    if (charLength >= 15) {
+      bvs = 40;
+      const politeWords = ['dạ', 'ạ', 'mình', 'bạn', 'chúng mình', 'cả nhà', 'các bạn'];
+      if (politeWords.some(w => lowerCaption.includes(w))) bvs += 25;
+      if (charLength >= 40) bvs += 15;
+      if (trimmedCaption.includes('!') || /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(trimmedCaption)) bvs += 10;
+    }
     brandVoiceScore = Math.min(95, bvs);
   }
 
   // Overall Score (Weighted: With BV = Hook 35%, CTA 25%, PlatformFit 20%, BV 20%; Without BV = Hook 45%, CTA 30%, PlatformFit 25%)
   const overallScore = hasBrandVoice
-    ? Math.round(hookScore * 0.35 + ctaScore * 0.25 + platformFitScore * 0.20 + brandVoiceScore! * 0.20)
+    ? Math.round(hookScore * 0.35 + ctaScore * 0.25 + platformFitScore * 0.20 + (brandVoiceScore || 0) * 0.20)
     : Math.round(hookScore * 0.45 + ctaScore * 0.30 + platformFitScore * 0.25);
 
   // Dynamic feedback
   const strengths: string[] = [];
   const improvements: string[] = [];
 
-  if (hasHookKeyword || hookScore >= 70) {
-    strengths.push('Câu mở đầu có từ khóa gây tò mò, kích thích người xem dừng lại 3s đầu.');
+  if (hookCheck.hasHook && hookScore >= 60) {
+    strengths.push('Câu mở đầu có yếu tố gây chú ý, kích thích người xem dừng lại 3s đầu.');
   } else {
-    improvements.push('Thêm câu hỏi hoặc số liệu giật tít ở câu đầu (vd: "3 Sai lầm khiến...", "Bạn đã biết chưa?").');
+    improvements.push('Cần viết câu mở đầu (Hook) gây chú ý trong 3 giây đầu (vd: đặt câu hỏi tò mò, bí quyết hoặc cảnh báo sai lầm).');
   }
 
-  if (foundCta.length > 0) {
-    strengths.push(`Có lời kêu gọi hành động rõ ràng (${foundCta.slice(0, 2).join(', ')}).`);
+  if (ctaCheck.hasCta && ctaScore > 0) {
+    strengths.push(`Có lời kêu gọi hành động rõ ràng (${ctaCheck.found.slice(0, 2).join(', ')}).`);
   } else {
-    improvements.push('Bổ sung lời kêu gọi hành động cụ thể ở cuối bài (vd: "Lưu lại ngay khi cần", "Comment để nhận file").');
+    improvements.push('Bổ sung lời kêu gọi hành động (CTA) cụ thể ở cuối bài (vd: "Lưu lại ngay khi cần", "Comment để nhận file").');
   }
 
-  if (hashtagCount >= 3) {
-    strengths.push(`Hashtag phong phú (${hashtagCount} thẻ) giúp thuật toán phân loại đúng đối tượng.`);
+  if (hasPlatform) {
+    if (hashtagCount >= 3) {
+      strengths.push(`Hashtag phong phú (${hashtagCount} thẻ) giúp thuật toán phân loại đúng đối tượng.`);
+    } else {
+      improvements.push('Cần bổ sung thêm từ 3 - 5 hashtag liên quan đến ngành và chủ đề video.');
+    }
   } else {
-    improvements.push('Cần bổ sung thêm từ 3 - 5 hashtag liên quan đến ngành và chủ đề video.');
-  }
-
-  if (hasBrandVoice && brandVoiceScore! >= 70) {
-    strengths.push('Văn phong phù hợp với định hướng giọng điệu thương hiệu đã cấu hình.');
-  } else if (hasBrandVoice && brandVoiceScore! < 60) {
-    improvements.push('Điều chỉnh câu từ để thể hiện rõ hơn phong cách giọng điệu thương hiệu.');
-  }
-
-  if (!hasPlatform) {
     improvements.unshift('Vui lòng chọn ít nhất một nền tảng xuất bản (TikTok, Reels, Shorts) để tối ưu định dạng.');
+  }
+
+  if (hasBrandVoice && (brandVoiceScore || 0) >= 70) {
+    strengths.push('Văn phong phù hợp với định hướng giọng điệu thương hiệu đã cấu hình.');
+  } else if (hasBrandVoice && (brandVoiceScore || 0) < 60) {
+    improvements.push('Điều chỉnh câu từ để thể hiện rõ hơn phong cách giọng điệu thương hiệu.');
   }
 
   if (improvements.length === 0) {
@@ -509,10 +594,10 @@ function calculateHeuristicContentScore(params: {
   let suggested = trimmedCaption;
   if (cleanTitle && cleanTitle.length > 2) {
     suggested = `🔥 [Khám phá ngay] ${cleanTitle}!\n\n${suggested || 'Cùng theo dõi những khoảnh khắc ấn tượng nhất.'}`;
-  } else if (!hasHookKeyword) {
+  } else if (!hookCheck.hasHook) {
     suggested = `🔥 Bạn đã biết điều này chưa? Đừng bỏ qua nếu không muốn bỏ lỡ!\n\n${suggested}`;
   }
-  if (foundCta.length === 0) {
+  if (!ctaCheck.hasCta) {
     suggested = `${suggested}\n\n👉 Lưu ngay video này để áp dụng & comment câu hỏi bên dưới mình giải đáp nhé!`;
   }
   if (hashtagCount < 3) {
@@ -525,12 +610,12 @@ function calculateHeuristicContentScore(params: {
     ctaScore,
     brandVoiceScore,
     platformFitScore,
-    hookAnalysis: (hasHookKeyword || hookScore >= 70)
+    hookAnalysis: hookCheck.hasHook
       ? 'Mở đầu ấn tượng, có yếu tố giữ chân người xem trong 3 giây vàng.'
-      : 'Câu mở đầu còn khá bình thường, nên bổ sung câu hỏi hoặc giật tít để tăng retention.',
-    ctaAnalysis: foundCta.length > 0
+      : 'Chưa có câu mở đầu thu hút trong 3 giây đầu để giữ chân khán giả.',
+    ctaAnalysis: ctaCheck.hasCta
       ? 'CTA rõ ràng, hướng dẫn khán giả hành động cụ thể.'
-      : 'Chưa có CTA rõ nét. Người xem có thể lướt qua mà không để lại tương tác.',
+      : 'Hoàn toàn thiếu lời kêu gọi hành động (CTA).',
     brandVoiceAnalysis: hasBrandVoice
       ? 'Văn phong tự nhiên, phù hợp với định hướng thương hiệu.'
       : undefined,

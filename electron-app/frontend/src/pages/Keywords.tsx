@@ -38,7 +38,34 @@ export default function Keywords() {
     try {
       const res = await api.get('/keywords');
       if (res.data) {
-        setKeywords(res.data.keywords || []);
+        const rawList = Array.isArray(res.data.keywords)
+          ? res.data.keywords
+          : Array.isArray(res.data)
+            ? res.data
+            : [];
+        const normalized: KeywordItem[] = rawList
+          .map((item: any, idx: number) => {
+            if (typeof item === 'string') {
+              return {
+                id: `kw_str_${idx}`,
+                keyword: item,
+                volume: 0,
+                trend: '0%',
+                mentionCount: 0,
+                createdAt: new Date().toISOString()
+              };
+            }
+            return {
+              id: item?.id || `kw_${idx}`,
+              keyword: item?.keyword || '',
+              volume: typeof item?.volume === 'number' ? item.volume : 0,
+              trend: item?.trend || 'FLAT',
+              mentionCount: typeof item?.mentionCount === 'number' ? item.mentionCount : 0,
+              createdAt: item?.createdAt || new Date().toISOString()
+            };
+          })
+          .filter((item: KeywordItem) => Boolean(item.keyword));
+        setKeywords(normalized);
       }
     } catch {
       // Local fallback mock keywords if fresh database
@@ -58,28 +85,49 @@ export default function Keywords() {
 
   const handleAddKeyword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKeyword.trim()) return;
+    const cleanKw = newKeyword.trim();
+    if (!cleanKw) return;
 
     setSubmitting(true);
     try {
-      const res = await api.post('/keywords', { keyword: newKeyword });
+      const res = await api.post('/keywords', { keyword: cleanKw });
       if (res.data) {
-        setKeywords([res.data.keyword || res.data, ...keywords]);
-        toast.success(`Đã thêm từ khóa "${newKeyword}" để theo dõi`);
+        let createdItem: KeywordItem;
+        if (res.data.keyword && typeof res.data.keyword === 'object') {
+          createdItem = res.data.keyword;
+        } else if (res.data && typeof res.data === 'object' && res.data.id) {
+          createdItem = res.data as KeywordItem;
+        } else {
+          createdItem = {
+            id: Date.now().toString(),
+            keyword: typeof res.data?.keyword === 'string' ? res.data.keyword : cleanKw,
+            volume: typeof res.data?.volume === 'number' ? res.data.volume : 0,
+            trend: res.data?.trend || '+15%',
+            mentionCount: typeof res.data?.mentionCount === 'number' ? res.data.mentionCount : 0,
+            createdAt: res.data?.createdAt || new Date().toISOString()
+          };
+        }
+
+        if (!createdItem.keyword) {
+          createdItem.keyword = cleanKw;
+        }
+
+        setKeywords(prev => [createdItem, ...prev.filter(k => (typeof k === 'object' ? k?.id : k) !== createdItem.id)]);
+        toast.success(`Đã thêm từ khóa "${createdItem.keyword}" để theo dõi`);
         setNewKeyword('');
         setIsModalOpen(false);
       }
     } catch {
       const fallbackItem: KeywordItem = {
         id: Date.now().toString(),
-        keyword: newKeyword,
+        keyword: cleanKw,
         volume: Math.floor(Math.random() * 15000) + 5000,
         trend: `+${Math.floor(Math.random() * 30) + 10}%`,
         mentionCount: Math.floor(Math.random() * 800) + 100,
         createdAt: new Date().toISOString()
       };
-      setKeywords([fallbackItem, ...keywords]);
-      toast.success(`Đã thêm từ khóa "${newKeyword}"`);
+      setKeywords(prev => [fallbackItem, ...prev.filter(k => (typeof k === 'object' ? k?.id : k) !== fallbackItem.id)]);
+      toast.success(`Đã thêm từ khóa "${cleanKw}"`);
       setNewKeyword('');
       setIsModalOpen(false);
     } finally {
@@ -92,12 +140,16 @@ export default function Keywords() {
     try {
       await api.delete(`/keywords?id=${id}`);
     } catch {}
-    setKeywords(keywords.filter(k => k.id !== id));
+    setKeywords(prev => prev.filter(k => (typeof k === 'object' ? k?.id : k) !== id));
     toast.success('Đã xóa từ khóa');
     if (selectedKeyword?.id === id) setSelectedKeyword(null);
   };
 
-  const filtered = keywords.filter(k => k.keyword.toLowerCase().includes(search.toLowerCase()));
+  const filtered = keywords.filter(k => {
+    if (!k) return false;
+    const kwText = typeof k === 'string' ? k : (k.keyword || '');
+    return kwText.toLowerCase().includes((search || '').toLowerCase());
+  });
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -152,13 +204,17 @@ export default function Keywords() {
                       <Hash className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-sm text-gray-900 line-clamp-1">{item.keyword}</h3>
-                      <span className="text-[10px] text-gray-400">Tạo: {new Date(item.createdAt).toLocaleDateString('vi-VN')}</span>
+                      <h3 className="font-bold text-sm text-gray-900 line-clamp-1">
+                        {typeof item === 'string' ? item : (item.keyword || 'Không tên')}
+                      </h3>
+                      <span className="text-[10px] text-gray-400">
+                        Tạo: {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : 'Mới tạo'}
+                      </span>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => handleDelete(item.id, item.keyword)}
+                    onClick={() => handleDelete(item.id, typeof item === 'string' ? item : (item.keyword || ''))}
                     className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-rose-600 p-1 rounded transition"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -230,10 +286,11 @@ export default function Keywords() {
                 </button>
                 <button
                   type="submit"
+                  id="btn-add-keyword"
                   disabled={submitting}
-                  className="btn-primary px-5 py-2 rounded-xl font-semibold"
+                  className="btn-primary px-5 py-2 rounded-xl font-semibold flex items-center justify-center gap-1.5 min-w-[110px]"
                 >
-                  {submitting ? 'Đang thêm...' : 'Theo Dõi'}
+                  {submitting ? 'Đang thêm...' : 'Thêm từ khóa (Add)'}
                 </button>
               </div>
             </form>
@@ -248,7 +305,7 @@ export default function Keywords() {
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
                 <BarChart3 className="w-4 h-4 text-indigo-600" />
-                <span>Chi tiết từ khóa: "{selectedKeyword.keyword}"</span>
+                <span>Chi tiết từ khóa: "{selectedKeyword?.keyword || ''}"</span>
               </h3>
               <button onClick={() => setSelectedKeyword(null)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-4 h-4" />

@@ -23,7 +23,12 @@ import {
   UserCheck,
   PanelRight,
   Bot,
+  Users,
+  UserPlus,
+  ExternalLink,
+  X,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import ConnectChannelsModal from '../components/inbox/ConnectChannelsModal';
@@ -143,12 +148,68 @@ export default function Inbox() {
   const [leadData, setLeadData] = useState<LeadDetectionData | null>(null);
   const [convertingLead, setConvertingLead] = useState(false);
 
+  const navigate = useNavigate();
+
   // Team list for @mention
-  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; name: string }>>([
-    { id: '1', name: 'Nguyễn Văn Nam' },
-    { id: '2', name: 'Trần Thị Hà' },
-    { id: '3', name: 'Lê Hoàng Minh' },
-  ]);
+  const [teamMembers, setTeamMembers] = useState<Array<{
+    id: string;
+    name: string;
+    email?: string;
+    role?: string;
+    avatar?: string | null;
+    isCurrentUser?: boolean;
+  }>>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // Quick invite modal state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState<'STAFF' | 'ADMIN'>('STAFF');
+  const [inviting, setInviting] = useState(false);
+
+  const fetchTeamMembers = async () => {
+    setLoadingMembers(true);
+    try {
+      const res = await api.get('/workspace/members');
+      if (res.data?.members && Array.isArray(res.data.members)) {
+        setTeamMembers(res.data.members);
+      }
+    } catch (e) {
+      console.warn('Failed to load workspace members:', e);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const handleInviteMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) {
+      toast.error('Vui lòng nhập email đồng nghiệp');
+      return;
+    }
+    setInviting(true);
+    try {
+      const res = await api.post('/workspace/members', {
+        email: inviteEmail.trim(),
+        name: inviteName.trim() || undefined,
+        role: inviteRole,
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Thêm thành viên vào nhóm thành công!');
+        setInviteEmail('');
+        setInviteName('');
+        setShowInviteModal(false);
+        await fetchTeamMembers();
+      } else {
+        toast.error(res.data?.error || 'Không thể thêm thành viên');
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Lỗi khi thêm thành viên');
+    } finally {
+      setInviting(false);
+    }
+  };
 
   const [showRightPanel, setShowRightPanel] = useState(true);
 
@@ -203,6 +264,7 @@ export default function Inbox() {
 
   useEffect(() => {
     fetchConversations();
+    fetchTeamMembers();
   }, [tabFilter]);
 
   // Fetch full details of active conversation
@@ -465,38 +527,68 @@ export default function Inbox() {
       {/* ────────────────────────────────────────────────────────────────────────
           CỘT 1: DANH SÁCH HỘI THOẠI & BỘ LỌC SLA / STATUS
           ──────────────────────────────────────────────────────────────────────── */}
-      <div className="w-64 lg:w-72 shrink-0 flex flex-col border-r border-gray-100 bg-gray-50/50">
+      <div className="w-72 lg:w-80 shrink-0 flex flex-col border-r border-gray-100 bg-gray-50/50">
         {/* Header */}
         <div className="p-3.5 border-b border-gray-100 bg-white space-y-2.5">
+          {/* Dòng 1: Tiêu đề & Subtitle */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
                 <MessageSquare className="w-4 h-4" />
               </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900 leading-tight">
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold text-gray-900 leading-tight truncate">
                   Hộp thư hợp nhất
                 </h2>
-                <span className="text-[10px] text-gray-500 font-medium">M3. Inbox Omnichannel</span>
+                <span className="text-[10px] text-gray-500 font-medium block truncate">M3. Inbox Omnichannel</span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
+          </div>
+
+          {/* Dòng 2: 2 Nút hành động Kết nối MXH & Nạp mẫu test tách biệt rộng rãi */}
+          <div className="grid grid-cols-2 gap-2 pt-0.5">
+            <button
+              onClick={() => setShowConnectModal(true)}
+              className="w-full text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200/80 transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
+              title="Kết nối Telegram Bot, Meta, Zalo"
+            >
+              <Bot className="w-3.5 h-3.5 shrink-0 text-sky-600" />
+              <span>Kết nối MXH</span>
+            </button>
+            <button
+              onClick={handleSeedDemo}
+              disabled={seeding}
+              className="w-full text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap disabled:opacity-60"
+              title="Tạo hội thoại mẫu để test"
+            >
+              <RefreshCw className={`w-3 h-3 shrink-0 text-blue-600 ${seeding ? 'animate-spin' : ''}`} />
+              <span>Nạp mẫu test</span>
+            </button>
+          </div>
+
+          {/* Dòng 3: Quản lý nhóm & Thêm nhân viên Workspace */}
+          <div className="px-2.5 py-1.5 bg-amber-50/70 border border-amber-200/70 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-1.5 truncate">
+              <Users className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span className="text-[11px] font-semibold text-amber-900 truncate">
+                Nhóm: {teamMembers.length} thành viên
+              </span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
               <button
-                onClick={() => setShowConnectModal(true)}
-                className="text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                title="Kết nối Telegram Bot, Meta, Zalo"
+                onClick={() => setShowInviteModal(true)}
+                className="text-[10px] font-semibold bg-amber-600 hover:bg-amber-700 text-white px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                title="Thêm nhân viên vào nhóm"
               >
-                <Bot className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Kết nối MXH</span>
+                <UserPlus className="w-2.5 h-2.5" />
+                <span>+ Mời</span>
               </button>
               <button
-                onClick={handleSeedDemo}
-                disabled={seeding}
-                className="text-[11px] font-semibold px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/60 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                title="Tạo hội thoại mẫu để test"
+                onClick={() => navigate('/team')}
+                className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 px-1 py-0.5 rounded-md hover:bg-amber-100 transition-colors cursor-pointer"
+                title="Quản lý nhân sự & nhóm (F116/F117)"
               >
-                <RefreshCw className={`w-3 h-3 ${seeding ? 'animate-spin' : ''}`} />
-                <span>Nạp mẫu test</span>
+                Chi tiết →
               </button>
             </div>
           </div>
@@ -868,8 +960,64 @@ export default function Inbox() {
                 )}
               </div>
 
-              {/* Text Input */}
+              {/* Text Input with Floating Mention Autocomplete */}
               <div className="relative">
+                {/* Floating Mention Autocomplete Popup */}
+                {replyMode === 'NOTE' && composerText.match(/@([^\s]*)$/) && (
+                  <div className="absolute bottom-full left-0 mb-1.5 z-40 w-72 bg-white rounded-xl shadow-2xl border border-amber-300 overflow-hidden animate-fade-in">
+                    <div className="px-3 py-1.5 bg-amber-500 text-white flex items-center justify-between text-[11px] font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5" /> Thành viên nhóm để tag (@)
+                      </span>
+                      <span className="text-[10px] bg-amber-600 px-1.5 py-0.2 rounded-md font-normal">
+                        {teamMembers.length}
+                      </span>
+                    </div>
+                    <div className="max-h-44 overflow-y-auto p-1 divide-y divide-gray-50">
+                      {teamMembers
+                        .filter((m) => {
+                          const query = (composerText.match(/@([^\s]*)$/)?.[1] || '').toLowerCase();
+                          return m.name.toLowerCase().includes(query) || (m.email && m.email.toLowerCase().includes(query));
+                        })
+                        .map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              setComposerText((prev) => prev.replace(/@([^\s]*)$/, `@${m.name} `));
+                            }}
+                            className="w-full px-2.5 py-2 rounded-lg hover:bg-amber-50 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer group"
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px] flex items-center justify-center shrink-0">
+                                {m.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-semibold text-gray-800 group-hover:text-amber-900 truncate">
+                                  {m.name} {m.isCurrentUser && <span className="text-[10px] text-gray-400 font-normal">(bạn)</span>}
+                                </p>
+                                <p className="text-[10px] text-gray-400 truncate">{m.email}</p>
+                              </div>
+                            </div>
+                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-600 shrink-0">
+                              {m.role === 'ADMIN' || m.role === 'SUPER_ADMIN' ? 'Admin' : 'Nhân viên'}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                    <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-[10px]">
+                      <span className="text-gray-400">Bấm để chèn tag</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowInviteModal(true)}
+                        className="text-amber-700 font-semibold hover:underline flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <UserPlus className="w-2.5 h-2.5" /> + Thêm nhân viên
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   value={composerText}
                   onChange={(e) => setComposerText(e.target.value)}
@@ -894,18 +1042,34 @@ export default function Inbox() {
 
                 <div className="flex items-center justify-between pt-1">
                   {replyMode === 'NOTE' ? (
-                    <div className="flex items-center gap-1 text-[11px] text-gray-400">
-                      <span>Gợi ý tag:</span>
-                      {teamMembers.map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => setComposerText((prev) => `${prev} @${m.name} `)}
-                          className="px-1.5 py-0.5 rounded-md bg-amber-100/70 hover:bg-amber-200 text-amber-800 text-[10px] font-medium"
-                        >
-                          @{m.name}
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-500 flex-wrap">
+                      <span className="text-gray-400 font-medium">Gợi ý tag:</span>
+                      {teamMembers.length > 0 ? (
+                        teamMembers.slice(0, 6).map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setComposerText((prev) => `${prev} @${m.name} `)}
+                            className="px-2 py-0.5 rounded-md bg-amber-100/80 hover:bg-amber-200 text-amber-900 text-[10px] font-semibold transition-colors cursor-pointer"
+                            title={`Tag ${m.name} (${m.email || ''})`}
+                          >
+                            @{m.name}
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-gray-400 italic">Chưa có đồng nghiệp trong nhóm</span>
+                      )}
+
+                      {/* Nút Thêm nhân viên vào nhóm ngay tại ghi chú nội bộ */}
+                      <button
+                        type="button"
+                        onClick={() => setShowInviteModal(true)}
+                        className="px-2 py-0.5 rounded-md border border-amber-300 hover:bg-amber-100 text-amber-800 text-[10px] font-semibold transition-colors flex items-center gap-1 cursor-pointer ml-0.5 shadow-2xs"
+                        title="Thêm nhân viên vào nhóm để cùng xử lý và tag"
+                      >
+                        <UserPlus className="w-2.5 h-2.5" />
+                        <span>+ Thêm nhân viên</span>
+                      </button>
                     </div>
                   ) : <div />}
 
@@ -1092,6 +1256,106 @@ export default function Inbox() {
         onClose={() => setShowConnectModal(false)}
         onSuccess={() => fetchConversations()}
       />
+
+      {/* Quick Invite Team Member Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-100 overflow-hidden flex flex-col animate-scale-up">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-amber-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <Users className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Thêm nhân viên vào nhóm làm việc</h3>
+                  <p className="text-[11px] text-gray-500">Đồng nghiệp sẽ có thể xem hộp thư và được tag (@) trong Ghi chú nội bộ</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleInviteMember} className="p-5 space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Email đồng nghiệp (*):
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="Ví dụ: nhanvien@topify.vn"
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-hidden focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Tên hiển thị (để tag @ trong ghi chú):
+                </label>
+                <input
+                  type="text"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  placeholder="Ví dụ: Hoàng Tuấn Anh"
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-hidden focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Vai trò trong nhóm:
+                </label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as any)}
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 focus:outline-hidden focus:border-amber-500 bg-white"
+                >
+                  <option value="STAFF">Nhân viên (STAFF) - Trực chat, phản hồi khách & ghi chú nội bộ</option>
+                  <option value="ADMIN">Quản trị viên (ADMIN) - Quản trị toàn bộ nhóm</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    navigate('/team');
+                  }}
+                  className="text-[11px] text-amber-700 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Trang Quản lý Nhân sự đầy đủ →</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowInviteModal(false)}
+                    className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={inviting || !inviteEmail.trim()}
+                    className="px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {inviting && <RefreshCw className="w-3 h-3 animate-spin" />}
+                    <span>{inviting ? 'Đang thêm...' : 'Thêm vào nhóm'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

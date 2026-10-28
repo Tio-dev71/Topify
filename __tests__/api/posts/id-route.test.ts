@@ -11,7 +11,10 @@ vi.mock('@/lib/db', () => {
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
-    }
+    },
+    postVersion: {
+      create: vi.fn().mockResolvedValue({}),
+    },
   };
   return {
     prisma: mockPrisma,

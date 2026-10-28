@@ -4,120 +4,106 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  ExternalLink,
   Sparkles,
-  Link as LinkIcon,
-  HelpCircle,
-  Clock,
-  ArrowRight
+  ArrowRight,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { auditContent, type AuditResult } from '../../lib/auditEngine';
 
-interface ChecklistItem {
-  id: string;
-  category: 'LINKS' | 'SPELLING' | 'POLICY' | 'MEDIA' | 'CTA' | 'TIME';
-  title: string;
-  description: string;
-  status: 'PASS' | 'WARN' | 'FAIL';
-  recommendation: string;
-}
+const INITIAL_CAPTION =
+  '🔥 Siêu ưu đãi mừng lễ lớn! Mua 1 tặng 1 toàn bộ sản phẩm công thái học chỉ trong hôm nay. Nhấn vào link bên dưới để nhận mã giảm giá 50% ngay! 👉 https://topify.vn/promo?utm_source=facebook&utm_medium=post #Topify #Sale #Ergonomic';
+const INITIAL_LINK = 'https://topify.vn/promo?utm_source=facebook&utm_medium=post';
 
 export function PrePublishChecklistTab() {
   const navigate = useNavigate();
-  const [testCaption, setTestCaption] = useState(
-    '🔥 Siêu ưu đãi mừng lễ lớn! Mua 1 tặng 1 toàn bộ sản phẩm công thái học chỉ trong hôm nay. Nhấn vào link bên dưới để nhận mã giảm giá 50% ngay! 👉 https://topify.vn/promo?utm_source=facebook&utm_medium=post #Topify #Sale #Ergonomic'
-  );
-  const [testLink, setTestLink] = useState('https://topify.vn/promo?utm_source=facebook&utm_medium=post');
+  const [testCaption, setTestCaption] = useState(INITIAL_CAPTION);
+  const [testLink, setTestLink] = useState(INITIAL_LINK);
   const [isAuditing, setIsAuditing] = useState(false);
 
-  // Checks state
-  const [checks, setChecks] = useState<ChecklistItem[]>([
-    {
-      id: 'check_link',
-      category: 'LINKS',
-      title: 'Kiểm tra Liên kết & UTM Builder',
-      description: 'Đảm bảo link đích không bị lỗi 404, có giao thức HTTPS và đã gắn đầy đủ UTM tracking',
-      status: 'PASS',
-      recommendation: 'Đã phát hiện UTM source=facebook và medium=post. Đường dẫn hợp lệ.',
-    },
-    {
-      id: 'check_spelling',
-      category: 'SPELLING',
-      title: 'Kiểm tra Chính tả & Mạch lạc',
-      description: 'Rà soát lỗi gõ phím tiếng Việt, khoảng trắng thừa và cấu trúc câu',
-      status: 'PASS',
-      recommendation: 'Không phát hiện lỗi chính tả nghiêm trọng. Ngắt đoạn rõ ràng.',
-    },
-    {
-      id: 'check_policy',
-      category: 'POLICY',
-      title: 'Chính sách Cộng đồng & Quảng cáo',
-      description: 'Phát hiện các từ khóa nhạy cảm, cam kết thái quá hoặc vi phạm chính sách Meta/TikTok',
-      status: 'WARN',
-      recommendation: 'Lưu ý từ "giảm giá 50%" có thể bị bóp reach nhẹ trên một số Fanpage mới nếu chạy ads.',
-    },
-    {
-      id: 'check_media',
-      category: 'MEDIA',
-      title: 'Tỷ lệ Asset & Kích thước Khung hình',
-      description: 'Đối chiếu tỷ lệ khung hình với từng nền tảng (9:16 dọc cho Reels/TikTok, 1:1 cho Feed)',
-      status: 'PASS',
-      recommendation: 'Khuyến nghị đính kèm ít nhất 1 video dọc 9:16 hoặc carousel ảnh chất lượng cao.',
-    },
-    {
-      id: 'check_cta',
-      category: 'CTA',
-      title: 'Lời kêu gọi hành động (Call To Action)',
-      description: 'Bài viết có chỉ dẫn hành vi cụ thể (Inbox, Nhấn link, Bình luận)',
-      status: 'PASS',
-      recommendation: 'Đã có CTA rõ ràng: "Nhấn vào link bên dưới để nhận mã giảm giá".',
-    },
-    {
-      id: 'check_time',
-      category: 'TIME',
-      title: 'Khung giờ vàng xuất bản (Golden Hours)',
-      description: 'Gợi ý thời điểm tệp khán giả mục tiêu online đông đảo nhất',
-      status: 'PASS',
-      recommendation: 'Khung giờ tối ưu hôm nay: 11:30 - 13:00 hoặc 19:30 - 21:30.',
-    },
-  ]);
+  // Dynamic audit result computed from content
+  const [auditResult, setAuditResult] = useState<AuditResult>(() =>
+    auditContent(INITIAL_CAPTION, INITIAL_LINK)
+  );
 
   const handleRunAudit = () => {
     setIsAuditing(true);
     setTimeout(() => {
+      const res = auditContent(testCaption, testLink);
+      setAuditResult(res);
       setIsAuditing(false);
-      toast.success('Đã hoàn tất kiểm tra chất lượng trước xuất bản! Điểm số an toàn: 95/100');
-    }, 600);
+
+      if (res.score >= 80) {
+        toast.success(
+          `Đã hoàn tất kiểm tra chất lượng trước xuất bản! Điểm số an toàn: ${res.score}/100`
+        );
+      } else if (res.score >= 50) {
+        toast.warning(
+          `Hoàn tất kiểm tra: ${res.score}/100 (${res.passCount} Đạt, ${res.warnCount} Lưu ý, ${res.failCount} Lỗi)`
+        );
+      } else {
+        toast.error(
+          `Nội dung chưa đạt chuẩn: ${res.score}/100 (${res.failCount} Lỗi, ${res.warnCount} Lưu ý). Vui lòng hoàn thiện trước khi xuất bản.`
+        );
+      }
+    }, 350);
   };
 
-  const passCount = checks.filter(c => c.status === 'PASS').length;
-  const warnCount = checks.filter(c => c.status === 'WARN').length;
-  const failCount = checks.filter(c => c.status === 'FAIL').length;
+  const handleResetSample = () => {
+    setTestCaption(INITIAL_CAPTION);
+    setTestLink(INITIAL_LINK);
+    const res = auditContent(INITIAL_CAPTION, INITIAL_LINK);
+    setAuditResult(res);
+    toast.info('Đã tải lại mẫu kiểm duyệt chuẩn.');
+  };
+
+  const wordCount = testCaption.trim() ? testCaption.trim().split(/\s+/).filter(Boolean).length : 0;
+  const charCount = testCaption.length;
+
+  const scoreBadgeColor =
+    auditResult.score >= 80
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : auditResult.score >= 50
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : 'bg-rose-50 text-rose-700 border-rose-200';
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-emerald-50/80 via-teal-50/40 to-white border border-emerald-100 shadow-2xs">
         <div>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <h3 className="font-bold text-gray-900 text-sm">
-              Bộ Tiêu Chuẩn Kiểm Tra Trước Xuất Bản (Pre-Publish Checklist - F078)
-            </h3>
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">
+                Bộ Tiêu Chuẩn Kiểm Tra Trước Xuất Bản (Pre-Publish Checklist - F078)
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Rà soát toàn diện: Link & UTM tracking, độ dài, chính sách nền tảng (Policy), tỷ lệ asset và lời kêu gọi hành động
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Rà soát toàn diện: Link & UTM tracking, chính tả tiếng Việt, chính sách nền tảng (Policy), tỷ lệ asset và CTA
-          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-emerald-200">
-            <span className="text-emerald-700 font-bold">{passCount} Đạt</span>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* Real Score Badge */}
+          <div
+            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border shadow-2xs ${scoreBadgeColor}`}
+          >
+            <span>Điểm an toàn:</span>
+            <span className="font-mono text-sm">{auditResult.score}/100</span>
+          </div>
+
+          {/* Counts */}
+          <div className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-emerald-200 shadow-2xs">
+            <span className="text-emerald-700 font-bold">{auditResult.passCount} Đạt</span>
             <span className="text-gray-300">•</span>
-            <span className="text-amber-700 font-bold">{warnCount} Lưu ý</span>
+            <span className="text-amber-700 font-bold">{auditResult.warnCount} Lưu ý</span>
             <span className="text-gray-300">•</span>
-            <span className="text-rose-700 font-bold">{failCount} Lỗi</span>
+            <span className="text-rose-700 font-bold">{auditResult.failCount} Lỗi</span>
           </div>
         </div>
       </div>
@@ -125,39 +111,56 @@ export function PrePublishChecklistTab() {
       {/* Interactive Audit Sandbox */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Content input to test */}
-        <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs space-y-3.5">
-          <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            Nội dung cần kiểm duyệt
-          </span>
+        <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              Nội dung cần kiểm duyệt
+            </span>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-600">Caption bài viết</label>
+            <button
+              type="button"
+              onClick={handleResetSample}
+              className="text-[11px] text-gray-400 hover:text-emerald-600 transition flex items-center gap-1 cursor-pointer font-medium"
+              title="Khôi phục nội dung mẫu ban đầu"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Nạp mẫu</span>
+            </button>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-600">
+              <label>Caption bài viết</label>
+              <span className="text-[11px] font-mono text-gray-400 font-normal">
+                {wordCount} từ • {charCount} ký tự
+              </span>
+            </div>
             <textarea
-              rows={6}
+              rows={7}
               value={testCaption}
               onChange={(e) => setTestCaption(e.target.value)}
-              className="w-full p-3 rounded-xl border border-gray-200 bg-white text-xs text-gray-900 focus:outline-none focus:border-emerald-500 leading-relaxed resize-none font-sans"
+              className="w-full p-3 rounded-xl border border-gray-200 bg-white text-xs text-gray-900 focus:outline-none focus:border-emerald-500 leading-relaxed resize-none font-sans shadow-2xs"
               placeholder="Dán nội dung caption vào đây để kiểm tra..."
             />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-600">Đường dẫn đính kèm (Link & UTM)</label>
             <input
-              type="url"
+              type="text"
               value={testLink}
               onChange={(e) => setTestLink(e.target.value)}
-              className="w-full p-2.5 rounded-xl border border-gray-200 bg-white text-xs font-mono text-gray-900 focus:outline-none focus:border-emerald-500"
+              className="w-full p-2.5 rounded-xl border border-gray-200 bg-white text-xs font-mono text-gray-900 focus:outline-none focus:border-emerald-500 shadow-2xs"
               placeholder="https://yourwebsite.com/landing?utm_source=facebook"
             />
           </div>
 
-          <div className="flex items-center gap-2 pt-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
             <button
               onClick={handleRunAudit}
               disabled={isAuditing}
-              className="btn-primary py-2.5 px-4 text-xs font-semibold flex-1 inline-flex items-center justify-center gap-2 cursor-pointer"
+              className="btn-primary py-2.5 px-4 text-xs font-semibold flex-1 inline-flex items-center justify-center gap-2 cursor-pointer shadow-xs whitespace-nowrap"
             >
               <ShieldCheck className="w-4 h-4" />
               <span>{isAuditing ? 'Đang phân tích...' : 'Kiểm Tra Tiêu Chuẩn Ngay'}</span>
@@ -167,10 +170,11 @@ export function PrePublishChecklistTab() {
                 navigate('/create', {
                   state: {
                     prefilledCaption: testCaption,
+                    prefilledLink: testLink,
                   },
                 });
               }}
-              className="py-2.5 px-4 text-xs font-semibold rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 transition inline-flex items-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-4 text-xs font-semibold rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 transition inline-flex items-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap"
             >
               <ArrowRight className="w-3.5 h-3.5" />
               <span>Đưa sang Đăng Bài</span>
@@ -178,12 +182,18 @@ export function PrePublishChecklistTab() {
           </div>
         </div>
 
-        {/* Right: Checklist Items */}
+        {/* Right: Dynamic Checklist Items */}
         <div className="lg:col-span-7 space-y-3">
-          {checks.map((item) => (
+          {auditResult.items.map((item) => (
             <div
               key={item.id}
-              className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs hover:border-emerald-200 transition space-y-2"
+              className={`bg-white p-4 rounded-2xl border shadow-2xs transition space-y-2 ${
+                item.status === 'FAIL'
+                  ? 'border-rose-100 hover:border-rose-200'
+                  : item.status === 'WARN'
+                  ? 'border-amber-100 hover:border-amber-200'
+                  : 'border-gray-100 hover:border-emerald-200'
+              }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -214,7 +224,15 @@ export function PrePublishChecklistTab() {
 
               <p className="text-xs text-gray-500 pl-6">{item.description}</p>
 
-              <div className="ml-6 p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 text-xs text-gray-700 font-medium">
+              <div
+                className={`ml-6 p-2.5 rounded-xl border text-xs font-medium ${
+                  item.status === 'FAIL'
+                    ? 'bg-rose-50/50 border-rose-100 text-rose-900'
+                    : item.status === 'WARN'
+                    ? 'bg-amber-50/50 border-amber-100 text-amber-900'
+                    : 'bg-gray-50/80 border-gray-100 text-gray-700'
+                }`}
+              >
                 💡 <span className="font-bold text-gray-900">Khuyến nghị Topify:</span> {item.recommendation}
               </div>
             </div>

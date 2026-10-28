@@ -23,6 +23,7 @@ import {
   List,
   Filter,
   SlidersHorizontal,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,7 +34,11 @@ import {
   PLATFORM_CONFIG, 
   safeFormatDate, 
   normalizePlatform, 
-  normalizeHashtags 
+  normalizeHashtags,
+  formatFileSize,
+  formatVideoDuration,
+  checkShortsCriteria,
+  formatFriendlyPublishError,
 } from '../lib/utils';
 
 type StatusFilter = 'ALL' | 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED';
@@ -49,11 +54,20 @@ interface PostItem {
   status: string;
   isEvergreen?: boolean;
   recycleIntervalDays?: number;
+  originalPostId?: string | null;
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
-  videoAsset?: { originalFileName?: string; storageUrl?: string } | null;
+  videoAsset?: {
+    id?: string;
+    originalFileName?: string;
+    storageUrl?: string;
+    duration?: number | null;
+    size?: number | null;
+    mimeType?: string | null;
+  } | null;
   platforms: {
+    id?: string;
     platform: string;
     status: string;
     externalPostId?: string | null;
@@ -90,6 +104,12 @@ export default function Posts() {
   const [search, setSearch] = useState('');
   const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
 
   useEffect(() => {
     fetchPosts();
@@ -206,63 +226,60 @@ export default function Posts() {
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-8 pb-12 max-w-[1400px] mx-auto px-4 sm:px-6"
+      className="space-y-8 pb-12 max-w-[1400px] mx-auto"
     >
       {/* Header */}
-      <div className="relative overflow-hidden rounded-[2.5rem] bg-white border border-black/[0.04] p-8 sm:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-        <div className="absolute top-0 right-0 -mt-24 -mr-24 w-96 h-96 bg-gradient-to-br from-[#5B3DF5]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -mb-24 -ml-24 w-64 h-64 bg-gradient-to-tr from-[#3B82F6]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white border border-black/[0.05] p-5 sm:p-6 shadow-[0_4px_20px_rgb(0,0,0,0.02)]">
+        <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-gradient-to-br from-[#5B3DF5]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 left-0 -mb-16 -ml-16 w-48 h-48 bg-gradient-to-tr from-[#3B82F6]/10 to-transparent blur-3xl rounded-full pointer-events-none" />
         
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-          <div className="space-y-4 max-w-2xl">
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900 leading-tight">
+        <div className="relative flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+          <div className="space-y-1.5 max-w-xl">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 leading-tight whitespace-nowrap">
               Quản lý <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#5B3DF5] to-[#3B82F6]">Bài Viết</span>
             </h1>
-            <p className="text-lg text-gray-500/80 font-medium leading-relaxed">
-              Tất cả video của bạn trên đa nền tảng, được tổng hợp tại một giao diện trung tâm thanh lịch.
+            <p className="text-xs sm:text-sm text-gray-500 font-medium leading-relaxed">
+              Tất cả video và bài viết của bạn trên đa nền tảng, được tổng hợp tại một giao diện trung tâm thanh lịch.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5 shrink-0 pt-1 xl:pt-0">
             <Link
               to="/calendar"
-              className="group relative inline-flex items-center justify-center gap-2.5 px-5 py-4 text-sm font-semibold text-purple-700 transition-all duration-300 bg-purple-50 border border-purple-200 rounded-2xl hover:bg-purple-100 hover:border-purple-300 shadow-sm hover:shadow hover:-translate-y-0.5"
-              title="Chuyển sang Calendar View xem trực quan theo tuần/tháng (F025)"
+              className="group inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-semibold text-purple-700 transition-all duration-200 bg-purple-50/90 hover:bg-purple-100/90 border border-purple-200/80 rounded-xl hover:shadow-xs hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
+              title="Chuyển sang Calendar View xem trực quan theo tuần/tháng"
             >
-              <div className="p-1.5 bg-purple-100 text-purple-700 rounded-lg group-hover:scale-110 transition-transform">
-                <Calendar className="w-4 h-4" />
-              </div>
-              Lịch đăng (Calendar - F025)
+              <Calendar className="w-3.5 h-3.5 text-purple-600 group-hover:scale-110 transition-transform" />
+              <span>Lịch đăng</span>
             </Link>
 
             <button
               type="button"
               onClick={() => setIsImportModalOpen(true)}
-              className="group relative inline-flex items-center justify-center gap-2.5 px-6 py-4 text-sm font-semibold text-gray-800 transition-all duration-300 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow hover:-translate-y-0.5"
+              className="group inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-semibold text-gray-700 transition-all duration-200 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl hover:shadow-xs hover:-translate-y-0.5 cursor-pointer whitespace-nowrap"
+              title="Nhập danh sách bài viết từ file Excel hoặc Google Drive"
             >
-              <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:scale-110 transition-transform">
-                <FileSpreadsheet className="w-4 h-4" />
-              </div>
-              Import từ Excel / Drive (F019)
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+              <span>Import từ Excel / Drive</span>
             </button>
 
             <Link 
               to="/create" 
-              className="group relative inline-flex items-center justify-center gap-3 px-8 py-4 text-sm font-semibold text-white transition-all duration-300 bg-gray-900 rounded-2xl hover:bg-black shadow-[0_8px_20px_rgba(0,0,0,0.12)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.2)] hover:-translate-y-0.5"
+              className="btn-primary inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer whitespace-nowrap"
+              title="Tạo bài đăng mới"
             >
-              <div className="p-1.5 bg-white/20 rounded-lg">
-                <Film className="w-4 h-4 transition-transform group-hover:scale-110" />
-              </div>
-              Tạo bài đăng mới
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tạo bài đăng mới</span>
             </Link>
           </div>
         </div>
       </div>
 
       {/* Filter & Search Bar - F026: Multi-filter by Status, Channel, Time + View Mode */}
-      <div className="space-y-4 p-5 bg-white rounded-[2rem] border border-black/[0.04] shadow-[0_4px_20px_rgb(0,0,0,0.02)] relative z-0">
+      <div className="space-y-4 p-5 bg-white rounded-[2rem] border border-black/[0.04] shadow-[0_4px_20px_rgb(0,0,0,0.02)] relative z-10">
         <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
           {/* Status Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide flex-1 min-w-0 px-1">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide scroll-smooth flex-1 min-w-0 px-1">
             {filterTabs.map((tab) => (
               <button
                 key={tab.value}
@@ -460,6 +477,30 @@ export default function Posts() {
                               {normalizeHashtags(post.hashtags)}
                             </p>
                           )}
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {post.videoAsset?.duration ? (
+                              <span className="inline-flex items-center text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200/60 font-mono">
+                                {formatVideoDuration(post.videoAsset.duration)}
+                              </span>
+                            ) : null}
+                            {post.videoAsset?.size ? (
+                              <span className="inline-flex items-center text-[10px] font-bold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200/60 font-mono">
+                                {formatFileSize(post.videoAsset.size)}
+                              </span>
+                            ) : null}
+                            {post.isEvergreen && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
+                                <Repeat className="w-2.5 h-2.5 text-emerald-600" />
+                                <span>Evergreen ({post.recycleIntervalDays || 30}d)</span>
+                              </span>
+                            )}
+                            {post.originalPostId && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60" title="Bài viết được tự động lên lịch tái đăng từ bài Evergreen gốc">
+                                <Repeat className="w-2.5 h-2.5 text-indigo-600" />
+                                <span>Tái đăng Evergreen</span>
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex flex-wrap gap-1">
@@ -492,6 +533,15 @@ export default function Posts() {
                             {getStatusIcon(post.status)}
                             {statusConfig?.label || post.status}
                           </span>
+                          {(post.status === 'FAILED' || post.status === 'PARTIAL_FAILED') && (() => {
+                            const failedPlat = (post.platforms || []).find(pl => pl.status === 'FAILED');
+                            const friendly = failedPlat ? formatFriendlyPublishError(failedPlat.errorMessage, failedPlat.platform) : null;
+                            return friendly ? (
+                              <p className="text-[10px] text-rose-600 mt-1 font-medium line-clamp-2 max-w-[170px] leading-tight" title={friendly.reason}>
+                                {friendly.reason}
+                              </p>
+                            ) : null;
+                          })()}
                         </td>
                         <td className="py-3 px-4 text-gray-600 text-[11px]">
                           {post.scheduledAt ? (
@@ -550,24 +600,21 @@ export default function Posts() {
           </div>
         ) : (
           /* Grid Card View */
-          <motion.div 
-            layout
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8"
-          >
-            <AnimatePresence>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 relative z-0">
+            <AnimatePresence mode="popLayout">
               {filteredPosts.map((post, index) => {
                 const statusConfig = STATUS_CONFIG[post.status as keyof typeof STATUS_CONFIG];
                 
                 return (
                   <motion.div 
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0, transition: { delay: index * 0.05 } }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    whileHover={{ y: -6 }}
+                    layout="position"
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1, transition: { duration: 0.25, delay: Math.min(index * 0.03, 0.3) } }}
+                    exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
+                    whileHover={{ y: -4 }}
                     key={post.id} 
                     onClick={() => setSelectedPost(post)}
-                    className="group bg-white rounded-[2rem] border border-black/[0.05] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col relative cursor-pointer"
+                    className="group bg-white rounded-[2rem] border border-black/[0.05] p-3 shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-shadow duration-300 flex flex-col relative cursor-pointer"
                   >
                     {/* Media Display */}
                     <div className="relative aspect-[4/5] bg-gray-900 rounded-[1.5rem] overflow-hidden mb-4">
@@ -628,12 +675,24 @@ export default function Posts() {
                         <h3 className="font-bold text-white text-[15px] leading-tight line-clamp-2 drop-shadow-md">
                           {post.title || 'Chưa đặt tiêu đề'}
                         </h3>
-                        <p className="text-white/80 text-[11px] font-medium mt-1 drop-shadow-md flex items-center gap-1.5">
-                          <Clock className="w-3 h-3 text-white/70" />
-                          {post.scheduledAt
-                            ? `Hẹn: ${safeFormatDate(post.scheduledAt, 'HH:mm dd/MM/yyyy')}`
-                            : safeFormatDate(post.createdAt, 'dd/MM/yyyy')}
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <p className="text-white/80 text-[11px] font-medium drop-shadow-md flex items-center gap-1.5">
+                            <Clock className="w-3 h-3 text-white/70" />
+                            {post.scheduledAt
+                              ? `Hẹn: ${safeFormatDate(post.scheduledAt, 'HH:mm dd/MM/yyyy')}`
+                              : safeFormatDate(post.createdAt, 'dd/MM/yyyy')}
+                          </p>
+                          {post.videoAsset?.duration ? (
+                            <span className="text-[10px] font-bold text-white/95 bg-black/60 backdrop-blur-xs px-1.5 py-0.5 rounded border border-white/20 font-mono">
+                              {formatVideoDuration(post.videoAsset.duration)}
+                            </span>
+                          ) : null}
+                          {post.videoAsset?.size ? (
+                            <span className="text-[10px] font-bold text-white/85 bg-black/60 backdrop-blur-xs px-1.5 py-0.5 rounded border border-white/20 font-mono">
+                              {formatFileSize(post.videoAsset.size)}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
 
@@ -667,6 +726,12 @@ export default function Posts() {
                               <span>Evergreen ({post.recycleIntervalDays || 30}d)</span>
                             </span>
                           )}
+                          {post.originalPostId && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-200" title="Bài viết được tự động lên lịch tái đăng từ bài Evergreen gốc">
+                              <Repeat className="w-3 h-3 text-indigo-700" />
+                              <span>Tái đăng Evergreen</span>
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -693,6 +758,23 @@ export default function Posts() {
                           );
                         })}
                       </div>
+
+                      {/* Failure Banner for Failed Posts */}
+                      {(post.status === 'FAILED' || post.status === 'PARTIAL_FAILED') && (() => {
+                        const failedPlat = (post.platforms || []).find(pl => pl.status === 'FAILED');
+                        const friendly = failedPlat ? formatFriendlyPublishError(failedPlat.errorMessage, failedPlat.platform) : null;
+                        return (
+                          <div className="bg-rose-50 border border-rose-200/80 rounded-xl p-2.5 text-rose-800 text-[11px] leading-tight flex items-start gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <p className="font-bold text-rose-900 truncate">Lý do thất bại:</p>
+                              <p className="line-clamp-2 text-[10px] text-rose-700 mt-0.5 font-medium leading-relaxed" title={friendly?.reason}>
+                                {friendly?.reason || 'Đăng bài không thành công'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Footer Actions */}
                       <div className="mt-auto pt-3 border-t border-black/[0.04] flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
@@ -729,7 +811,7 @@ export default function Posts() {
                 );
               })}
             </AnimatePresence>
-          </motion.div>
+          </div>
         )}
       </div>
 
@@ -767,18 +849,64 @@ export default function Posts() {
 
             {/* Video Player & Basic Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Video Player */}
-              <div className="aspect-[9/16] max-h-[460px] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
-                {selectedPost.videoAsset?.storageUrl ? (
-                  <video
-                    src={getMediaUrl(selectedPost.videoAsset.storageUrl)}
-                    controls
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <div className="text-gray-400 text-center p-4">
-                    <Film className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-xs">Không có file video</p>
+              {/* Video Player & Technical Specs */}
+              <div className="space-y-3">
+                <div className="aspect-[9/16] max-h-[400px] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+                  {selectedPost.videoAsset?.storageUrl ? (
+                    <video
+                      src={getMediaUrl(selectedPost.videoAsset.storageUrl)}
+                      controls
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-gray-400 text-center p-4">
+                      <Film className="w-8 h-8 mx-auto mb-2" />
+                      <p className="text-xs">Không có file video</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Video Technical Specs Card */}
+                {selectedPost.videoAsset && (
+                  <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-3 text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                        <Film className="w-3.5 h-3.5 text-purple-600" />
+                        Thông số Video
+                      </span>
+                      {(() => {
+                        const shortsCheck = checkShortsCriteria(selectedPost.videoAsset.duration, selectedPost.videoAsset.mimeType);
+                        return (
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            shortsCheck.isEligible ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                          }`}>
+                            {shortsCheck.badge}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-200/60 font-mono text-[11px]">
+                      <div>
+                        <span className="text-gray-400 block text-[10px] font-sans">Thời lượng:</span>
+                        <span className="font-bold text-gray-900">{formatVideoDuration(selectedPost.videoAsset.duration)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block text-[10px] font-sans">Dung lượng:</span>
+                        <span className="font-bold text-gray-900">{formatFileSize(selectedPost.videoAsset.size)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block text-[10px] font-sans">Định dạng:</span>
+                        <span className="font-bold text-gray-900 uppercase">{selectedPost.videoAsset.mimeType?.replace('video/', '') || 'MP4'}</span>
+                      </div>
+                    </div>
+                    {(() => {
+                      const shortsCheck = checkShortsCriteria(selectedPost.videoAsset.duration, selectedPost.videoAsset.mimeType);
+                      return (
+                        <p className={`text-[10px] leading-tight ${shortsCheck.isEligible ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {shortsCheck.note}
+                        </p>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -841,14 +969,15 @@ export default function Posts() {
               </div>
             </div>
 
-            {/* Platform Status */}
+            {/* Platform Status & Failure Details */}
             <div>
               <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                Trạng thái trên nền tảng
+                Trạng thái trên nền tảng & Chi tiết lỗi
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {(selectedPost.platforms || []).map(normalizePlatform).map((pl, i) => {
                   const cfg = PLATFORM_CONFIG[pl.platform as keyof typeof PLATFORM_CONFIG];
+                  const friendlyErr = pl.status === 'FAILED' ? formatFriendlyPublishError(pl.errorMessage, pl.platform) : null;
                   let linkUrl = '';
                   if (pl.externalPostId) {
                     if (pl.platform === 'YOUTUBE_SHORTS') linkUrl = `https://www.youtube.com/shorts/${pl.externalPostId}`;
@@ -856,30 +985,59 @@ export default function Posts() {
                   }
 
                   return (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
-                      <span className="text-xs font-bold" style={{ color: cfg?.color || '#333' }}>
-                        {cfg?.name || (pl.platform ? pl.platform.replace(/_/g, ' ') : 'Nền tảng')}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                          pl.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-700' :
-                          pl.status === 'FAILED' ? 'bg-rose-100 text-rose-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {pl.status === 'PUBLISHED' ? 'Đã đăng' : pl.status === 'FAILED' ? 'Thất bại' : 'Đang xử lý'}
+                    <div key={i} className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold" style={{ color: cfg?.color || '#333' }}>
+                          {cfg?.name || (pl.platform ? pl.platform.replace(/_/g, ' ') : 'Nền tảng')}
                         </span>
-                        {linkUrl && (
-                          <a
-                            href={linkUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1 rounded bg-white border border-gray-200 text-blue-600"
-                            title="Xem video trên nền tảng"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                            pl.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-700' :
+                            pl.status === 'FAILED' ? 'bg-rose-100 text-rose-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {pl.status === 'PUBLISHED' ? 'Đã đăng' : pl.status === 'FAILED' ? 'Thất bại' : 'Đang xử lý'}
+                          </span>
+                          {linkUrl && (
+                            <a
+                              href={linkUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded bg-white border border-gray-200 text-blue-600 hover:bg-gray-50"
+                              title="Xem video trên nền tảng"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
                       </div>
+
+                      {/* If FAILED, render detailed friendly error + guide */}
+                      {friendlyErr && (
+                        <div className="bg-rose-50/90 border border-rose-200 rounded-xl p-3 space-y-1.5 text-xs">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="font-bold text-rose-950">
+                                Lý do thất bại: <span className="font-medium text-rose-800">{friendlyErr.reason}</span>
+                              </p>
+                              {friendlyErr.guide && (
+                                <p className="text-[11px] text-rose-700 leading-relaxed bg-white/70 p-2 rounded-lg border border-rose-100">
+                                  💡 <strong>Hướng dẫn khắc phục:</strong> {friendlyErr.guide}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {pl.errorMessage && (
+                            <details className="mt-1 text-[10px] text-gray-500">
+                              <summary className="cursor-pointer hover:text-gray-700 font-mono">Chi tiết kỹ thuật (Raw Log)</summary>
+                              <pre className="mt-1 p-2 bg-gray-900 text-gray-100 rounded-md font-mono text-[9px] overflow-x-auto whitespace-pre-wrap max-h-32">
+                                {pl.errorMessage}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -4,6 +4,20 @@ import prisma from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+};
+
+// OPTIONS /api/content/duplicate-check
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 /**
  * Tokenize and generate N-grams (unigrams + bigrams + trigrams)
  */
@@ -53,9 +67,29 @@ function calculateJaccardSimilarity(setA: Set<string>, setB: Set<string>): numbe
 // POST /api/content/duplicate-check - Check for duplicate content (text & media)
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    let session = await auth();
+    let userId = session?.user?.id;
+    let workspaceId = (session?.user as any)?.workspaceId;
+
+    // Fallback cho development nếu không có session
+    if (!userId && process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      const mockUser = await prisma.user?.findFirst?.().catch(() => null);
+      if (mockUser) {
+        userId = mockUser.id;
+        workspaceId = mockUser.workspaceId;
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
+    }
+
+    if (!workspaceId && userId) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { workspaceId: true },
+      });
+      workspaceId = dbUser?.workspaceId || null;
     }
 
     const body = await req.json();
@@ -81,15 +115,14 @@ export async function POST(req: NextRequest) {
         isMediaDuplicate: false,
         matches: [],
         checkedCount: 0,
-      });
+      }, { headers: corsHeaders });
     }
 
-    const workspaceId = (session.user as any).workspaceId;
     const where: any = {};
     if (workspaceId) {
       where.workspaceId = workspaceId;
-    } else {
-      where.createdById = session.user.id;
+    } else if (userId) {
+      where.createdById = userId;
     }
 
     // Exclude current post if editing
@@ -211,9 +244,9 @@ export async function POST(req: NextRequest) {
       isMediaDuplicate,
       matches: topMatches,
       checkedCount: candidatePosts.length,
-    });
+    }, { headers: corsHeaders });
   } catch (error: any) {
     console.error('❌ [DUPLICATE-CHECK-API] Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders });
   }
 }

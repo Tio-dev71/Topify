@@ -92,9 +92,11 @@ if (!gotTheLock) {
 }
 
 function createWindow() {
+  const iconPath = path.join(__dirname, 'build', 'icon.png');
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -215,6 +217,17 @@ function createWindow() {
 app.whenReady().then(() => {
   // Chuẩn hóa User-Agent toàn app sang Chrome để tương thích hoàn toàn với Google APIs
   app.userAgentFallback = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+  if (process.platform === 'darwin' && app.dock) {
+    const dockIcon = path.join(__dirname, 'build', 'icon.png');
+    if (fs.existsSync(dockIcon)) {
+      try {
+        app.dock.setIcon(dockIcon);
+      } catch (e) {
+        console.warn('[Electron Dock Icon] Failed to set dock icon:', e);
+      }
+    }
+  }
 
   createWindow();
 

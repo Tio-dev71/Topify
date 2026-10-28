@@ -72,6 +72,37 @@ describe('AI Content Score (F084)', () => {
       expect(result.suggestedCaption).toContain("BTS (방탄소년단) 'Life Goes On'");
     });
 
+    it('gives 0 for all criteria when caption is abc and no platform is selected (User Bug Reproduction)', async () => {
+      const result = await analyzeContentScore({
+        caption: 'abc',
+        platform: '',
+      });
+
+      expect(result.overallScore).toBe(0);
+      expect(result.hookScore).toBe(0);
+      expect(result.ctaScore).toBe(0);
+      expect(result.platformFitScore).toBe(0);
+      expect(result.brandVoiceScore).toBeUndefined();
+      expect(result.strengths).toEqual([]);
+      expect(result.improvements.some(imp => imp.includes('nền tảng'))).toBe(true);
+      expect(result.improvements.some(imp => imp.includes('vô nghĩa') || imp.includes('sơ sài'))).toBe(true);
+      expect(result.improvements.some(imp => imp.includes('CTA') || imp.includes('kêu gọi'))).toBe(true);
+      expect(result.improvements.some(imp => imp.includes('Hook') || imp.includes('mở đầu'))).toBe(true);
+    });
+
+    it('gives 0 hook, 0 cta, and 0 platform score for meaningful text without hook/cta/platform', async () => {
+      const result = await analyzeContentScore({
+        caption: 'Hôm nay trời nắng và gió thổi nhẹ nhàng qua từng con phố.',
+        platform: '',
+      });
+
+      expect(result.hookScore).toBe(0);
+      expect(result.ctaScore).toBe(0);
+      expect(result.platformFitScore).toBe(0);
+      expect(result.overallScore).toBe(0);
+      expect(result.strengths.filter(s => s.includes('nền tảng') || s.includes('CTA'))).toEqual([]);
+    });
+
     it('sets platformFitScore to 0 when platform is unselected or ALL', async () => {
       const result = await analyzeContentScore({
         caption: 'Bí quyết nấu ăn ngon cho cả nhà, lưu lại ngay nhé!',
@@ -79,6 +110,8 @@ describe('AI Content Score (F084)', () => {
       });
 
       expect(result.platformFitScore).toBe(0);
+      expect(result.hookScore).toBeGreaterThan(0);
+      expect(result.ctaScore).toBeGreaterThan(0);
       expect(result.improvements.some(imp => imp.includes('nền tảng xuất bản'))).toBe(true);
       expect(result.platformFitAnalysis).toContain('Chưa chọn nền tảng');
     });

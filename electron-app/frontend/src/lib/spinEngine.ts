@@ -1,3 +1,5 @@
+import { sanitizeUtf8, safeSlice } from './utils';
+
 export interface SpinVariantItem {
   id: string;
   index: number;
@@ -144,16 +146,20 @@ export function generateSpinVariantsClient(
 ): SpinGenerationResult {
   const isSpintax = /\{[^{}]+\|[^{}]+\}/.test(originalCaption);
 
+  // Nếu nội dung chứa Spintax, ưu tiên bung theo cấu trúc Spintax
   if (isSpintax) {
     const rawVariants = expandSpintaxMultipleClient(originalCaption, count);
     const variants: SpinVariantItem[] = rawVariants.map((cap, i) => {
       const uniqueness = calculateUniquenessScore(originalCaption, cap);
-      const safeCap = typeof cap.toWellFormed === 'function' ? cap.toWellFormed() : cap;
-      const hookText = Array.from(safeCap).slice(0, 45).join('') + '...';
+      const safeCap = sanitizeUtf8(cap);
+      const hookText = safeSlice(safeCap, 45) + '...';
+      const safeVariantTitle = sanitizeUtf8(
+        originalTitle ? `${originalTitle} (Biến thể #${i + 1})` : `Biến thể #${i + 1}`
+      );
       return {
         id: `spin-var-${Date.now()}-${i + 1}`,
         index: i + 1,
-        title: originalTitle ? `${originalTitle} (Biến thể #${i + 1})` : `Biến thể #${i + 1}`,
+        title: safeVariantTitle,
         caption: safeCap,
         uniquenessScore: uniqueness,
         hook: hookText,
@@ -167,7 +173,7 @@ export function generateSpinVariantsClient(
     );
 
     return {
-      originalCaption,
+      originalCaption: sanitizeUtf8(originalCaption),
       variants,
       averageUniqueness: avgUnique,
       isSpintax: true,
@@ -176,8 +182,8 @@ export function generateSpinVariantsClient(
   }
 
   // Sử dụng cờ /u để regex xử lý đúng ký tự Unicode 32-bit (surrogate pairs) và không cắt đứt emoji
-  const cleanBase = originalCaption.replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/u, '').trim();
-  const safeBase = typeof cleanBase.toWellFormed === 'function' ? cleanBase.toWellFormed() : cleanBase;
+  const cleanBase = sanitizeUtf8(originalCaption).replace(/^[🔥💡✨🚀📌⚡🎯💎🌟🏆]\s*/u, '').trim();
+  const safeBase = sanitizeUtf8(cleanBase);
   const variants: SpinVariantItem[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -195,16 +201,19 @@ export function generateSpinVariantsClient(
 
     const builder = TEMPLATE_BUILDERS[i % TEMPLATE_BUILDERS.length];
     const rawCaption = builder(hook, transformedBody, cta);
-    const finalCaption = typeof rawCaption.toWellFormed === 'function' ? rawCaption.toWellFormed() : rawCaption;
+    const finalCaption = sanitizeUtf8(rawCaption);
 
     const uniqueness = calculateUniquenessScore(originalCaption, finalCaption);
+    const safeVariantTitle = sanitizeUtf8(
+      originalTitle
+        ? `${originalTitle} - Bản ${String.fromCharCode(65 + i)}`
+        : `Biến thể caption #${i + 1}`
+    );
 
     variants.push({
       id: `spin-var-${Date.now()}-${i + 1}`,
       index: i + 1,
-      title: originalTitle
-        ? `${originalTitle} - Bản ${String.fromCharCode(65 + i)}`
-        : `Biến thể caption #${i + 1}`,
+      title: safeVariantTitle,
       caption: finalCaption,
       uniquenessScore: Math.max(uniqueness, 68 + ((i * 7) % 25)),
       hook: hook.trim(),

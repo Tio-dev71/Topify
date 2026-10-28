@@ -4,6 +4,9 @@ import {
   parseExcelOrCsvBuffer,
   generateSampleExcelTemplate,
   parseScheduleDateTime,
+  parsePlatformList,
+  isPlatformProviderConnected,
+  formatFriendlyImportError,
 } from '@/lib/content-studio/import-engine';
 
 describe('Content Studio Bulk Import Engine (F019)', () => {
@@ -191,7 +194,7 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     for (const row of result.rows) {
       expect(row.isValid).toBe(true);
       expect(row.warnings.length).toBe(0);
-      expect(row.scheduledAt).toBeNull();
+      expect(row.scheduledAt).toBe('NOW');
     }
   });
 
@@ -225,7 +228,42 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     expect(result.invalidRows).toBe(0);
 
     expect(result.rows[0].warnings.length).toBe(0);
+    expect(result.rows[0].scheduledAt).toBe('NOW');
     expect(result.rows[1].warnings.length).toBe(0);
+    expect(result.rows[1].scheduledAt).toBe('NOW');
+  });
+
+  it('identifies explicit "Bản thảo" or "Draft" in schedule time as DRAFT with 0 warnings', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Bài viết lưu nháp',
+        'Nội dung': 'Nội dung bản thảo',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': 'Bản thảo',
+      },
+      {
+        'Tiêu đề': 'Draft article',
+        'Nội dung': 'Draft content',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': 'draft',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(2);
+    expect(result.warningRows).toBe(0);
+    expect(result.invalidRows).toBe(0);
+
+    expect(result.rows[0].scheduledAt).toBe('DRAFT');
+    expect(result.rows[1].scheduledAt).toBe('DRAFT');
   });
 
   it('marks row invalid immediately when schedule time has an invalid format or is in the past', () => {
@@ -426,17 +464,283 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
     expect(d1.getHours()).toBe(11);
     expect(d1.getMinutes()).toBe(59);
 
-    // Record 2: Empty time -> Valid, 0 warnings, scheduledAt null (Publish Now)
+    // Record 2: Empty time -> Valid, 0 warnings, scheduledAt 'NOW' (Publish Now)
     expect(result.rows[1].isValid).toBe(true);
     expect(result.rows[1].warnings).toEqual([]);
     expect(result.rows[1].errors).toEqual([]);
-    expect(result.rows[1].scheduledAt).toBeNull();
+    expect(result.rows[1].scheduledAt).toBe('NOW');
 
-    // Record 3: Empty time -> Valid, 0 warnings, scheduledAt null (Publish Now)
+    // Record 3: Empty time -> Valid, 0 warnings, scheduledAt 'NOW' (Publish Now)
     expect(result.rows[2].isValid).toBe(true);
     expect(result.rows[2].warnings).toEqual([]);
     expect(result.rows[2].errors).toEqual([]);
-    expect(result.rows[2].scheduledAt).toBeNull();
+    expect(result.rows[2].scheduledAt).toBe('NOW');
+  });
+
+  it('correctly parses platform list with "TikTok / YouTube Short" delimiter formats', () => {
+    const list1 = parsePlatformList('TikTok / YouTube Short');
+    expect(list1).toContain('TIKTOK_VIDEO');
+    expect(list1).toContain('YOUTUBE_SHORTS');
+
+    const list2 = parsePlatformList('TIKTOK | FACEBOOK');
+    expect(list2).toContain('TIKTOK_VIDEO');
+    expect(list2).toContain('FACEBOOK_REELS');
+
+    const list3 = parsePlatformList('Instagram; Zalo');
+    expect(list3).toContain('INSTAGRAM_REELS');
+    expect(list3).toContain('ZALO_POST');
+  });
+
+  it('marks record invalid when "TikTok / YouTube Short" is uploaded and account only has YouTube connected', () => {
+    const rows = [
+      {
+        'Tiêu đề bài viết': 'Top 3 bí quyết xây kênh TikTok',
+        'Nội dung (Caption)': 'Kịch bản chi tiết 3 bước giữ chân người xem...',
+        'Nền tảng': 'TikTok / YouTube Short',
+        'Thời gian': '2026-10-28 19:30',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // Only YouTube connected
+    const connectedProviders = new Set(['YOUTUBE', 'GOOGLE']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.totalRows).toBe(1);
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(1);
+
+    const row = result.rows[0];
+    expect(row.isValid).toBe(false);
+    expect(row.unconnectedPlatforms).toContain('TIKTOK_VIDEO');
+    expect(row.errors.some((e) => e.includes('TikTok') && e.includes('chưa được kết nối'))).toBe(true);
+  });
+
+  it('evaluates isPlatformProviderConnected accurately across short and long platform keys', () => {
+    const connectedSet = new Set(['YOUTUBE', 'GOOGLE']);
+
+    // YouTube connected
+    expect(isPlatformProviderConnected('YOUTUBE_SHORTS', connectedSet)).toBe(true);
+    expect(isPlatformProviderConnected('YOUTUBE', connectedSet)).toBe(true);
+
+    // TikTok not connected
+    expect(isPlatformProviderConnected('TIKTOK_VIDEO', connectedSet)).toBe(false);
+    expect(isPlatformProviderConnected('TIKTOK', connectedSet)).toBe(false);
+
+    // Meta not connected
+    expect(isPlatformProviderConnected('FACEBOOK_REELS', connectedSet)).toBe(false);
+    expect(isPlatformProviderConnected('FACEBOOK', connectedSet)).toBe(false);
+    expect(isPlatformProviderConnected('INSTAGRAM_REELS', connectedSet)).toBe(false);
+    expect(isPlatformProviderConnected('INSTAGRAM', connectedSet)).toBe(false);
+
+    // If empty connected set, all platforms return false
+    const emptySet = new Set<string>();
+    expect(isPlatformProviderConnected('TIKTOK_VIDEO', emptySet)).toBe(false);
+    expect(isPlatformProviderConnected('YOUTUBE_SHORTS', emptySet)).toBe(false);
+  });
+
+  it('normalizes alternative column aliases such as "Lịch đăng", "Ngày giờ", "Chủ đề", "Kênh đăng bài"', () => {
+    const rows = [
+      {
+        'Chủ đề': 'Tiêu đề từ cột Chủ đề',
+        'Nội dung caption': 'Nội dung bài viết',
+        'Kênh đăng bài': 'FACEBOOK',
+        'Lịch đăng': '2026-11-20 15:30',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(1);
+    expect(result.invalidRows).toBe(0);
+
+    const first = result.rows[0];
+    expect(first.title).toBe('Tiêu đề từ cột Chủ đề');
+    expect(first.platforms).toContain('FACEBOOK_REELS');
+    expect(first.scheduledAt).toContain('2026-11-20');
+  });
+
+  it('flags invalid schedule in "Lịch đăng" and preserves raw invalid string in scheduledAt', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Bài viết lỗi lịch đăng',
+        'Nội dung': 'Nội dung chi tiết',
+        'Nền tảng': 'FACEBOOK',
+        'Lịch đăng': 'sai-dinh-dang-thoi-gian',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(1);
+
+    const row = result.rows[0];
+    expect(row.isValid).toBe(false);
+    expect(row.scheduledAt).toBe('sai-dinh-dang-thoi-gian');
+    expect(row.errors.some((e) => e.includes('Thời gian sai định dạng'))).toBe(true);
+  });
+
+  it('flags all 3 records as Không hợp lệ (Hợp lệ = 0, Không hợp lệ = 3) for missing required field, invalid date, and unconnected platform', () => {
+    const rows = [
+      {
+        'Tiêu đề': '', // Empty title
+        'Nội dung': 'Caption 1',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+      {
+        'Tiêu đề': 'Bài viết 2',
+        'Nội dung': 'Caption 2',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '2026/13/45 25:00', // Invalid date format
+      },
+      {
+        'Tiêu đề': 'Bài viết 3',
+        'Nội dung': 'Caption 3',
+        'Nền tảng': 'TIKTOK', // Unconnected platform (account only has Facebook)
+        'Thời gian': '',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.totalRows).toBe(3);
+    expect(result.validRows).toBe(0);
+    expect(result.invalidRows).toBe(3);
+    expect(result.warningRows).toBe(0);
+
+    // Row 1: Missing title error
+    expect(result.rows[0].isValid).toBe(false);
+    expect(result.rows[0].errors.some((e) => e.includes('Thiếu tiêu đề bài viết'))).toBe(true);
+
+    // Row 2: Invalid date format error & raw string preserved
+    expect(result.rows[1].isValid).toBe(false);
+    expect(result.rows[1].scheduledAt).toBe('2026/13/45 25:00');
+    expect(result.rows[1].errors.some((e) => e.includes('Thời gian sai định dạng'))).toBe(true);
+
+    // Row 3: Unconnected platform error
+    expect(result.rows[2].isValid).toBe(false);
+    expect(result.rows[2].unconnectedPlatforms).toContain('TIKTOK_VIDEO');
+    expect(result.rows[2].errors.some((e) => e.includes('chưa được kết nối'))).toBe(true);
+  });
+
+  it('ensures Facebook records have exactly 0 warnings when no warning situation exists, even if caption or time is empty', () => {
+    const rows = [
+      {
+        'Tiêu đề': 'Bài 1 có lịch hẹn',
+        'Nội dung': 'Nội dung bài 1',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '11:59 11/11',
+      },
+      {
+        'Tiêu đề': 'Bài 2 để trống thời gian',
+        'Nội dung': 'Nội dung bài 2',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+      {
+        'Tiêu đề': 'Bài 3 để trống caption và thời gian',
+        'Nội dung': '',
+        'Nền tảng': 'FACEBOOK',
+        'Thời gian': '',
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    const connectedProviders = new Set(['FACEBOOK', 'META']);
+    const result = parseExcelOrCsvBuffer(buffer, 'EXCEL', connectedProviders);
+
+    expect(result.success).toBe(true);
+    expect(result.totalRows).toBe(3);
+    expect(result.validRows).toBe(3);
+    expect(result.warningRows).toBe(0);
+    expect(result.invalidRows).toBe(0);
+
+    for (const row of result.rows) {
+      expect(row.isValid).toBe(true);
+      expect(row.warnings).toEqual([]);
+      expect(row.errors).toEqual([]);
+    }
+  });
+
+  describe('formatFriendlyImportError (Sanitizing internal technical queries/IDs)', () => {
+    it('sanitizes internal Prisma queries and SocialAccount status errors', () => {
+      const rawOrmError =
+        'Invalid `prisma.socialAccount.findMany()` invocation: { where: { OR: [ { workspaceId: "cmubcm2km000246z8xx84kwpd" }, { userId: "cmu11u2ax000011jtoqxtg6dv" } ], status: { in: [ "CONNECTED", "active" ] } } } Invalid value for argument `in`. Expected SocialAccountStatus.';
+
+      const formatted = formatFriendlyImportError(rawOrmError);
+      expect(formatted).not.toContain('prisma');
+      expect(formatted).not.toContain('findMany');
+      expect(formatted).not.toContain('cmubcm2km000246z8xx84kwpd');
+      expect(formatted).not.toContain('cmu11u2ax000011jtoqxtg6dv');
+      expect(formatted).not.toContain('SocialAccountStatus');
+      expect(formatted).toBe('Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu. Vui lòng thử lại sau giây lát hoặc liên hệ hỗ trợ.');
+    });
+
+    it('sanitizes Google Sheets permission errors', () => {
+      const googleError = 'Google Sheets returned 403 Forbidden: private document';
+      const formatted = formatFriendlyImportError(googleError);
+      expect(formatted).toContain('Không có quyền truy cập Google Sheets');
+      expect(formatted).toContain('Viewer');
+    });
+
+    it('sanitizes corrupted file errors', () => {
+      const corruptError = 'Zip end of central directory signature not found';
+      const formatted = formatFriendlyImportError(corruptError);
+      expect(formatted).toContain('Tệp dữ liệu bị hỏng, bị khóa mật khẩu');
+    });
+
+    it('returns clear guidance when file has unrecognized columns', () => {
+      const rows = [
+        {
+          'Cột A': 'Dữ liệu 1',
+          'Cột B': 'Dữ liệu 2',
+          'Cột C': 'Dữ liệu 3',
+        },
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+      const result = parseExcelOrCsvBuffer(buffer, 'EXCEL');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Tệp bảng tính không đúng mẫu quy định');
+      expect(result.error).toContain('Không tìm thấy các cột bắt buộc');
+    });
   });
 });
+
 

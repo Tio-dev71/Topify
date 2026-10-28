@@ -73,27 +73,45 @@ export async function POST(req: NextRequest) {
             continue;
           }
         }
-        const post = await prisma.post.create({
-          data: {
-            title: sanitizeUtf8(p.title) || `Bài viết ${i + 1}`,
-            caption: sanitizeUtf8Nullable(p.caption),
-            firstComment: sanitizeUtf8Nullable(p.firstComment),
-            hashtags: sanitizeUtf8Nullable(p.hashtags),
-            postType: p.postType || 'FEED',
-            videoAssetId: p.videoAssetId || null,
-            createdById: session.user.id,
-            workspaceId: (session.user as any).workspaceId,
-            status: p.scheduledAt ? 'SCHEDULED' : 'DRAFT',
-            scheduledAt: p.scheduledAt ? new Date(p.scheduledAt) : null,
-            platforms: p.platforms ? {
-              create: p.platforms.map((platform: string) => ({
-                platform,
-                status: 'PENDING',
-              })),
-            } : undefined,
-          },
-          include: { platforms: true },
-        });
+        const postData: any = {
+          title: sanitizeUtf8(p.title) || `Bài viết ${i + 1}`,
+          caption: sanitizeUtf8Nullable(p.caption),
+          firstComment: sanitizeUtf8Nullable(p.firstComment),
+          hashtags: sanitizeUtf8Nullable(p.hashtags),
+          postType: p.postType || 'FEED',
+          videoAssetId: p.videoAssetId || null,
+          createdById: session.user.id,
+          workspaceId: (session.user as any).workspaceId,
+          status: p.scheduledAt ? 'SCHEDULED' : 'DRAFT',
+          scheduledAt: p.scheduledAt ? new Date(p.scheduledAt) : null,
+          platforms: p.platforms ? {
+            create: p.platforms.map((platform: string) => ({
+              platform,
+              status: 'PENDING',
+            })),
+          } : undefined,
+        };
+
+        let post;
+        try {
+          post = await prisma.post.create({
+            data: postData,
+            include: { platforms: true },
+          });
+        } catch (createErr: any) {
+          if (createErr?.message && (createErr.message.includes('surrogate') || createErr.message.includes('hex escape'))) {
+            postData.title = sanitizeUtf8(postData.title).replace(/[\uD800-\uDFFF]/g, '') || `Bài viết ${i + 1}`;
+            postData.caption = postData.caption ? sanitizeUtf8(postData.caption).replace(/[\uD800-\uDFFF]/g, '') : null;
+            postData.firstComment = postData.firstComment ? sanitizeUtf8(postData.firstComment).replace(/[\uD800-\uDFFF]/g, '') : null;
+            postData.hashtags = postData.hashtags ? sanitizeUtf8(postData.hashtags).replace(/[\uD800-\uDFFF]/g, '') : null;
+            post = await prisma.post.create({
+              data: postData,
+              include: { platforms: true },
+            });
+          } else {
+            throw createErr;
+          }
+        }
         results.push(post);
       } catch (err: any) {
         errors.push({ index: i, error: err.message });
