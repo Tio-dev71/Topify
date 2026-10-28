@@ -11,6 +11,21 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-28] (v1.3.60) — Giao Diện Sidebar: Loại Bỏ Logo Tia Sét Trùng Lặp Phía Ngoài (Bên Trái), Đồng Bộ Nhận Diện Thương Hiệu Topify Chuẩn
+
+### Thanh Điều Hướng Sidebar (Sidebar Layout) [Electron Desktop App & Web Frontend]:
+- **[Loại Bỏ Logo Trùng Lặp Phía Ngoài Header Sidebar]:**
+  - **Vấn đề ghi nhận từ Người dùng:**
+    - Người dùng phản hồi: *"bỏ cái logo bên ngoài đi ( bên trái ý )"*, kèm ảnh chụp header thanh Sidebar đang hiển thị cùng lúc 2 logo: Một logo hình tròn tia sét màu tím (`topify-app-mark-1024x1024.png`) ở ngoài cùng bên trái, và logo chữ `Topify` chính thức màu xanh (`Topify-logo.png`) ngay cạnh bên.
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Tối giản Header Sidebar ([Sidebar.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/layout/Sidebar.tsx)):**
+       - Gỡ bỏ thẻ `<img>` của logo tia sét tím `topify-app-mark-1024x1024.png`.
+       - Giữ lại duy nhất logo chính thức `Topify-logo.png`.
+       - Khi mở rộng (`collapsed = false`), hiển thị đầy đủ biểu tượng và chữ thương hiệu Topify.
+       - Khi thu nhỏ (`collapsed = true`), vùng chứa giới hạn chiều rộng `w-10 overflow-hidden` kết hợp `object-left` sẽ hiển thị gọn gàng biểu tượng ngôi sao Topify đồng bộ với phiên bản Web Dashboard.
+    2. **Đồng bộ phiên bản:**
+       - Nâng phiên bản toàn hệ thống lên **`v1.3.60`**.
+
 ## 🚀 [2026-10-28] (v1.3.59) — Phân Hệ M4: Customer & Lead CRM (F093 - F102): Rà Soát, Chuẩn Hóa Mã Tính Năng, Định Vị Màn Hình & Tái Cấu Trúc Menu/Header Theo Đúng Mô Tả Nghiệp Vụ (PRD)
 
 ### Phân hệ Customer & Lead CRM (M4. CRM) [Electron App & Web Frontend]:

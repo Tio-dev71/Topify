@@ -186,19 +186,12 @@ export function Sidebar() {
       >
         {/* Header */}
         <div className={`flex items-center h-16 px-4 border-b border-[var(--color-border)] ${collapsed ? 'justify-center' : 'justify-between'}`}>
-          <Link to="/dashboard" className={`flex items-center gap-2.5 min-w-0 overflow-hidden transition-all ${collapsed ? 'justify-center w-10' : 'w-[170px]'}`}>
+          <Link to="/dashboard" className={`flex items-center min-w-0 overflow-hidden transition-all ${collapsed ? 'justify-center w-10' : 'w-[160px]'}`}>
             <img 
-              src="./topify-app-mark-1024x1024.png" 
-              alt="Topify" 
-              className="w-8 h-8 rounded-lg shadow-2xs object-cover flex-shrink-0" 
+              src="./Topify-logo.png" 
+              alt="Topify Logo" 
+              className={`h-9 w-auto object-contain object-left ${collapsed ? 'max-w-none' : ''}`} 
             />
-            {!collapsed && (
-              <img 
-                src="./Topify-logo.png" 
-                alt="Topify Logo" 
-                className="h-7 w-auto object-contain object-left" 
-              />
-            )}
           </Link>
           
           {/* Desktop collapse */}
@@ -343,7 +336,7 @@ export function Sidebar() {
             <div className="mt-2.5 pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[11px] text-gray-600 px-1">
               <span>Topify Desktop</span>
               <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-[#5B3DF5] font-semibold border border-[#5B3DF5]/20">
-                v1.3.59
+                v1.3.60
               </span>
             </div>
           )}
