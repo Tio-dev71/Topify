@@ -11,6 +11,66 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-10-28] (v1.3.61) — Làm Sạch Toàn Diện Dữ Liệu Ảo (Clean Slate / Zero State) Trên Toàn Hệ Thống (CSDL & Frontend/Backend Fallback) Sẵn Sàng Cho Tester Kiểm Thử Thực Tế
+
+### Tổng Quan Nhiệm Vụ (Task Overview):
+- **Yêu cầu từ Người dùng:** *"với nhiều trường hiện tại đang là demo data ảo, tôi cần reset bỏ toàn bộ data ảo để tester test thực tế"*.
+- **Mục tiêu:** Dọn sạch toàn bộ dữ liệu mẫu / data ảo tự sinh trong CSDL và loại bỏ hoàn toàn các mảng mock/fallback data tĩnh ở cả Frontend và Backend API, đưa hệ thống về trạng thái "trắng" chuẩn (Clean Slate), đồng thời bảo toàn an toàn 100% tài khoản Admin, phân quyền, Workspace và Pipeline bán hàng chuẩn.
+
+### Chi Tiết Triển Khai Kỹ Thuật:
+
+1. **Dọn dẹp CSDL PostgreSQL ([scripts/clean-test-data.ts](file:///Users/tiodev/Desktop/Topify.nosync/scripts/clean-test-data.ts)):**
+   - **Bảo toàn nguyên vẹn (Không xóa):**
+     - Tài khoản Admin (`User`, `Account`, `Session`, `AllowedEmail`, `SystemSetting`).
+     - Workspace mặc định (`Workspace` id `default-workspace`).
+     - Pipeline chuẩn mặc định (`Pipeline` & 4 `PipelineStage`: Tiếp cận, Tư vấn, Đàm phán, Thành công) để CRM Kanban sẵn sàng nhận deal mới.
+   - **Xóa trắng các bảng dữ liệu thử nghiệm:**
+     - `Deal` (Cơ hội CRM): 0 bản ghi.
+     - `Customer` (Khách hàng CRM) & `CrmActivity`: 0 bản ghi.
+     - `KeywordTracker` (Từ khóa theo dõi) & `MentionAlert`: 0 bản ghi.
+     - `CompetitorPage` (Fanpage đối thủ) & `CompetitorPost`: 0 bản ghi.
+     - `Conversation` (Hội thoại Inbox) & `Message`, `ConversationNote`: 0 bản ghi.
+     - `Post` (Bài viết Studio/Lịch đăng) & `PostPlatform`, `PostVersion`, `PublishLog`, `MediaAsset`: 0 bản ghi.
+     - `Task` (Công việc dự án) & `TaskComment`: 0 bản ghi.
+     - `Campaign` (Chiến dịch đa kênh): 0 bản ghi.
+     - `BuffOrder` (Đơn buff tương tác): 0 bản ghi.
+     - `AutomationLog` & `AutomationTask`: 0 bản ghi.
+
+2. **Gỡ Bỏ Mock Data & Xử Lý Giao Diện Trắng (Empty States) Tại Frontend ([electron-app/frontend/](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/)):**
+   - **Cơ Hội Bán Hàng CRM ([Deals.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Deals.tsx)):**
+     - Loại bỏ hoàn toàn mảng fallback `[d_1, d_2, d_3]` ('Chuỗi Spa Mai Anh', 'Bella Boutique', 'Gym Fitness X') khi API trả về rỗng. Khi chưa có deal, bảng Kanban hiển thị rỗng với các cột trạng thái sẵn sàng để Tester kéo thả và tạo deal mới.
+   - **Theo Dõi Từ Khóa ([Keywords.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Keywords.tsx)):**
+     - Gỡ bỏ mảng fallback 3 từ khóa mẫu `[kw_1, kw_2, kw_3]` trong khối `catch`. Hiển thị Empty State chuẩn với nút `+ Thêm từ khóa theo dõi`.
+     - Nâng cấp modal "Phân tích" gọi API thời gian thực `/api/keywords/detail`.
+   - **Quản Lý Công Việc ([Tasks.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Tasks.tsx)):**
+     - Đặt `INITIAL_TASKS = []` và `INITIAL_COMMENTS = {}`, gỡ bỏ hoàn toàn 4 task mẫu (`task_1` - `task_4`) và các comment mẫu.
+     - Tích hợp `useEffect` gọi `api.get('/tasks')` đồng bộ từ CSDL. Hiển thị placeholder `Chưa có công việc` khi cột rỗng.
+   - **Quản Lý Chiến Dịch ([Campaigns.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Campaigns.tsx)):**
+     - Đặt `INITIAL_CAMPAIGNS = []` và `INITIAL_ASSETS = []`, gỡ bỏ hoàn toàn 3 chiến dịch mẫu (`camp_1` - `camp_3`) và 5 tài nguyên sáng tạo mẫu.
+     - Tích hợp `useEffect` gọi `api.get('/campaigns')` đồng bộ từ CSDL.
+     - Bổ sung Empty State trực quan cho Tab "Chiến dịch", Tab "Tiến độ", Tab "Tài nguyên" và Tab "Báo cáo tài chính" khi chưa có chiến dịch nào, tránh lỗi runtime do truy cập thuộc tính trên đối tượng rỗng.
+
+3. **Gỡ Bỏ Mock Data Tại Backend API ([app/api/](file:///Users/tiodev/Desktop/Topify.nosync/app/api/)):**
+   - **Tasks Route ([app/api/tasks/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/tasks/route.ts)):**
+     - Đổi `memoryTasks` từ mảng 4 task mẫu thành `[]`.
+   - **Campaigns Route ([app/api/campaigns/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/campaigns/route.ts)):**
+     - Đổi `memoryCampaigns` từ `[...SAMPLE_CAMPAIGNS]` thành `[]`.
+   - **Intelligence Alerts Route ([app/api/intelligence/alerts/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/intelligence/alerts/route.ts)):**
+     - Đổi `alertRules` và `triggeredAlerts` thành `[]`.
+   - **Intelligence Trending Route ([app/api/intelligence/trending/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/intelligence/trending/route.ts)):**
+     - Chuyển sang truy vấn bài viết viral thực tế từ bảng `competitorPost` trong CSDL, trả về mảng rỗng nếu chưa có bài viết nào được quét.
+   - **Analytics Engine ([lib/analytics/engine.ts](file:///Users/tiodev/Desktop/Topify.nosync/lib/analytics/engine.ts)):**
+     - Trong hàm `generatePeriodComparison`, bổ sung cờ `isSeed`. Khi `isSeed = false` và không có bài viết trong CSDL, các chỉ số lượt xem (views), độ phủ (reach), lượt thích, doanh thu, lợi nhuận đều phản ánh chính xác giá trị `0` thay vì tự sinh số liệu ảo 154,200 views.
+   - **Analytics Routes ([app/api/analytics/](file:///Users/tiodev/Desktop/Topify.nosync/app/api/analytics/)):**
+     - `content-scores`: Trả về `[]` khi CSDL rỗng và `seed !== 'true'`.
+     - `campaign-roi`: Trả về `[]` khi CSDL rỗng và `seed !== 'true'`.
+     - `funnel`: Tính toán từ số lượng thực tế trong CSDL (Customer, Deal, Won Deal), trả về 0 khi CSDL rỗng thay vì số liệu ảo 128,500 interactions.
+
+4. **Kiểm Tra & Xác Minh (Verification):**
+   - Chạy tập lệnh kiểm tra số lượng bản ghi ([verify-db-counts.ts](file:///Users/tiodev/Desktop/Topify.nosync/scripts/verify-db-counts.ts)): Toàn bộ bảng Deals, Customers, Competitors, Keywords, Inbox, Posts, Tasks, Campaigns, BuffOrders đều có số lượng bằng `0`.
+   - Biên dịch thành công ứng dụng Desktop Frontend (`npm run build --prefix electron-app/frontend`) không có lỗi.
+   - Nâng phiên bản toàn hệ thống lên **`v1.3.61`**.
+
 ## 🚀 [2026-10-28] (v1.3.60) — Giao Diện Sidebar: Loại Bỏ Logo Tia Sét Trùng Lặp Phía Ngoài (Bên Trái), Đồng Bộ Nhận Diện Thương Hiệu Topify Chuẩn
 
 ### Thanh Điều Hướng Sidebar (Sidebar Layout) [Electron Desktop App & Web Frontend]:

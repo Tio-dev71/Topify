@@ -7,10 +7,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const seed = searchParams.get('seed') === 'true';
 
-    let interactions = 128500;
-    let leads = 4120;
-    let deals = 1350;
-    let won = 580;
+    let interactions = 0;
+    let leads = 0;
+    let deals = 0;
+    let won = 0;
 
     if (!seed) {
       try {
@@ -20,15 +20,19 @@ export async function GET(req: NextRequest) {
           prisma.deal.count({ where: { status: 'WON' } }),
         ]);
 
-        if (customerCount > 0) {
-          leads = customerCount;
-          deals = dealCount > 0 ? dealCount : Math.round(customerCount * 0.4);
-          won = wonDealCount > 0 ? wonDealCount : Math.round(deals * 0.35);
-          interactions = Math.max(10000, leads * 25);
-        }
+        leads = customerCount;
+        deals = dealCount;
+        won = wonDealCount;
+        interactions = leads > 0 ? Math.max(100, leads * 25) : 0;
       } catch {
-        // Fallback to default realistic stats
+        // Fallback
       }
+    } else {
+      // Explicit seed request
+      interactions = 128500;
+      leads = 4120;
+      deals = 1350;
+      won = 580;
     }
 
     const funnel = calculateConversionFunnel({

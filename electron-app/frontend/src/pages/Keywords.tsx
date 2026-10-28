@@ -10,7 +10,13 @@ import {
   X, 
   BarChart3,
   Clock,
-  Sparkles
+  Sparkles,
+  ExternalLink,
+  Newspaper,
+  Flame,
+  Activity,
+  TrendingDown,
+  Minus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -32,6 +38,24 @@ export default function Keywords() {
   const [newKeyword, setNewKeyword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [selectedKeyword, setSelectedKeyword] = useState<KeywordItem | null>(null);
+  const [detailData, setDetailData] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const handleOpenDetail = async (item: KeywordItem) => {
+    setSelectedKeyword(item);
+    setDetailData(null);
+    setDetailLoading(true);
+    try {
+      const res = await api.get(`/keywords/detail?id=${item.id}&keyword=${encodeURIComponent(item.keyword)}`);
+      if (res.data) {
+        setDetailData(res.data);
+      }
+    } catch {
+      // Fallback if network issue
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const fetchKeywords = async () => {
     setLoading(true);
@@ -68,12 +92,7 @@ export default function Keywords() {
         setKeywords(normalized);
       }
     } catch {
-      // Local fallback mock keywords if fresh database
-      setKeywords([
-        { id: 'kw_1', keyword: 'thời trang mùa đông 2026', volume: 24500, trend: '+35%', mentionCount: 1420, createdAt: new Date().toISOString() },
-        { id: 'kw_2', keyword: 'mỹ phẩm thuần chay dưỡng ẩm', volume: 18200, trend: '+18%', mentionCount: 890, createdAt: new Date().toISOString() },
-        { id: 'kw_3', keyword: 'bàn làm việc công thái học', volume: 32000, trend: '+42%', mentionCount: 2310, createdAt: new Date().toISOString() },
-      ]);
+      setKeywords([]);
     } finally {
       setLoading(false);
     }
@@ -241,7 +260,7 @@ export default function Keywords() {
                   {item.mentionCount || 0} lượt nhắc tới
                 </span>
                 <button
-                  onClick={() => setSelectedKeyword(item)}
+                  onClick={() => handleOpenDetail(item)}
                   className="text-indigo-600 font-semibold hover:underline inline-flex items-center gap-1"
                 >
                   <Eye className="w-3 h-3" />
@@ -301,40 +320,173 @@ export default function Keywords() {
       {/* Detail Modal */}
       {selectedKeyword && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 border border-gray-100 space-y-4 text-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
-                <BarChart3 className="w-4 h-4 text-indigo-600" />
-                <span>Chi tiết từ khóa: "{selectedKeyword?.keyword || ''}"</span>
-              </h3>
-              <button onClick={() => setSelectedKeyword(null)} className="text-gray-400 hover:text-gray-700">
+          <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl p-6 border border-gray-100 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900">
+                    Phân tích từ khóa: "{selectedKeyword?.keyword || ''}"
+                  </h3>
+                  <span className="text-[11px] text-gray-400">
+                    Dữ liệu thời gian thực từ Google Keyword & Tin tức thị trường
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setSelectedKeyword(null); setDetailData(null); }} 
+                className="text-gray-400 hover:text-gray-700 p-1 rounded-lg"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-1">
-                <span className="text-indigo-900 font-bold block">Đánh giá tiềm năng thị trường:</span>
-                <p className="text-gray-600 leading-relaxed text-[11px]">
-                  Từ khóa đang trong giai đoạn tăng trưởng ổn định (+35%). Khuyến nghị sản xuất 2-3 video Reels/Shorts tập trung vào giải quyết vấn đề thực tế để thu hút tệp khách hàng tiềm năng.
-                </p>
+            {detailLoading ? (
+              <div className="py-12 text-center space-y-3">
+                <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin mx-auto" />
+                <p className="text-gray-500 font-medium">Đang tải chỉ số thị trường & tin tức thời gian thực...</p>
               </div>
+            ) : (
+              <div className="space-y-4">
+                {/* 4 Cards Chỉ số chính */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 space-y-1">
+                    <span className="text-[10px] text-gray-400 block font-semibold uppercase">Lượng tìm kiếm</span>
+                    <span className="text-base font-bold text-gray-900">
+                      {(detailData?.volume ?? selectedKeyword.volume ?? 0).toLocaleString('vi-VN')}
+                    </span>
+                    <span className="text-[10px] text-gray-500 block">lượt/tháng (Google)</span>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-3 rounded-xl border border-gray-100 bg-gray-50">
-                  <span className="text-[10px] text-gray-400 block font-semibold">Tốc độ lan truyền</span>
-                  <span className="font-bold text-gray-900 text-sm">Cao (High)</span>
+                  <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <span className="text-[10px] text-emerald-700 block font-semibold uppercase">Xu hướng (3T)</span>
+                    <span className="text-base font-bold text-emerald-800 flex items-center gap-1">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      {detailData?.trendRate || selectedKeyword.trend || 'Ổn định'}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 block">Google Search</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 space-y-1">
+                    <span className="text-[10px] text-amber-700 block font-semibold uppercase">Cạnh tranh Ads</span>
+                    <span className="text-base font-bold text-amber-800">
+                      {detailData?.competitionLevel === 'HIGH' ? 'Cao' : detailData?.competitionLevel === 'LOW' ? 'Thấp' : 'Trung bình'}
+                    </span>
+                    <span className="text-[10px] text-amber-600 block">
+                      {detailData?.competitionIndex ?? 25}/100 điểm
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-1">
+                    <span className="text-[10px] text-indigo-700 block font-semibold uppercase">Lượt thảo luận</span>
+                    <span className="text-base font-bold text-indigo-800">
+                      {detailData?.stats?.totalMentions ?? selectedKeyword.mentionCount ?? 0}
+                    </span>
+                    <span className="text-[10px] text-indigo-600 block">tin bài tại VN</span>
+                  </div>
                 </div>
-                <div className="p-3 rounded-xl border border-gray-100 bg-gray-50">
-                  <span className="text-[10px] text-gray-400 block font-semibold">Mức độ cạnh tranh</span>
-                  <span className="font-bold text-amber-700 text-sm">Trung bình (Medium)</span>
-                </div>
+
+                {/* Sắc thái cảm xúc */}
+                {detailData?.stats && (
+                  <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                        Sắc thái thảo luận công chúng (Sentiment)
+                      </span>
+                      <span className="text-[11px] text-gray-500 font-mono">
+                        Tổng {detailData.stats.totalMentions} bài
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+                      <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-100">
+                        <span className="text-emerald-700 font-bold block">{detailData.stats.positiveCount}</span>
+                        <span className="text-emerald-600 text-[10px]">Tích cực (Positive)</span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-gray-100 border border-gray-200">
+                        <span className="text-gray-700 font-bold block">{detailData.stats.neutralCount}</span>
+                        <span className="text-gray-600 text-[10px]">Trung tính (Neutral)</span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-rose-50 border border-rose-100">
+                        <span className="text-rose-700 font-bold block">{detailData.stats.negativeCount}</span>
+                        <span className="text-rose-600 text-[10px]">Tiêu cực (Negative)</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Gợi ý từ khóa liên quan */}
+                {detailData?.relatedKeywords && detailData.relatedKeywords.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      Từ khóa gợi ý liên quan (Google Suggestions)
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detailData.relatedKeywords.slice(0, 8).map((rel: any, idx: number) => (
+                        <div 
+                          key={idx}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-50/60 border border-indigo-100 text-[11px] text-indigo-800 flex items-center gap-1.5"
+                        >
+                          <span className="font-medium">{rel.text}</span>
+                          {rel.volume > 0 && (
+                            <span className="text-[10px] text-indigo-500 font-mono">
+                              ({rel.volume.toLocaleString()})
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tin tức thời gian thực */}
+                {detailData?.mentions && detailData.mentions.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                      <Newspaper className="w-3.5 h-3.5 text-indigo-600" />
+                      Tin tức & Bài viết gần nhất liên quan
+                    </span>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      {detailData.mentions.slice(0, 4).map((m: any) => (
+                        <a
+                          key={m.id}
+                          href={m.sourceUrl || '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2.5 rounded-xl border border-gray-100 bg-white hover:bg-gray-50 transition block space-y-1 group"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-bold text-gray-800 group-hover:text-indigo-600 line-clamp-1 text-[11px]">
+                              {m.title}
+                            </h4>
+                            <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-indigo-600 flex-shrink-0" />
+                          </div>
+                          <p className="text-gray-500 line-clamp-1 text-[10px]">
+                            {m.message}
+                          </p>
+                          <div className="flex items-center gap-2 text-[9px] text-gray-400">
+                            <span>{new Date(m.createdAt).toLocaleDateString('vi-VN')}</span>
+                            <span className={`px-1.5 py-0.5 rounded ${
+                              m.sentiment === 'positive' ? 'bg-emerald-50 text-emerald-700' :
+                              m.sentiment === 'negative' ? 'bg-rose-50 text-rose-700' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {m.sentiment === 'positive' ? 'Tích cực' : m.sentiment === 'negative' ? 'Tiêu cực' : 'Trung tính'}
+                            </span>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
-            <div className="pt-2 border-t border-gray-100 flex justify-end">
+            <div className="pt-3 border-t border-gray-100 flex justify-end">
               <button
-                onClick={() => setSelectedKeyword(null)}
+                onClick={() => { setSelectedKeyword(null); setDetailData(null); }}
                 className="btn-primary px-4 py-2 rounded-xl text-xs font-semibold"
               >
                 Đóng

@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
 
     let campaignsRoi: CampaignRoiMetrics[] = [];
 
-    if (dbCampaigns.length > 0 && !seed) {
+    if (dbCampaigns.length > 0) {
       // Calculate from DB
       const allDeals = await prisma.deal.findMany({
         select: { value: true, status: true },
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
         const subset = allDeals.slice(index * 2, (index + 1) * 3);
         return calculateCampaignRoi(c, subset, Math.max(10, subset.length * 8));
       });
-    } else {
+    } else if (seed) {
       campaignsRoi = SAMPLE_CAMPAIGNS.map((c) =>
         calculateCampaignRoi(
           {

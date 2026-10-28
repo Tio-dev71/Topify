@@ -32,6 +32,7 @@ import {
   MoreVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../lib/axios';
 
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
@@ -192,189 +193,9 @@ const INITIAL_TEMPLATES: TaskTemplate[] = [
   },
 ];
 
-const INITIAL_TASKS: EnrichedTask[] = [
-  {
-    id: 'task_1',
-    title: 'Sản xuất video review Nồi chiên không dầu TikTok #Shorts',
-    description: 'Quay dựng video 45s giới thiệu 3 tính năng vượt trội, tập trung hook 3s đầu tiên và CTA dẫn về link bio.',
-    priority: 'HIGH',
-    status: 'IN_PROGRESS',
-    dueDate: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
-    assigneeId: 'user_1',
-    assignee: {
-      id: 'user_1',
-      name: 'Nguyễn Văn A',
-      email: 'nguyenvana@topify.vn',
-      image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-    },
-    collaboratorIds: ['user_2', 'user_3'],
-    collaborators: [
-      { id: 'user_2', name: 'Trần Thị B', email: 'tranthib@topify.vn', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop' },
-      { id: 'user_3', name: 'Lê Hoàng C', email: 'lehoangc@topify.vn', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop' },
-    ],
-    isRecurring: true,
-    recurRule: 'WEEKLY',
-    subtasks: [
-      { id: 'sub_1', title: 'Nghiên cứu góc máy & viết kịch bản 3s hook', isCompleted: true, assigneeName: 'Nguyễn Văn A' },
-      { id: 'sub_2', title: 'Quay source video chất lượng cao tại studio', isCompleted: true, assigneeName: 'Nguyễn Văn A' },
-      { id: 'sub_3', title: 'Dựng video, cắt nhịp nhanh & chèn hiệu ứng âm thanh', isCompleted: false, assigneeName: 'Trần Thị B' },
-      { id: 'sub_4', title: 'Tạo phụ đề tự động WebVTT và kiểm duyệt bản quyền', isCompleted: false, assigneeName: 'Trần Thị B' },
-    ],
-    commentsCount: 2,
-    attachmentsCount: 2,
-    createdAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'task_2',
-    title: 'Xử lý khiếu nại giao trễ đơn hàng #DH-9842 & hoàn tiền',
-    description: 'Khách hàng phản ánh đơn hàng giao trễ 4 ngày tại Hà Nội. Cần kiểm tra kho vận và gọi điện trực tiếp bồi hoàn voucher.',
-    priority: 'URGENT',
-    status: 'TODO',
-    dueDate: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
-    assigneeId: 'user_2',
-    assignee: {
-      id: 'user_2',
-      name: 'Trần Thị B',
-      email: 'tranthib@topify.vn',
-      image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    },
-    collaboratorIds: ['user_1'],
-    collaborators: [
-      { id: 'user_1', name: 'Nguyễn Văn A', email: 'nguyenvana@topify.vn', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop' },
-    ],
-    isRecurring: false,
-    recurRule: null,
-    subtasks: [
-      { id: 'sub_21', title: 'Tra cứu mã vận đơn trên hệ thống ViettelPost', isCompleted: true, assigneeName: 'Trần Thị B' },
-      { id: 'sub_22', title: 'Gọi điện giải thích nguyên nhân và xin lỗi khách', isCompleted: false, assigneeName: 'Trần Thị B' },
-      { id: 'sub_23', title: 'Cấp mã voucher hoàn 50.000đ cho đơn kế tiếp', isCompleted: false, assigneeName: 'Trần Thị B' },
-    ],
-    commentsCount: 1,
-    attachmentsCount: 0,
-    createdAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'task_3',
-    title: 'Chiến dịch Campaign Sale Giữa Tháng (Mid-Month 15.10)',
-    description: 'Thiết lập trọn gói chiến dịch quảng cáo TikTok Ads và Facebook Reels, kích hoạt phễu CRM và theo dõi ROI.',
-    priority: 'HIGH',
-    status: 'REVIEW',
-    dueDate: new Date(Date.now() - 14 * 3600 * 1000).toISOString(), // Overdue!
-    assigneeId: 'user_3',
-    assignee: {
-      id: 'user_3',
-      name: 'Lê Hoàng C',
-      email: 'lehoangc@topify.vn',
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-    },
-    collaboratorIds: ['user_1', 'user_2'],
-    collaborators: [
-      { id: 'user_1', name: 'Nguyễn Văn A', email: 'nguyenvana@topify.vn' },
-      { id: 'user_2', name: 'Trần Thị B', email: 'tranthib@topify.vn' },
-    ],
-    isRecurring: true,
-    recurRule: 'MONTHLY',
-    subtasks: [
-      { id: 'sub_31', title: 'Set ngân sách và gắn UTM tracking links', isCompleted: true },
-      { id: 'sub_32', title: 'Seeding 5 cộng đồng review tiêu dùng lớn', isCompleted: true },
-      { id: 'sub_33', title: 'Đối soát chi phí và đo lường Campaign ROI', isCompleted: false },
-    ],
-    commentsCount: 0,
-    attachmentsCount: 0,
-    createdAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'task_4',
-    title: 'Đào tạo & Onboarding nhân sự mới phòng Media',
-    description: 'Hướng dẫn thành viên mới về phong cách Brand Voice, cách sử dụng Topify Media Studio và quy trình duyệt bài.',
-    priority: 'MEDIUM',
-    status: 'DONE',
-    dueDate: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-    assigneeId: 'user_1',
-    assignee: {
-      id: 'user_1',
-      name: 'Nguyễn Văn A',
-      email: 'nguyenvana@topify.vn',
-      image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-    },
-    collaboratorIds: ['user_3'],
-    collaborators: [
-      { id: 'user_3', name: 'Lê Hoàng C', email: 'lehoangc@topify.vn' },
-    ],
-    isRecurring: false,
-    recurRule: null,
-    subtasks: [
-      { id: 'sub_41', title: 'Cấp tài khoản Workspace và hướng dẫn bảo mật 2FA', isCompleted: true },
-      { id: 'sub_42', title: 'Thực hành cắt dựng 1 video mẫu trong Media Studio', isCompleted: true },
-      { id: 'sub_43', title: 'Đánh giá đạt chuẩn và bàn giao dự án chính', isCompleted: true },
-    ],
-    commentsCount: 0,
-    attachmentsCount: 0,
-    createdAt: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+const INITIAL_TASKS: EnrichedTask[] = [];
 
-const INITIAL_COMMENTS: Record<string, TaskCommentItem[]> = {
-  task_1: [
-    {
-      id: 'comm_1',
-      taskId: 'task_1',
-      authorId: 'user_2',
-      authorName: 'Trần Thị B',
-      authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-      content: 'Đã nhận được source video 4K từ @Nguyễn Văn A, âm thanh thoại rất rõ và sạch. Đang dựng phần hook 3s đầu tiên!',
-      mentions: ['nguyenvana@topify.vn'],
-      attachments: [
-        {
-          id: 'att_1',
-          name: 'hook_sample_v1.mp4',
-          size: 14800000,
-          url: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-          type: 'video/mp4',
-          uploadedAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-        },
-      ],
-      createdAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-    },
-    {
-      id: 'comm_2',
-      taskId: 'task_1',
-      authorId: 'user_1',
-      authorName: 'Nguyễn Văn A',
-      authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-      content: 'Nhớ chèn thêm sticker CTA follow kênh và link bio nhé @Trần Thị B. File kịch bản đính kèm bên dưới.',
-      mentions: ['tranthib@topify.vn'],
-      attachments: [
-        {
-          id: 'att_2',
-          name: 'kich_ban_chi_tiet_noi_chien.pdf',
-          size: 2450000,
-          url: 'https://topify.vn/docs/kich_ban_chi_tiet_noi_chien.pdf',
-          type: 'application/pdf',
-          uploadedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-        },
-      ],
-      createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-    },
-  ],
-  task_2: [
-    {
-      id: 'comm_3',
-      taskId: 'task_2',
-      authorId: 'user_2',
-      authorName: 'Trần Thị B',
-      authorAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-      content: 'Đã liên hệ với khách hàng qua Zalo OA, khách đã đồng ý nhận voucher hoàn 50k thay vì hủy đơn.',
-      mentions: [],
-      attachments: [],
-      createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-    },
-  ],
-};
+const INITIAL_COMMENTS: Record<string, TaskCommentItem[]> = {};
 
 export default function Tasks() {
   const [activeTab, setActiveTab] = useState<'board' | 'templates' | 'productivity'>('board');
@@ -382,6 +203,24 @@ export default function Tasks() {
 
   // Tasks state
   const [tasks, setTasks] = useState<EnrichedTask[]>(INITIAL_TASKS);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      setIsLoading(true);
+      try {
+        const res = await api.get('/tasks');
+        if (res.data?.success && Array.isArray(res.data?.tasks)) {
+          setTasks(res.data.tasks);
+        }
+      } catch (err) {
+        console.warn('Tasks API fallback to state:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchTasks();
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState<string>('ALL');
   const [filterMember, setFilterMember] = useState<string>('ALL');

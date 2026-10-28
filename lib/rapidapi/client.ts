@@ -172,7 +172,7 @@ export const getFacebookDeepPosts = async (targetUrlOrId: string, options: DeepS
   while (pageNum < maxPages) {
     pageNum++;
     try {
-      const resData = isGroup 
+      const resData: any = isGroup 
         ? await getFacebookGroupPosts(resolvedId, cursor)
         : await getFacebookPagePosts(resolvedId, cursor);
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/db';
 
 export interface TrendingPostItem {
   id: string;
@@ -89,9 +90,34 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const platform = (searchParams.get('platform') || 'ALL').toUpperCase();
 
-    let items = [...SAMPLE_TRENDING_ITEMS];
-    if (platform !== 'ALL') {
-      items = items.filter((i) => i.platform === platform);
+    let items: TrendingPostItem[] = [];
+    try {
+      const posts = await (prisma as any).competitorPost.findMany({
+        where: platform !== 'ALL' ? { platform } : undefined,
+        orderBy: { viralScore: 'desc' },
+        take: 20,
+        include: { page: true },
+      });
+      if (posts && posts.length > 0) {
+        items = posts.map((p: any) => ({
+          id: p.id,
+          title: p.content?.substring(0, 100) || 'Bài viết đối thủ',
+          author: p.page?.name || 'Trang đối thủ',
+          authorAvatar: p.page?.avatarUrl || undefined,
+          platform: (p.platform as any) || 'FACEBOOK',
+          publishedHoursAgo: Math.max(1, Math.round((Date.now() - new Date(p.publishedAt).getTime()) / 3600000)),
+          views: p.viewsCount || 0,
+          likes: p.likesCount || 0,
+          comments: p.commentsCount || 0,
+          shares: p.sharesCount || 0,
+          velocityScore: p.viralScore || 0,
+          growthStatus: (p.viralScore || 0) > 85 ? 'BREAKOUT' : 'STEADY',
+          growthBadge: (p.viralScore || 0) > 85 ? '🔥 Bùng Nổ' : '⚡ Tăng Trưởng',
+          thumbnailUrl: p.mediaUrl || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&h=400&fit=crop',
+        }));
+      }
+    } catch {
+      // Return clean empty array
     }
 
     return NextResponse.json({

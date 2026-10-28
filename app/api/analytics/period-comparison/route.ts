@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
       timeframe,
       comparisonType,
       posts,
+      isSeed: forceSeed,
     });
 
     return NextResponse.json({

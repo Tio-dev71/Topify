@@ -21,50 +21,10 @@ export interface TriggeredAlertItem {
   isRead: boolean;
 }
 
-// In-memory state for dev & demo
-let alertRules: AlertRule[] = [
-  {
-    id: 'rule_1',
-    name: 'Cảnh báo bài viết Siêu Viral đối thủ',
-    minViralScore: 85,
-    keywords: ['Topify', 'Review', 'Sale'],
-    notifyInApp: true,
-    notifyEmail: true,
-    isActive: true,
-  },
-  {
-    id: 'rule_2',
-    name: 'Theo dõi từ khóa Khuyến mãi mùa hè',
-    minViralScore: 75,
-    keywords: ['Khuyến mãi', 'Freeship', 'Giảm giá'],
-    notifyInApp: true,
-    notifyEmail: false,
-    isActive: true,
-  },
-];
+// In-memory state for dev & demo (Clean state for testing)
+let alertRules: AlertRule[] = [];
 
-let triggeredAlerts: TriggeredAlertItem[] = [
-  {
-    id: 'alert_ev_1',
-    ruleName: 'Cảnh báo bài viết Siêu Viral đối thủ',
-    title: 'Phát hiện bài viết đạt 95 điểm Viral từ kênh @ReviewThoiTrang: "Review mẫu áo sơ mi lụa tay bồng..."',
-    sourceUrl: 'https://tiktok.com/@sample/video/1',
-    platform: 'TIKTOK',
-    viralScore: 95,
-    detectedAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
-    isRead: false,
-  },
-  {
-    id: 'alert_ev_2',
-    ruleName: 'Theo dõi từ khóa Khuyến mãi mùa hè',
-    title: 'Từ khóa "Freeship" xuất hiện 140 lần trong 1 giờ qua trên cộng đồng Facebook Hội Mua Sắm',
-    sourceUrl: 'https://facebook.com/group/sample',
-    platform: 'FACEBOOK',
-    viralScore: 78,
-    detectedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-    isRead: true,
-  },
-];
+let triggeredAlerts: TriggeredAlertItem[] = [];
 
 export async function GET(req: NextRequest) {
   try {

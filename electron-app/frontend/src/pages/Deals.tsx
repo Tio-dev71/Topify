@@ -112,26 +112,21 @@ export default function Deals() {
         setPipelines([{ id: 'default', name: 'Quy trình bán hàng chuẩn', isDefault: true, stages: DEFAULT_STAGES }]);
       }
 
-      if (dealsRes.data?.deals?.length > 0) {
+      if (dealsRes.data?.deals) {
         setDeals(dealsRes.data.deals);
       } else {
-        setDeals([
-          { id: 'd_1', title: 'Hợp đồng Marketing Trọn Gói - Chuỗi Spa Mai Anh', value: 18000000, stageId: 'stage_2', pipelineId: 'default', status: 'OPEN', createdAt: new Date().toISOString(), customer: { name: 'Mai Anh', phone: '0988112233' } },
-          { id: 'd_2', title: 'Gói Chuyển Đổi Số - Cửa Hàng Thời Trang Bella', value: 8500000, stageId: 'stage_1', pipelineId: 'default', status: 'OPEN', createdAt: new Date().toISOString(), customer: { name: 'Bella Boutique', phone: '0977223344' } },
-          { id: 'd_3', title: 'Setup Hệ Thống Đa Kênh Tự Động - Gym Fitness X', value: 25000000, stageId: 'stage_4', pipelineId: 'default', status: 'WON', createdAt: new Date().toISOString(), customer: { name: 'Anh Tuấn', phone: '0912345678' } },
-        ]);
+        setDeals([]);
       }
 
       if (custRes.data?.customers?.length > 0) {
         setCustomers(custRes.data.customers);
+      } else {
+        setCustomers([]);
       }
     } catch {
       setPipelines([{ id: 'default', name: 'Quy trình bán hàng chuẩn', isDefault: true, stages: DEFAULT_STAGES }]);
-      setDeals([
-        { id: 'd_1', title: 'Hợp đồng Marketing Trọn Gói - Chuỗi Spa Mai Anh', value: 18000000, stageId: 'stage_2', pipelineId: 'default', status: 'OPEN', createdAt: new Date().toISOString(), customer: { name: 'Mai Anh', phone: '0988112233' } },
-        { id: 'd_2', title: 'Gói Chuyển Đổi Số - Cửa Hàng Thời Trang Bella', value: 8500000, stageId: 'stage_1', pipelineId: 'default', status: 'OPEN', createdAt: new Date().toISOString(), customer: { name: 'Bella Boutique', phone: '0977223344' } },
-        { id: 'd_3', title: 'Setup Hệ Thống Đa Kênh Tự Động - Gym Fitness X', value: 25000000, stageId: 'stage_4', pipelineId: 'default', status: 'WON', createdAt: new Date().toISOString(), customer: { name: 'Anh Tuấn', phone: '0912345678' } },
-      ]);
+      setDeals([]);
+      setCustomers([]);
     } finally {
       setLoading(false);
     }

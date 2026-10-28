@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
 
     let combinedPosts: PostPerformanceMetrics[] = [];
 
-    if (dbPosts.length > 0 && !seed) {
+    if (dbPosts.length > 0) {
       combinedPosts = dbPosts.map((p) => {
         // Derive realistic deterministic metrics based on individual post characteristics
         const metrics = getDeterministicMetrics({
@@ -167,8 +167,8 @@ export async function GET(req: NextRequest) {
           isEvergreen: p.isEvergreen || false,
         };
       });
-    } else {
-      // Use rich sample performance posts
+    } else if (seed) {
+      // Use rich sample performance posts only if requested
       combinedPosts = SAMPLE_PERFORMANCE_POSTS.map((sample) => {
         const scoreObj = calculateContentPerformanceScore({
           reach: sample.reach,

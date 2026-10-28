@@ -489,10 +489,12 @@ export function generatePeriodComparison(params: {
   timeframe: string;
   comparisonType?: 'prior_period' | 'same_period_last_year';
   posts?: PostPerformanceMetrics[];
+  isSeed?: boolean;
 }): PeriodComparisonResult {
   const timeframe = params.timeframe || '30d';
   const comparisonType = params.comparisonType || 'prior_period';
   const posts = params.posts || [];
+  const isSeed = params.isSeed ?? false;
 
   let days = 30;
   let currentLabel = '30 ngày qua';
@@ -512,23 +514,24 @@ export function generatePeriodComparison(params: {
     priorLabel = 'Cùng kỳ tháng trước';
   }
 
-  // Calculate base values from existing posts if present, or deterministic seed baseline
-  const baseViews = posts.reduce((sum, p) => sum + p.views, 0) || 154200;
-  const baseReach = posts.reduce((sum, p) => sum + p.reach, 0) || 128500;
-  const baseLikes = posts.reduce((sum, p) => sum + p.likes, 0) || 9800;
-  const baseComments = posts.reduce((sum, p) => sum + p.comments, 0) || 1450;
-  const baseShares = posts.reduce((sum, p) => sum + p.shares, 0) || 1920;
+  // Calculate base values from existing posts if present, or deterministic seed baseline if isSeed is requested
+  const hasPosts = posts.length > 0;
+  const baseViews = hasPosts ? posts.reduce((sum, p) => sum + p.views, 0) : (isSeed ? 154200 : 0);
+  const baseReach = hasPosts ? posts.reduce((sum, p) => sum + p.reach, 0) : (isSeed ? 128500 : 0);
+  const baseLikes = hasPosts ? posts.reduce((sum, p) => sum + p.likes, 0) : (isSeed ? 9800 : 0);
+  const baseComments = hasPosts ? posts.reduce((sum, p) => sum + p.comments, 0) : (isSeed ? 1450 : 0);
+  const baseShares = hasPosts ? posts.reduce((sum, p) => sum + p.shares, 0) : (isSeed ? 1920 : 0);
   const baseEngagements = baseLikes + baseComments + baseShares;
-  const baseClicks = posts.reduce((sum, p) => sum + p.clicks, 0) || 3850;
-  const baseLeads = posts.reduce((sum, p) => sum + p.conversions, 0) * 4 || 126;
-  const baseWonDeals = Math.round(baseLeads * 0.28) || 35;
-  const baseRevenue = baseWonDeals * 4500000 || 157500000;
-  const baseSpent = 28000000;
-  const baseRoi = baseSpent > 0 ? Math.round(((baseRevenue - baseSpent) / baseSpent) * 100) : 462;
-  const baseScore = posts.length > 0 ? Math.round(posts.reduce((sum, p) => sum + p.overallScore, 0) / posts.length) : 78;
+  const baseClicks = hasPosts ? posts.reduce((sum, p) => sum + p.clicks, 0) : (isSeed ? 3850 : 0);
+  const baseLeads = hasPosts ? posts.reduce((sum, p) => sum + p.conversions, 0) * 4 : (isSeed ? 126 : 0);
+  const baseWonDeals = hasPosts ? Math.round(baseLeads * 0.28) : (isSeed ? 35 : 0);
+  const baseRevenue = hasPosts ? baseWonDeals * 4500000 : (isSeed ? 157500000 : 0);
+  const baseSpent = isSeed ? 28000000 : 0;
+  const baseRoi = baseSpent > 0 ? Math.round(((baseRevenue - baseSpent) / baseSpent) * 100) : (baseRevenue > 0 ? 100 : 0);
+  const baseScore = hasPosts ? Math.round(posts.reduce((sum, p) => sum + p.overallScore, 0) / posts.length) : (isSeed ? 78 : 0);
 
-  // Scale factors for current vs prior: current performed ~15-25% better
-  const priorFactor = 0.82; // ~+22% growth in current
+  // Scale factors for current vs prior
+  const priorFactor = 0.82;
   const priorViews = Math.round(baseViews * priorFactor);
   const priorReach = Math.round(baseReach * 0.85);
   const priorLikes = Math.round(baseLikes * 0.81);
@@ -539,9 +542,9 @@ export function generatePeriodComparison(params: {
   const priorLeads = Math.round(baseLeads * 0.78);
   const priorWonDeals = Math.round(baseWonDeals * 0.74);
   const priorRevenue = priorWonDeals * 4200000;
-  const priorSpent = 25000000;
-  const priorRoi = Math.round(((priorRevenue - priorSpent) / priorSpent) * 100);
-  const priorScore = baseScore - 5;
+  const priorSpent = isSeed ? 25000000 : 0;
+  const priorRoi = priorSpent > 0 ? Math.round(((priorRevenue - priorSpent) / priorSpent) * 100) : 0;
+  const priorScore = Math.max(0, baseScore - (isSeed || hasPosts ? 5 : 0));
 
   // Generate trajectory points for dual-line chart
   const pointCount = days <= 7 ? 7 : days <= 30 ? 10 : 12;

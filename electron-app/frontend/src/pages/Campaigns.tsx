@@ -30,6 +30,7 @@ import {
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../lib/axios';
 
 export type CampaignStatus = 'DRAFT' | 'PLANNING' | 'RUNNING' | 'PAUSED' | 'COMPLETED';
 export type CampaignObjectiveType = 'REVENUE' | 'LEADS' | 'REACH' | 'APP_INSTALL' | 'CONVERSIONS';
@@ -124,334 +125,37 @@ export interface EnrichedCampaign {
   updatedAt: string;
 }
 
-// Initial Sample Campaigns
-const INITIAL_CAMPAIGNS: EnrichedCampaign[] = [
-  {
-    id: 'camp_1',
-    name: 'Mega Sale Giữa Tháng 11.11 - Siêu Sale Nồi Chiên & Gia Dụng',
-    description: 'Chiến dịch trọng điểm quý 4 kích hoạt doanh số trên TikTok Shop, Facebook Reels và phễu CRM Topify.',
-    status: 'RUNNING',
-    objectiveType: 'REVENUE',
-    startDate: new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString(),
-    endDate: new Date(Date.now() + 6 * 24 * 3600 * 1000).toISOString(),
-    totalBudget: 85000000,
-    totalSpent: 42500000,
-    ownerId: 'user_1',
-    ownerName: 'Nguyễn Văn A (Lead)',
-    ownerAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-    channels: ['TIKTOK', 'FACEBOOK', 'INSTAGRAM', 'SHOPEE'],
-    kpis: [
-      {
-        id: 'kpi_1',
-        name: 'Doanh thu thuần mục tiêu',
-        metricType: 'REVENUE',
-        targetValue: 280000000,
-        currentValue: 196000000,
-        unit: 'đ',
-        completionRate: 70,
-      },
-      {
-        id: 'kpi_2',
-        name: 'Số lượng Lead mới thu về CRM',
-        metricType: 'LEADS',
-        targetValue: 800,
-        currentValue: 620,
-        unit: 'leads',
-        completionRate: 77.5,
-      },
-      {
-        id: 'kpi_3',
-        name: 'Độ phủ video (Total Views)',
-        metricType: 'REACH',
-        targetValue: 1500000,
-        currentValue: 1280000,
-        unit: 'lượt xem',
-        completionRate: 85.3,
-      },
-    ],
-    budgetCategories: [
-      { category: 'PAID_ADS', label: 'Quảng cáo trả phí (TikTok & FB Ads)', plannedAmount: 45000000, actualSpent: 26000000, color: '#3b82f6' },
-      { category: 'KOL_BOOKING', label: 'Booking KOC/KOL Review sản phẩm', plannedAmount: 25000000, actualSpent: 12000000, color: '#a855f7' },
-      { category: 'CREATIVE_MEDIA', label: 'Sản xuất Video & Banner Creative', plannedAmount: 10000000, actualSpent: 3500000, color: '#10b981' },
-      { category: 'SEEDING_OPS', label: 'Seeding hội nhóm & Vận hành phễu', plannedAmount: 5000000, actualSpent: 1000000, color: '#f59e0b' },
-    ],
-    phases: [
-      {
-        id: 'ph_1',
-        name: 'Giai đoạn 1: Teaser & Thu thập Lead sớm',
-        phaseKey: 'TEASER',
-        startDate: new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString(),
-        endDate: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-        targetPostsCount: 8,
-        publishedPostsCount: 8,
-        description: 'Tung video ngắn hé lộ deal khủng và mời vào nhóm Zalo nhận voucher độc quyền.',
-      },
-      {
-        id: 'ph_2',
-        name: 'Giai đoạn 2: Kick-off Mở bán & Đẩy mạnh Livestream',
-        phaseKey: 'KICKOFF',
-        startDate: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-        endDate: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
-        targetPostsCount: 14,
-        publishedPostsCount: 11,
-        description: 'Phát trực tiếp đa kênh, tung mã giảm giá giờ vàng và đẩy ngân sách TikTok Ads.',
-      },
-      {
-        id: 'ph_3',
-        name: 'Giai đoạn 3: Mega Peak Sale & Countdown Chốt đơn',
-        phaseKey: 'PEAK_SALE',
-        startDate: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
-        endDate: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
-        targetPostsCount: 12,
-        publishedPostsCount: 0,
-        description: 'Chiến dịch giờ chót, email nhắc giỏ hàng bỏ quên và SMS thông báo ưu đãi sắp hết hạn.',
-      },
-      {
-        id: 'ph_4',
-        name: 'Giai đoạn 4: Cảm ơn & Tái chăm sóc (Post-Sale)',
-        phaseKey: 'POST_SALE',
-        startDate: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
-        endDate: new Date(Date.now() + 6 * 24 * 3600 * 1000).toISOString(),
-        targetPostsCount: 4,
-        publishedPostsCount: 0,
-        description: 'Gửi thiệp cảm ơn, khảo sát độ hài lòng CSKH và giới thiệu quà tặng phụ kiện.',
-      },
-    ],
-    assetsCount: 5,
-    contentPlanCount: 38,
-    tasksCount: 12,
-    completedTasksCount: 8,
-    financialSummary: {
-      campaignId: 'camp_1',
-      totalRevenue: 196000000,
-      totalPlannedBudget: 85000000,
-      totalActualSpend: 42500000,
-      paidAdsSpend: 26000000,
-      netProfit: 153500000,
-      roiPercentage: 361,
-      roas: 7.5,
-      totalLeads: 620,
-      costPerLead: 68548,
-      totalOrders: 312,
-      costPerAcquisition: 136217,
-      rating: 'OUTSTANDING',
-      summaryVerdict: 'Chiến dịch bùng nổ vượt bậc, tỷ suất sinh lời ROI 361% và ROAS 7.5x rất ấn tượng!',
-    },
-    createdAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'camp_2',
-    name: 'Ra Mắt Bộ Sưu Tập Thời Trang Thu Đông 2026',
-    description: 'Chiến dịch định vị thương hiệu cao cấp kết hợp Lookbook Reels, KOC trải nghiệm và chiến dịch Retargeting.',
-    status: 'PLANNING',
-    objectiveType: 'LEADS',
-    startDate: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
-    endDate: new Date(Date.now() + 18 * 24 * 3600 * 1000).toISOString(),
-    totalBudget: 40000000,
-    totalSpent: 0,
-    ownerId: 'user_2',
-    ownerName: 'Trần Thị B',
-    ownerAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    channels: ['TIKTOK', 'INSTAGRAM', 'FACEBOOK'],
-    kpis: [
-      {
-        id: 'kpi_21',
-        name: 'Đăng ký nhận Lookbook độc quyền',
-        metricType: 'LEADS',
-        targetValue: 1200,
-        currentValue: 0,
-        unit: 'leads',
-        completionRate: 0,
-      },
-      {
-        id: 'kpi_22',
-        name: 'Lượt tương tác Reels & Shorts',
-        metricType: 'REACH',
-        targetValue: 800000,
-        currentValue: 0,
-        unit: 'tương tác',
-        completionRate: 0,
-      },
-    ],
-    budgetCategories: [
-      { category: 'PAID_ADS', label: 'Quảng cáo trả phí (TikTok & FB Ads)', plannedAmount: 18000000, actualSpent: 0, color: '#3b82f6' },
-      { category: 'KOL_BOOKING', label: 'Booking KOC/KOL Review sản phẩm', plannedAmount: 14000000, actualSpent: 0, color: '#a855f7' },
-      { category: 'CREATIVE_MEDIA', label: 'Sản xuất Video & Banner Creative', plannedAmount: 6000000, actualSpent: 0, color: '#10b981' },
-      { category: 'SEEDING_OPS', label: 'Seeding hội nhóm & Vận hành phễu', plannedAmount: 2000000, actualSpent: 0, color: '#f59e0b' },
-    ],
-    phases: [
-      {
-        id: 'ph_21',
-        name: 'Giai đoạn 1: Teaser Lookbook & Thu thập Lead',
-        phaseKey: 'TEASER',
-        startDate: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
-        endDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
-        targetPostsCount: 6,
-        publishedPostsCount: 0,
-        description: 'Tung bộ ảnh nghệ thuật và video moodboard phong cách châu Âu.',
-      },
-      {
-        id: 'ph_22',
-        name: 'Giai đoạn 2: Chính thức mở bán BST Thu Đông',
-        phaseKey: 'KICKOFF',
-        startDate: new Date(Date.now() + 8 * 24 * 3600 * 1000).toISOString(),
-        endDate: new Date(Date.now() + 18 * 24 * 3600 * 1000).toISOString(),
-        targetPostsCount: 15,
-        publishedPostsCount: 0,
-        description: 'Tung mã ưu đãi cho 100 khách hàng đầu tiên và kích hoạt mạng lưới KOCs.',
-      },
-    ],
-    assetsCount: 3,
-    contentPlanCount: 21,
-    tasksCount: 8,
-    completedTasksCount: 2,
-    financialSummary: {
-      campaignId: 'camp_2',
-      totalRevenue: 0,
-      totalPlannedBudget: 40000000,
-      totalActualSpend: 0,
-      paidAdsSpend: 0,
-      netProfit: 0,
-      roiPercentage: 0,
-      roas: 0,
-      totalLeads: 0,
-      costPerLead: 0,
-      totalOrders: 0,
-      costPerAcquisition: 0,
-      rating: 'ON_TARGET',
-      summaryVerdict: 'Chiến dịch đang trong giai đoạn lên kế hoạch và chuẩn bị tài nguyên trước ngày khởi chạy.',
-    },
-    createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'camp_3',
-    name: 'Chiến Dịch Tải Ứng Dụng Topify Mobile App Q3',
-    description: 'Chạy phễu chuyển đổi cài đặt ứng dụng Topify trên iOS và Android qua chiến dịch Viral Video & Referral.',
-    status: 'COMPLETED',
-    objectiveType: 'APP_INSTALL',
-    startDate: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
-    endDate: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
-    totalBudget: 35000000,
-    totalSpent: 33800000,
-    ownerId: 'user_3',
-    ownerName: 'Lê Hoàng C',
-    ownerAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-    channels: ['TIKTOK', 'FACEBOOK', 'YOUTUBE'],
-    kpis: [
-      {
-        id: 'kpi_31',
-        name: 'Lượt cài đặt ứng dụng thành công',
-        metricType: 'APP_INSTALL',
-        targetValue: 5000,
-        currentValue: 5420,
-        unit: 'installs',
-        completionRate: 108.4,
-      },
-    ],
-    budgetCategories: [],
-    phases: [],
-    assetsCount: 5,
-    contentPlanCount: 20,
-    tasksCount: 6,
-    completedTasksCount: 6,
-    financialSummary: {
-      campaignId: 'camp_3',
-      totalRevenue: 68000000,
-      totalPlannedBudget: 35000000,
-      totalActualSpend: 33800000,
-      paidAdsSpend: 24500000,
-      netProfit: 34200000,
-      roiPercentage: 101,
-      roas: 2.8,
-      totalLeads: 5420,
-      costPerLead: 6236,
-      totalOrders: 450,
-      costPerAcquisition: 75111,
-      rating: 'ON_TARGET',
-      summaryVerdict: 'Chiến dịch hoàn thành đúng hạn, CPI cài đặt app thấp hơn 15% so với benchmark ngành.',
-    },
-    createdAt: new Date(Date.now() - 35 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
-  },
-];
+// Initial Campaigns (Clean State for testing)
+const INITIAL_CAMPAIGNS: EnrichedCampaign[] = [];
 
-const INITIAL_ASSETS: CampaignAssetItem[] = [
-  {
-    id: 'asset_1',
-    campaignId: 'camp_1',
-    name: 'Banner_Hero_MegaSale_11.11_1080x1920.png',
-    type: 'IMAGE',
-    fileUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1080&h=1920&fit=crop',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=300&h=400&fit=crop',
-    fileSize: 3450000,
-    approvalStatus: 'APPROVED',
-    reviewedBy: 'Nguyễn Văn A (Lead)',
-    reviewerNote: 'Thiết kế chuẩn nhận diện thương hiệu, CTA nổi bật.',
-    uploadedAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'asset_2',
-    campaignId: 'camp_1',
-    name: 'Teaser_Video_Hook3s_AirFryer_4K.mp4',
-    type: 'VIDEO',
-    fileUrl: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=300&h=400&fit=crop',
-    fileSize: 45800000,
-    approvalStatus: 'APPROVED',
-    reviewedBy: 'Nguyễn Văn A (Lead)',
-    reviewerNote: 'Nhịp cắt 3s đầu rất cuốn, phụ đề to rõ ràng.',
-    uploadedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'asset_3',
-    campaignId: 'camp_1',
-    name: 'Kich_ban_Livestream_FlashSale_11.11.pdf',
-    type: 'DOCUMENT',
-    fileUrl: 'https://topify.vn/docs/sample.pdf',
-    fileSize: 1200000,
-    approvalStatus: 'APPROVED',
-    reviewedBy: 'Trần Thị B',
-    reviewerNote: 'Đã bổ sung khung giờ vàng 12h trưa và 20h tối.',
-    uploadedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'asset_4',
-    campaignId: 'camp_1',
-    name: 'Cover_Story_Voucher_50k.png',
-    type: 'IMAGE',
-    fileUrl: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=1080&h=1920&fit=crop',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=300&h=400&fit=crop',
-    fileSize: 2100000,
-    approvalStatus: 'PENDING_REVIEW',
-    uploadedAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'asset_5',
-    campaignId: 'camp_1',
-    name: 'KOC_Video_Draft_Unboxing.mp4',
-    type: 'VIDEO',
-    fileUrl: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=300&h=400&fit=crop',
-    fileSize: 32000000,
-    approvalStatus: 'REJECTED',
-    reviewedBy: 'Nguyễn Văn A (Lead)',
-    reviewerNote: 'Âm thanh thoại bị rè nhẹ và logo nhà tài trợ bị che góc dưới, cần quay lại phần mở hộp.',
-    uploadedAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+const INITIAL_ASSETS: CampaignAssetItem[] = [];
 
 export default function Campaigns() {
   const [activeTab, setActiveTab] = useState<'campaigns' | 'progress' | 'assets' | 'report'>('campaigns');
   const [campaigns, setCampaigns] = useState<EnrichedCampaign[]>(INITIAL_CAMPAIGNS);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('camp_1');
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [assets, setAssets] = useState<CampaignAssetItem[]>(INITIAL_ASSETS);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchCampaigns = async () => {
+      setIsLoading(true);
+      try {
+        const res = await api.get('/campaigns');
+        if (res.data?.success && Array.isArray(res.data?.campaigns)) {
+          setCampaigns(res.data.campaigns);
+          if (res.data.campaigns.length > 0) {
+            setSelectedCampaignId(res.data.campaigns[0].id);
+          }
+        }
+      } catch (err) {
+        console.warn('Campaigns API fallback to state:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchCampaigns();
+  }, []);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -979,6 +683,21 @@ export default function Campaigns() {
                 </div>
               );
             })}
+            {filteredCampaigns.length === 0 && (
+              <div className="col-span-full py-16 px-4 text-center border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-card)]/40 flex flex-col items-center justify-center">
+                <Rocket className="w-12 h-12 text-[var(--color-muted-foreground)] opacity-40 mb-3" />
+                <h3 className="font-semibold text-base text-[var(--color-foreground)] mb-1">Chưa có chiến dịch nào</h3>
+                <p className="text-sm text-[var(--color-muted-foreground)] mb-4 max-w-sm">
+                  Bắt đầu tạo chiến dịch đa kênh đầu tiên để theo dõi tiến độ, phân bổ ngân sách và đo lường ROI.
+                </p>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="px-4 py-2 bg-[var(--color-primary)] text-white text-sm font-semibold rounded-xl hover:opacity-90 shadow-md shadow-indigo-500/20"
+                >
+                  + Tạo chiến dịch mới
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -987,6 +706,21 @@ export default function Campaigns() {
       {/* TAB 2: PROGRESS DASHBOARD (F138) */}
       {/* ==================================================================== */}
       {activeTab === 'progress' && (
+        !currentCampaign ? (
+          <div className="py-16 px-4 text-center border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-card)] flex flex-col items-center justify-center">
+            <Target className="w-12 h-12 text-[var(--color-muted-foreground)] opacity-40 mb-3" />
+            <h3 className="font-semibold text-base text-[var(--color-foreground)] mb-1">Chưa có chiến dịch để xem tiến độ</h3>
+            <p className="text-sm text-[var(--color-muted-foreground)] mb-4 max-w-sm">
+              Hãy tạo một chiến dịch mới ở tab "Chiến dịch" để xem bảng theo dõi tiến độ theo thời gian thực.
+            </p>
+            <button
+              onClick={() => { setActiveTab('campaigns'); setIsCreateModalOpen(true); }}
+              className="px-4 py-2 bg-[var(--color-primary)] text-white text-sm font-semibold rounded-xl hover:opacity-90"
+            >
+              + Tạo chiến dịch mới
+            </button>
+          </div>
+        ) : (
         <div className="space-y-6">
           {/* Header Summary */}
           <div className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-4">
@@ -1195,6 +929,7 @@ export default function Campaigns() {
             </div>
           </div>
         </div>
+        )
       )}
 
       {/* ==================================================================== */}
@@ -1323,6 +1058,13 @@ export default function Campaigns() {
                     </td>
                   </tr>
                 ))}
+                {assets.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-xs text-[var(--color-muted-foreground)] italic">
+                      Chưa có tài nguyên sáng tạo nào được tải lên.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1333,6 +1075,21 @@ export default function Campaigns() {
       {/* TAB 4: FINANCIAL REPORT & ROI (F139) */}
       {/* ==================================================================== */}
       {activeTab === 'report' && (
+        !currentCampaign ? (
+          <div className="py-16 px-4 text-center border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-card)] flex flex-col items-center justify-center">
+            <BarChart3 className="w-12 h-12 text-[var(--color-muted-foreground)] opacity-40 mb-3" />
+            <h3 className="font-semibold text-base text-[var(--color-foreground)] mb-1">Chưa có dữ liệu báo cáo tài chính</h3>
+            <p className="text-sm text-[var(--color-muted-foreground)] mb-4 max-w-sm">
+              Tạo chiến dịch và ghi nhận chi phí thực tế để xem báo cáo phân tích ROI, ROAS và chi phí trên mỗi Lead.
+            </p>
+            <button
+              onClick={() => { setActiveTab('campaigns'); setIsCreateModalOpen(true); }}
+              className="px-4 py-2 bg-[var(--color-primary)] text-white text-sm font-semibold rounded-xl hover:opacity-90"
+            >
+              + Tạo chiến dịch mới
+            </button>
+          </div>
+        ) : (
         <div className="space-y-6">
           {/* Verdict Banner */}
           <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1469,6 +1226,7 @@ export default function Campaigns() {
             </div>
           </div>
         </div>
+        )
       )}
 
       {/* ==================================================================== */}

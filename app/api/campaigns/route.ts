@@ -10,8 +10,8 @@ import {
   calculateCampaignROI,
 } from '@/lib/campaigns/engine';
 
-// In-memory memory fallback store
-let memoryCampaigns: EnrichedCampaign[] = [...SAMPLE_CAMPAIGNS];
+// In-memory memory fallback store (clean state for testing)
+let memoryCampaigns: EnrichedCampaign[] = [];
 
 // GET /api/campaigns
 export async function GET(req: NextRequest) {
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
         });
 
         if (dbCampaigns && dbCampaigns.length > 0) {
-          // Merge with memory campaigns
+          // Map db campaigns
           campaigns = dbCampaigns.map((dc: any) => {
             const memoryMatch = memoryCampaigns.find((mc) => mc.id === dc.id);
             if (memoryMatch) {
