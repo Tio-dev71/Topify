@@ -257,6 +257,10 @@ export default function CreatePost() {
       prefilledMediaUrl?: string;
       prefilledMediaName?: string;
       prefilledMediaType?: 'image' | 'video';
+      prefilledAssetId?: string;
+      prefilledWidth?: number;
+      prefilledHeight?: number;
+      prefilledDuration?: number;
       isCarousel?: boolean;
       carouselSlides?: CarouselSlideItem[];
     } | null;
@@ -287,13 +291,17 @@ export default function CreatePost() {
 
     if (locState?.prefilledTitle || locState?.prefilledCaption || locState?.prefilledHashtags || locState?.prefilledMediaUrl) {
       if (videos.length === 0) {
+        const isVideo = locState.prefilledMediaType === 'video' || (locState.prefilledMediaUrl && (locState.prefilledMediaUrl.endsWith('.mp4') || locState.prefilledMediaUrl.includes('video')));
         const draft: UploadedVideo = {
-          id: `draft_${Date.now()}`,
-          originalFileName: locState.prefilledMediaName || (locState.prefilledMediaUrl ? 'asset_resized.png' : 'Bản thảo kịch bản AI (Chưa gắn video)'),
+          id: locState.prefilledAssetId || (locState.prefilledMediaUrl ? `asset_${Date.now()}` : `draft_${Date.now()}`),
+          originalFileName: locState.prefilledMediaName || (locState.prefilledMediaUrl ? (isVideo ? 'video_resized.mp4' : 'asset_resized.png') : 'Bản thảo kịch bản AI (Chưa gắn video)'),
           titleFromFileName: locState.prefilledTitle || 'Bản thảo kịch bản AI',
           storageUrl: locState.prefilledMediaUrl || '',
           size: 1024 * 1024,
-          mimeType: locState.prefilledMediaType === 'image' || (locState.prefilledMediaUrl && locState.prefilledMediaUrl.startsWith('data:image')) ? 'image/png' : 'video/mp4',
+          mimeType: isVideo ? 'video/mp4' : 'image/png',
+          duration: locState.prefilledDuration || (isVideo ? 10 : null),
+          width: locState.prefilledWidth || (isVideo ? 1920 : 0),
+          height: locState.prefilledHeight || (isVideo ? 1080 : 0),
           isDraft: !locState.prefilledMediaUrl,
           title: locState.prefilledTitle || '',
           caption: locState.prefilledCaption || '',
@@ -308,18 +316,19 @@ export default function CreatePost() {
           updateVideoField(videos[0].id, 'hashtags', locState.prefilledHashtags);
         }
         if (locState.prefilledMediaUrl) {
+          const isVideo = locState.prefilledMediaType === 'video' || locState.prefilledMediaUrl.endsWith('.mp4');
           setVideos(prev =>
             prev.map((v, i) =>
               i === 0
                 ? {
                     ...v,
+                    id: locState.prefilledAssetId || v.id,
                     storageUrl: locState.prefilledMediaUrl!,
                     originalFileName: locState.prefilledMediaName || v.originalFileName,
-                    mimeType:
-                      locState.prefilledMediaType === 'image' ||
-                      locState.prefilledMediaUrl!.startsWith('data:image')
-                        ? 'image/png'
-                        : 'video/mp4',
+                    mimeType: isVideo ? 'video/mp4' : 'image/png',
+                    width: locState.prefilledWidth || v.width,
+                    height: locState.prefilledHeight || v.height,
+                    duration: locState.prefilledDuration !== undefined ? locState.prefilledDuration : v.duration,
                     isDraft: false,
                   }
                 : v
@@ -900,7 +909,7 @@ export default function CreatePost() {
       return;
     }
 
-    const unattachedDrafts = videos.filter(v => !v.isCarousel && (v.isDraft || v.id.startsWith('draft_') || !v.storageUrl));
+    const unattachedDrafts = videos.filter(v => !v.isCarousel && (v.isDraft || !v.storageUrl));
     if (unattachedDrafts.length > 0) {
       setTargetDraftForModal(unattachedDrafts[0]);
       setDraftReminderModalOpen(true);

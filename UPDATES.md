@@ -11,6 +11,48 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.70) — Studio Nội Dung & Media: Khắc Phục Lỗi Resize Đa Nền Tảng (F113) Áp Dụng Sang Bài Viết Không Thay Đổi Tỷ Lệ Trên YouTube
+
+### Phân hệ M2 & M7. Studio Nội Dung & Media Studio — Resize Đa Nền Tảng (F113) [Electron App, Web Dashboard & Backend API]:
+- **[Khắc phục lỗi video/ảnh giữ nguyên tỷ lệ cũ sau khi chọn Resize 9:16 sang 16:9 và xuất bản lên YouTube]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Studio Nội dung & Spin $\rightarrow$ Chọn **Resize Đa Nền Tảng (F113)**.
+    - Chọn video/ảnh tỷ lệ 9:16, chọn tỷ lệ đích `16:9 Ngang (1920 x 1080)`.
+    - Chọn `"Áp dụng vào bài viết mới"` và đăng bài lên kênh YouTube. Đăng thành công.
+    - *Mong đợi:* Video hoặc ảnh của bài đăng được chuyển đổi và xuất bản đúng theo tỷ lệ đích đã chọn (16:9 Ngang, 1920x1080 với hậu cảnh Gaussian blur hoặc căn chỉnh theo chế độ đã chọn).
+    - *Thực tế trước khi sửa:* Bài đăng thành công nhưng video/ảnh trên kênh YouTube vẫn giữ nguyên tỷ lệ gốc 9:16, không có hiệu ứng hậu cảnh hay thay đổi tỷ lệ khung hình.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Chưa thực hiện chuyển đổi vật lý (Transcoding) trước khi chuyển sang màn hình Tạo bài viết:**
+       - Giao diện `MultiPlatformResizer.tsx` chỉ dựng hiệu ứng preview mô phỏng bằng CSS (`w-[420px] h-[236px]`, backdrop-filter blur).
+       - Khi người dùng nhấn nút *"Áp Dụng Cho Bài Viết & Đăng Lên Kênh"*, hàm `handleApplyToCreatePost` chỉ chuyển hướng sang `/create` và truyền `currentMedia.url` (chính là URL/file gốc 9:16 chưa qua chuyển đổi).
+    2. **Tải xuống video chưa chuyển đổi tỷ lệ:**
+       - Nút *"Chuyển Đổi & Tải Xuống Asset"* đối với video chỉ tải lại tệp `currentMedia.url` gốc mà không thực hiện render khung hình tỷ lệ mới.
+    3. **Gán cứng loại tệp là hình ảnh:**
+       - Trong `ContentStudio.tsx` và `MediaStudio.tsx`, callback `onApplyToPost` bị gán cứng `prefilledMediaType: 'image'` và đuôi tệp `.png`, làm sai lệch định dạng khi người dùng thao tác với video.
+    4. **YouTube Publisher tự động ép thẻ `#Shorts`:**
+       - `YouTubeShortsPublisher` trước đó tự động chèn `#Shorts` vào tiêu đề và mô tả cho mọi bài đăng YouTube mà không kiểm tra tỷ lệ khung hình ngang (16:9, `width > height`).
+  - **Giải pháp xử lý toàn diện:**
+    1. **Nâng cấp Media Studio Engine (`lib/media/studio.ts`):**
+       - Bổ sung hàm `processMediaResize` hỗ trợ chuyển đổi tỷ lệ vật lý cho cả video (MP4) và hình ảnh (PNG/JPG) bằng FFmpeg.
+       - Hỗ trợ đầy đủ 3 chế độ căn chỉnh:
+         - `FIT_BLUR`: Tự động tạo lớp nền mờ Gaussian blur (`boxblur=20:5`) phóng to bao phủ toàn khung hình 16:9 và đặt video gốc sắc nét ở trung tâm.
+         - `CENTER_CROP`: Cắt cúp trung tâm để lấp đầy toàn bộ khung hình 1920x1080.
+         - `LETTERBOX`: Giữ trọn nội dung và đóng viền đen chuẩn studio.
+       - Tự động map luồng âm thanh an toàn (`-map 0:a? -c:a aac`) và trích xuất thời lượng `duration`.
+    2. **Mở rộng API `/api/media/resize` (`app/api/media/resize/route.ts`):**
+       - Hỗ trợ tiếp nhận cả tệp tải lên (`multipart/form-data`) và đường dẫn tệp (`mediaUrl`).
+       - Tự động chuyển đổi sang tỷ lệ đích, lưu tệp kết xuất vào Topify Storage và tạo bản ghi `VideoAsset` trong database liên kết với workspace của người dùng.
+    3. **Cập nhật giao diện `MultiPlatformResizer.tsx`:**
+       - Khi nhấn *"Áp Dụng Cho Bài Viết & Đăng Lên Kênh"* hoặc *"Chuyển Đổi & Tải Xuống Asset"*: hệ thống hiển thị trạng thái xử lý chuyển đổi (`isProcessing`), gửi yêu cầu tới API resize, nhận về tệp đã chuyển đổi thực tế (1920x1080) cùng `assetId`.
+       - Truyền đầy đủ `prefilledAssetId`, `prefilledMediaUrl`, `prefilledWidth`, `prefilledHeight` sang màn hình Tạo Bài Viết (`CreatePost.tsx`).
+    4. **Cập nhật `CreatePost.tsx` & YouTube Publisher:**
+       - `CreatePost.tsx`: Nhận diện `prefilledAssetId` đã chuyển đổi làm video chính thức sẵn sàng đăng (không bị chặn bởi cảnh báo bản thảo).
+       - `YouTubeShortsPublisher`: Nhận diện video tỷ lệ ngang 16:9 (`width > height`) để đăng tải dưới dạng video YouTube tiêu chuẩn (không chèn ép hashtag `#Shorts` sai lệch).
+    5. **Kiểm thử tự động (Unit Tests):**
+       - Bổ sung test case trong `__tests__/api/media/resize.test.ts` kiểm thử chuyển đổi video/ảnh sang tỷ lệ 16:9 (1920x1080) với chế độ `FIT_BLUR`. 8/8 tests đều pass 100%.
+
+---
+
 ## 🚀 [2026-11-02] (v1.3.69) — Studio Nội Dung & Spin: Nâng Cấp Thuật Toán Kiểm Tra Trùng Lặp (F082) Với Điều Kiện OR (Trùng Tiêu Đề HOẶC Trùng Caption)
 
 ### Phân hệ M2. Studio Nội Dung & Spin — Kiểm Tra Trùng Lặp (F082) [Electron App, Web Dashboard & Backend API]:

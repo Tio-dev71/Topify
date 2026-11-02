@@ -1,12 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   ASPECT_RATIO_PROFILES,
   calculateResizeTransform,
+  processMediaResize,
   AspectRatio,
   ResizeMode,
 } from '@/lib/media/studio';
 import { GET, POST } from '@/app/api/media/resize/route';
 import { NextRequest } from 'next/server';
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 describe('F113 Multi-Platform Resize Engine & API', () => {
   describe('ASPECT_RATIO_PROFILES', () => {
@@ -127,6 +132,29 @@ describe('F113 Multi-Platform Resize Engine & API', () => {
       expect(data.transform.targetWidth).toBe(1080);
       expect(data.transform.targetHeight).toBe(1920);
       expect(data.targetProfile.platforms).toContain('TikTok');
+    });
+
+    it('processMediaResize converts media to 16:9 (1920x1080) with FIT_BLUR', async () => {
+      // Create a small 1-frame test PNG using ffmpeg
+      const ffmpeg = (await import('@ffmpeg-installer/ffmpeg')).default.path;
+      const tmpTestPath = path.join(os.tmpdir(), `test_src_${Date.now()}.png`);
+      execSync(`"${ffmpeg}" -y -f lavfi -i color=c=blue:s=1080x1920:d=1 -vframes 1 "${tmpTestPath}"`, { stdio: 'pipe' });
+
+      const inputBuffer = fs.readFileSync(tmpTestPath);
+      fs.unlinkSync(tmpTestPath);
+
+      const result = await processMediaResize({
+        inputBuffer,
+        originalFileName: 'vertical_clip.png',
+        mimeType: 'image/png',
+        targetRatio: '16:9',
+        mode: 'FIT_BLUR',
+      });
+
+      expect(result.width).toBe(1920);
+      expect(result.height).toBe(1080);
+      expect(result.outputFileName).toContain('Resized_16_9');
+      expect(result.outputBuffer.length).toBeGreaterThan(0);
     });
   });
 });

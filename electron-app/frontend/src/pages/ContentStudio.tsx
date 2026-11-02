@@ -1196,12 +1196,17 @@ export default function ContentStudio() {
           </div>
 
           <MultiPlatformResizer
-            onApplyToPost={(assetUrl: string, ratio: AspectRatio, caption?: string) => {
+            onApplyToPost={(assetUrl: string, ratio: AspectRatio, caption?: string, assetMeta?: any) => {
+              const isVideo = assetMeta?.type === 'video' || assetUrl.endsWith('.mp4');
               navigate('/create', {
                 state: {
                   prefilledMediaUrl: assetUrl,
-                  prefilledMediaName: `resized_${ratio.replace(':', '_')}_${Date.now()}.png`,
-                  prefilledMediaType: 'image',
+                  prefilledMediaName: assetMeta?.originalFileName || `resized_${ratio.replace(':', '_')}_${Date.now()}.${isVideo ? 'mp4' : 'png'}`,
+                  prefilledMediaType: isVideo ? 'video' : 'image',
+                  prefilledAssetId: assetMeta?.id,
+                  prefilledWidth: assetMeta?.width,
+                  prefilledHeight: assetMeta?.height,
+                  prefilledDuration: assetMeta?.duration,
                   prefilledTitle: `Asset đã Resize chuẩn ${ratio} (${RATIO_PROFILES[ratio]?.platforms.join(', ') || ''})`,
                   prefilledCaption: caption || `Hình ảnh / Video chuẩn tỷ lệ ${ratio} đã được tối ưu hiển thị cho ${RATIO_PROFILES[ratio]?.platforms.join(', ')} #Topify #Resize #F113`,
                   prefilledHashtags: '#Topify #ContentStudio #ResizeF113',

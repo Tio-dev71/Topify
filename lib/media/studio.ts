@@ -2,6 +2,13 @@
  * M7. Media Studio Engine (F113, F114, F115)
  * Helpers for Multi-Platform Video Resizing, Repurposing & Subtitles
  */
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export type AspectRatio = '9:16' | '1:1' | '16:9' | '4:5';
 export type ResizeMode = 'FIT_BLUR' | 'CENTER_CROP' | 'LETTERBOX';
@@ -57,7 +64,7 @@ export function calculateResizeTransform(params: {
   mode: ResizeMode;
 }) {
   const { sourceWidth, sourceHeight, targetRatio, mode } = params;
-  const targetProfile = ASPECT_RATIO_PROFILES[targetRatio];
+  const targetProfile = ASPECT_RATIO_PROFILES[targetRatio] || ASPECT_RATIO_PROFILES['16:9'];
   const targetAspect = targetProfile.width / targetProfile.height;
   const sourceAspect = sourceWidth / sourceHeight;
 
@@ -101,4 +108,115 @@ export function calculateResizeTransform(params: {
     mode,
     ratio: targetRatio,
   };
+}
+
+/**
+ * Transcode and resize video or image to the target aspect ratio profile
+ * using FFmpeg with FIT_BLUR, CENTER_CROP, or LETTERBOX modes.
+ */
+export async function processMediaResize(params: {
+  inputBuffer: Buffer;
+  originalFileName: string;
+  mimeType?: string;
+  targetRatio: AspectRatio;
+  mode: ResizeMode;
+  customScale?: number;
+}): Promise<{
+  outputBuffer: Buffer;
+  outputFileName: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  duration?: number;
+}> {
+  const { inputBuffer, originalFileName, mimeType, targetRatio, mode } = params;
+
+  // 1. Detect if media is video or image
+  const isVideo =
+    (mimeType && mimeType.startsWith('video/')) ||
+    /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(originalFileName);
+
+  // 2. Resolve ffmpeg binary path
+  let ffmpegPath = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find(p =>
+    fs.existsSync(p)
+  );
+  if (!ffmpegPath) {
+    try {
+      // @ts-expect-error - no types
+      const ffmpegInstaller = await import('@ffmpeg-installer/ffmpeg');
+      ffmpegPath = ffmpegInstaller?.default?.path || ffmpegInstaller?.path;
+    } catch {}
+  }
+  if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
+    ffmpegPath = 'ffmpeg';
+  }
+
+  // 3. Resolve target profile
+  const profile = ASPECT_RATIO_PROFILES[targetRatio] || ASPECT_RATIO_PROFILES['16:9'];
+  const tw = profile.width;
+  const th = profile.height;
+
+  // 4. Determine filter graph
+  let filter = '';
+  if (mode === 'FIT_BLUR') {
+    filter = `[0:v]scale=${tw}:${th}:force_original_aspect_ratio=increase,crop=${tw}:${th},boxblur=20:5[bg];[0:v]scale=${tw}:${th}:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1`;
+  } else if (mode === 'CENTER_CROP') {
+    filter = `scale=${tw}:${th}:force_original_aspect_ratio=increase,crop=${tw}:${th},setsar=1`;
+  } else {
+    // LETTERBOX
+    filter = `scale=${tw}:${th}:force_original_aspect_ratio=decrease,pad=${tw}:${th}:(ow-iw)/2:(oh-ih)/2:black,setsar=1`;
+  }
+
+  // 5. Setup temp files
+  const tempDir = os.tmpdir();
+  const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const inputExt = path.extname(originalFileName) || (isVideo ? '.mp4' : '.png');
+  const inputTempPath = path.join(tempDir, `topify_resize_in_${uniqueId}${inputExt}`);
+  const outputExt = isVideo ? '.mp4' : '.png';
+  const outputTempPath = path.join(tempDir, `topify_resize_out_${uniqueId}${outputExt}`);
+
+  try {
+    await fs.promises.writeFile(inputTempPath, inputBuffer);
+
+    let ffmpegCmd = '';
+    if (isVideo) {
+      ffmpegCmd = `"${ffmpegPath}" -y -i "${inputTempPath}" -filter_complex "${filter}" -map 0:a? -c:v libx264 -preset veryfast -c:a aac -b:a 192k "${outputTempPath}"`;
+    } else {
+      ffmpegCmd = `"${ffmpegPath}" -y -i "${inputTempPath}" -filter_complex "${filter}" -vframes 1 "${outputTempPath}"`;
+    }
+
+    const { stderr } = await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
+
+    // Parse duration from stderr if available
+    let duration: number | undefined;
+    const durMatch = (stderr || '').match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
+    if (durMatch) {
+      const hours = parseFloat(durMatch[1]);
+      const minutes = parseFloat(durMatch[2]);
+      const seconds = parseFloat(durMatch[3]);
+      duration = hours * 3600 + minutes * 60 + seconds;
+    }
+
+    const outputBuffer = await fs.promises.readFile(outputTempPath);
+    const safeRatioName = targetRatio.replace(':', '_');
+    const baseName = path.basename(originalFileName, path.extname(originalFileName));
+    const outputFileName = `Resized_${safeRatioName}_${baseName}${outputExt}`;
+
+    return {
+      outputBuffer,
+      outputFileName,
+      mimeType: isVideo ? 'video/mp4' : 'image/png',
+      width: tw,
+      height: th,
+      duration,
+    };
+  } finally {
+    // Clean up temporary files
+    if (fs.existsSync(inputTempPath)) {
+      await fs.promises.unlink(inputTempPath).catch(() => {});
+    }
+    if (fs.existsSync(outputTempPath)) {
+      await fs.promises.unlink(outputTempPath).catch(() => {});
+    }
+  }
 }

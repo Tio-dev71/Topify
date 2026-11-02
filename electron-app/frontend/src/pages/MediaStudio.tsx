@@ -301,12 +301,17 @@ export default function MediaStudio() {
       {/* ========================================================================= */}
       {activeTab === 'resize' && (
         <MultiPlatformResizer
-          onApplyToPost={(assetUrl: string, ratio: AspectRatio, caption?: string) => {
+          onApplyToPost={(assetUrl: string, ratio: AspectRatio, caption?: string, assetMeta?: any) => {
+            const isVideo = assetMeta?.type === 'video' || assetUrl.endsWith('.mp4');
             navigate('/create', {
               state: {
                 prefilledMediaUrl: assetUrl,
-                prefilledMediaName: `media_studio_resized_${ratio.replace(':', '_')}.png`,
-                prefilledMediaType: 'image',
+                prefilledMediaName: assetMeta?.originalFileName || `media_studio_resized_${ratio.replace(':', '_')}.${isVideo ? 'mp4' : 'png'}`,
+                prefilledMediaType: isVideo ? 'video' : 'image',
+                prefilledAssetId: assetMeta?.id,
+                prefilledWidth: assetMeta?.width,
+                prefilledHeight: assetMeta?.height,
+                prefilledDuration: assetMeta?.duration,
                 prefilledTitle: `Video/Ảnh đã Resize chuẩn ${ratio} (${RATIO_PROFILES[ratio]?.platforms.join(', ') || ''})`,
                 prefilledCaption: caption || `Tối ưu tỷ lệ ${ratio} cho ${RATIO_PROFILES[ratio]?.platforms.join(', ')} #Topify #MediaStudio #F113`,
                 prefilledHashtags: '#Topify #MediaStudio #ResizeF113',

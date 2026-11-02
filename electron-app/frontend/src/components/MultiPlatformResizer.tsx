@@ -108,12 +108,13 @@ const SAMPLE_MEDIA = [
 ];
 
 export interface MultiPlatformResizerProps {
-  onApplyToPost?: (mediaUrl: string, ratio: AspectRatio, caption?: string) => void;
+  onApplyToPost?: (mediaUrl: string, ratio: AspectRatio, caption?: string, assetMeta?: any) => void;
   onAppliedToCreatePost?: (data: {
     mediaUrl: string;
     mediaName: string;
     mediaType: string;
     ratio: AspectRatio;
+    assetId?: string;
   }) => void;
 }
 
@@ -249,210 +250,256 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
     }
   };
 
-  // Convert & Download Image / Spec via HTML5 Canvas (F113)
-  const handleConvertAndDownload = async () => {
-    setIsProcessing(true);
+  // Perform genuine conversion of currentMedia to selectedRatio via /api/media/resize
+  const requestResizedMedia = async (): Promise<{
+    storageUrl: string;
+    originalFileName: string;
+    assetId?: string;
+    width: number;
+    height: number;
+    duration?: number;
+    mimeType: string;
+    blobUrl?: string;
+  }> => {
     const targetProfile = RATIO_PROFILES[selectedRatio];
 
-    try {
-      if (currentMedia.type === 'image') {
-        const canvas = document.createElement('canvas');
-        canvas.width = targetProfile.width;
-        canvas.height = targetProfile.height;
-        const ctx = canvas.getContext('2d');
+    if (currentMedia.type === 'video') {
+      if (currentMedia.file) {
+        const formData = new FormData();
+        formData.append('file', currentMedia.file);
+        formData.append('targetRatio', selectedRatio);
+        formData.append('mode', resizeMode);
+        formData.append('customScale', customScale.toString());
 
-        if (!ctx) throw new Error('Không thể khởi tạo Canvas 2D context');
-
-        // Resolve clean image source (avoid CORS canvas taint if possible)
-        let resolvedSrc = currentMedia.url;
-        if (currentMedia.file) {
-          resolvedSrc = URL.createObjectURL(currentMedia.file);
-        } else if (currentMedia.url.startsWith('http')) {
-          try {
-            const resp = await fetch(currentMedia.url, { mode: 'cors' });
-            if (resp.ok) {
-              const b = await resp.blob();
-              resolvedSrc = URL.createObjectURL(b);
-            }
-          } catch {
-            // Keep original if fetch blocked
-          }
-        }
-
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => {
-            // Fallback: try loading without crossOrigin if local or same-origin
-            const fallbackImg = new Image();
-            fallbackImg.onload = () => {
-              img.src = fallbackImg.src;
-              resolve();
-            };
-            fallbackImg.onerror = () => reject(new Error('Không thể tải hình ảnh nguồn'));
-            fallbackImg.src = resolvedSrc;
-          };
-          img.src = resolvedSrc;
+        const res = await api.post('/media/resize', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 240000,
         });
 
-        const scaleModifier = customScale / 100;
-
-        // Render Background
-        if (resizeMode === 'FIT_BLUR') {
-          // Draw blurred zoomed background
-          ctx.save();
-          ctx.filter = 'blur(40px) brightness(0.65)';
-          const bgScale = Math.max(targetProfile.width / img.width, targetProfile.height / img.height) * 1.3;
-          const bgW = img.width * bgScale;
-          const bgH = img.height * bgScale;
-          const bgX = (targetProfile.width - bgW) / 2;
-          const bgY = (targetProfile.height - bgH) / 2;
-          ctx.drawImage(img, bgX, bgY, bgW, bgH);
-          ctx.restore();
-
-          // Draw main fitted image
-          const fitScale = Math.min(targetProfile.width / img.width, targetProfile.height / img.height) * scaleModifier;
-          const w = img.width * fitScale;
-          const h = img.height * fitScale;
-          const x = (targetProfile.width - w) / 2;
-          const y = (targetProfile.height - h) / 2;
-          ctx.drawImage(img, x, y, w, h);
-        } else if (resizeMode === 'CENTER_CROP') {
-          // Crop to fill
-          const fillScale = Math.max(targetProfile.width / img.width, targetProfile.height / img.height) * scaleModifier;
-          const w = img.width * fillScale;
-          const h = img.height * fillScale;
-          const x = (targetProfile.width - w) / 2;
-          const y = (targetProfile.height - h) / 2;
-          ctx.drawImage(img, x, y, w, h);
-        } else {
-          // LETTERBOX
-          ctx.fillStyle = '#0a0a0a';
-          ctx.fillRect(0, 0, targetProfile.width, targetProfile.height);
-
-          const fitScale = Math.min(targetProfile.width / img.width, targetProfile.height / img.height) * scaleModifier;
-          const w = img.width * fitScale;
-          const h = img.height * fitScale;
-          const x = (targetProfile.width - w) / 2;
-          const y = (targetProfile.height - h) / 2;
-          ctx.drawImage(img, x, y, w, h);
-        }
-
-        // Add sleek subtle watermark badge
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.beginPath();
-        ctx.roundRect(targetProfile.width - 200, targetProfile.height - 70, 170, 42, 12);
-        ctx.fill();
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.fillText('Topify Resize', targetProfile.width - 180, targetProfile.height - 43);
-
-        const safeRatioName = selectedRatio.replace(':', '_');
-
-        // Safe export with fallback if tainted
-        try {
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              // Fallback to data URL
-              const dataUrl = canvas.toDataURL('image/png');
-              const a = document.createElement('a');
-              a.href = dataUrl;
-              a.download = `Topify_${safeRatioName}_${Date.now()}.png`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              toast.success(`Chuyển đổi thành công! Đã tải về tệp ảnh chuẩn ${selectedRatio} (${targetProfile.width}x${targetProfile.height})`);
-              setIsProcessing(false);
-              return;
-            }
-            const downloadUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = `Topify_${safeRatioName}_${Date.now()}.png`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(downloadUrl);
-
-            toast.success(`Chuyển đổi thành công! Đã tải về tệp ảnh chuẩn ${selectedRatio} (${targetProfile.width}x${targetProfile.height})`);
-            setIsProcessing(false);
-          }, 'image/png');
-        } catch {
-          // Direct fallback if canvas is strictly tainted: download clean asset
-          const a = document.createElement('a');
-          a.href = resolvedSrc;
-          a.target = '_blank';
-          a.download = `Topify_${safeRatioName}_${Date.now()}.png`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          toast.success(`Đã chuẩn hóa thông số tỷ lệ ${selectedRatio} (${targetProfile.width}x${targetProfile.height}) và tải file thành công!`);
-          setIsProcessing(false);
+        if (res.data?.success && res.data?.asset) {
+          return {
+            storageUrl: res.data.mediaUrl || res.data.asset.storageUrl,
+            originalFileName: res.data.asset.originalFileName,
+            assetId: res.data.asset.id,
+            width: res.data.asset.width || targetProfile.width,
+            height: res.data.asset.height || targetProfile.height,
+            duration: res.data.asset.duration,
+            mimeType: res.data.asset.mimeType || 'video/mp4',
+          };
         }
       } else {
-        // Video conversion & download
-        await new Promise((r) => setTimeout(r, 600));
-        const safeRatioName = selectedRatio.replace(':', '_');
-        const a = document.createElement('a');
-        a.href = currentMedia.url;
-        a.target = '_blank';
-        a.download = `Topify_Video_${safeRatioName}_${Date.now()}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        toast.success(`Đã chuyển đổi và tải về video chuẩn tỷ lệ ${selectedRatio} (${targetProfile.width}x${targetProfile.height}) thành công!`);
-        setIsProcessing(false);
+        // Video from URL or sample media
+        const res = await api.post('/media/resize', {
+          mediaUrl: currentMedia.url,
+          fileName: currentMedia.name,
+          targetRatio: selectedRatio,
+          mode: resizeMode,
+          customScale,
+        }, { timeout: 240000 });
+
+        if (res.data?.success && res.data?.asset) {
+          return {
+            storageUrl: res.data.mediaUrl || res.data.asset.storageUrl,
+            originalFileName: res.data.asset.originalFileName,
+            assetId: res.data.asset.id,
+            width: res.data.asset.width || targetProfile.width,
+            height: res.data.asset.height || targetProfile.height,
+            duration: res.data.asset.duration,
+            mimeType: res.data.asset.mimeType || 'video/mp4',
+          };
+        }
       }
-    } catch (err: any) {
-      console.error('Error converting asset:', err);
-      // Fallback graceful download
+    } else {
+      // Image: Render on Canvas for exact layout
+      const canvas = document.createElement('canvas');
+      canvas.width = targetProfile.width;
+      canvas.height = targetProfile.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Không thể khởi tạo Canvas 2D context');
+
+      let resolvedSrc = currentMedia.url;
+      if (currentMedia.file) {
+        resolvedSrc = URL.createObjectURL(currentMedia.file);
+      }
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => {
+          const fallbackImg = new Image();
+          fallbackImg.onload = () => { img.src = fallbackImg.src; resolve(); };
+          fallbackImg.onerror = () => reject(new Error('Không thể tải hình ảnh nguồn'));
+          fallbackImg.src = resolvedSrc;
+        };
+        img.src = resolvedSrc;
+      });
+
+      const scaleModifier = customScale / 100;
+
+      if (resizeMode === 'FIT_BLUR') {
+        ctx.save();
+        ctx.filter = 'blur(40px) brightness(0.65)';
+        const bgScale = Math.max(targetProfile.width / img.width, targetProfile.height / img.height) * 1.3;
+        const bgW = img.width * bgScale;
+        const bgH = img.height * bgScale;
+        ctx.drawImage(img, (targetProfile.width - bgW) / 2, (targetProfile.height - bgH) / 2, bgW, bgH);
+        ctx.restore();
+
+        const fitScale = Math.min(targetProfile.width / img.width, targetProfile.height / img.height) * scaleModifier;
+        const w = img.width * fitScale;
+        const h = img.height * fitScale;
+        ctx.drawImage(img, (targetProfile.width - w) / 2, (targetProfile.height - h) / 2, w, h);
+      } else if (resizeMode === 'CENTER_CROP') {
+        const fillScale = Math.max(targetProfile.width / img.width, targetProfile.height / img.height) * scaleModifier;
+        const w = img.width * fillScale;
+        const h = img.height * fillScale;
+        ctx.drawImage(img, (targetProfile.width - w) / 2, (targetProfile.height - h) / 2, w, h);
+      } else {
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fillRect(0, 0, targetProfile.width, targetProfile.height);
+        const fitScale = Math.min(targetProfile.width / img.width, targetProfile.height / img.height) * scaleModifier;
+        const w = img.width * fitScale;
+        const h = img.height * fitScale;
+        ctx.drawImage(img, (targetProfile.width - w) / 2, (targetProfile.height - h) / 2, w, h);
+      }
+
       const safeRatioName = selectedRatio.replace(':', '_');
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (blob) {
+        const formData = new FormData();
+        const exportName = `Resized_${safeRatioName}_${currentMedia.name.replace(/\.[^/.]+$/, '')}.png`;
+        formData.append('file', blob, exportName);
+        formData.append('targetRatio', selectedRatio);
+        formData.append('mode', resizeMode);
+
+        try {
+          const res = await api.post('/media/resize', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 60000,
+          });
+          if (res.data?.success && res.data?.asset) {
+            return {
+              storageUrl: res.data.mediaUrl || res.data.asset.storageUrl,
+              originalFileName: res.data.asset.originalFileName,
+              assetId: res.data.asset.id,
+              width: targetProfile.width,
+              height: targetProfile.height,
+              mimeType: 'image/png',
+              blobUrl: URL.createObjectURL(blob),
+            };
+          }
+        } catch (uploadErr) {
+          console.warn('Could not save resized image to server, fallback to client blob:', uploadErr);
+        }
+
+        const blobUrl = URL.createObjectURL(blob);
+        return {
+          storageUrl: blobUrl,
+          originalFileName: exportName,
+          width: targetProfile.width,
+          height: targetProfile.height,
+          mimeType: 'image/png',
+          blobUrl,
+        };
+      }
+    }
+
+    throw new Error('Không thể xử lý chuyển đổi tệp');
+  };
+
+  // Convert & Download Asset (F113)
+  const handleConvertAndDownload = async () => {
+    setIsProcessing(true);
+    const toastId = toast.loading(`Đang xử lý chuyển đổi ${currentMedia.type === 'video' ? 'video' : 'hình ảnh'} chuẩn ${selectedRatio} (${targetProfile.width}×${targetProfile.height})...`);
+
+    try {
+      const resized = await requestResizedMedia();
+      toast.dismiss(toastId);
+
       const a = document.createElement('a');
-      a.href = currentMedia.url;
+      a.href = resized.blobUrl || resized.storageUrl;
       a.target = '_blank';
-      a.download = `Topify_Resized_${safeRatioName}_${Date.now()}.jpg`;
+      a.download = resized.originalFileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      toast.success(`Đã xử lý chuyển đổi thành công tệp chuẩn ${selectedRatio}!`);
+
+      toast.success(`Đã chuyển đổi và tải về tệp chuẩn tỷ lệ ${selectedRatio} (${targetProfile.width}×${targetProfile.height}) thành công!`);
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      console.error('Error downloading resized media:', err);
+      toast.error(`Lỗi chuyển đổi asset: ${err.response?.data?.error || err.message || 'Không thể kết xuất asset'}`);
+    } finally {
       setIsProcessing(false);
     }
   };
 
   // Apply and Send to Create Post
-  const handleApplyToCreatePost = () => {
-    if (onApplyToPost) {
-      onApplyToPost(
-        currentMedia.url,
-        selectedRatio,
-        `Hình ảnh / Video chuẩn tỷ lệ ${selectedRatio} đã được tối ưu hiển thị cho ${RATIO_PROFILES[selectedRatio]?.platforms.join(', ')} #Topify #Resize #F113`
-      );
-      return;
-    }
+  const handleApplyToCreatePost = async () => {
+    setIsProcessing(true);
+    const toastId = toast.loading(`Đang xử lý chuyển đổi ${currentMedia.type === 'video' ? 'video' : 'hình ảnh'} sang chuẩn ${selectedRatio} (${targetProfile.width}×${targetProfile.height})...`);
 
-    if (onAppliedToCreatePost) {
-      onAppliedToCreatePost({
-        mediaUrl: currentMedia.url,
-        mediaName: `Resized_${selectedRatio}_${currentMedia.name}`,
-        mediaType: currentMedia.type === 'video' ? 'video/mp4' : 'image/png',
-        ratio: selectedRatio,
+    try {
+      const resized = await requestResizedMedia();
+      toast.dismiss(toastId);
+      toast.success(`Đã chuyển đổi ${currentMedia.type === 'video' ? 'video' : 'hình ảnh'} chuẩn ${selectedRatio} thành công!`);
+
+      const targetPlatforms = RATIO_PROFILES[selectedRatio]?.platforms || [];
+      const captionText = `Hình ảnh / Video chuẩn tỷ lệ ${selectedRatio} (${RATIO_PROFILES[selectedRatio].name}) đã được tối ưu hiển thị cho ${targetPlatforms.join(', ')} #Topify #Resize #F113`;
+
+      if (onApplyToPost) {
+        onApplyToPost(
+          resized.storageUrl,
+          selectedRatio,
+          captionText,
+          {
+            id: resized.assetId,
+            storageUrl: resized.storageUrl,
+            originalFileName: resized.originalFileName,
+            mimeType: resized.mimeType,
+            type: currentMedia.type,
+            width: resized.width,
+            height: resized.height,
+            duration: resized.duration,
+          }
+        );
+        return;
+      }
+
+      if (onAppliedToCreatePost) {
+        onAppliedToCreatePost({
+          mediaUrl: resized.storageUrl,
+          mediaName: resized.originalFileName,
+          mediaType: resized.mimeType,
+          ratio: selectedRatio,
+          assetId: resized.assetId,
+        });
+        return;
+      }
+
+      navigate('/create', {
+        state: {
+          prefilledTitle: `[${selectedRatio}] ${currentMedia.name.replace(/\.[^/.]+$/, '')}`,
+          prefilledCaption: `Video chuẩn tỷ lệ ${selectedRatio} (${RATIO_PROFILES[selectedRatio].name}) được chuyển đổi tự động bởi Topify Media Studio F113!`,
+          prefilledHashtags: `#Topify #${selectedRatio.replace(':', '_')} #Viral #Trending`,
+          prefilledMediaUrl: resized.storageUrl,
+          prefilledMediaName: resized.originalFileName,
+          prefilledMediaType: currentMedia.type,
+          prefilledAssetId: resized.assetId,
+          prefilledWidth: resized.width,
+          prefilledHeight: resized.height,
+          prefilledDuration: resized.duration,
+        },
       });
-      return;
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      console.error('Error applying resized media:', err);
+      toast.error(`Chuyển đổi asset thất bại: ${err.response?.data?.error || err.message || 'Lỗi không xác định'}`);
+    } finally {
+      setIsProcessing(false);
     }
-
-    navigate('/create', {
-      state: {
-        prefilledTitle: `[${selectedRatio}] ${currentMedia.name.replace(/\.[^/.]+$/, '')}`,
-        prefilledCaption: `Video chuẩn tỷ lệ ${selectedRatio} (${RATIO_PROFILES[selectedRatio].name}) được chuyển đổi tự động bởi Topify Media Studio F113!`,
-        prefilledHashtags: `#Topify #${selectedRatio.replace(':', '_')} #Viral #Trending`,
-        prefilledMediaUrl: currentMedia.url,
-        prefilledMediaName: `Resized_${selectedRatio}_${currentMedia.name}`,
-        prefilledMediaType: currentMedia.type === 'video' ? 'video/mp4' : 'image/png',
-      },
-    });
-    toast.success(`Đã chuyển asset chuẩn ${selectedRatio} sang màn hình Tạo Bài Viết!`);
   };
 
   const targetProfile = RATIO_PROFILES[selectedRatio];
@@ -681,11 +728,21 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
             <button
               type="button"
               onClick={handleApplyToCreatePost}
-              className="w-full py-3 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+              disabled={isProcessing}
+              className="w-full py-3 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer disabled:opacity-60"
             >
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Áp Dụng Cho Bài Viết & Đăng Lên Kênh</span>
-              <ArrowRight className="w-3.5 h-3.5 text-emerald-600" />
+              {isProcessing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 text-emerald-600 animate-spin" />
+                  <span>Đang Xử Lý Chuyển Đổi ({selectedRatio})...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Áp Dụng Cho Bài Viết & Đăng Lên Kênh</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-emerald-600" />
+                </>
+              )}
             </button>
           </div>
         </div>

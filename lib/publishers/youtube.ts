@@ -26,9 +26,14 @@ export class YouTubeShortsPublisher implements Publisher {
       const token = await getValidAccessToken(socialAccount);
       const storage = getStorage();
 
-      // Ensure title includes #Shorts for YouTube algorithm to recognize it (max 100 chars for YouTube Data API)
-      let title = sanitizeUtf8(post.title) || 'Shorts';
-      if (!title.toLowerCase().includes('#shorts')) {
+      // Detect if video is standard landscape (16:9) or exceeding shorts duration (> 180s)
+      const isHorizontalVideo = Boolean(videoAsset.width && videoAsset.height && videoAsset.width > videoAsset.height);
+      const isOverDuration = Boolean(videoAsset.duration && videoAsset.duration > 180);
+      const isStandardVideo = isHorizontalVideo || isOverDuration;
+
+      // Ensure title includes #Shorts only if vertical/square shorts video (max 100 chars for YouTube Data API)
+      let title = sanitizeUtf8(post.title) || (isStandardVideo ? 'Video' : 'Shorts');
+      if (!isStandardVideo && !title.toLowerCase().includes('#shorts')) {
         if (Array.from(title).length + 8 <= 100) {
           title = `${title} #Shorts`;
         } else {
@@ -36,15 +41,18 @@ export class YouTubeShortsPublisher implements Publisher {
         }
       }
 
-      // Ensure description includes #Shorts tag
+      // Ensure description includes #Shorts tag only for vertical/square shorts videos
       let description = sanitizeUtf8([post.caption, post.hashtags].filter(Boolean).join('\n\n'));
-      if (!description.toLowerCase().includes('#shorts')) {
+      if (!isStandardVideo && !description.toLowerCase().includes('#shorts')) {
         description = description ? `${description}\n\n#Shorts #YouTubeShorts` : '#Shorts #YouTubeShorts';
       }
 
-      // Warn if video duration exceeds YouTube Shorts limits (> 180s)
+      // Warn/log video format details
       if (videoAsset.duration && videoAsset.duration > 180) {
         console.warn(`[YouTubeShortsPublisher] Video duration is ${videoAsset.duration}s (> 180s). YouTube will automatically process this as a Standard Long-form Video.`);
+      }
+      if (isHorizontalVideo) {
+        console.log(`[YouTubeShortsPublisher] Video is Landscape/16:9 (${videoAsset.width}x${videoAsset.height}). Uploading as standard landscape YouTube Video.`);
       }
 
       // Auto-detect channel if not yet stored
@@ -76,15 +84,17 @@ export class YouTubeShortsPublisher implements Publisher {
         }
       }
 
-      // Prepare tags from hashtags and guarantee Shorts tags
+      // Prepare tags from hashtags and guarantee Shorts tags if vertical
       const tags = post.hashtags
         ? post.hashtags.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean)
         : [];
-      ['Shorts', 'Short', 'YouTubeShorts'].forEach(tag => {
-        if (!tags.some(t => t.toLowerCase() === tag.toLowerCase())) {
-          tags.push(tag);
-        }
-      });
+      if (!isStandardVideo) {
+        ['Shorts', 'Short', 'YouTubeShorts'].forEach(tag => {
+          if (!tags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+            tags.push(tag);
+          }
+        });
+      }
 
       // Step 1: Initialize resumable upload
       const initRes = await fetch(
