@@ -23,10 +23,10 @@ export async function GET(req: NextRequest) {
     const deals = await prisma.deal.findMany({
       where,
       include: {
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true, source: true, tags: true } },
         stage: { select: { name: true, color: true, sortOrder: true } },
         pipeline: { select: { name: true } },
-        owner: { select: { name: true, image: true } },
+        owner: { select: { id: true, name: true, image: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -58,7 +58,9 @@ export async function POST(req: NextRequest) {
       customerNotes,
       pipelineId,
       stageId,
-      expectedClose
+      expectedClose,
+      probability,
+      ownerId
     } = body;
     const workspaceId = (session.user as any).workspaceId;
 
@@ -98,17 +100,19 @@ export async function POST(req: NextRequest) {
       data: {
         title,
         value: typeof value === 'string' ? parseFloat(value) || 0 : (value || 0),
+        probability: probability !== undefined ? Math.min(100, Math.max(0, parseInt(probability) || 0)) : 50,
         customerId: finalCustomerId,
         pipelineId,
         stageId,
-        ownerId: session.user.id,
+        ownerId: ownerId || session.user.id,
         expectedClose: expectedClose ? new Date(expectedClose) : null,
         workspaceId,
       },
       include: {
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true, source: true, tags: true } },
         stage: { select: { name: true, color: true } },
         pipeline: { select: { name: true } },
+        owner: { select: { id: true, name: true, image: true, email: true } },
       },
     });
 
@@ -151,7 +155,7 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const id = body.dealId || body.id;
-    const { title, value, customerId, stageId, status, expectedClose } = body;
+    const { title, value, customerId, stageId, status, expectedClose, probability, ownerId } = body;
     const workspaceId = (session.user as any).workspaceId;
 
     if (!id) {
@@ -163,6 +167,8 @@ export async function PATCH(req: NextRequest) {
     if (value !== undefined) data.value = typeof value === 'string' ? parseFloat(value) || 0 : value;
     if (customerId !== undefined) data.customerId = customerId || null;
     if (stageId) data.stageId = stageId;
+    if (probability !== undefined) data.probability = Math.min(100, Math.max(0, parseInt(probability) || 0));
+    if (ownerId !== undefined) data.ownerId = ownerId || null;
     if (expectedClose !== undefined) data.expectedClose = expectedClose ? new Date(expectedClose) : null;
     if (status) {
       data.status = status;
@@ -174,7 +180,9 @@ export async function PATCH(req: NextRequest) {
       data,
       include: {
         stage: { select: { name: true, color: true } },
-        customer: { select: { id: true, name: true, email: true, phone: true } },
+        pipeline: { select: { name: true } },
+        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true, source: true, tags: true } },
+        owner: { select: { id: true, name: true, image: true, email: true } },
       },
     });
 

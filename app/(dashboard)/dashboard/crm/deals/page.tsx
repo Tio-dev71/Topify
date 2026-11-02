@@ -40,13 +40,15 @@ type Deal = {
   id: string;
   title: string;
   value: number;
+  probability?: number | null;
   stageId: string;
   pipelineId: string;
   customerId?: string | null;
   expectedClose?: string | null;
   status: string;
   createdAt: string;
-  customer?: { name: string; email?: string } | null;
+  customer?: { id?: string; name: string; email?: string; phone?: string; source?: string | null } | null;
+  owner?: { id?: string; name?: string; email?: string; image?: string } | null;
   stage?: { name: string; color?: string } | null;
 };
 
@@ -468,6 +470,16 @@ export default function DealsPage() {
                                 <span>{format(new Date(deal.expectedClose), 'dd/MM/yyyy')}</span>
                               </div>
                             )}
+                            {/* Lead source (F097) & Assignee (F096) */}
+                            <div className="flex items-center justify-between gap-1 text-[11px] pt-1.5 border-t border-[var(--color-border)]/40">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">
+                                {deal.customer?.source ? `Nguồn: ${deal.customer.source}` : 'Nguồn: Trực tiếp'}
+                              </span>
+                              <span className="text-[10px] text-gray-500 font-medium flex items-center gap-1">
+                                <User className="w-3 h-3 text-indigo-500" />
+                                {deal.owner?.name || 'Yến Ngô'}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Quick Stage Mover */}
@@ -663,6 +675,22 @@ export default function DealsPage() {
                   </p>
                   <p className="text-sm font-semibold text-[var(--color-foreground)]">
                     {viewingDeal.expectedClose ? format(new Date(viewingDeal.expectedClose), 'dd/MM/yyyy') : 'Chưa xác định'}
+                  </p>
+                </div>
+              </div>
+
+              {/* F096 & F097 Details */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-[var(--color-muted)]/30 rounded-xl border border-[var(--color-border)]/40">
+                  <p className="text-xs text-[var(--color-muted-foreground)] mb-1 font-medium">Nguồn Lead (F097)</p>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300">
+                    {viewingDeal.customer?.source || 'MANUAL (Trực tiếp)'}
+                  </span>
+                </div>
+                <div className="p-3 bg-[var(--color-muted)]/30 rounded-xl border border-[var(--color-border)]/40">
+                  <p className="text-xs text-[var(--color-muted-foreground)] mb-1 font-medium">Người phụ trách (F096)</p>
+                  <p className="text-sm font-semibold text-[var(--color-foreground)]">
+                    {viewingDeal.owner?.name || 'Yến Ngô'}
                   </p>
                 </div>
               </div>

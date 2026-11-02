@@ -74,6 +74,42 @@ describe('CRM Deals API - /api/crm/deals', () => {
       expect(data.deals).toHaveLength(1);
       expect(data.deals[0].customer.name).toBe('Nguyễn Minh Anh');
     });
+
+    it('returns lead source (F097), assignee owner (F096), and probability (F096)', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'u1', workspaceId: 'ws1' },
+      } as any);
+
+      vi.mocked(prisma.deal.findMany).mockResolvedValue([
+        {
+          id: 'd_f096',
+          title: 'Đơn sỉ 100 áo gió - Nguyễn Văn Minh',
+          value: 15000000,
+          probability: 80,
+          stageId: 's1',
+          pipelineId: 'p1',
+          customer: {
+            id: 'c1',
+            name: 'Nguyễn Văn Minh',
+            phone: '0988112233',
+            source: 'TIKTOK',
+          },
+          owner: {
+            id: 'u1',
+            name: 'yến ngô',
+            email: 'nhim300997@gmail.com',
+          },
+        },
+      ] as any);
+
+      const req = new NextRequest('http://localhost/api/crm/deals');
+      const res = await GET(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.deals[0].customer.source).toBe('TIKTOK');
+      expect(data.deals[0].owner.name).toBe('yến ngô');
+      expect(data.deals[0].probability).toBe(80);
+    });
   });
 
   describe('POST /api/crm/deals (Tạo Deal & Đồng bộ CRM)', () => {

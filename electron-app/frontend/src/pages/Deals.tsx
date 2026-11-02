@@ -4,6 +4,7 @@ import {
   Search, 
   Calendar,
   User,
+  UserCheck,
   Trash2,
   X,
   Target,
@@ -48,18 +49,97 @@ type CustomerOption = {
   avatar?: string | null;
 };
 
+type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  image?: string;
+};
+
 type Deal = {
   id: string;
   title: string;
   value: number;
+  probability?: number | null;
   stageId: string;
   pipelineId: string;
   customerId?: string | null;
   expectedClose?: string | null;
+  ownerId?: string | null;
   status: string;
   createdAt: string;
-  customer?: { id?: string; name: string; email?: string; phone?: string; avatar?: string } | null;
+  customer?: { 
+    id?: string; 
+    name: string; 
+    email?: string; 
+    phone?: string; 
+    avatar?: string;
+    source?: string | null;
+    tags?: string | null;
+  } | null;
+  owner?: { 
+    id?: string; 
+    name?: string; 
+    email?: string; 
+    image?: string; 
+  } | null;
   stage?: { name: string; color?: string } | null;
+  pipeline?: { name: string } | null;
+};
+
+const getLeadSourceBadge = (source?: string | null) => {
+  const s = (source || 'MANUAL').toUpperCase();
+  switch (s) {
+    case 'TIKTOK':
+      return {
+        label: 'TikTok',
+        className: 'bg-black text-white border border-gray-800',
+        dotColor: 'bg-rose-500',
+      };
+    case 'FACEBOOK':
+      return {
+        label: 'Facebook',
+        className: 'bg-blue-50 text-blue-700 border border-blue-200',
+        dotColor: 'bg-blue-500',
+      };
+    case 'ZALO':
+      return {
+        label: 'Zalo',
+        className: 'bg-sky-50 text-sky-700 border border-sky-200',
+        dotColor: 'bg-sky-500',
+      };
+    case 'INSTAGRAM':
+      return {
+        label: 'Instagram',
+        className: 'bg-pink-50 text-pink-700 border border-pink-200',
+        dotColor: 'bg-pink-500',
+      };
+    case 'LANDING_PAGE':
+      return {
+        label: 'Landing Page',
+        className: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+        dotColor: 'bg-emerald-500',
+      };
+    case 'HOTLINE':
+      return {
+        label: 'Hotline',
+        className: 'bg-amber-50 text-amber-700 border border-amber-200',
+        dotColor: 'bg-amber-500',
+      };
+    case 'WEBSITE':
+      return {
+        label: 'Website',
+        className: 'bg-violet-50 text-violet-700 border border-violet-200',
+        dotColor: 'bg-violet-500',
+      };
+    default:
+      return {
+        label: source || 'Trực tiếp',
+        className: 'bg-gray-100 text-gray-700 border border-gray-200',
+        dotColor: 'bg-gray-400',
+      };
+  }
 };
 
 const DEFAULT_STAGES: Stage[] = [
@@ -74,6 +154,7 @@ export default function Deals() {
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>('default');
   const [deals, setDeals] = useState<Deal[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -84,6 +165,9 @@ export default function Deals() {
     title: '',
     value: 5000000,
     stageId: 'stage_1',
+    probability: 80,
+    expectedClose: '',
+    ownerId: '',
   });
 
   // Customer selection / creation states
@@ -99,10 +183,11 @@ export default function Deals() {
   const fetchDealsAndCustomers = async () => {
     setLoading(true);
     try {
-      const [pipeRes, dealsRes, custRes] = await Promise.all([
+      const [pipeRes, dealsRes, custRes, membersRes] = await Promise.all([
         api.get('/crm/pipelines').catch(() => ({ data: { pipelines: [] } })),
         api.get('/crm/deals').catch(() => ({ data: { deals: [] } })),
         api.get('/crm/customers').catch(() => ({ data: { customers: [] } })),
+        api.get('/workspace/members').catch(() => ({ data: { members: [] } })),
       ]);
 
       if (pipeRes.data?.pipelines?.length > 0) {
@@ -122,6 +207,10 @@ export default function Deals() {
         setCustomers(custRes.data.customers);
       } else {
         setCustomers([]);
+      }
+
+      if (membersRes.data?.members && Array.isArray(membersRes.data.members)) {
+        setTeamMembers(membersRes.data.members);
       }
     } catch {
       setPipelines([{ id: 'default', name: 'Quy trình bán hàng chuẩn', isDefault: true, stages: DEFAULT_STAGES }]);
@@ -143,6 +232,9 @@ export default function Deals() {
       title: '',
       value: 5000000,
       stageId: currentPipeline.stages[0]?.id || 'stage_1',
+      probability: 80,
+      expectedClose: '',
+      ownerId: teamMembers[0]?.id || '',
     });
     setCustomerMode('existing');
     setSelectedCustomerId('');
@@ -174,6 +266,9 @@ export default function Deals() {
         value: Number(dealForm.value) || 0,
         stageId: dealForm.stageId,
         pipelineId: selectedPipelineId,
+        probability: Number(dealForm.probability) || 0,
+        expectedClose: dealForm.expectedClose || undefined,
+        ownerId: dealForm.ownerId || undefined,
       };
 
       if (customerMode === 'existing' && selectedCustomerId) {
@@ -195,17 +290,21 @@ export default function Deals() {
         setDeals(prev => [createdDeal, ...prev]);
       } else {
         const selectedCust = customers.find(c => c.id === selectedCustomerId);
+        const selectedMember = teamMembers.find(m => m.id === dealForm.ownerId);
         const newDeal: Deal = {
           id: Date.now().toString(),
           title: dealForm.title,
           value: Number(dealForm.value),
           stageId: dealForm.stageId,
           pipelineId: selectedPipelineId,
+          probability: Number(dealForm.probability) || 80,
+          expectedClose: dealForm.expectedClose || null,
           status: 'OPEN',
           createdAt: new Date().toISOString(),
           customer: customerMode === 'existing' && selectedCust
-            ? { name: selectedCust.name, phone: selectedCust.phone || undefined, email: selectedCust.email || undefined }
-            : { name: newCustName || 'Khách hàng mới', phone: newCustPhone || undefined, email: newCustEmail || undefined }
+            ? { name: selectedCust.name, phone: selectedCust.phone || undefined, email: selectedCust.email || undefined, source: selectedCust.source || 'MANUAL' }
+            : { name: newCustName || 'Khách hàng mới', phone: newCustPhone || undefined, email: newCustEmail || undefined, source: newCustSource || 'MANUAL' },
+          owner: selectedMember ? { name: selectedMember.name, email: selectedMember.email } : { name: 'Yến Ngô' }
         };
         setDeals(prev => [newDeal, ...prev]);
       }
@@ -365,6 +464,47 @@ export default function Deals() {
                           </span>
                         </div>
 
+                        {/* Xác suất & Ngày dự kiến chốt (F096) */}
+                        <div className="flex items-center justify-between gap-1 text-[10px] text-gray-500 bg-gray-50/80 px-2 py-1 rounded-lg border border-gray-100">
+                          <span className="flex items-center gap-1 font-semibold text-emerald-700">
+                            <Target className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span>Xác suất: {deal.probability ?? 75}%</span>
+                          </span>
+                          <span className="flex items-center gap-1 text-gray-500 font-medium">
+                            <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                            <span>
+                              {deal.expectedClose
+                                ? new Date(deal.expectedClose).toLocaleDateString('vi-VN')
+                                : 'Dự kiến chốt T11'}
+                            </span>
+                          </span>
+                        </div>
+
+                        {/* Nguồn Lead (F097) & Người phụ trách (F096) */}
+                        <div className="flex items-center justify-between gap-1.5 pt-0.5 text-[11px]">
+                          {/* Nguồn Lead (F097) */}
+                          <div className="flex items-center gap-1 min-w-0" title={`Nguồn lead (F097): ${deal.customer?.source || 'MANUAL'}`}>
+                            <span className="text-[10px] text-gray-400 shrink-0 font-medium">Nguồn:</span>
+                            {(() => {
+                              const badge = getLeadSourceBadge(deal.customer?.source);
+                              return (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1 truncate ${badge.className}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${badge.dotColor}`} />
+                                  <span className="truncate">{badge.label}</span>
+                                </span>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Người phụ trách (F096) */}
+                          <div className="flex items-center gap-1 shrink-0 text-gray-600 text-[10px]" title={`Người phụ trách (F096): ${deal.owner?.name || 'Yến Ngô'}`}>
+                            <UserCheck className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span className="font-semibold text-gray-700 truncate max-w-[95px]">
+                              {deal.owner?.name || 'Yến Ngô'}
+                            </span>
+                          </div>
+                        </div>
+
                         {/* Quick Stage Switcher - Dedicated Row */}
                         <div className="flex items-center gap-1.5 pt-1">
                           <span className="text-[10px] text-gray-400 font-medium shrink-0">Chuyển:</span>
@@ -392,7 +532,8 @@ export default function Deals() {
                               </span>
                             </div>
                             {deal.customer.phone && (
-                              <span className="text-[10px] text-gray-400 shrink-0 font-mono ml-1">
+                              <span className="text-[10px] text-gray-400 shrink-0 font-mono ml-1 flex items-center gap-0.5">
+                                <Phone className="w-2.5 h-2.5 text-gray-400" />
                                 {deal.customer.phone}
                               </span>
                             )}
@@ -461,6 +602,55 @@ export default function Deals() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* F096: Xác suất thành công & Ngày dự kiến chốt */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">
+                    Xác suất chốt (%) (F096)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={dealForm.probability}
+                    onChange={e => setDealForm({ ...dealForm, probability: Number(e.target.value) })}
+                    className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-500 text-xs font-mono"
+                    placeholder="VD: 80%"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">
+                    Dự kiến chốt (F096)
+                  </label>
+                  <input
+                    type="date"
+                    value={dealForm.expectedClose}
+                    onChange={e => setDealForm({ ...dealForm, expectedClose: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-500 text-xs bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* F096: Người phụ trách */}
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">
+                  Người phụ trách (F096)
+                </label>
+                <select
+                  value={dealForm.ownerId}
+                  onChange={e => setDealForm({ ...dealForm, ownerId: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-500 text-xs bg-white"
+                >
+                  <option value="">-- Mặc định (Tài khoản hiện tại: Yến Ngô) --</option>
+                  {teamMembers.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.name || m.email} ({m.role || 'Member'})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Section: Khách hàng liên hệ (Chọn từ CRM hoặc Thêm mới) */}

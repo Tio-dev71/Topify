@@ -11,6 +11,35 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.76) — CRM & Cơ Hội Bán Hàng: Hiển Thị Đầy Đủ Nguồn Lead (F097) & Người Phụ Trách (F096) Trên Thẻ Deal Kanban
+
+### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Cơ Hội Bán Hàng (Deals - F096 | Lead Source - F097) [Electron App & Web Dashboard]:
+- **[Hiển thị thông tin Nguồn Lead (F097) và Người phụ trách (F096) trên thẻ Deal]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Cơ hội bán hàng (F096)** $\rightarrow$ Quan sát các thẻ deal ở các cột giai đoạn (ví dụ deal *"Đơn sỉ 100 áo gió - Nguyễn Văn Minh"*).
+    - *Mong đợi:* Thẻ deal hiển thị thông tin nguồn lead (F097) và người phụ trách của khách hàng/deal, đúng theo mô tả màn hình *(giá trị, xác suất, người phụ trách, dự kiến chốt (F096) và theo dõi nguồn lead liên hệ (F097))*.
+    - *Thực tế trước khi sửa:* Thẻ deal chỉ hiển thị tên deal, giá trị, giai đoạn, tên khách hàng và số điện thoại. Hoàn toàn không có thông tin nguồn lead và người phụ trách.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **API `/api/crm/deals`:** Câu lệnh Prisma `findMany` chỉ select các trường cơ bản của customer (`id`, `name`, `email`, `phone`, `avatar`) mà không select `source` (nguồn lead), đồng thời chưa trả về đầy đủ quan hệ `owner` (`id`, `name`, `image`, `email`) trong các hàm POST và PATCH.
+    2. **Giao diện thẻ Deal (`Deals.tsx`):** Chưa khai báo các trường `probability`, `expectedClose`, `owner` và `customer.source` trong kiểu `Deal`, đồng thời giao diện thẻ chỉ render dòng khách hàng và SĐT mà bỏ quên huy hiệu Nguồn Lead (F097), Người phụ trách (F096) và Xác suất thành công (F096).
+    3. **Form tạo Deal mới:** Chưa cung cấp các ô nhập xác suất chốt, ngày dự kiến chốt và chọn người phụ trách từ danh sách thành viên workspace.
+  - **Giải pháp xử lý triệt để:**
+    1. **Cập nhật Backend API (`app/api/crm/deals/route.ts`):**
+       - Bổ sung `source: true, tags: true` vào `customer select`.
+       - Bổ sung `owner: { select: { id: true, name: true, image: true, email: true } }` vào tất cả các truy vấn GET, POST, PATCH.
+       - Hỗ trợ nhận và lưu `probability`, `expectedClose` và `ownerId` khi tạo mới hoặc cập nhật deal.
+    2. **Tối ưu hóa Thẻ Deal Kanban (`electron-app/frontend/src/pages/Deals.tsx`):**
+       - **Huy hiệu Nguồn Lead (F097):** Hiển thị rõ nguồn lead đa kênh *(TikTok, Facebook, Zalo, Instagram, Landing Page, Hotline, Trực tiếp)* với màu sắc thương hiệu và dot trạng thái trực quan.
+       - **Người phụ trách (F096):** Hiển thị rõ tên nhân sự phụ trách *(ví dụ: "yến ngô", "Thọ Nguyễn Đình")* kèm icon `UserCheck` chuyên nghiệp.
+       - **Xác suất & Dự kiến chốt (F096):** Hiển thị thanh thông số xác suất thành công (`Xác suất: 80%`) và ngày dự kiến hoàn thành hợp đồng.
+       - **Mở rộng Modal tạo Deal:** Bổ sung các trường nhập Xác suất chốt (%), Ngày dự kiến chốt và Dropdown chọn Người phụ trách từ danh sách thành viên workspace (`/api/workspace/members`).
+    3. **Đồng bộ hóa Web Dashboard (`app/(dashboard)/dashboard/crm/deals/page.tsx`):**
+       - Thêm thông tin Nguồn Lead và Người phụ trách trên thẻ Kanban của bản web dashboard và trong modal xem chi tiết cơ hội bán hàng.
+    4. **Bổ sung Unit Tests (`__tests__/api/crm/deals.test.ts`):**
+       - Bổ sung test case kiểm tra API trả về đầy đủ Nguồn Lead (F097), Người phụ trách (F096) và Xác suất (F096) $\rightarrow$ 28/28 tests passed (100%).
+
+---
+
 ## 🚀 [2026-11-03] (v1.3.75) — CRM & Cơ Hội Bán Hàng: Tối Ưu Thẻ Deal, Giá Trị Hợp Đồng Chống Vỡ Layout & Trình Diễn Kanban Chuẩn Phễu Bán Hàng
 
 ### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Cơ Hội Bán Hàng (Deals - F096) [Electron App]:
