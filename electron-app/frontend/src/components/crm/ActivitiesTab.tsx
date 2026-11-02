@@ -490,3 +490,4 @@ export default function ActivitiesTab({ customers = [] }: { customers?: Customer
     </div>
   );
 }
+

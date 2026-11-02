@@ -11,6 +11,39 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.78) — Quản Lý Công Việc (Tasks): Khắc Phục Triệt Để Lỗi Mất Công Việc Khi Chuyển Menu & Lưu Trữ Đa Tầng Bền Vững (Database + LocalStorage Cache)
+
+### Phân hệ M9. Quản Lý Công Việc & Phối Hợp (Work & Tasks - F124/F131) [Electron App & Backend API]:
+- **[Khắc phục lỗi tạo công việc xong, chuyển menu rồi quay lại thì công việc đã tạo bị mất]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Quản lý công việc (Tasks)**.
+    - Click **"Tạo việc mới"**, tạo công việc *(ví dụ "Tạo công việc", Ưu tiên cao, trạng thái Cần làm)* $\rightarrow$ Công việc hiển thị ở cột "Cần làm".
+    - Chuyển sang menu khác *(ví dụ Chiến dịch, Cơ hội bán hàng hoặc Dashboard)*.
+    - Quay lại menu **Quản lý công việc (Tasks)**.
+    - *Mong đợi:* Công việc đã tạo được lưu trữ bền vững và vẫn hiển thị đầy đủ trong bảng Kanban khi quay lại màn hình.
+    - *Thực tế trước khi sửa:* Sau khi tạo xong, chuyển menu rồi quay lại thì công việc đã tạo bị mất hoàn toàn khỏi bảng công việc.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Thiếu lệnh gọi API & Cơ chế Cache ở Frontend (`Tasks.tsx`):** Hàm `handleCreateTask` trước đây chỉ thực hiện thêm tạm thời đối tượng công việc vào biến state React `setTasks([newTask, ...tasks])` trên RAM mà không hề gửi request `api.post('/tasks', ...)` về backend và cũng không lưu vào `localStorage`. Khi người dùng chuyển menu, component `Tasks` bị unmount khỏi cây DOM; khi quay lại, state bị reset về mảng rỗng `[]` và hàm `fetchTasks()` lấy dữ liệu từ server (chưa có task) dẫn đến công việc bị biến mất.
+    2. **Tương tự với các thao tác khác:** Hàm áp dụng mẫu quy trình `handleApplyTemplate`, thay đổi trạng thái `handleStatusChange` và checklist con `handleToggleSubtask` cũng chỉ cập nhật state RAM.
+    3. **Backend API (`/api/tasks`):**
+       - Lọc theo `workspaceId` từ session người dùng nhưng chưa có cơ chế fallback tự động tìm workspace của user trong database khi session token không đính kèm `workspaceId`.
+       - Ràng buộc khóa ngoại `assigneeId` tham chiếu tới bảng `User(id)`: Khi frontend truyền mã nhân sự giả lập (`user_1`, `user_2`), Prisma ném lỗi vi phạm khóa ngoại khiến bản ghi không được tạo trong cơ sở dữ liệu PostgreSQL.
+  - **Giải pháp xử lý triệt để:**
+    1. **Frontend `Tasks.tsx` — Lưu trữ hai tầng (Persistent Multi-tier Storage):**
+       - **Khởi tạo state từ LocalStorage Cache:** Khởi tạo `tasks` ngay từ `localStorage.getItem('topify_tasks_cache')` giúp hiển thị tức thì không độ trễ (zero-flicker) và giữ trọn vẹn dữ liệu kể cả khi chuyển menu hay khởi động lại app.
+       - **Tự động hợp nhất (Sync & Merge):** Khi `fetchTasks()` lấy dữ liệu từ API `/api/tasks`, hệ thống tự động đối chiếu và hợp nhất các công việc đã lưu trữ, cập nhật lại vào `localStorage`.
+       - **Gửi API đồng bộ:** Cập nhật `handleCreateTask`, `handleApplyTemplate`, `handleStatusChange`, `handleToggleSubtask` gửi request `api.post` và `api.patch` lưu bền vững vào backend database.
+       - **Bổ sung tính năng Xóa công việc (`handleDeleteTask`):** Cho phép xóa công việc cả trên thẻ Kanban, chế độ xem Danh sách và modal chi tiết với hộp thoại xác nhận an toàn.
+       - **Đồng bộ danh sách thành viên thực tế:** Kết nối API `/api/workspace/members` để lấy danh sách nhân sự thực tế trong workspace *(yến ngô, Thọ Nguyễn Đình, ...)* cho ô chọn Người phụ trách (Assignee).
+    2. **Backend API `app/api/tasks/route.ts`:**
+       - Tự động fallback tìm `workspaceId` và `createdById` từ database kể cả khi session thiếu trường.
+       - Kiểm tra hợp lệ `assigneeId` trước khi gán quan hệ để đảm bảo an toàn toàn vẹn dữ liệu cơ sở dữ liệu.
+       - Mã hóa và giải mã linh hoạt danh sách phối hợp (`collaboratorIds`) và checklist công việc con (`subtasks`) trong trường JSON của Task.
+    3. **Bổ sung Kiểm thử Tự động (`__tests__/api/tasks/tasks.test.ts`):**
+       - 6 test cases kiểm tra GET, POST, PATCH, DELETE và kịch bản mô phỏng chuyển menu rồi quay lại $\rightarrow$ Tất cả 6/6 tests pass (100%).
+
+---
+
 ## 🚀 [2026-11-03] (v1.3.77) — CRM Toàn Diện (M4): Hoàn Thiện Trọn Bộ 5 Phân Hệ CRM F098, F099, F100, F101, F102 Theo Chuẩn Checklist QA
 
 ### Phân hệ M4. Giao Tiếp & Bán Hàng (CRM) — Trọn Bộ 5 Hạng Mục Checklist [Electron App, Web Dashboard & Backend API]:

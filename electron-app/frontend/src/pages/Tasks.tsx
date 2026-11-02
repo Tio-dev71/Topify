@@ -30,6 +30,7 @@ import {
   UserCheck,
   RefreshCw,
   MoreVertical,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -201,24 +202,78 @@ export default function Tasks() {
   const [activeTab, setActiveTab] = useState<'board' | 'templates' | 'productivity'>('board');
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
 
-  // Tasks state
-  const [tasks, setTasks] = useState<EnrichedTask[]>(INITIAL_TASKS);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // Team members (synced with workspace or fallback)
+  const [teamMembers, setTeamMembers] = useState(TEAM_MEMBERS);
 
+  // Load team members from workspace
   useEffect(() => {
-    const fetchTasks = async () => {
-      setIsLoading(true);
+    const fetchMembers = async () => {
       try {
-        const res = await api.get('/tasks');
-        if (res.data?.success && Array.isArray(res.data?.tasks)) {
-          setTasks(res.data.tasks);
+        const res = await api.get('/workspace/members');
+        if (res.data?.members && Array.isArray(res.data.members) && res.data.members.length > 0) {
+          const mapped = res.data.members.map((m: any) => ({
+            id: m.id || m.userId,
+            name: m.name || m.email?.split('@')[0] || 'Thành viên',
+            email: m.email || '',
+            role: m.role || 'Thành viên',
+            avatar: m.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name || 'User')}&background=random`,
+          }));
+          setTeamMembers(mapped);
+          if (mapped[0]?.id) {
+            setNewAssigneeId(mapped[0].id);
+          }
         }
       } catch (err) {
-        console.warn('Tasks API fallback to state:', err);
-      } finally {
-        setIsLoading(false);
+        // keep TEAM_MEMBERS fallback
       }
     };
+    fetchMembers();
+  }, []);
+
+  // Tasks state (initialized from persistent localStorage cache for zero-flicker and offline retention)
+  const [tasks, setTasks] = useState<EnrichedTask[]>(() => {
+    try {
+      const cached = localStorage.getItem('topify_tasks_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return INITIAL_TASKS;
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const fetchTasks = async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get('/tasks');
+      if (res.data?.success && Array.isArray(res.data?.tasks)) {
+        const fetchedTasks: EnrichedTask[] = res.data.tasks;
+        let merged = [...fetchedTasks];
+        try {
+          const cached = localStorage.getItem('topify_tasks_cache');
+          if (cached) {
+            const cachedTasks: EnrichedTask[] = JSON.parse(cached);
+            const fetchedIds = new Set(fetchedTasks.map((t) => t.id));
+            const unsynced = cachedTasks.filter((t) => !fetchedIds.has(t.id));
+            merged = [...fetchedTasks, ...unsynced];
+          }
+        } catch {}
+        setTasks(merged);
+        try {
+          localStorage.setItem('topify_tasks_cache', JSON.stringify(merged));
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('Tasks API fallback to cache:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchTasks();
   }, []);
   const [searchQuery, setSearchQuery] = useState('');
@@ -253,7 +308,7 @@ export default function Tasks() {
   // Calculate Member Metrics on tasks change
   useEffect(() => {
     const now = Date.now();
-    const metrics: MemberProductivityMetric[] = TEAM_MEMBERS.map((member) => {
+    const metrics: MemberProductivityMetric[] = teamMembers.map((member) => {
       const userTasks = tasks.filter(
         (t) => t.assigneeId === member.id || t.collaboratorIds.includes(member.id)
       );
@@ -297,7 +352,7 @@ export default function Tasks() {
       };
     });
     setProductivityMetrics(metrics);
-  }, [tasks]);
+  }, [tasks, teamMembers]);
 
   // Filter tasks
   const filteredTasks = tasks.filter((t) => {
@@ -328,9 +383,9 @@ export default function Tasks() {
   ];
 
   // Quick Change Status
-  const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
-    setTasks((prev) =>
-      prev.map((t) => {
+  const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+    setTasks((prev) => {
+      const updatedList = prev.map((t) => {
         if (t.id === taskId) {
           const updated = { ...t, status: newStatus, updatedAt: new Date().toISOString() };
           // If task completed & is recurring, notify
@@ -340,26 +395,46 @@ export default function Tasks() {
           return updated;
         }
         return t;
-      })
-    );
+      });
+      try {
+        localStorage.setItem('topify_tasks_cache', JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
+
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
+
+    try {
+      await api.patch('/tasks', {
+        id: taskId,
+        status: newStatus,
+      });
+    } catch (err) {
+      console.warn('Backend task status update warning:', err);
     }
   };
 
   // Toggle Subtask in Modal
-  const handleToggleSubtask = (taskId: string, subId: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
+  const handleToggleSubtask = async (taskId: string, subId: string) => {
+    let updatedSubs: any[] = [];
+    setTasks((prev) => {
+      const updatedList = prev.map((t) => {
         if (t.id === taskId) {
-          const updatedSubs = t.subtasks.map((st) =>
+          updatedSubs = t.subtasks.map((st) =>
             st.id === subId ? { ...st, isCompleted: !st.isCompleted } : st
           );
           return { ...t, subtasks: updatedSubs };
         }
         return t;
-      })
-    );
+      });
+      try {
+        localStorage.setItem('topify_tasks_cache', JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
+
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask((prev) => {
         if (!prev) return null;
@@ -371,6 +446,39 @@ export default function Tasks() {
         };
       });
     }
+
+    try {
+      await api.patch('/tasks', {
+        id: taskId,
+        subtasks: updatedSubs,
+      });
+    } catch (err) {
+      console.warn('Backend subtask update warning:', err);
+    }
+  };
+
+  // Delete Task
+  const handleDeleteTask = async (taskId: string, taskTitle?: string) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa công việc "${taskTitle || 'này'}"?`)) return;
+
+    setTasks((prev) => {
+      const filtered = prev.filter((t) => t.id !== taskId);
+      try {
+        localStorage.setItem('topify_tasks_cache', JSON.stringify(filtered));
+      } catch {}
+      return filtered;
+    });
+
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask(null);
+    }
+
+    try {
+      await api.delete(`/tasks?id=${taskId}`);
+      toast.success('Đã xóa công việc thành công!');
+    } catch (err) {
+      toast.success('Đã xóa công việc khỏi danh sách!');
+    }
   };
 
   // Add Comment with mentions & attachments
@@ -380,7 +488,7 @@ export default function Tasks() {
 
     // Detect mentions like @Name
     const detectedMentions: string[] = [];
-    TEAM_MEMBERS.forEach((m) => {
+    teamMembers.forEach((m) => {
       if (newCommentText.includes(`@${m.name}`) || newCommentText.includes(`@${m.email}`)) {
         detectedMentions.push(m.email);
       }
@@ -415,8 +523,8 @@ export default function Tasks() {
     }));
 
     // Update comments count on task
-    setTasks((prev) =>
-      prev.map((t) =>
+    setTasks((prev) => {
+      const updatedList = prev.map((t) =>
         t.id === selectedTask.id
           ? {
               ...t,
@@ -424,8 +532,12 @@ export default function Tasks() {
               attachmentsCount: (t.attachmentsCount || 0) + (mockAttachmentName.trim() ? 1 : 0),
             }
           : t
-      )
-    );
+      );
+      try {
+        localStorage.setItem('topify_tasks_cache', JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
 
     setNewCommentText('');
     setMockAttachmentName('');
@@ -433,21 +545,21 @@ export default function Tasks() {
   };
 
   // 1-Click Apply Template
-  const handleApplyTemplate = (tpl: TaskTemplate) => {
+  const handleApplyTemplate = async (tpl: TaskTemplate) => {
     const due = new Date();
     due.setDate(due.getDate() + tpl.estimatedDays);
 
-    const newTask: EnrichedTask = {
+    const localTask: EnrichedTask = {
       id: `task_${Date.now()}`,
       title: `${tpl.name}`,
       description: tpl.description,
       priority: 'HIGH',
       status: 'TODO',
       dueDate: due.toISOString(),
-      assigneeId: 'user_1',
-      assignee: TEAM_MEMBERS[0],
-      collaboratorIds: ['user_2'],
-      collaborators: [TEAM_MEMBERS[1]],
+      assigneeId: teamMembers[0]?.id || 'user_1',
+      assignee: teamMembers[0] || null,
+      collaboratorIds: teamMembers[1] ? [teamMembers[1].id] : [],
+      collaborators: teamMembers[1] ? [teamMembers[1]] : [],
       isRecurring: false,
       recurRule: null,
       subtasks: tpl.steps.map((st, i) => ({
@@ -462,22 +574,57 @@ export default function Tasks() {
       updatedAt: new Date().toISOString(),
     };
 
-    setTasks([newTask, ...tasks]);
+    const nextTasks = [localTask, ...tasks];
+    setTasks(nextTasks);
+    try {
+      localStorage.setItem('topify_tasks_cache', JSON.stringify(nextTasks));
+    } catch {}
+
     setActiveTab('board');
-    setSelectedTask(newTask);
-    toast.success(`Đã áp dụng mẫu quy trình [${tpl.name}] thành công với ${tpl.steps.length} bước!`);
+    setSelectedTask(localTask);
+
+    try {
+      const res = await api.post('/tasks', {
+        title: localTask.title,
+        description: localTask.description,
+        priority: localTask.priority,
+        status: localTask.status,
+        dueDate: localTask.dueDate,
+        assigneeId: localTask.assigneeId,
+        assigneeName: localTask.assignee?.name,
+        assigneeEmail: localTask.assignee?.email,
+        collaboratorIds: localTask.collaboratorIds,
+        isRecurring: false,
+        subtasks: localTask.subtasks,
+        templateId: tpl.id,
+      });
+
+      if (res.data?.success && res.data?.task) {
+        const serverTask: EnrichedTask = res.data.task;
+        setTasks((prev) => {
+          const updated = prev.map((t) => (t.id === localTask.id ? serverTask : t));
+          try {
+            localStorage.setItem('topify_tasks_cache', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      }
+      toast.success(`Đã áp dụng mẫu quy trình [${tpl.name}] thành công với ${tpl.steps.length} bước!`);
+    } catch (err) {
+      toast.success(`Đã áp dụng mẫu quy trình [${tpl.name}] thành công!`);
+    }
   };
 
   // Submit Create Task Form
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) {
       toast.error('Vui lòng nhập tiêu đề công việc');
       return;
     }
 
-    const assignee = TEAM_MEMBERS.find((m) => m.id === newAssigneeId) || null;
-    const collaborators = TEAM_MEMBERS.filter((m) => newCollaboratorIds.includes(m.id));
+    const assignee = teamMembers.find((m) => m.id === newAssigneeId) || null;
+    const collaborators = teamMembers.filter((m) => newCollaboratorIds.includes(m.id));
 
     // Handle template subtasks if selected
     let subtasksList: Array<{ id: string; title: string; isCompleted: boolean; assigneeName?: string }> = [];
@@ -501,7 +648,7 @@ export default function Tasks() {
         }));
     }
 
-    const newTask: EnrichedTask = {
+    const localTask: EnrichedTask = {
       id: `task_${Date.now()}`,
       title: newTitle.trim(),
       description: newDescription.trim() || null,
@@ -521,7 +668,13 @@ export default function Tasks() {
       updatedAt: new Date().toISOString(),
     };
 
-    setTasks([newTask, ...tasks]);
+    // Optimistically update state & local cache immediately
+    const nextTasks = [localTask, ...tasks];
+    setTasks(nextTasks);
+    try {
+      localStorage.setItem('topify_tasks_cache', JSON.stringify(nextTasks));
+    } catch {}
+
     setIsCreateModalOpen(false);
 
     // Reset form
@@ -533,7 +686,38 @@ export default function Tasks() {
     setNewIsRecurring(false);
     setNewSelectedTemplateId('');
 
-    toast.success('Đã tạo công việc mới thành công!');
+    // Persist to backend API & DB
+    try {
+      const res = await api.post('/tasks', {
+        title: localTask.title,
+        description: localTask.description,
+        priority: localTask.priority,
+        status: localTask.status,
+        dueDate: localTask.dueDate,
+        assigneeId: localTask.assigneeId,
+        assigneeName: assignee?.name,
+        assigneeEmail: assignee?.email,
+        collaboratorIds: localTask.collaboratorIds,
+        isRecurring: localTask.isRecurring,
+        recurRule: localTask.recurRule,
+        subtasks: localTask.subtasks,
+      });
+
+      if (res.data?.success && res.data?.task) {
+        const serverTask: EnrichedTask = res.data.task;
+        setTasks((prev) => {
+          const updated = prev.map((t) => (t.id === localTask.id ? serverTask : t));
+          try {
+            localStorage.setItem('topify_tasks_cache', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      }
+      toast.success('Đã tạo công việc mới thành công!');
+    } catch (err) {
+      console.warn('Backend task create warning, saved to local cache:', err);
+      toast.success('Đã tạo công việc mới thành công!');
+    }
   };
 
   // Helper render priority badge
@@ -656,7 +840,7 @@ export default function Tasks() {
                   className="px-2.5 py-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none"
                 >
                   <option value="ALL">Tất cả thành viên</option>
-                  {TEAM_MEMBERS.map((m) => (
+                  {teamMembers.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name} ({m.role})
                     </option>
@@ -872,11 +1056,22 @@ export default function Tasks() {
                               </div>
                             </div>
 
-                            {/* Quick status transition dropdown on hover */}
+                            {/* Quick status transition dropdown on hover & delete action */}
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="pt-1 flex items-center justify-end gap-1"
+                              className="pt-1 flex items-center justify-between gap-1"
                             >
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTask(task.id, task.title);
+                                }}
+                                className="p-1 rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                                title="Xóa công việc"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                               <select
                                 value={task.status}
                                 onChange={(e) => handleStatusChange(task.id, e.target.value as TaskStatus)}
@@ -1292,12 +1487,22 @@ export default function Tasks() {
                 </select>
               </div>
 
-              <button
-                onClick={() => setSelectedTask(null)}
-                className="p-1.5 rounded-xl hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTask(selectedTask.id, selectedTask.title)}
+                  className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                  title="Xóa công việc này"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setSelectedTask(null)}
+                  className="p-1.5 rounded-xl hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Content */}
@@ -1504,7 +1709,7 @@ export default function Tasks() {
                         <AtSign className="w-3 h-3" />
                         <span>Tag nhanh:</span>
                       </span>
-                      {TEAM_MEMBERS.map((m) => (
+                      {teamMembers.map((m) => (
                         <button
                           key={m.id}
                           type="button"
@@ -1636,7 +1841,7 @@ export default function Tasks() {
                     onChange={(e) => setNewAssigneeId(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
                   >
-                    {TEAM_MEMBERS.map((m) => (
+                    {teamMembers.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name} ({m.role})
                       </option>
@@ -1650,7 +1855,7 @@ export default function Tasks() {
                     <span>Người phối hợp (Collaborators)</span>
                   </label>
                   <div className="space-y-1 p-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] max-h-24 overflow-y-auto">
-                    {TEAM_MEMBERS.map((m) => (
+                    {teamMembers.map((m) => (
                       <label key={m.id} className="flex items-center gap-2 cursor-pointer hover:bg-[var(--color-muted)]/30 p-1 rounded">
                         <input
                           type="checkbox"

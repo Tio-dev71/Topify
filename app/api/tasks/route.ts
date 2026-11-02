@@ -58,7 +58,19 @@ export async function GET(req: NextRequest) {
     // Try DB query if available
     try {
       const session = await auth();
-      const workspaceId = (session?.user as any)?.workspaceId;
+      let workspaceId = (session?.user as any)?.workspaceId;
+      if (!workspaceId && session?.user?.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { workspaceId: true },
+        });
+        workspaceId = dbUser?.workspaceId;
+      }
+      if (!workspaceId) {
+        const firstWs = await prisma.workspace.findFirst({ select: { id: true } });
+        workspaceId = firstWs?.id;
+      }
+
       if (workspaceId) {
         const dbTasks = await prisma.task.findMany({
           where: { workspaceId, parentId: null },
@@ -70,19 +82,31 @@ export async function GET(req: NextRequest) {
           orderBy: { createdAt: 'desc' },
         });
 
-        if (dbTasks && dbTasks.length > 0) {
-          tasks = dbTasks.map((t: any) => {
-            // Parse collaboratorIds from recurRule if encoded as JSON
+        if (dbTasks) {
+          const mappedDbTasks = dbTasks.map((t: any) => {
+            // Parse collaboratorIds and subtasks from recurRule if encoded as JSON
             let collabIds: string[] = [];
             let recurRuleStr: string | null = t.recurRule;
+            let subtasksList: any[] = [];
             try {
               if (t.recurRule && t.recurRule.startsWith('{')) {
                 const parsed = JSON.parse(t.recurRule);
                 collabIds = parsed.collaboratorIds || [];
                 recurRuleStr = parsed.recurRule || null;
+                if (Array.isArray(parsed.subtasks)) {
+                  subtasksList = parsed.subtasks;
+                }
               }
             } catch (e) {
               // plain string
+            }
+
+            if (t.children && t.children.length > 0) {
+              subtasksList = t.children.map((ch: any) => ({
+                id: ch.id,
+                title: ch.title,
+                isCompleted: ch.status === 'DONE',
+              }));
             }
 
             return {
@@ -90,29 +114,30 @@ export async function GET(req: NextRequest) {
               title: t.title,
               description: t.description,
               priority: (t.priority as TaskPriority) || 'MEDIUM',
-              status: (t.status as TaskStatus) || 'TODO',
+              status: t.status === 'IN_REVIEW' ? 'REVIEW' : (t.status as TaskStatus) || 'TODO',
               dueDate: t.dueDate ? t.dueDate.toISOString() : null,
               assigneeId: t.assigneeId,
               assignee: t.assignee,
               collaboratorIds: collabIds,
               collaborators: collabIds.map((cId) => ({
                 id: cId,
-                name: cId === 'user_2' ? 'Trần Thị B' : 'Lê Hoàng C',
+                name: cId === 'user_1' ? 'Nguyễn Văn A' : cId === 'user_2' ? 'Trần Thị B' : 'Lê Hoàng C',
                 email: `${cId}@topify.vn`,
               })),
               isRecurring: t.isRecurring,
               recurRule: recurRuleStr,
-              subtasks: (t.children || []).map((ch: any) => ({
-                id: ch.id,
-                title: ch.title,
-                isCompleted: ch.status === 'DONE',
-              })),
+              subtasks: subtasksList,
               commentsCount: t._count?.comments || 0,
               attachmentsCount: 0,
               createdAt: t.createdAt.toISOString(),
               updatedAt: t.updatedAt.toISOString(),
             };
           });
+
+          // Merge with memoryTasks (avoid duplicate ids)
+          const dbIds = new Set(mappedDbTasks.map((t: any) => t.id));
+          const nonDbMemory = memoryTasks.filter((t) => !dbIds.has(t.id));
+          tasks = [...mappedDbTasks, ...nonDbMemory];
         }
       }
     } catch (dbErr) {
@@ -234,12 +259,41 @@ export async function POST(req: NextRequest) {
     // Try save to database if available
     try {
       const session = await auth();
-      const workspaceId = (session?.user as any)?.workspaceId;
-      if (workspaceId && session?.user?.id) {
-        // Encode collaborators in recurRule JSON
+      let workspaceId = (session?.user as any)?.workspaceId;
+      let userId = session?.user?.id;
+
+      if (!workspaceId && userId) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { workspaceId: true },
+        });
+        workspaceId = dbUser?.workspaceId;
+      }
+
+      if (!workspaceId) {
+        const firstWs = await prisma.workspace.findFirst({ select: { id: true } });
+        workspaceId = firstWs?.id;
+      }
+
+      if (!userId) {
+        const firstUser = await prisma.user.findFirst({ select: { id: true } });
+        userId = firstUser?.id;
+      }
+
+      if (workspaceId && userId) {
+        let validAssigneeId: string | null = null;
+        if (newTask.assigneeId) {
+          const userExists = await prisma.user.findUnique({ where: { id: newTask.assigneeId } });
+          if (userExists) {
+            validAssigneeId = newTask.assigneeId;
+          }
+        }
+
+        // Encode collaborators & subtasks in recurRule JSON
         const encodedRule = JSON.stringify({
           recurRule: recurRule || null,
           collaboratorIds: newTask.collaboratorIds,
+          subtasks: newTask.subtasks,
         });
 
         const createdDb = await prisma.task.create({
@@ -249,17 +303,31 @@ export async function POST(req: NextRequest) {
             priority: newTask.priority,
             status: newTask.status === 'REVIEW' ? 'IN_REVIEW' : (newTask.status as any),
             dueDate: newTask.dueDate ? new Date(newTask.dueDate) : null,
-            assigneeId: newTask.assigneeId,
+            assigneeId: validAssigneeId,
             isRecurring: newTask.isRecurring,
             recurRule: encodedRule,
-            createdById: session.user.id,
+            createdById: userId,
             workspaceId,
           },
         });
         newTask.id = createdDb.id;
+
+        await recordAuditLog({
+          action: 'TASK.CREATE',
+          entityType: 'Task',
+          entityId: createdDb.id,
+          userId,
+          workspaceId,
+          req,
+          metadata: {
+            title: newTask.title,
+            priority: newTask.priority,
+            status: newTask.status,
+          },
+        });
       }
     } catch (dbErr) {
-      // use memory fallback
+      console.warn('DB Task create fallback to memory:', dbErr);
     }
 
     memoryTasks.unshift(newTask);
@@ -322,13 +390,28 @@ export async function PATCH(req: NextRequest) {
     // Attempt DB update
     try {
       const updateData: any = {};
-      if (status !== undefined) updateData.status = status;
+      if (status !== undefined) updateData.status = status === 'REVIEW' ? 'IN_REVIEW' : status;
       if (priority !== undefined) updateData.priority = priority;
       if (title !== undefined) updateData.title = title;
       if (description !== undefined) updateData.description = description;
       if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
-      if (assigneeId !== undefined) updateData.assigneeId = assigneeId;
+      if (assigneeId !== undefined) {
+        if (assigneeId) {
+          const userExists = await prisma.user.findUnique({ where: { id: assigneeId } });
+          updateData.assigneeId = userExists ? assigneeId : null;
+        } else {
+          updateData.assigneeId = null;
+        }
+      }
       if (isRecurring !== undefined) updateData.isRecurring = isRecurring;
+
+      if (collaboratorIds !== undefined || subtasks !== undefined || recurRule !== undefined) {
+        updateData.recurRule = JSON.stringify({
+          recurRule: recurRule || null,
+          collaboratorIds: collaboratorIds || [],
+          subtasks: subtasks || [],
+        });
+      }
 
       await prisma.task.update({
         where: { id: targetId },
