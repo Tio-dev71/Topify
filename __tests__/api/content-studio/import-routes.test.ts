@@ -266,5 +266,116 @@ describe('Bulk Import API Routes (F019)', () => {
       expect(json.count).toBe(1);
       expect(json.postIds).toContain('post_new_1');
     });
+
+    it('creates VideoAsset and attaches videoAssetId when mediaUrl is provided in imported row', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'usr_1', workspaceId: 'ws_1' },
+      } as any);
+
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([
+        { provider: 'YOUTUBE', status: 'CONNECTED', expiresAt: null, refreshToken: 'token' } as any,
+      ]);
+
+      let capturedPostData: any = null;
+      let capturedAssetData: any = null;
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
+        const tx = {
+          videoAsset: {
+            create: vi.fn().mockImplementation(async ({ data }: any) => {
+              capturedAssetData = data;
+              return { id: 'asset_123', ...data };
+            }),
+          },
+          post: {
+            create: vi.fn().mockImplementation(async ({ data }: any) => {
+              capturedPostData = data;
+              return { id: 'post_with_video', title: data.title, status: data.status, scheduledAt: data.scheduledAt };
+            }),
+          },
+        };
+        return callback(tx);
+      });
+
+      const req = new NextRequest('http://localhost/api/content-studio/import/save', {
+        method: 'POST',
+        body: JSON.stringify({
+          posts: [
+            {
+              title: 'Video YouTube Shorts 1',
+              caption: 'Caption Shorts',
+              platforms: ['YOUTUBE_SHORTS'],
+              scheduledAt: '2026-12-01 10:30',
+              mediaUrl: 'https://drive.google.com/file/d/12345abcdef/view?usp=sharing',
+            },
+          ],
+          importAsDraft: false,
+        }),
+      });
+
+      const res = await savePOST(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(capturedAssetData).toBeDefined();
+      expect(capturedAssetData.source).toBe('GOOGLE_DRIVE');
+      expect(capturedAssetData.storageUrl).toContain('export=download&id=12345abcdef');
+      expect(capturedPostData.videoAssetId).toBe('asset_123');
+      expect(capturedPostData.status).toBe('SCHEDULED');
+    });
+
+    it('forces status to DRAFT for video-only platforms when mediaUrl is missing to avoid failed publishing', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'usr_1', workspaceId: 'ws_1' },
+      } as any);
+
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([
+        { provider: 'YOUTUBE', status: 'CONNECTED', expiresAt: null, refreshToken: 'token' } as any,
+      ]);
+
+      let capturedPostData: any = null;
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
+        const tx = {
+          videoAsset: {
+            create: vi.fn(),
+          },
+          post: {
+            create: vi.fn().mockImplementation(async ({ data }: any) => {
+              capturedPostData = data;
+              return { id: 'post_draft_video', title: data.title, status: data.status, scheduledAt: data.scheduledAt };
+            }),
+          },
+        };
+        return callback(tx);
+      });
+
+      const req = new NextRequest('http://localhost/api/content-studio/import/save', {
+        method: 'POST',
+        body: JSON.stringify({
+          posts: [
+            {
+              title: 'Video YouTube Shorts thiếu video',
+              caption: 'Chưa có link video',
+              platforms: ['YOUTUBE_SHORTS'],
+              scheduledAt: '2026-12-01 10:30',
+              mediaUrl: '',
+            },
+          ],
+          importAsDraft: false,
+        }),
+      });
+
+      const res = await savePOST(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.draftsWaitingForVideo).toBe(1);
+      // Status must be DRAFT to prevent publisher queue from failing with missing video error!
+      expect(capturedPostData.status).toBe('DRAFT');
+      expect(capturedPostData.videoAssetId).toBeNull();
+      // Scheduled time is safely retained for later
+      expect(capturedPostData.scheduledAt).toBeDefined();
+    });
   });
 });

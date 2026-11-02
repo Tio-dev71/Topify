@@ -17,6 +17,8 @@ import {
   Edit3,
   Settings,
   FileText,
+  Info,
+  Film,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/axios';
@@ -972,6 +974,25 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                 </div>
               )}
 
+              {/* Notice for video posts without media */}
+              {parsedRows.some(
+                (r) =>
+                  !r.mediaUrl &&
+                  r.platforms.some((p) =>
+                    ['YOUTUBE_SHORTS', 'YOUTUBE', 'TIKTOK_VIDEO', 'FACEBOOK_REELS', 'INSTAGRAM_REELS', 'INSTAGRAM_STORY'].includes(p)
+                  )
+              ) && (
+                <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-start gap-2.5 shadow-2xs">
+                  <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Lưu ý về bài viết dạng Video (YouTube, TikTok, Reels):</span>
+                    <p className="text-[11px] text-indigo-800 mt-0.5 leading-relaxed">
+                      Các bài viết chưa có link video sẽ được tự động lưu dưới dạng <strong>Bản thảo (Chờ gắn video)</strong> để bạn tải file video lên trong mục Quản lý bài viết trước khi xuất bản, giúp tránh lỗi không đăng được bài.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Data Table */}
               <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
                 <div className="max-h-[50vh] overflow-y-auto">
@@ -1160,10 +1181,33 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
                                   Có cảnh báo
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  Hợp lệ
-                                </span>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    Hợp lệ
+                                  </span>
+                                  {!row.mediaUrl &&
+                                    row.platforms.some((p) =>
+                                      ['YOUTUBE_SHORTS', 'YOUTUBE', 'TIKTOK_VIDEO', 'FACEBOOK_REELS', 'INSTAGRAM_REELS', 'INSTAGRAM_STORY'].includes(p)
+                                    ) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 cursor-help"
+                                        title="Bài viết chưa có link video. Hệ thống sẽ lưu dạng Bản thảo để bạn tải video lên trong mục Quản lý bài viết."
+                                      >
+                                        <Film className="w-2.5 h-2.5 text-amber-600" />
+                                        Chờ gắn video
+                                      </span>
+                                    )}
+                                  {row.mediaUrl && (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 max-w-[120px] truncate"
+                                      title={row.mediaUrl}
+                                    >
+                                      <Film className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                      Có link video
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </td>
                             <td className="p-3 text-center">

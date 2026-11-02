@@ -27,6 +27,7 @@ import {
   Plus,
   Send,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -679,8 +680,21 @@ export default function Posts() {
                         <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-400 p-6 text-center">
                           {post.postType === 'CAROUSEL' ? <Images className="w-8 h-8 text-pink-400 mb-2" /> : <Film className="w-8 h-8 text-gray-400 mb-2" />}
                           <span className="text-xs font-semibold text-gray-300">
-                            {post.postType === 'CAROUSEL' ? 'Bộ ảnh Carousel' : 'Không có file video'}
+                            {post.postType === 'CAROUSEL' ? 'Bộ ảnh Carousel' : 'Chưa có file video'}
                           </span>
+                          {post.status !== 'PUBLISHED' && post.postType !== 'CAROUSEL' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPost(post);
+                              }}
+                              className="mt-2.5 px-3 py-1 rounded-xl bg-purple-600/90 hover:bg-purple-600 text-white text-[11px] font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer z-10"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              Gắn video ngay
+                            </button>
+                          )}
                         </div>
                       )}
                       
@@ -810,14 +824,29 @@ export default function Posts() {
                       {(post.status === 'FAILED' || post.status === 'PARTIAL_FAILED') && (() => {
                         const failedPlat = (post.platforms || []).find(pl => pl.status === 'FAILED');
                         const friendly = failedPlat ? formatFriendlyPublishError(failedPlat.errorMessage, failedPlat.platform) : null;
+                        const isMissingVideo = failedPlat?.errorMessage?.toLowerCase().includes('tệp video') || !post.videoAsset?.storageUrl;
+
                         return (
-                          <div className="bg-rose-50 border border-rose-200/80 rounded-xl p-2.5 text-rose-800 text-[11px] leading-tight flex items-start gap-1.5">
+                          <div className="bg-rose-50 border border-rose-200/80 rounded-xl p-2.5 text-rose-800 text-[11px] leading-tight flex items-start gap-1.5 mt-2">
                             <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-                            <div className="min-w-0">
-                              <p className="font-bold text-rose-900 truncate">Lý do thất bại:</p>
-                              <p className="line-clamp-2 text-[10px] text-rose-700 mt-0.5 font-medium leading-relaxed" title={friendly?.reason}>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-rose-900">Lý do thất bại:</p>
+                              <p className="text-[10px] text-rose-700 mt-0.5 font-medium leading-relaxed break-words" title={friendly?.reason}>
                                 {friendly?.reason || 'Đăng bài không thành công'}
                               </p>
+                              {isMissingVideo && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedPost(post);
+                                  }}
+                                  className="mt-1.5 px-2 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold inline-flex items-center gap-1 transition-colors shadow-2xs"
+                                >
+                                  <Upload className="w-3 h-3" />
+                                  Tải video lên
+                                </button>
+                              )}
                             </div>
                           </div>
                         );

@@ -11,6 +11,41 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.68) — Quản Lý Bài Viết & Import Hàng Loạt: Khắc Phục Lỗi Bài Viết Import Bị Thất Bại & Hỗ Trợ Tự Động Lưu Bản Thảo Chờ Gắn Video / Gắn Video Trực Tiếp
+
+### Phân hệ M2. Quản lý bài viết & Content Studio Import (F019) [Electron App, Web Dashboard & Backend API]:
+- **[Khắc phục lỗi bài viết import hàng loạt bị thất bại do thiếu video]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Quản lý bài viết $\rightarrow$ "Import từ Excel / Drive" $\rightarrow$ import danh sách bài viết nền tảng YouTube Shorts / TikTok.
+    - Xác nhận lên lịch / lưu bài đã import.
+    - *Mong đợi:* Bài viết import được lưu và xuất bản thành công theo đúng lịch hẹn hoặc thời điểm xuất bản.
+    - *Thực tế trước khi sửa:* Các thẻ bài viết import trong danh sách đều hiển thị "Không có file video". Khi đến giờ hẹn hoặc chọn đăng ngay, bài viết chuyển sang trạng thái "Thất bại" với lý do bị cắt cụt: `Lý do thất bại: Đăng bài dạng...` (`Đăng bài dạng Video/Reels yêu cầu phải có tệp video`).
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Bỏ qua cột `mediaUrl` khi lưu:** Trong `app/api/content-studio/import/save/route.ts`, `videoAssetId: null` bị gán cứng mặc định. Ngay cả khi người dùng nhập link video vào bảng tính hoặc dùng file mẫu, hệ thống không tạo bản ghi `VideoAsset` để liên kết với `Post`.
+    2. **Tự động đẩy vào hàng đợi xuất bản khi chưa có tệp video:** Với các nền tảng video bắt buộc (YouTube Shorts, YouTube, TikTok Video, Facebook Reels), API YouTube/TikTok từ chối tiếp nhận bài đăng nếu không có tệp video. Do `videoAssetId` là `null`, hàng đợi xuất bản (`publisher-service.ts`) ngay lập tức ném lỗi ngoại lệ: `Đăng bài dạng Video/Reels yêu cầu phải có tệp video` và đánh dấu bài viết là `FAILED`.
+    3. **Thiếu tính năng gắn/tải video cho bài viết đã tạo:** Màn hình Chi tiết bài viết (`PostDetail.tsx`) và Quản lý bài viết (`Posts.tsx`) chỉ cho phép sửa văn bản (tiêu đề, caption, hashtags), không có cơ chế tải tệp video lên cho các bài viết đã import trước đó.
+    4. **Thông báo lỗi bị cắt ngắn:** Khung lỗi thất bại trên thẻ bài viết giới hạn dòng (`line-clamp-2`), làm câu thông báo lỗi dài bị cắt cụt thành `Đăng bài dạng...`.
+  - **Giải pháp xử lý toàn diện:**
+    1. **Tự động liên kết `mediaUrl` (`app/api/content-studio/import/save/route.ts`):**
+       - Khi bảng tính có cột `Đường dẫn Media` (`mediaUrl`), hệ thống tự động nhận diện và tạo bản ghi `VideoAsset` tương ứng (hỗ trợ chuyển đổi tự động link chia sẻ Google Drive sang link tải trực tiếp).
+    2. **Bảo vệ hàng đợi xuất bản — Tự động lưu Bản thảo (Chờ gắn video):**
+       - Đối với các bài viết nhắm tới nền tảng video (YouTube, TikTok, Reels) mà chưa có đường dẫn video trong bảng tính, hệ thống tự động lưu dưới dạng **Bản thảo (DRAFT)** thay vì đưa vào hàng đợi `PUBLISHING` hay `SCHEDULED`.
+       - Vẫn lưu giữ thời gian hẹn giờ (`scheduledAt`) để sẵn sàng xuất bản ngay sau khi người dùng gắn video.
+    3. **Bổ sung tính năng "Gắn video" trực tiếp trên Quản lý bài viết & Chi tiết bài viết:**
+       - Trên thẻ bài viết (`Posts.tsx`): Hiển thị nút **"Gắn video ngay"** / **"Tải video lên"** ngay trên thumbnail box và banner lỗi khi bài viết chưa có tệp video.
+       - Trong Chi tiết bài viết (`PostDetail.tsx`): Bổ sung khu vực tải tệp video chuyên dụng (`.mp4, .mov, .webm`), cho phép người dùng kéo thả hoặc chọn file video từ máy tính. Hệ thống tự động upload lên `/api/upload` và cập nhật `videoAssetId` cho bài viết.
+       - Bổ sung nút **"Đăng bài ngay"** và hỗ trợ **"Thử lại ngay"** sau khi đã gắn video thành công.
+    4. **Cập nhật `formatFriendlyPublishError` & Thông báo thân thiện (`utils.ts`):**
+       - Bổ sung trường hợp nhận diện lỗi thiếu video:
+         - *Lý do:* `Bài viết chưa có tệp video. Nền tảng Video/Reels bắt buộc phải có tệp video để đăng bài.`
+         - *Hướng dẫn:* `Vui lòng mở chi tiết bài viết, bấm "Tải video lên" từ máy tính hoặc cung cấp đường dẫn video trước khi xuất bản.`
+       - Điều chỉnh CSS khung thông báo lỗi để hiển thị trọn vẹn lý do, có nút bấm "Tải video lên" nhanh.
+    5. **Cập nhật giao diện Import (`ImportPostsModal.tsx`):**
+       - Bổ sung badge hiển thị trạng thái video trong bảng xem trước: `Có link video` (xanh) hoặc `Chờ gắn video` (vàng).
+       - Bổ sung banner lưu ý hướng dẫn người dùng về việc các bài viết thiếu link video sẽ được lưu dạng Bản thảo an toàn.
+
+---
+
 ## 🚀 [2026-11-02] (v1.3.67) — Studio Nội Dung & Xuất Bản Đa Kênh: Hỗ Trợ Toàn Diện Bài Đăng Carousel Nhiều Ảnh (F013) & Đăng Ngay Sang Instagram Carousel / Facebook Album
 
 ### Phân hệ M2. Studio Nội dung & Spin — Soạn Carousel Nhiều Ảnh (F013) & Xuất Bản Đa Kênh [Electron App, Web Dashboard & Backend API]:

@@ -36,6 +36,16 @@ export async function POST(
       );
     }
 
+    const requiresVideo = post.platforms.some((p: any) =>
+      ['YOUTUBE_SHORTS', 'YOUTUBE', 'TIKTOK_VIDEO', 'FACEBOOK_REELS', 'INSTAGRAM_REELS', 'INSTAGRAM_STORY'].includes(p.platform)
+    );
+    if (requiresVideo && !post.videoAssetId) {
+      return NextResponse.json(
+        { error: 'Bài viết chưa có tệp video. Vui lòng tải video lên bài viết trước khi thử lại đăng bài.' },
+        { status: 400 }
+      );
+    }
+
     // Reset failed platforms to PENDING
     await prisma.postPlatform.updateMany({
       where: {

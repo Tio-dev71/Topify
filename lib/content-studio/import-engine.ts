@@ -664,7 +664,7 @@ export function generateSampleExcelTemplate(): Buffer {
       '#topify #tiktoktips #videomarketing #automation',
       'TIKTOK_VIDEO, FACEBOOK_REELS',
       tomorrowStr,
-      'https://storage.topify.vn/samples/sample_reel_1.mp4',
+      '',
     ],
     [
       'Chiến lược tối ưu kịch bản video ngắn cho F&B',

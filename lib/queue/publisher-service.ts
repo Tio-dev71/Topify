@@ -202,7 +202,7 @@ export async function publishPostDirectly(postId: string): Promise<{
         result = await publisher.publishCarousel(postForPlatform as Post, assets, socialAccount, postPlatform);
       } else {
         if (!post.videoAsset) {
-          throw new Error('Đăng bài dạng Video/Reels yêu cầu phải có tệp video');
+          throw new Error('Bài viết chưa có tệp video. Nền tảng Video/Reels yêu cầu phải có tệp video để đăng bài.');
         }
         result = await publisher.publishReel(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
       }

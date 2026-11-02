@@ -5,7 +5,7 @@ import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
 import { isPlatformProviderConnected, PLATFORM_PROVIDER_INFO, formatFriendlyImportError } from '@/lib/content-studio/import-engine';
-import type { Platform } from '@prisma/client';
+import type { Platform, PostType, VideoSource } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,6 +166,62 @@ export async function POST(req: NextRequest) {
           cleanPlatforms.push('FACEBOOK_REELS' as Platform);
         }
 
+        // Process mediaUrl if provided in the row (e.g. direct link, storage URL, or Google Drive)
+        const rawMediaUrl = item.mediaUrl ? String(item.mediaUrl).trim() : '';
+        let videoAssetId: string | null = null;
+
+        if (rawMediaUrl) {
+          let finalMediaUrl = rawMediaUrl;
+          const isGoogleDrive = rawMediaUrl.includes('drive.google.com') || rawMediaUrl.includes('docs.google.com');
+          if (isGoogleDrive) {
+            const driveMatch = rawMediaUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawMediaUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            if (driveMatch && driveMatch[1]) {
+              finalMediaUrl = `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`;
+            }
+          }
+
+          const rawFileName = rawMediaUrl.split('/').pop()?.split('?')[0] || '';
+          const extMatch = rawFileName.match(/\.(mp4|mov|webm|avi|mkv|jpg|jpeg|png|webp)$/i);
+          const ext = extMatch ? extMatch[0].toLowerCase() : '.mp4';
+          const cleanTitle = title.slice(0, 30).replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1EA0-\u1EF9-]/g, '_');
+          const fileName = rawFileName && extMatch ? rawFileName : `${cleanTitle}${ext}`;
+
+          const mimeType = ext === '.mov'
+            ? 'video/quicktime'
+            : ext === '.webm'
+            ? 'video/webm'
+            : ext === '.jpg' || ext === '.jpeg'
+            ? 'image/jpeg'
+            : ext === '.png'
+            ? 'image/png'
+            : ext === '.webp'
+            ? 'image/webp'
+            : 'video/mp4';
+
+          const isImage = mimeType.startsWith('image/');
+          const duration = item.duration ? parseInt(String(item.duration).replace(/[^\d]/g, ''), 10) || null : null;
+
+          const asset = await tx.videoAsset.create({
+            data: {
+              originalFileName: fileName,
+              titleFromFileName: title,
+              storageUrl: finalMediaUrl,
+              source: isGoogleDrive ? ('GOOGLE_DRIVE' as VideoSource) : ('LOCAL_UPLOAD' as VideoSource),
+              mimeType,
+              size: 2 * 1024 * 1024,
+              duration: isImage ? null : (duration || 30),
+              createdById: userId,
+              workspaceId: workspaceId || null,
+            },
+          });
+          videoAssetId = asset.id;
+        }
+
+        // Determine if target platforms strictly require video
+        const requiresVideo = cleanPlatforms.some((p) =>
+          ['YOUTUBE_SHORTS', 'YOUTUBE', 'TIKTOK_VIDEO', 'FACEBOOK_REELS', 'INSTAGRAM_REELS', 'INSTAGRAM_STORY'].includes(p)
+        );
+
         // Determine scheduling
         let status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' = 'DRAFT';
         let finalScheduledAt: Date | null = null;
@@ -185,13 +241,32 @@ export async function POST(req: NextRequest) {
           status = 'PUBLISHING';
         }
 
+        // If the post requires video but has no video asset:
+        // Do NOT set status to PUBLISHING or SCHEDULED!
+        // Always force status to DRAFT so it does NOT fail the publisher queue with
+        // "Đăng bài dạng Video/Reels yêu cầu phải có tệp video".
+        let isDraftDueToMissingVideo = false;
+        if (requiresVideo && !videoAssetId) {
+          status = 'DRAFT';
+          isDraftDueToMissingVideo = true;
+        }
+
+        // Determine postType
+        let postType: PostType = 'REEL';
+        if (cleanPlatforms.some((p) => p.includes('CAROUSEL'))) {
+          postType = 'CAROUSEL';
+        } else if (!requiresVideo && cleanPlatforms.every((p) => ['FACEBOOK_POST', 'ZALO_POST', 'TELEGRAM'].includes(p))) {
+          postType = 'FEED';
+        }
+
         const post = await tx.post.create({
           data: {
             title,
             caption,
             firstComment,
             hashtags,
-            videoAssetId: null, // Draft / Text / Pending video attach
+            videoAssetId,
+            postType,
             createdById: userId,
             workspaceId,
             status,
@@ -211,7 +286,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        created.push(post);
+        created.push({ ...post, isDraftDueToMissingVideo });
       }
 
       return created;
@@ -238,6 +313,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const draftsWaitingForVideo = results.filter((r) => r.isDraftDueToMissingVideo).length;
+    let message = `Đã nhập thành công ${createdPostIds.length} bài viết vào hệ thống!`;
+    if (draftsWaitingForVideo > 0) {
+      message = `Đã nhập thành công ${createdPostIds.length} bài viết! Trong đó có ${draftsWaitingForVideo} bài dạng video được lưu ở dạng Bản thảo (Chờ gắn video) để bạn gắn tệp video trước khi xuất bản.`;
+    }
+
     await recordAuditLog({
       action: 'POST.BULK_IMPORT',
       entityType: 'Post',
@@ -248,6 +329,7 @@ export async function POST(req: NextRequest) {
       metadata: {
         totalImported: createdPostIds.length,
         importAsDraft: !!importAsDraft,
+        draftsWaitingForVideo,
       },
     });
 
@@ -256,7 +338,8 @@ export async function POST(req: NextRequest) {
         success: true,
         count: createdPostIds.length,
         postIds: createdPostIds,
-        message: `Đã nhập thành công ${createdPostIds.length} bài viết vào hệ thống!`,
+        draftsWaitingForVideo,
+        message,
       },
       { headers: corsHeaders }
     );

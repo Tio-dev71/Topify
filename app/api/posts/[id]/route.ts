@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { enqueuePublish, schedulePublish } from '@/lib/queue';
+import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
 import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
 
@@ -133,6 +135,7 @@ export async function PATCH(
     if (body.caption !== undefined) updateData.caption = sanitizeUtf8Nullable(body.caption);
     if (body.hashtags !== undefined) updateData.hashtags = sanitizeUtf8Nullable(body.hashtags);
     if (body.firstComment !== undefined) updateData.firstComment = sanitizeUtf8Nullable(body.firstComment);
+    if (body.videoAssetId !== undefined) updateData.videoAssetId = body.videoAssetId;
     if (body.scheduledAt !== undefined) {
       updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
       if (body.scheduledAt && post.status !== 'PUBLISHED' && post.status !== 'PUBLISHING') {
@@ -142,6 +145,9 @@ export async function PATCH(
     if (body.status === 'DRAFT' && post.status === 'SCHEDULED') {
       updateData.status = 'DRAFT';
       updateData.scheduledAt = null;
+    }
+    if (body.status === 'PUBLISHING' || body.action === 'PUBLISH_NOW') {
+      updateData.status = 'PUBLISHING';
     }
 
     // Auto-save previous version snapshot if content changed (F081)
@@ -169,6 +175,23 @@ export async function PATCH(
       where: { id },
       data: updateData,
     });
+
+    if (updateData.status === 'PUBLISHING') {
+      try {
+        await enqueuePublish(id);
+      } catch (e: any) {
+        console.warn(`[Posts PATCH] Enqueue publish error for ${id}:`, e.message);
+      }
+    } else if (updateData.status === 'SCHEDULED' && updateData.scheduledAt) {
+      try {
+        await schedulePublish(id, updateData.scheduledAt);
+        if (updateData.scheduledAt <= new Date()) {
+          checkAndPublishDuePosts().catch(console.error);
+        }
+      } catch (e: any) {
+        console.warn(`[Posts PATCH] Schedule publish error for ${id}:`, e.message);
+      }
+    }
 
     await recordAuditLog({
       action: 'POST.UPDATE',

@@ -246,6 +246,21 @@ export function formatFriendlyPublishError(rawError?: string | null, platform?: 
 
   const errLower = rawError.toLowerCase();
 
+  // 0. Missing video asset error
+  if (
+    errLower.includes('yêu cầu phải có tệp video') ||
+    errLower.includes('chưa có tệp video') ||
+    errLower.includes('không có tệp video') ||
+    errLower.includes('phải có tệp video') ||
+    errLower.includes('video/reels yêu cầu')
+  ) {
+    return {
+      reason: 'Bài viết chưa có tệp video. Nền tảng Video/Reels bắt buộc phải có tệp video để đăng bài.',
+      guide: 'Vui lòng mở chi tiết bài viết, bấm "Tải video lên" từ máy tính hoặc cung cấp đường dẫn video trước khi xuất bản.',
+      raw: rawError,
+    };
+  }
+
   // 1. YouTube Daily Upload Limit Exceeded (uploadLimitExceeded)
   if (
     errLower.includes('uploadlimitexceeded') ||
