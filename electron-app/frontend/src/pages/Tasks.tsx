@@ -96,10 +96,12 @@ export interface TaskCommentItem {
 export interface TaskTemplate {
   id: string;
   name: string;
-  category: 'CONTENT' | 'CSKH' | 'CAMPAIGN' | 'ONBOARDING';
+  category: 'CONTENT' | 'CSKH' | 'CAMPAIGN' | 'ONBOARDING' | 'CUSTOM' | string;
   description: string;
   estimatedDays: number;
   icon: string;
+  isCustom?: boolean;
+  createdAt?: string;
   steps: Array<{
     title: string;
     description?: string;
@@ -273,8 +275,34 @@ export default function Tasks() {
     }
   };
 
+  const fetchTemplates = async () => {
+    try {
+      const res = await api.get('/tasks/templates');
+      if (res.data?.success && Array.isArray(res.data?.templates)) {
+        const fetched: TaskTemplate[] = res.data.templates;
+        let merged = [...fetched];
+        try {
+          const cached = localStorage.getItem('topify_task_templates_cache');
+          if (cached) {
+            const cachedTpls: TaskTemplate[] = JSON.parse(cached);
+            const fetchedIds = new Set(fetched.map((t) => t.id));
+            const customUnsynced = cachedTpls.filter((t) => t.isCustom && !fetchedIds.has(t.id));
+            merged = [...fetched, ...customUnsynced];
+          }
+        } catch {}
+        setTemplates(merged);
+        try {
+          localStorage.setItem('topify_task_templates_cache', JSON.stringify(merged));
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('Templates API fallback to cache:', err);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
+    fetchTemplates();
   }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState<string>('ALL');
@@ -284,6 +312,29 @@ export default function Tasks() {
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<EnrichedTask | null>(null);
+
+  // Templates State (F130)
+  const [templates, setTemplates] = useState<TaskTemplate[]>(() => {
+    try {
+      const cached = localStorage.getItem('topify_task_templates_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_TEMPLATES;
+  });
+
+  const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
+  const [tplName, setTplName] = useState('');
+  const [tplCategory, setTplCategory] = useState<'CONTENT' | 'CSKH' | 'CAMPAIGN' | 'ONBOARDING' | 'CUSTOM'>('CUSTOM');
+  const [tplDescription, setTplDescription] = useState('');
+  const [tplEstimatedDays, setTplEstimatedDays] = useState(3);
+  const [tplSteps, setTplSteps] = useState<Array<{ title: string; defaultRole: string; relativeDueDays: number }>>([
+    { title: 'Nghiên cứu & Lập kế hoạch chi tiết', defaultRole: 'Trưởng nhóm', relativeDueDays: 1 },
+    { title: 'Triển khai công việc & Chuẩn bị tài nguyên', defaultRole: 'Thành viên thực hiện', relativeDueDays: 2 },
+    { title: 'Kiểm duyệt chất lượng & Nghiệm thu', defaultRole: 'Quản lý dự án', relativeDueDays: 3 },
+  ]);
 
   // Create Task Form State
   const [newTitle, setNewTitle] = useState('');
@@ -615,6 +666,104 @@ export default function Tasks() {
     }
   };
 
+  // Create New Custom Template (F130)
+  const handleCreateTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tplName.trim()) {
+      toast.error('Vui lòng nhập tên mẫu quy trình');
+      return;
+    }
+
+    const validSteps = tplSteps.filter((s) => s.title.trim().length > 0);
+    if (validSteps.length === 0) {
+      toast.error('Quy trình phải có ít nhất 1 bước thực hiện');
+      return;
+    }
+
+    const newTemplate: TaskTemplate = {
+      id: `tpl_custom_${Date.now()}`,
+      name: tplName.trim(),
+      category: tplCategory,
+      description: tplDescription.trim() || 'Mẫu quy trình làm việc do người dùng tùy biến thiết lập.',
+      estimatedDays: Number(tplEstimatedDays) > 0 ? Number(tplEstimatedDays) : 1,
+      icon:
+        tplCategory === 'CONTENT'
+          ? 'Film'
+          : tplCategory === 'CSKH'
+          ? 'MessageSquare'
+          : tplCategory === 'CAMPAIGN'
+          ? 'Rocket'
+          : tplCategory === 'ONBOARDING'
+          ? 'UserCheck'
+          : 'Sparkles',
+      steps: validSteps,
+      isCustom: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextTemplates = [newTemplate, ...templates];
+    setTemplates(nextTemplates);
+    try {
+      localStorage.setItem('topify_task_templates_cache', JSON.stringify(nextTemplates));
+    } catch {}
+
+    setIsCreateTemplateModalOpen(false);
+    // Reset form
+    setTplName('');
+    setTplCategory('CUSTOM');
+    setTplDescription('');
+    setTplEstimatedDays(3);
+    setTplSteps([
+      { title: 'Nghiên cứu & Lập kế hoạch chi tiết', defaultRole: 'Trưởng nhóm', relativeDueDays: 1 },
+      { title: 'Triển khai công việc & Chuẩn bị tài nguyên', defaultRole: 'Thành viên thực hiện', relativeDueDays: 2 },
+      { title: 'Kiểm duyệt chất lượng & Nghiệm thu', defaultRole: 'Quản lý dự án', relativeDueDays: 3 },
+    ]);
+
+    try {
+      const res = await api.post('/tasks/templates', {
+        name: newTemplate.name,
+        category: newTemplate.category,
+        description: newTemplate.description,
+        estimatedDays: newTemplate.estimatedDays,
+        icon: newTemplate.icon,
+        steps: newTemplate.steps,
+      });
+      if (res.data?.success && res.data?.template) {
+        const serverTpl: TaskTemplate = res.data.template;
+        setTemplates((prev) => {
+          const updated = prev.map((t) => (t.id === newTemplate.id ? serverTpl : t));
+          try {
+            localStorage.setItem('topify_task_templates_cache', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+      }
+      toast.success(`Đã tạo mẫu quy trình "${newTemplate.name}" thành công!`);
+    } catch (err) {
+      toast.success(`Đã tạo mẫu quy trình "${newTemplate.name}" thành công!`);
+    }
+  };
+
+  // Delete Custom Template (F130)
+  const handleDeleteTemplate = async (templateId: string, templateName: string) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa mẫu quy trình "${templateName}"?`)) {
+      return;
+    }
+
+    const nextTemplates = templates.filter((t) => t.id !== templateId);
+    setTemplates(nextTemplates);
+    try {
+      localStorage.setItem('topify_task_templates_cache', JSON.stringify(nextTemplates));
+    } catch {}
+
+    try {
+      await api.delete(`/tasks/templates?id=${templateId}`);
+      toast.success(`Đã xóa mẫu quy trình "${templateName}"!`);
+    } catch (err) {
+      toast.success(`Đã xóa mẫu quy trình "${templateName}"!`);
+    }
+  };
+
   // Submit Create Task Form
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -629,7 +778,7 @@ export default function Tasks() {
     // Handle template subtasks if selected
     let subtasksList: Array<{ id: string; title: string; isCompleted: boolean; assigneeName?: string }> = [];
     if (newSelectedTemplateId) {
-      const tpl = INITIAL_TEMPLATES.find((t) => t.id === newSelectedTemplateId);
+      const tpl = templates.find((t) => t.id === newSelectedTemplateId);
       if (tpl) {
         subtasksList = tpl.steps.map((st, i) => ({
           id: `sub_${Date.now()}_${i}`,
@@ -792,7 +941,7 @@ export default function Tasks() {
             <Sparkles className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">Thư viện Mẫu quy trình (F130)</span>
             <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-purple-500/10 text-purple-400 whitespace-nowrap">
-              4 mẫu
+              {templates.length} mẫu
             </span>
           </button>
 
@@ -1235,7 +1384,7 @@ export default function Tasks() {
       {/* ==================================================================== */}
       {activeTab === 'templates' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-bold text-[var(--color-foreground)]">
                 Thư viện Mẫu quy trình chuẩn hóa (Task Templates)
@@ -1244,10 +1393,17 @@ export default function Tasks() {
                 Các quy trình phối hợp liên phòng ban chuẩn mực, 1-click kích hoạt ngay công việc cha và danh mục checklist phân vai.
               </p>
             </div>
+            <button
+              onClick={() => setIsCreateTemplateModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 font-medium text-xs shadow-sm transition-all shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo mẫu quy trình mới</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {INITIAL_TEMPLATES.map((tpl) => (
+            {templates.map((tpl) => (
               <div
                 key={tpl.id}
                 className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] hover:border-[var(--color-primary)]/40 hover:shadow-md transition-all flex flex-col justify-between space-y-4"
@@ -1255,22 +1411,42 @@ export default function Tasks() {
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold shrink-0">
                         {tpl.category === 'CONTENT' && <Film className="w-5 h-5" />}
                         {tpl.category === 'CSKH' && <MessageSquare className="w-5 h-5" />}
                         {tpl.category === 'CAMPAIGN' && <Rocket className="w-5 h-5" />}
                         {tpl.category === 'ONBOARDING' && <UserCheck className="w-5 h-5" />}
+                        {tpl.category !== 'CONTENT' &&
+                          tpl.category !== 'CSKH' &&
+                          tpl.category !== 'CAMPAIGN' &&
+                          tpl.category !== 'ONBOARDING' && <Sparkles className="w-5 h-5" />}
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-[var(--color-foreground)]">
-                          {tpl.name}
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-[var(--color-foreground)]">
+                            {tpl.name}
+                          </h4>
+                          {tpl.isCustom && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                              Tùy chỉnh
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[11px] text-[var(--color-muted-foreground)] flex items-center gap-1 mt-0.5">
                           <Clock className="w-3 h-3" />
                           <span>Dự kiến: {tpl.estimatedDays} ngày • {tpl.steps.length} bước quy trình</span>
                         </span>
                       </div>
                     </div>
+                    {tpl.isCustom && (
+                      <button
+                        onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        title="Xóa mẫu quy trình này"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
 
                   <p className="text-xs text-[var(--color-muted-foreground)] leading-relaxed">
@@ -1920,9 +2096,9 @@ export default function Tasks() {
                   className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
                 >
                   <option value="">-- Tự thiết lập checklist thủ công --</option>
-                  {INITIAL_TEMPLATES.map((tpl) => (
+                  {templates.map((tpl) => (
                     <option key={tpl.id} value={tpl.id}>
-                      {tpl.name} ({tpl.steps.length} bước)
+                      {tpl.name} ({tpl.steps.length} bước){tpl.isCustom ? ' [Tùy chỉnh]' : ''}
                     </option>
                   ))}
                 </select>
@@ -1984,6 +2160,219 @@ export default function Tasks() {
                   className="px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 text-xs font-semibold shadow-sm"
                 >
                   Tạo công việc
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: CREATE TASK TEMPLATE (F130) */}
+      {/* ==================================================================== */}
+      {isCreateTemplateModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in-50 zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-[var(--color-border)] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[var(--color-foreground)]">
+                    Tạo Mẫu Quy Trình Mới (F130)
+                  </h3>
+                  <p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+                    Định nghĩa quy trình chuẩn hóa gồm các bước checklist phân vai và thời gian hoàn thành
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateTemplateModalOpen(false)}
+                className="p-1.5 rounded-lg text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleCreateTemplate} className="p-5 space-y-4 overflow-y-auto text-xs">
+              {/* Template Name & Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2 space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">
+                    Tên mẫu quy trình <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: Quy trình Livestream Bán hàng Đa kênh"
+                    value={tplName}
+                    onChange={(e) => setTplName(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--color-foreground)] text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Phân loại</label>
+                  <select
+                    value={tplCategory}
+                    onChange={(e) => setTplCategory(e.target.value as any)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                  >
+                    <option value="CONTENT">Nội dung (CONTENT)</option>
+                    <option value="CSKH">CSKH (CSKH)</option>
+                    <option value="CAMPAIGN">Chiến dịch (CAMPAIGN)</option>
+                    <option value="ONBOARDING">Nhân sự (ONBOARDING)</option>
+                    <option value="CUSTOM">Tùy biến (CUSTOM)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Estimated Days & Description */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="space-y-1 sm:col-span-1">
+                  <label className="font-semibold text-[var(--color-foreground)] flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Dự kiến (ngày)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="90"
+                    value={tplEstimatedDays}
+                    onChange={(e) => setTplEstimatedDays(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-3">
+                  <label className="font-semibold text-[var(--color-foreground)]">Mô tả quy trình</label>
+                  <input
+                    type="text"
+                    placeholder="Quy chuẩn từng bước để phối hợp nhịp nhàng giữa các phòng ban..."
+                    value={tplDescription}
+                    onChange={(e) => setTplDescription(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] focus:outline-none text-[var(--color-foreground)] text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Steps Checklist Builder */}
+              <div className="space-y-2 pt-2 border-t border-[var(--color-border)]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="font-semibold text-[var(--color-foreground)]">
+                      Các bước quy trình chuẩn hóa ({tplSteps.length} bước)
+                    </label>
+                    <p className="text-[11px] text-[var(--color-muted-foreground)]">
+                      Mỗi bước sẽ tự động chuyển thành checklist việc con kèm vai trò khi áp dụng 1-click
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTplSteps([
+                        ...tplSteps,
+                        {
+                          title: '',
+                          defaultRole: 'Thành viên thực hiện',
+                          relativeDueDays: tplSteps.length + 1,
+                        },
+                      ])
+                    }
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 font-medium text-xs transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm bước</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {tplSteps.map((step, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+                    >
+                      <div className="w-5 h-5 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-[10px] shrink-0 self-center">
+                        {idx + 1}
+                      </div>
+
+                      <input
+                        type="text"
+                        required
+                        placeholder={`Tiêu đề bước ${idx + 1} (VD: Viết kịch bản, Quay video...)`}
+                        value={step.title}
+                        onChange={(e) => {
+                          const updated = [...tplSteps];
+                          updated[idx].title = e.target.value;
+                          setTplSteps(updated);
+                        }}
+                        className="flex-1 p-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] text-xs focus:outline-none text-[var(--color-foreground)]"
+                      />
+
+                      <input
+                        type="text"
+                        placeholder="Vai trò (VD: Content Creator)"
+                        value={step.defaultRole}
+                        onChange={(e) => {
+                          const updated = [...tplSteps];
+                          updated[idx].defaultRole = e.target.value;
+                          setTplSteps(updated);
+                        }}
+                        className="w-full sm:w-36 p-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] text-xs focus:outline-none text-[var(--color-foreground)]"
+                      />
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-[var(--color-muted-foreground)] whitespace-nowrap">
+                          Ngày +
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="90"
+                          value={step.relativeDueDays}
+                          onChange={(e) => {
+                            const updated = [...tplSteps];
+                            updated[idx].relativeDueDays = parseInt(e.target.value) || 0;
+                            setTplSteps(updated);
+                          }}
+                          className="w-12 p-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] text-xs text-center focus:outline-none text-[var(--color-foreground)]"
+                        />
+                      </div>
+
+                      {tplSteps.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setTplSteps(tplSteps.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-[var(--color-muted-foreground)] hover:text-rose-500 rounded-lg hover:bg-rose-500/10 transition-colors shrink-0 self-center"
+                          title="Xóa bước này"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="pt-4 border-t border-[var(--color-border)] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTemplateModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 text-xs font-semibold shadow-sm transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Lưu & Kích hoạt mẫu quy trình</span>
                 </button>
               </div>
             </form>

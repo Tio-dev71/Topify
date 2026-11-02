@@ -53,11 +53,13 @@ export interface TaskTemplateStep {
 export interface TaskTemplate {
   id: string;
   name: string;
-  category: 'CONTENT' | 'CSKH' | 'CAMPAIGN' | 'ONBOARDING';
+  category: 'CONTENT' | 'CSKH' | 'CAMPAIGN' | 'ONBOARDING' | 'CUSTOM' | string;
   description: string;
   estimatedDays: number;
   icon: string;
   steps: TaskTemplateStep[];
+  isCustom?: boolean;
+  createdAt?: string;
 }
 
 export interface MemberProductivityMetric {

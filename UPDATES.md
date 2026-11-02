@@ -11,6 +11,33 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.79) — Thư Viện Mẫu Quy Trình (Task Templates - F130): Hỗ Trợ Tạo, Tùy Biến, Lưu Trữ & Xóa Mẫu Quy Trình Chuẩn Hóa
+
+### Phân hệ M9. Quản Lý Công Việc & Phối Hợp (Work & Tasks - F130) [Electron App & Backend API]:
+- **[Khắc phục lỗi Thư viện Mẫu quy trình (F130) không tạo được quy trình mới, chỉ có 4 mẫu có sẵn]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Quản lý công việc (Tasks)** $\rightarrow$ Chọn tab **"Thư viện Mẫu quy trình (F130)"**.
+    - Tìm cách tạo quy trình mới (mẫu quy trình gồm các bước, vai trò phụ trách, thời gian dự kiến).
+    - *Mong đợi:* Cho phép tạo quy trình mới tùy biến bên cạnh các mẫu có sẵn. Hiển thị badge số lượng mẫu động, cho phép áp dụng 1-click để tạo việc kèm checklist phân vai, xóa/chỉnh sửa quy trình tùy chỉnh.
+    - *Thực tế trước khi sửa:* Màn hình chỉ hiển thị cố định 4 mẫu quy trình có sẵn với nút "Áp dụng quy trình (1-Click)", tab header ghi cứng "4 mẫu", không có nút tạo mẫu mới hay thao tác tùy biến.
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Backend API (`/api/tasks/templates`):**
+       - Bổ sung handler `POST /api/tasks/templates`: Kiểm tra tính hợp lệ của tên mẫu quy trình (bắt buộc) và danh sách các bước (ít nhất 1 bước có tiêu đề). Chuẩn hóa các bước kèm vai trò phụ trách (`defaultRole`), số ngày hoàn thành tương đối (`relativeDueDays`) và phân loại category.
+       - Bổ sung handler `DELETE /api/tasks/templates`: Ngăn chặn việc xóa các mẫu mặc định của hệ thống (`BUILT_IN_TASK_TEMPLATES`), cho phép xóa mẫu quy trình tùy chỉnh an toàn theo ID.
+       - Cập nhật handler `GET /api/tasks/templates`: Trả về danh sách kết hợp mẫu mặc định và mẫu tùy chỉnh, hỗ trợ lọc theo phân loại và tìm kiếm từ khóa.
+    2. **Frontend Desktop App (`Tasks.tsx`):**
+       - Chuyển đổi danh sách template sang state động `templates` kết hợp lưu trữ bền vững hai tầng (`localStorage.getItem('topify_task_templates_cache')` và API `GET /api/tasks/templates`). Khi chuyển menu hoặc khởi động lại ứng dụng, các mẫu quy trình đã tạo không bị mất.
+       - Cập nhật badge số lượng mẫu trên tab header từ cố định `"4 mẫu"` thành động `{templates.length} mẫu`.
+       - Bổ sung nút **"+ Tạo mẫu quy trình mới"** tại header tab Thư viện Mẫu quy trình.
+       - Xây dựng Modal **"Tạo Mẫu Quy Trình Mới (F130)"** cho phép:
+         - Nhập tên quy trình (bắt buộc).
+         - Chọn phân loại (Nội dung, CSKH, Chiến dịch, Nhân sự, Tùy biến).
+         - Thời gian dự kiến hoàn thành (ngày).
+         - Mô tả chi tiết quy trình.
+         - Bộ dựng checklist động (Dynamic Steps Builder): Thêm/xóa bước, nhập tiêu đề bước, gán vai trò phụ trách mặc định và số ngày tương đối.
+       - Hiển thị badge **"Tùy chỉnh"** và nút xóa quy trình (biểu tượng thùng rác có xác nhận an toàn) cho các mẫu do người dùng tạo.
+       - Tích hợp mẫu quy trình tùy chỉnh vào cả nút "Áp dụng quy trình (1-Click)" trong tab F130 và danh sách chọn mẫu quy trình trong Modal "+ Tạo việc mới".
+
 ## 🚀 [2026-11-03] (v1.3.78) — Quản Lý Công Việc (Tasks): Khắc Phục Triệt Để Lỗi Mất Công Việc Khi Chuyển Menu & Lưu Trữ Đa Tầng Bền Vững (Database + LocalStorage Cache)
 
 ### Phân hệ M9. Quản Lý Công Việc & Phối Hợp (Work & Tasks - F124/F131) [Electron App & Backend API]:
