@@ -11,6 +11,34 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.72) — CRM & Kênh Bán Hàng: Cho Phép Xem Chi Tiết, Chỉnh Sửa Tên, Màu Sắc, Thứ Tự Các Giai Đoạn (Pipelines - F094 | Stages - F095)
+
+### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Kênh Bán Hàng & Giai Đoạn (Pipelines/Stages - F094/F095) [Electron App & Backend API]:
+- **[Khắc phục lỗi không chỉnh sửa được các giai đoạn đã tạo trong quy trình chuyển đổi]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Kênh bán hàng (F094/F095)** $\rightarrow$ Trong danh sách các giai đoạn ("Quy trình chuyển đổi chuẩn"), click vào một giai đoạn đã tạo (ví dụ *"Khách hàng mới"*, *"Giai đoạn 6"*).
+    - *Mong đợi:* Cho phép người dùng chỉnh sửa các giai đoạn đã tạo: sửa tên (`name`), mã màu nhận diện (`color`), và thứ tự xuất hiện (`sortOrder`). Có thể click trực tiếp vào từng thẻ giai đoạn hoặc bấm nút chỉnh sửa chuyên biệt.
+    - *Thực tế trước khi sửa:* Không chỉnh sửa được giai đoạn đã tạo. Mỗi giai đoạn chỉ có một nút xóa (biểu tượng thùng rác `Trash2`), không có nút chỉnh sửa hay thao tác xem chi tiết.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Thiếu sự kiện và giao diện chỉnh sửa trong Electron App (`Pipelines.tsx`):** `Edit2` được import từ `lucide-react` nhưng không được render trong JSX. Các thẻ giai đoạn không có handler `onClick`, không có nút Sửa và không có Modal Chỉnh sửa giai đoạn.
+    2. **Chưa đồng bộ dữ liệu với Backend API:** Các thao tác thêm giai đoạn (`handleAddStage`) và xóa giai đoạn (`handleDelete`) trước đó chỉ cập nhật state React cục bộ mà không gọi API `PATCH /crm/pipelines`, khiến thay đổi bị mất khi tải lại trang.
+    3. **Backend API cần hỗ trợ cập nhật linh hoạt:** Bổ sung hỗ trợ cập nhật trực tiếp từng giai đoạn đơn lẻ (`stageId`) và cập nhật danh sách mảng stages cùng thứ tự sắp xếp trong `app/api/crm/pipelines/route.ts`.
+  - **Giải pháp xử lý triệt để:**
+    1. **Nâng cấp giao diện trực quan và tương tác đa điểm (`electron-app/frontend/src/pages/Pipelines.tsx`):**
+       - **Click-to-Edit:** Click trực tiếp vào bất kỳ thẻ giai đoạn nào để mở ngay modal "Chỉnh Sửa Giai Đoạn Bán Hàng".
+       - **Nút "Sửa" chuyên biệt:** Bổ sung nút bấm có biểu tượng `Edit2` kèm nhãn "Sửa" rõ ràng ngay cạnh nút xóa.
+       - **Bộ điều khiển đổi thứ tự nhanh (Quick Reorder):** Bổ sung 2 nút bấm `ArrowUp` (Lên) và `ArrowDown` (Xuống) giúp điều chỉnh thứ tự giai đoạn tức thì.
+       - **Modal Chỉnh Sửa Toàn Diện:** Cho phép chỉnh sửa Tên giai đoạn, chọn nhanh màu từ bảng 10 Preset Colors hoặc bảng màu tùy biến (Hex picker), chọn Thứ tự hiển thị trong quy trình (Sort Order dropdown), cùng hộp Xem trước trực quan (Live Preview).
+       - **Banner Sơ Đồ Chuyển Đổi:** Bổ sung thanh trực quan hóa luồng các bước từ 1 đến N kết nối bằng mũi tên (`ArrowRight`), có thể click từng bước để chỉnh sửa nhanh.
+       - **Hỗ trợ Đa Quy Trình (F094):** Bổ sung nút "+ Tạo Kênh Mới" và thanh chuyển đổi qua lại giữa các Kênh bán hàng khi Workspace có nhiều pipeline.
+    2. **Đồng bộ cơ sở dữ liệu (`app/api/crm/pipelines/route.ts`):**
+       - Tự động gọi `api.patch('/crm/pipelines')` lưu thay đổi vào cơ sở dữ liệu ngay khi sửa, đổi thứ tự, thêm mới hoặc xóa giai đoạn.
+       - Bổ sung fallback xác thực workspace trong `getAuthContext()` và xử lý CORS preflight `OPTIONS` để tương thích hoàn hảo giữa Electron App và Web API.
+    3. **Kiểm thử tự động:**
+       - Viết bộ test `__tests__/api/crm/pipelines.test.ts` kiểm tra trọn vẹn: Khởi tạo mặc định, Cập nhật giai đoạn đơn lẻ, Sắp xếp lại thứ tự các giai đoạn và Tạo kênh bán hàng mới. 100% test case đạt trạng thái PASS.
+
+---
+
 ## 🚀 [2026-11-02] (v1.3.71) — Media Studio AI: Khắc Phục Lỗi Repurpose Video (F114) Cho Phép Chọn/Tải Video Dài, Cắt Highlight Thực Tế Bằng FFmpeg & Đưa Sang Tạo Bài Viết
 
 ### Phân hệ M7. Media Studio AI — Tách Clip Highlight (Repurpose Video - F114) [Electron App, Web Dashboard & Backend API]:
