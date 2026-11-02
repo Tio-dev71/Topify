@@ -69,7 +69,10 @@ function App() {
           <Route path="/crm/pipelines" element={<Pipelines />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/intelligence/social-search" element={<SocialSearch />} />
-          <Route path="/intelligence/alerts" element={<ViralAlerts />} />
+          <Route path="/intelligence/trending" element={<ViralAlerts defaultTab="trending" />} />
+          <Route path="/trending" element={<ViralAlerts defaultTab="trending" />} />
+          <Route path="/intelligence/alerts" element={<ViralAlerts defaultTab="alerts" />} />
+          <Route path="/alerts" element={<ViralAlerts defaultTab="alerts" />} />
           <Route path="/intelligence/competitors" element={<Competitors />} />
           <Route path="/competitors" element={<Competitors />} />
           <Route path="/intelligence/keywords" element={<Keywords />} />

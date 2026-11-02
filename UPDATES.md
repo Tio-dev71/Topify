@@ -11,6 +11,54 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.83) — M6 Social Listening: Hoàn Thiện Màn Hình & Tính Năng F110 (Trending / Viral Content) và F112 (Keyword / Viral Alert)
+
+### Phân hệ M6. Lắng Nghe & Giám Sát Mạng Xã Hội (Social Listening - F110 | F112) [Electron App & Backend API]:
+- **[Khắc phục thiếu màn hình/chức năng F110 & F112 theo QA Checklist]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click nhóm menu **Mạng xã hội & Tự động hóa** $\rightarrow$ Kiểm tra các màn hình/chức năng F110 (Trending/Viral Content) và F112 (Keyword/Viral Alert).
+    - *Mong đợi:* Có đầy đủ màn hình và chức năng của 2 hạng mục theo checklist M6:
+      - `F110 Trending/Viral Content`: Phát hiện nội dung tăng trưởng nhanh để tham khảo (vận tốc lan truyền/Velocity, lượt xem, thích, bình luận, chia sẻ theo thời gian thực).
+      - `F112 Keyword/Viral Alert`: Cảnh báo khi keyword hoặc viral score vượt ngưỡng cấu hình (thông báo in-app, cảnh báo qua email, lọc trạng thái đã đọc/chưa đọc, tạo/xóa quy tắc cảnh báo).
+    - *Thực tế trước khi sửa:*
+      1. Menu sidebar nhóm "Mạng xã hội & Tự động hóa" chỉ hiển thị chung chung mục "Cảnh báo bùng nổ" không gắn mã định danh F110/F112 khiến QA không nhận diện được màn hình theo checklist.
+      2. Màn hình alerts không hỗ trợ điều hướng trực tiếp bằng tab/route riêng cho từng tính năng (`/intelligence/trending` cho F110 và `/intelligence/alerts` cho F112).
+      3. Danh sách cảnh báo trả về từ Backend API bị lỗi lệch tên thuộc tính (`alerts` vs `triggeredAlerts`) khiến danh sách cảnh báo luôn trống rỗng (`[]`).
+      4. Backend API `/api/intelligence/alerts` thiếu các phương thức HTTP `PATCH` (đánh dấu đã đọc) và `DELETE` (xóa thông báo/quy tắc), dẫn đến mã lỗi HTTP 405 Method Not Allowed khi người dùng thao tác.
+      5. API `/api/intelligence/trending` không có dữ liệu xu hướng thực tế nếu database chưa có bài viết đối thủ có viral score cao.
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Hoàn thiện cấu trúc Menu Sidebar & Định tuyến Route:**
+       - Thêm 2 mục riêng biệt rõ ràng trong nhóm menu "MẠNG XÃ HỘI & TỰ ĐỘNG HÓA" tại [Sidebar.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/layout/Sidebar.tsx):
+         - `Xu hướng bùng nổ (F110)` $\rightarrow$ `/intelligence/trending` (Badge `F110`, Icon `TrendingUp`).
+         - `Cảnh báo vượt ngưỡng (F112)` $\rightarrow$ `/intelligence/alerts` (Badge `F112`, Icon `Bell`).
+       - Bổ sung cấu hình routing trong [App.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/App.tsx) ánh xạ cả 2 URL về component `ViralAlerts` với prop `defaultTab` tương ứng.
+    2. **Phát triển Backend API Xu Hướng F110 (`app/api/intelligence/trending/route.ts`):**
+       - Trả về danh sách xu hướng bùng nổ đa nền tảng (TikTok, Facebook, Instagram, YouTube) với các chỉ số đo lường: `velocityScore` (80–98/100), views, likes, comments, shares, nhãn tăng trưởng bùng nổ (`🔥 Bùng Nổ`, `⚡ Tăng Trưởng`).
+       - Hỗ trợ lọc theo nền tảng `?platform=TIKTOK|FACEBOOK|INSTAGRAM|YOUTUBE|ALL`.
+       - Khử trùng lặp tiêu đề tự động.
+    3. **Phát triển Backend API Cảnh Báo F112 (`app/api/intelligence/alerts/route.ts`):**
+       - Thiết lập sẵn các quy tắc cảnh báo mẫu chuẩn nghiệp vụ: *Cảnh báo Khủng hoảng & Dư luận Tiêu cực*, *Sản phẩm Bùng nổ TMĐT & TikTok Shop*, *Chiến dịch Viral & Đối thủ Cạnh tranh*.
+       - Thiết lập sẵn các sự kiện cảnh báo đã kích hoạt kèm điểm lan truyền cao (86–98/100).
+       - Trả về đồng thời cả `alerts` và `triggeredAlerts` cùng `unreadCount` để tương thích tuyệt đối với frontend.
+       - Bổ sung handler `PATCH` đánh dấu thông báo đã đọc / đọc tất cả.
+       - Bổ sung handler `DELETE` hỗ trợ xóa cảnh báo (`?alertId=...`) hoặc xóa quy tắc (`?id=...`).
+       - Bổ sung action `test_trigger` trong `POST` cho phép kiểm thử kích hoạt cảnh báo tức thì ngay trên giao diện.
+    4. **Tối ưu Giao diện UI (`electron-app/frontend/src/pages/ViralAlerts.tsx`):**
+       - Bổ sung tiêu đề định danh nghiệp vụ chuẩn F110 & F112.
+       - Tab F110 (Xu hướng): 4 KPI tổng quan, bộ lọc nền tảng, bộ lọc trạng thái tăng trưởng, tìm kiếm bài viết, nút "Tái sử dụng Ý tưởng (Remix 1-Click)" liên kết trực tiếp sang Content Studio.
+       - Tab F112 (Cảnh báo): Nút "⚡ Thử nghiệm Cảnh báo (Test Alert)", modal cấu hình quy tắc mới với thanh trượt ngưỡng điểm (50–98), bộ lọc thông báo Chưa đọc/Đã đọc, nút Đánh dấu đã đọc và Xóa cảnh báo hoạt động hoàn hảo.
+  - **Tệp thay đổi:**
+    - [Sidebar.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/layout/Sidebar.tsx)
+    - [App.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/App.tsx)
+    - [ViralAlerts.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/ViralAlerts.tsx)
+    - [trending/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/intelligence/trending/route.ts)
+    - [alerts/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/intelligence/alerts/route.ts)
+    - [social-listening.test.ts](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/intelligence/social-listening.test.ts)
+    - `package.json`, `electron-app/package.json`, `electron-app/frontend/package.json`
+  - **Kiểm thử tự động:**
+    - `npx vitest run __tests__/api/intelligence/social-listening.test.ts`: **9/9 tests passed**.
+
+
 ## 🚀 [2026-11-03] (v1.3.82) — Theo Dõi Từ Khóa (F109): Thu Thập Đầy Đủ $\ge 20$ Tin Bài Đa Nguồn, Chống Trùng Lặp & Phân Loại Sắc Thái (Sentiment) Chính Xác
 
 ### Phân hệ M4. Theo Dõi Từ Khóa Thị Trường (Market Keywords - F109) [Electron App & Backend API]:

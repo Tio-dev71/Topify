@@ -21,6 +21,8 @@ import {
   Search,
   Film,
   Flame,
+  TrendingUp,
+  Bell,
   CheckSquare,
   Rocket,
   Wallet,
@@ -87,8 +89,9 @@ const navSections: NavSection[] = [
       { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart },
       { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play },
       { key: 'Thám tử xu hướng (MXH)', href: '/intelligence/social-search', icon: Search },
-      { key: 'Theo dõi từ khóa (Keywords)', href: '/intelligence/keywords', icon: Hash },
-      { key: 'Cảnh báo bùng nổ', href: '/intelligence/alerts', icon: Flame },
+      { key: 'Theo dõi từ khóa (F109)', href: '/intelligence/keywords', icon: Hash, badge: 'F109' },
+      { key: 'Xu hướng bùng nổ (F110)', href: '/intelligence/trending', icon: TrendingUp, badge: 'F110' },
+      { key: 'Cảnh báo vượt ngưỡng (F112)', href: '/intelligence/alerts', icon: Bell, badge: 'F112' },
       { key: 'Theo dõi đối thủ (Fanpages)', href: '/competitors', icon: Target },
     ],
   },
@@ -345,7 +348,7 @@ export function Sidebar() {
             <div className="mt-2.5 pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[11px] text-gray-600 px-1">
               <span>Topify Desktop</span>
               <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-[#5B3DF5] font-semibold border border-[#5B3DF5]/20">
-                v1.3.82
+                v1.3.83
               </span>
             </div>
           )}
