@@ -1128,45 +1128,106 @@ BẮT BUỘC TRẢ VỀ JSON:
   }
 
   // Heuristic Fallback for Repurpose
-  const step = Math.max(35, Math.floor(durationSeconds / 4));
-  return {
-    sourceTitle: title,
-    totalDuration: durationSeconds,
-    clips: [
-      {
-        id: 'clip_1',
-        title: '🔥 Đoạn Mở Đầu Gây Sốc: Bí Quyết Ít Người Biết',
-        hookPoint: 'Nếu bạn vẫn đang làm theo cách cũ, bạn đang đốt tiền mỗi ngày!',
-        startTime: 0,
-        endTime: Math.min(42, durationSeconds),
-        duration: Math.min(42, durationSeconds),
-        viralPotentialScore: 94,
-        suggestedCaption: 'Bí quyết giúp bạn tiết kiệm 50% thời gian mà doanh số vẫn tăng vọt. Xem ngay để không bỏ lỡ! #Trending #KinhDoanh #Topify',
-        suggestedTags: ['#Trending', '#TikTokShop', '#MeoHay', '#Reels'],
-      },
-      {
-        id: 'clip_2',
-        title: '⚡ Cao Trào: Sai Lầm Chết Người Ai Cũng Mắc Phải',
-        hookPoint: 'Tại sao 90% người mới bắt đầu đều thất bại ở bước này?',
-        startTime: Math.min(step, durationSeconds - 50),
-        endTime: Math.min(step + 48, durationSeconds),
-        duration: 48,
-        viralPotentialScore: 88,
-        suggestedCaption: 'Đừng mắc phải sai lầm ngớ ngẩn này nếu bạn muốn đơn hàng nổ liên tục! Chia sẻ ngay cho đồng đội cùng biết nha. #KinhNghiem #Review',
-        suggestedTags: ['#KinhNghiem', '#GocNhin', '#ViralVideo'],
-      },
-      {
+  const total = Math.max(10, Math.round(durationSeconds));
+  const cleanTitle = title.replace(/\.[^/.]+$/, '').trim() || 'Video chia sẻ';
+
+  // Extract keywords for hashtags
+  const words = cleanTitle.split(/\s+/).filter(w => w.length > 2);
+  const tag1 = words[0] ? `#${words[0].replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, '')}` : '#Topify';
+  const tag2 = words[1] ? `#${words[1].replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF]/g, '')}` : '#Shorts';
+
+  const clips: any[] = [];
+
+  if (total <= 60) {
+    const mid = Math.max(5, Math.floor(total * 0.45));
+    clips.push({
+      id: 'clip_1',
+      title: `🔥 Đoạn Mở Đầu Gây Chú Ý: ${cleanTitle}`,
+      hookPoint: `Bạn đã biết bí mật này về "${cleanTitle}" chưa?`,
+      startTime: 0,
+      endTime: mid,
+      duration: mid,
+      viralPotentialScore: 94,
+      suggestedCaption: `Bí quyết quan trọng nhất trong "${cleanTitle}" giúp bạn bứt phá. Xem ngay đừng bỏ lỡ! ${tag1} ${tag2} #Topify #Trending`,
+      suggestedTags: [tag1, tag2, '#Trending', '#Reels', '#Shorts'],
+    });
+    clips.push({
+      id: 'clip_2',
+      title: `🎯 Cao Trào & Hành Động: ${cleanTitle}`,
+      hookPoint: `Chỉ cần làm đúng bước này, kết quả sẽ thay đổi hoàn toàn!`,
+      startTime: mid,
+      endTime: total,
+      duration: total - mid,
+      viralPotentialScore: 89,
+      suggestedCaption: `Áp dụng ngay công thức này cho "${cleanTitle}" để đạt hiệu quả tối đa. Chia sẻ cho bạn bè cùng biết nhé! #HuongDan #KinhNghiem #Viral`,
+      suggestedTags: [tag1, '#HuongDan', '#KinhNghiem', '#ViralVideo'],
+    });
+  } else {
+    // 3 or 4 clips distributed across the video
+    const clip1End = Math.min(45, Math.max(20, Math.floor(total * 0.25)));
+    clips.push({
+      id: 'clip_1',
+      title: `🔥 Đoạn Mở Đầu Gây Sốc: Bí Mật "${cleanTitle}"`,
+      hookPoint: `Nếu bạn vẫn đang làm theo cách cũ, đây là lý do bạn chưa đạt hiệu quả với ${cleanTitle}!`,
+      startTime: 0,
+      endTime: clip1End,
+      duration: clip1End,
+      viralPotentialScore: 95,
+      suggestedCaption: `Bí quyết giúp tiết kiệm 50% thời gian mà kết quả vẫn tăng vọt trong "${cleanTitle}". Xem ngay kẻo lỡ! ${tag1} #Trending #Reels #Shorts`,
+      suggestedTags: [tag1, '#Shorts', '#Trending', '#Reels', '#Topify'],
+    });
+
+    const clip2Start = Math.floor(total * 0.35);
+    const clip2Duration = Math.min(50, Math.max(25, Math.floor(total * 0.28)));
+    const clip2End = Math.min(total - 30, clip2Start + clip2Duration);
+    clips.push({
+      id: 'clip_2',
+      title: `⚡ Cao Trào: Sai Lầm Đắt Giá Nhất Khi Làm "${cleanTitle}"`,
+      hookPoint: `Tại sao 90% người mới bắt đầu đều vấp phải sai lầm nghiêm trọng này?`,
+      startTime: clip2Start,
+      endTime: clip2End,
+      duration: clip2End - clip2Start,
+      viralPotentialScore: 89,
+      suggestedCaption: `Đừng mắc phải sai lầm ngớ ngẩn này nếu bạn muốn thành công với "${cleanTitle}". Chia sẻ ngay cho đồng đội cùng biết nha! #KinhNghiem #GocNhin #ViralVideo`,
+      suggestedTags: [tag2, '#KinhNghiem', '#GocNhin', '#ViralVideo'],
+    });
+
+    if (total >= 180) {
+      const clip3Start = Math.floor(total * 0.65);
+      const clip3Duration = Math.min(45, Math.max(25, Math.floor(total * 0.22)));
+      const clip3End = Math.min(total - 20, clip3Start + clip3Duration);
+      clips.push({
         id: 'clip_3',
-        title: '🎯 Hướng Dẫn Từng Bước (Step-by-Step Action)',
-        hookPoint: 'Chỉ cần làm đúng 3 bước này, kết quả sẽ đến ngay tuần đầu tiên.',
-        startTime: Math.max(0, durationSeconds - 55),
-        endTime: durationSeconds,
-        duration: 55,
-        viralPotentialScore: 86,
-        suggestedCaption: 'Lưu lại ngay công thức 3 bước đơn giản này để áp dụng cho kênh của bạn ngay hôm nay! #Tutorial #HuongDan #Topify',
-        suggestedTags: ['#HuongDan', '#CongThuc', '#Shorts'],
-      },
-    ],
+        title: `💡 Bí Quyết Đột Phá: Tư Duy Thực Chiến Về "${cleanTitle}"`,
+        hookPoint: `Điểm mấu chốt quyết định 80% kết quả mà ít ai nói cho bạn biết.`,
+        startTime: clip3Start,
+        endTime: clip3End,
+        duration: clip3End - clip3Start,
+        viralPotentialScore: 88,
+        suggestedCaption: `Tư duy đúng đắn sẽ giúp bạn đi nhanh hơn gấp 10 lần. Đúc kết bài học giá trị từ "${cleanTitle}" ngay hôm nay! #KienThuc #TuDuy #BíQuyet`,
+        suggestedTags: ['#KienThuc', '#TuDuy', '#BiQuyet', '#Topify'],
+      });
+    }
+
+    const clipFinalDuration = Math.min(55, Math.max(25, Math.floor(total * 0.3)));
+    const clipFinalStart = Math.max(0, total - clipFinalDuration);
+    clips.push({
+      id: `clip_${clips.length + 1}`,
+      title: `🎯 Hướng Dẫn Hành Động: Cách Tối Ưu "${cleanTitle}" Từng Bước`,
+      hookPoint: `Chỉ cần làm đúng 3 bước này, kết quả sẽ đến ngay tuần đầu tiên!`,
+      startTime: clipFinalStart,
+      endTime: total,
+      duration: total - clipFinalStart,
+      viralPotentialScore: 86,
+      suggestedCaption: `Lưu lại ngay hướng dẫn 3 bước đơn giản này để áp dụng cho kênh của bạn ngay hôm nay! #Tutorial #HuongDan #Topify #CongThuc`,
+      suggestedTags: [tag1, '#HuongDan', '#CongThuc', '#Tutorial', '#Shorts'],
+    });
+  }
+
+  return {
+    sourceTitle: cleanTitle,
+    totalDuration: total,
+    clips,
     isAiGenerated: false,
   };
 }

@@ -11,6 +11,43 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.71) — Media Studio AI: Khắc Phục Lỗi Repurpose Video (F114) Cho Phép Chọn/Tải Video Dài, Cắt Highlight Thực Tế Bằng FFmpeg & Đưa Sang Tạo Bài Viết
+
+### Phân hệ M7. Media Studio AI — Tách Clip Highlight (Repurpose Video - F114) [Electron App, Web Dashboard & Backend API]:
+- **[Khắc phục lỗi không cho tải/chọn video dài lên, chỉ hiển thị dữ liệu mẫu template cố định]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Media Studio AI** $\rightarrow$ Chọn tab **"[F114] Tách Clip Highlight (Repurpose)"**.
+    - *Mong đợi:* Cho phép người dùng chọn hoặc tải video dài từ máy tính hoặc thư viện media workspace, AI phân tích và trích xuất các clip ngắn (highlight 30s-60s) kèm tiêu đề, câu hook 3s, caption và hashtag từ chính video đó. Cho phép xem trước đúng đoạn clip, tải tệp clip MP4 thật về máy và đưa clip sang màn hình Tạo bài viết.
+    - *Thực tế trước khi sửa:* Không có chức năng chọn hoặc tải video dài lên. Màn hình chỉ hiển thị cố định một video mẫu ("Review Chi Tiết Bàn Làm Việc...", 180s) cùng 3 clip template cố định (0s-42s, 45s-93s, 125s-180s), không hỗ trợ video của người dùng.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Thiếu thành phần tải tệp và chọn video:** Giao diện `MediaStudio.tsx` bị gán cứng state `videoTitle` và `videoDuration = 180`, không có input file upload, không có modal chọn video từ Thư viện Media Workspace.
+    2. **Heuristic Fallback cố định thời gian:** `generateVideoRepurposeHighlights` trong `lib/ai/9router.ts` sử dụng các mốc cố định (0-42, 45-93, 125-180) mà không phân đoạn động theo thời lượng và tiêu đề video thực tế.
+    3. **Chưa có pipeline cắt video vật lý (Physical Video Clipping):** API `/api/media/repurpose` chỉ trả về JSON metadata mà không cắt file MP4 bằng FFmpeg. Các nút "Tải clip (.mp4)" và "Đưa sang Tạo bài viết" chỉ dùng dummy URL `ForBiggerBlazes.mp4` hoặc chỉ truyền query caption sang `/create` mà không truyền asset video đã cắt.
+  - **Giải pháp xử lý (Solution & Implementation):**
+    1. **Thêm cơ chế chọn & tải video dài toàn diện (`MediaStudio.tsx`):**
+       - Thêm nút **"Tải Video Dài Từ Máy"** hỗ trợ các định dạng `.mp4, .mov, .webm, .mkv, .avi`. Khi chọn file, hệ thống tự động đọc metadata (thời lượng duration, độ phân giải width x height, dung lượng) và làm sạch tên tệp để làm tiêu đề video.
+       - Thêm nút **"Chọn Từ Thư Viện Media"** mở Modal chọn video từ workspace qua API `GET /api/media?type=VIDEO` có tìm kiếm theo tên và tags.
+       - Cung cấp sẵn 3 video mẫu thử nghiệm (Mẫu 1: 180s, Mẫu 2: 240s, Mẫu 3: 150s) cho phép chuyển đổi nhanh chóng.
+       - Cho phép người dùng chỉnh sửa tiêu đề video và nhập bản ghi thoại/tóm tắt ý chính (transcript/notes) để AI cắt clip chuẩn xác hơn.
+    2. **Động cơ phân đoạn highlight thông minh (`lib/ai/9router.ts`):**
+       - Phân đoạn động theo thời lượng thực tế của video: video ngắn (<60s) tạo 2 clip; video dài (>=60s) chia 3-4 clip (Đoạn mở đầu, Điểm nhấn/Cao trào, Hành động/Tóm tắt, Tư duy đột phá) với mốc `startTime` và `endTime` chính xác nằm trong độ dài video.
+       - Tiêu đề, câu hook 3s, caption đề xuất và hashtags được sinh động theo tiêu đề và nội dung video được chọn.
+    3. **Tích hợp FFmpeg cắt video vật lý (`lib/media/studio.ts` & `/api/media/repurpose`):**
+       - Xây dựng hàm `processVideoRepurposeCut` sử dụng FFmpeg (`-ss startTime -to endTime -c:v libx264 -preset veryfast -c:a aac -movflags +faststart`) cắt chính xác đoạn clip theo từng giây.
+       - API `/api/media/repurpose` hỗ trợ `action: 'cut'`, tự động upload clip đã cắt lên Topify Storage và đăng ký bản ghi `VideoAsset` trong database thuộc workspace của người dùng.
+    4. **Xem trước, tải clip MP4 thật & đưa sang Tạo bài viết:**
+       - **Xem trước:** Modal video player phát đúng khoảng thời gian của clip `[clip.startTime, clip.endTime]` kèm hiển thị điểm viral và câu hook.
+       - **Tải clip (.mp4):** Cắt trực tiếp clip bằng FFmpeg trên server và tải đúng tệp MP4 về máy người dùng.
+       - **Đưa sang Tạo bài viết:** Cắt clip thành `VideoAsset` độc lập và điều hướng sang `/create` với đầy đủ `prefilledMediaUrl`, `prefilledAssetId`, `prefilledMediaType: 'video'`, `prefilledTitle`, `prefilledCaption`, `prefilledHashtags`, `prefilledDuration`.
+  - **Tệp thay đổi (Files Modified):**
+    - `lib/media/studio.ts`: Thêm hàm `processVideoRepurposeCut` cắt video bằng FFmpeg.
+    - `lib/ai/9router.ts`: Nâng cấp `generateVideoRepurposeHighlights` phân đoạn clip động theo độ dài và tiêu đề video.
+    - `app/api/media/repurpose/route.ts`: Hỗ trợ `action: 'analyze'` và `action: 'cut'`, xử lý upload file và tạo `VideoAsset`.
+    - `electron-app/frontend/src/pages/MediaStudio.tsx`: Thêm nút tải video dài, modal chọn từ thư viện media, xem trước theo mốc thời gian, tải clip MP4 thật và chuyển sang Tạo bài viết.
+    - `__tests__/api/media/repurpose.test.ts`: 6 unit tests kiểm tra toàn bộ pipeline phân tích và cắt clip highlight.
+
+
+
 ## 🚀 [2026-11-02] (v1.3.70) — Studio Nội Dung & Media: Khắc Phục Lỗi Resize Đa Nền Tảng (F113) Áp Dụng Sang Bài Viết Không Thay Đổi Tỷ Lệ Trên YouTube
 
 ### Phân hệ M2 & M7. Studio Nội Dung & Media Studio — Resize Đa Nền Tảng (F113) [Electron App, Web Dashboard & Backend API]:

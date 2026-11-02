@@ -220,3 +220,88 @@ export async function processMediaResize(params: {
     }
   }
 }
+
+/**
+ * Extract / Cut a video highlight clip segment using FFmpeg.
+ * Takes inputBuffer, startTime, endTime and outputs the clipped MP4.
+ */
+export async function processVideoRepurposeCut(params: {
+  inputBuffer: Buffer;
+  originalFileName?: string;
+  startTime: number;
+  endTime: number;
+  clipTitle?: string;
+}): Promise<{
+  outputBuffer: Buffer;
+  outputFileName: string;
+  mimeType: string;
+  duration: number;
+  width?: number;
+  height?: number;
+}> {
+  const { inputBuffer, originalFileName = 'video.mp4', startTime, endTime, clipTitle } = params;
+
+  // 1. Resolve ffmpeg binary path
+  let ffmpegPath = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find(p =>
+    fs.existsSync(p)
+  );
+  if (!ffmpegPath) {
+    try {
+      // @ts-expect-error - no types
+      const ffmpegInstaller = await import('@ffmpeg-installer/ffmpeg');
+      ffmpegPath = ffmpegInstaller?.default?.path || ffmpegInstaller?.path;
+    } catch {}
+  }
+  if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
+    ffmpegPath = 'ffmpeg';
+  }
+
+  // 2. Setup temp files
+  const tempDir = os.tmpdir();
+  const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const inputExt = path.extname(originalFileName) || '.mp4';
+  const inputTempPath = path.join(tempDir, `topify_cut_in_${uniqueId}${inputExt}`);
+  const outputTempPath = path.join(tempDir, `topify_cut_out_${uniqueId}.mp4`);
+
+  const clipDuration = Math.max(1, Math.round(endTime - startTime));
+  const safeTitle = (clipTitle || 'Highlight')
+    .replace(/[^\p{L}\p{N}\-_]+/gu, '_')
+    .substring(0, 30);
+
+  try {
+    await fs.promises.writeFile(inputTempPath, inputBuffer);
+
+    // Fast and frame-accurate cut using -ss before -i and re-encoding with libx264 & aac
+    const ffmpegCmd = `"${ffmpegPath}" -y -ss ${startTime} -to ${endTime} -i "${inputTempPath}" -c:v libx264 -preset veryfast -c:a aac -b:a 192k -movflags +faststart "${outputTempPath}"`;
+
+    const { stderr } = await execAsync(ffmpegCmd, { maxBuffer: 10 * 1024 * 1024 });
+
+    // Parse dimensions from stderr if available
+    let width = 1080;
+    let height = 1920;
+    const resMatch = (stderr || '').match(/Video:.*?(\d{3,4})x(\d{3,4})/);
+    if (resMatch) {
+      width = parseInt(resMatch[1], 10);
+      height = parseInt(resMatch[2], 10);
+    }
+
+    const outputBuffer = await fs.promises.readFile(outputTempPath);
+    const outputFileName = `Highlight_${safeTitle}_${startTime}s_${endTime}s.mp4`;
+
+    return {
+      outputBuffer,
+      outputFileName,
+      mimeType: 'video/mp4',
+      duration: clipDuration,
+      width,
+      height,
+    };
+  } finally {
+    if (fs.existsSync(inputTempPath)) {
+      await fs.promises.unlink(inputTempPath).catch(() => {});
+    }
+    if (fs.existsSync(outputTempPath)) {
+      await fs.promises.unlink(outputTempPath).catch(() => {});
+    }
+  }
+}
