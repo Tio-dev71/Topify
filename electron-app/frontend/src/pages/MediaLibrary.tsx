@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+// @ts-ignore
 import heic2any from 'heic2any';
 import { 
   Image as ImageIcon, 
