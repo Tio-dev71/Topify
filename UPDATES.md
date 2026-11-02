@@ -11,6 +11,45 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.67) — Studio Nội Dung & Xuất Bản Đa Kênh: Hỗ Trợ Toàn Diện Bài Đăng Carousel Nhiều Ảnh (F013) & Đăng Ngay Sang Instagram Carousel / Facebook Album
+
+### Phân hệ M2. Studio Nội dung & Spin — Soạn Carousel Nhiều Ảnh (F013) & Xuất Bản Đa Kênh [Electron App, Web Dashboard & Backend API]:
+- **[Hỗ trợ định dạng Carousel nhiều ảnh & Đăng bài ngay] Khắc phục triệt để lỗi chuyển từ F013 sang màn đăng bài bị mất ảnh và hệ thống chỉ cho phép đăng video:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester (F013):**
+    - Mở app Topify $\rightarrow$ Studio Nội dung & Spin $\rightarrow$ Soạn Carousel Nhiều Ảnh (F013).
+    - Nhập tiêu đề, caption, hashtags và các trang ảnh slide Carousel.
+    - Bấm "Đăng bài ngay".
+    - *Mong đợi:* Đăng được bài Carousel nhiều ảnh lên các nền tảng (Instagram Carousel, Facebook Album), toàn bộ ảnh và caption đã soạn được chuyển sang màn đăng bài.
+    - *Thực tế trước khi sửa:* Màn đăng bài (`/create`) chuyển sang trạng thái "Bản thảo AI (Chưa gắn video)", không hiển thị danh sách ảnh, bắt buộc phải tải video thực tế mới cho đăng, từ chối tải file ảnh.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Màn hình CreatePost (`electron-app/frontend/src/pages/CreatePost.tsx`):**
+       - Chỉ thiết kế cho định dạng video duy nhất (`accept="video/*"`, chỉ gọi `/api/upload`), từ chối file ảnh.
+       - Khi nhận `location.state` từ F013 có `isCarousel: true` và `carouselSlides: [...]`, `CreatePost` không đọc các trường này và tự động gán nhãn bản thảo chưa có video (`isDraft: true`), chặn nút gửi.
+       - Mặc định nền tảng chỉ chọn các kênh video (Reels, Shorts, TikTok) thay vì chọn `INSTAGRAM_CAROUSEL` và `FACEBOOK_POST`.
+    2. **Backend API (`app/api/posts/route.ts`):**
+       - Bắt buộc `videoAssetId` phải là một bản ghi video có sẵn trong DB, chặn mọi bản thảo không có video (`draft_`).
+       - Chưa có luồng tự động tạo `VideoAsset` ảnh bìa và liên kết `PostMedia` cho từng slide ảnh Carousel.
+    3. **Publisher Service & Publishers (`lib/queue/publisher-service.ts`, `lib/publishers/facebook.ts`):**
+       - Chưa nạp quan hệ `post.media` khi xử lý `postType === 'CAROUSEL'`.
+       - Facebook Publisher chưa hỗ trợ Graph API đăng bài nhiều ảnh (multi-photo unpublished photos + attached_media feed post).
+  - **Giải pháp xử lý toàn diện:**
+    1. **Nâng cấp toàn diện màn hình CreatePost (`CreatePost.tsx`):**
+       - Nhận diện `isCarousel: true` và mảng `carouselSlides` từ F013: tự động nạp toàn bộ slide ảnh vào bài đăng, không còn bị coi là bản thảo thiếu video.
+       - Tự động chọn các nền tảng tối ưu cho Carousel: `INSTAGRAM_CAROUSEL` và `FACEBOOK_POST`, làm mờ và gắn nhãn "Chỉ video" cho các kênh không tương thích (YouTube Shorts, TikTok Video).
+       - Thêm bộ hiển thị **Carousel Slides Manager**: cho phép xem trước danh sách các trang ảnh slide (`Trang 1: Bìa`, `Trang 2`...), xóa ảnh, và thêm ảnh mới trực tiếp vào bộ slide.
+       - Hỗ trợ kéo thả / tải lên cả tệp hình ảnh (`JPG, PNG, WEBP, HEIC`) thông qua `/api/media`.
+    2. **Cập nhật Backend API (`app/api/posts/route.ts`):**
+       - Bổ sung `isCarousel`, `postType: 'CAROUSEL'`, `carouselSlides` vào Zod schema `createPostSchema`.
+       - Khi nhận bài Carousel: tự động khởi tạo bản ghi asset ảnh bìa và tạo các bản ghi `MediaAsset` + `PostMedia` theo đúng thứ tự `sortOrder`.
+       - Mở rộng `GET /api/posts` để nạp `media: { include: { mediaAsset: true } }` và `postType`.
+    3. **Tối ưu hóa Publisher Service & Facebook Publisher:**
+       - `publisher-service.ts`: Nạp toàn bộ danh sách `post.media` và chuyển thành mảng `assets` gửi vào `publisher.publishCarousel`.
+       - `lib/publishers/facebook.ts`: Bổ sung cơ chế Graph API đăng nhiều ảnh lên Facebook Fanpage thông qua `POST /{page_id}/photos?published=false` kèm `attached_media` vào Feed.
+    4. **Tối ưu giao diện Danh sách bài viết & Chi tiết bài viết ([`Posts.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Posts.tsx), [`PostDetail.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/PostDetail.tsx)):**
+       - Nhận diện `post.postType === 'CAROUSEL'` và hiển thị ảnh bìa slide sắc nét (`<img />`) thay vì thẻ `<video>` trống.
+
+---
+
 ## 🚀 [2026-11-02] (v1.3.66) — Studio Nội Dung & Spin: Khắc Phục Lỗi Hiển Thị Trùng 2 Nút Chỉnh Sửa Trên Thẻ Content Brief (F077)
 
 ### Phân hệ M2. Studio Nội dung & Spin — Quản Lý Content Brief (F077) [Electron App]:

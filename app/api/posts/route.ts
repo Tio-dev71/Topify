@@ -14,7 +14,7 @@ const createPostSchema = z.object({
   caption: z.string().nullable().optional(),
   firstComment: z.string().nullable().optional(),
   hashtags: z.string().nullable().optional(),
-  videoAssetId: z.string().min(1),
+  videoAssetId: z.string().nullable().optional(),
   platforms: z.array(z.enum([
     'FACEBOOK_REELS',
     'FACEBOOK_POST',
@@ -33,6 +33,15 @@ const createPostSchema = z.object({
   randomWindowEnd: z.string().nullable().optional(),
   isEvergreen: z.boolean().optional(),
   recycleIntervalDays: z.number().optional(),
+  postType: z.enum(['REEL', 'CAROUSEL', 'FEED', 'STORY', 'ARTICLE']).optional(),
+  isCarousel: z.boolean().optional(),
+  carouselSlides: z.array(z.object({
+    id: z.string().optional(),
+    imageUrl: z.string(),
+    fileName: z.string().optional(),
+    caption: z.string().optional(),
+    tag: z.string().optional(),
+  })).optional(),
 });
 
 // GET /api/posts - List posts
@@ -107,6 +116,14 @@ export async function GET(req: NextRequest) {
             mimeType: true,
           },
         },
+        media: {
+          include: {
+            mediaAsset: true,
+          },
+          orderBy: {
+            sortOrder: 'asc',
+          },
+        },
         platforms: {
           select: {
             id: true,
@@ -163,7 +180,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isRandomWindow, randomWindowStart, randomWindowEnd, isEvergreen, recycleIntervalDays } = parsed.data;
+    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isRandomWindow, randomWindowStart, randomWindowEnd, isEvergreen, recycleIntervalDays, postType, isCarousel, carouselSlides } = parsed.data;
 
     let finalScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
 
@@ -202,25 +219,64 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Guard against draft or placeholder video assets
-    if (!videoAssetId || videoAssetId.startsWith('draft_')) {
-      return NextResponse.json(
-        { error: 'Bài viết đang ở dạng bản thảo AI. Vui lòng tải lên tệp video thực tế trước khi xuất bản.' },
-        { status: 400 }
-      );
-    }
+    const isCarouselPost = !!isCarousel ||
+      postType === 'CAROUSEL' ||
+      platforms.includes('INSTAGRAM_CAROUSEL') ||
+      (carouselSlides && carouselSlides.length > 0);
 
-    // Verify video asset exists and belongs to workspace
-    const videoAsset = await prisma.videoAsset.findUnique({
-      where: { id: videoAssetId },
-    });
+    let effectiveVideoAssetId = videoAssetId;
+    let videoAsset: any = null;
 
-    if (!videoAsset || videoAsset.workspaceId !== (session.user as any).workspaceId) {
-      return NextResponse.json({ error: 'Video asset not found in your workspace' }, { status: 404 });
+    if (isCarouselPost) {
+      const slides = carouselSlides || [];
+      const coverUrl = slides[0]?.imageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800';
+      const coverName = slides[0]?.fileName || `${title.slice(0, 30)}.jpg`;
+
+      // If videoAssetId provided and exists in DB, keep it
+      if (effectiveVideoAssetId && !effectiveVideoAssetId.startsWith('draft_') && !effectiveVideoAssetId.startsWith('carousel_')) {
+        videoAsset = await prisma.videoAsset.findUnique({
+          where: { id: effectiveVideoAssetId },
+        }).catch(() => null);
+      }
+
+      // If no valid videoAsset found, create one for the carousel cover image
+      if (!videoAsset) {
+        const userWsId = (session.user as any).workspaceId || null;
+        videoAsset = await prisma.videoAsset.create({
+          data: {
+            originalFileName: coverName,
+            titleFromFileName: title.slice(0, 50),
+            storageUrl: coverUrl,
+            source: 'LOCAL_UPLOAD',
+            mimeType: 'image/jpeg',
+            size: 1024 * 1024,
+            duration: null,
+            createdById: session.user.id,
+            workspaceId: userWsId,
+          },
+        });
+        effectiveVideoAssetId = videoAsset.id;
+      }
+    } else {
+      // Normal Video post validation
+      if (!effectiveVideoAssetId || effectiveVideoAssetId.startsWith('draft_')) {
+        return NextResponse.json(
+          { error: 'Bài viết đang ở dạng bản thảo AI. Vui lòng tải lên tệp video thực tế trước khi xuất bản.' },
+          { status: 400 }
+        );
+      }
+
+      videoAsset = await prisma.videoAsset.findUnique({
+        where: { id: effectiveVideoAssetId },
+      });
+
+      if (!videoAsset || videoAsset.workspaceId !== (session.user as any).workspaceId) {
+        return NextResponse.json({ error: 'Video asset not found in your workspace' }, { status: 404 });
+      }
     }
 
     let youtubeDurationWarning: string | undefined = undefined;
-    if (platforms.includes('YOUTUBE_SHORTS') && videoAsset.duration && videoAsset.duration > 180) {
+    if (platforms.includes('YOUTUBE_SHORTS') && videoAsset?.duration && videoAsset.duration > 180) {
       youtubeDurationWarning = `Video cho YouTube Shorts có thời lượng ${videoAsset.duration}s (> 180s). YouTube sẽ tự động chuyển thành video thường.`;
       console.warn(`[PostsAPI] ${youtubeDurationWarning}`);
     }
@@ -277,12 +333,37 @@ export async function POST(req: NextRequest) {
     }
 
     // Create post with platforms (safely sanitized against lone surrogate pairs)
+    const mediaCreateData: Array<{ mediaAssetId: string; sortOrder: number; caption?: string | null }> = [];
+    if (isCarouselPost && carouselSlides && carouselSlides.length > 0) {
+      const userWsId = (session.user as any).workspaceId || null;
+      for (let i = 0; i < carouselSlides.length; i++) {
+        const slide = carouselSlides[i];
+        const slideAsset = await prisma.mediaAsset.create({
+          data: {
+            fileName: slide.fileName || `slide_${i + 1}.jpg`,
+            storageUrl: slide.imageUrl,
+            mimeType: 'image/jpeg',
+            size: 1024 * 1024,
+            mediaType: 'IMAGE',
+            createdById: session.user.id,
+            workspaceId: userWsId,
+          },
+        });
+        mediaCreateData.push({
+          mediaAssetId: slideAsset.id,
+          sortOrder: i,
+          caption: slide.caption || null,
+        });
+      }
+    }
+
     const postData: any = {
       title: sanitizeUtf8(title) || 'Untitled Post',
       caption: sanitizeUtf8Nullable(caption),
       firstComment: sanitizeUtf8Nullable(firstComment),
       hashtags: sanitizeUtf8Nullable(hashtags),
-      videoAssetId,
+      videoAssetId: effectiveVideoAssetId,
+      postType: isCarouselPost ? 'CAROUSEL' : 'REEL',
       createdById: session.user.id,
       workspaceId: (session.user as any).workspaceId,
       status: publishMode === 'request_approval' ? 'PENDING_REVIEW' : publishMode === 'now' ? 'PUBLISHING' : 'SCHEDULED',
@@ -295,6 +376,11 @@ export async function POST(req: NextRequest) {
           status: 'PENDING',
         })),
       },
+      ...(mediaCreateData.length > 0 ? {
+        media: {
+          create: mediaCreateData,
+        },
+      } : {}),
     };
 
     let post;

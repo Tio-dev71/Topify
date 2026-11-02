@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Film,
+  Images,
   Search,
   Eye,
   Trash2,
@@ -60,6 +61,14 @@ interface PostItem {
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
+  postType?: string;
+  media?: Array<{
+    id: string;
+    mediaAsset?: {
+      storageUrl: string;
+      fileName?: string;
+    };
+  }>;
   videoAsset?: {
     id?: string;
     originalFileName?: string;
@@ -481,10 +490,14 @@ export default function Posts() {
                         <td className="py-3 px-4">
                           <div className="w-12 h-14 rounded-xl bg-gray-900 overflow-hidden relative flex-shrink-0 shadow-xs">
                             {post.videoAsset?.storageUrl ? (
-                              <video src={getMediaUrl(post.videoAsset.storageUrl)} className="w-full h-full object-cover" muted />
+                              post.videoAsset.mimeType?.startsWith('image/') || post.postType === 'CAROUSEL' ? (
+                                <img src={getMediaUrl(post.videoAsset.storageUrl)} className="w-full h-full object-cover" alt="" />
+                              ) : (
+                                <video src={getMediaUrl(post.videoAsset.storageUrl)} className="w-full h-full object-cover" muted />
+                              )
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-white/40">
-                                <Film className="w-5 h-5" />
+                                {post.postType === 'CAROUSEL' ? <Images className="w-5 h-5 text-pink-400" /> : <Film className="w-5 h-5" />}
                               </div>
                             )}
                           </div>
@@ -643,21 +656,31 @@ export default function Posts() {
                     {/* Media Display */}
                     <div className="relative aspect-[4/5] bg-gray-900 rounded-[1.5rem] overflow-hidden mb-4">
                       {post.videoAsset?.storageUrl ? (
-                        <video
-                          src={getMediaUrl(post.videoAsset.storageUrl)}
-                          className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105"
-                          muted
-                          loop
-                          onMouseOver={(e) => (e.target as HTMLVideoElement).play().catch(()=>{})}
-                          onMouseOut={(e) => {
-                            const v = e.target as HTMLVideoElement;
-                            v.pause();
-                          }}
-                        />
+                        post.videoAsset.mimeType?.startsWith('image/') || post.postType === 'CAROUSEL' ? (
+                          <img
+                            src={getMediaUrl(post.videoAsset.storageUrl)}
+                            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105"
+                            alt=""
+                          />
+                        ) : (
+                          <video
+                            src={getMediaUrl(post.videoAsset.storageUrl)}
+                            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-transform duration-700 group-hover:scale-105"
+                            muted
+                            loop
+                            onMouseOver={(e) => (e.target as HTMLVideoElement).play().catch(()=>{})}
+                            onMouseOut={(e) => {
+                              const v = e.target as HTMLVideoElement;
+                              v.pause();
+                            }}
+                          />
+                        )
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-400 p-6 text-center">
-                          <Film className="w-8 h-8 text-gray-400 mb-2" />
-                          <span className="text-xs font-semibold text-gray-300">Không có file video</span>
+                          {post.postType === 'CAROUSEL' ? <Images className="w-8 h-8 text-pink-400 mb-2" /> : <Film className="w-8 h-8 text-gray-400 mb-2" />}
+                          <span className="text-xs font-semibold text-gray-300">
+                            {post.postType === 'CAROUSEL' ? 'Bộ ảnh Carousel' : 'Không có file video'}
+                          </span>
                         </div>
                       )}
                       
@@ -877,15 +900,32 @@ export default function Posts() {
               <div className="space-y-3">
                 <div className="aspect-[9/16] max-h-[400px] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
                   {selectedPost.videoAsset?.storageUrl ? (
-                    <video
-                      src={getMediaUrl(selectedPost.videoAsset.storageUrl)}
-                      controls
-                      className="w-full h-full object-contain"
-                    />
+                    selectedPost.videoAsset.mimeType?.startsWith('image/') || selectedPost.postType === 'CAROUSEL' ? (
+                      <img
+                        src={getMediaUrl(selectedPost.videoAsset.storageUrl)}
+                        alt={selectedPost.title}
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <video
+                        src={getMediaUrl(selectedPost.videoAsset.storageUrl)}
+                        controls
+                        className="w-full h-full object-contain"
+                      />
+                    )
                   ) : (
                     <div className="text-gray-400 text-center p-4">
-                      <Film className="w-8 h-8 mx-auto mb-2" />
-                      <p className="text-xs">Không có file video</p>
+                      {selectedPost.postType === 'CAROUSEL' ? (
+                        <>
+                          <Images className="w-8 h-8 mx-auto mb-2 text-pink-400" />
+                          <p className="text-xs">Bài đăng Carousel nhiều ảnh</p>
+                        </>
+                      ) : (
+                        <>
+                          <Film className="w-8 h-8 mx-auto mb-2" />
+                          <p className="text-xs">Không có file video</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

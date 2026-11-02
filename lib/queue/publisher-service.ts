@@ -173,8 +173,32 @@ export async function publishPostDirectly(postId: string): Promise<{
       let result: PublishResult;
       if (post.postType === 'FEED' || post.postType === 'ARTICLE') {
         result = await publisher.publishFeed(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
-      } else if (post.postType === 'CAROUSEL') {
-        const assets = post.videoAsset ? [post.videoAsset] : [];
+      } else if (post.postType === 'CAROUSEL' || postPlatform.platform === 'INSTAGRAM_CAROUSEL') {
+        const postWithMedia = await prisma.post.findUnique({
+          where: { id: post.id },
+          include: {
+            media: {
+              include: { mediaAsset: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+            videoAsset: true,
+          },
+        });
+        const assets: VideoAsset[] = (postWithMedia?.media && postWithMedia.media.length > 0)
+          ? postWithMedia.media.map((pm: any) => ({
+              id: pm.mediaAsset.id,
+              originalFileName: pm.mediaAsset.fileName,
+              titleFromFileName: pm.mediaAsset.fileName,
+              storageUrl: pm.mediaAsset.storageUrl,
+              source: 'LOCAL_UPLOAD' as any,
+              mimeType: pm.mediaAsset.mimeType,
+              size: pm.mediaAsset.size,
+              duration: null,
+              createdById: post.createdById,
+              createdAt: pm.mediaAsset.createdAt,
+              workspaceId: post.workspaceId,
+            }))
+          : (post.videoAsset ? [post.videoAsset] : []);
         result = await publisher.publishCarousel(postForPlatform as Post, assets, socialAccount, postPlatform);
       } else {
         if (!post.videoAsset) {

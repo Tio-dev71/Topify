@@ -15,6 +15,10 @@ vi.mock('@/lib/db', () => {
     },
     videoAsset: {
       findUnique: vi.fn(),
+      create: vi.fn(),
+    },
+    mediaAsset: {
+      create: vi.fn(),
     },
     socialAccount: {
       findMany: vi.fn(),
@@ -464,6 +468,74 @@ describe('Posts API Route', () => {
         expect.any(Date)
       );
       expect(prisma.post.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('creates Carousel post (F013) with multiple slides without requiring pre-existing video asset', async () => {
+      vi.mocked(prisma.videoAsset.create).mockResolvedValue({
+        id: 'carousel-video-asset-1',
+        originalFileName: 'slide_1.jpg',
+        titleFromFileName: 'Carousel Post',
+        storageUrl: 'https://example.com/slide1.jpg',
+        mimeType: 'image/jpeg',
+        size: 1024,
+        duration: null,
+        createdById: 'user-1',
+        workspaceId: 'ws-1',
+        createdAt: new Date(),
+        source: 'LOCAL_UPLOAD' as any,
+      });
+
+      vi.mocked(prisma.mediaAsset.create).mockImplementation(async (args: any) => ({
+        id: `media-asset-${Date.now()}`,
+        ...args.data,
+      }));
+
+      const mockCarouselPost = {
+        id: 'post-carousel-1',
+        title: 'Topify Carousel Post',
+        caption: 'Full carousel description',
+        firstComment: null,
+        hashtags: '#Carousel #Topify',
+        videoAssetId: 'carousel-video-asset-1',
+        postType: 'CAROUSEL',
+        status: 'PUBLISHING',
+        platforms: [{ platform: 'INSTAGRAM_CAROUSEL', status: 'PENDING' }],
+      };
+
+      vi.mocked(prisma.post.create).mockResolvedValue(mockCarouselPost as any);
+      vi.mocked(prisma.post.findUnique).mockResolvedValue({
+        ...mockCarouselPost,
+        status: 'PUBLISHED',
+      } as any);
+
+      const req = new NextRequest('http://localhost/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Topify Carousel Post',
+          caption: 'Full carousel description',
+          hashtags: '#Carousel #Topify',
+          videoAssetId: 'carousel_draft_1',
+          isCarousel: true,
+          postType: 'CAROUSEL',
+          platforms: ['INSTAGRAM_CAROUSEL'],
+          publishMode: 'now',
+          carouselSlides: [
+            { imageUrl: 'https://example.com/slide1.jpg', fileName: 'slide1.jpg', caption: 'Slide 1' },
+            { imageUrl: 'https://example.com/slide2.jpg', fileName: 'slide2.jpg', caption: 'Slide 2' },
+          ],
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.id).toBe('post-carousel-1');
+      expect(json.postType).toBe('CAROUSEL');
+      expect(prisma.post.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          postType: 'CAROUSEL',
+        }),
+      }));
     });
   });
 });

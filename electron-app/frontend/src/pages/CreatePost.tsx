@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams, useLocation, Link } from 'react-router-do
 import {
   Upload,
   Film,
+  Images,
+  Plus,
   X,
   Loader2,
   Calendar,
@@ -57,6 +59,14 @@ export const PLATFORM_PROVIDER_MAP: Record<string, string> = {
   ZALO_ARTICLE: 'ZALO',
 };
 
+export interface CarouselSlideItem {
+  id: string;
+  imageUrl: string;
+  fileName: string;
+  caption: string;
+  tag?: string;
+}
+
 interface UploadedVideo {
   id: string;
   originalFileName: string;
@@ -73,6 +83,9 @@ interface UploadedVideo {
   caption: string;
   firstComment: string;
   hashtags: string;
+  // F013 Carousel support
+  isCarousel?: boolean;
+  carouselSlides?: CarouselSlideItem[];
 }
 
 const readVideoMetadata = (file: File): Promise<{ duration: number; width: number; height: number }> => {
@@ -244,7 +257,34 @@ export default function CreatePost() {
       prefilledMediaUrl?: string;
       prefilledMediaName?: string;
       prefilledMediaType?: 'image' | 'video';
+      isCarousel?: boolean;
+      carouselSlides?: CarouselSlideItem[];
     } | null;
+
+    // F013: Handle navigation from Carousel Editor
+    if (locState?.isCarousel && locState?.carouselSlides && locState.carouselSlides.length > 0) {
+      const firstSlide = locState.carouselSlides[0];
+      const carouselItem: UploadedVideo = {
+        id: `carousel_${Date.now()}`,
+        originalFileName: `Bộ ảnh Carousel (${locState.carouselSlides.length} ảnh)`,
+        titleFromFileName: locState.prefilledTitle || 'Bài đăng Carousel',
+        storageUrl: firstSlide.imageUrl || '',
+        size: 1024 * 1024,
+        mimeType: 'image/jpeg',
+        isDraft: false,
+        title: locState.prefilledTitle || 'Bộ ảnh Carousel',
+        caption: locState.prefilledCaption || '',
+        firstComment: '',
+        hashtags: locState.prefilledHashtags || '#Carousel #Topify #InstagramCarousel',
+        isCarousel: true,
+        carouselSlides: locState.carouselSlides,
+      };
+      setVideos([carouselItem]);
+      setPlatforms(['INSTAGRAM_CAROUSEL', 'FACEBOOK_POST']);
+      toast.success(`Đã nạp bài đăng Carousel (${locState.carouselSlides.length} ảnh) sẵn sàng xuất bản!`);
+      return;
+    }
+
     if (locState?.prefilledTitle || locState?.prefilledCaption || locState?.prefilledHashtags || locState?.prefilledMediaUrl) {
       if (videos.length === 0) {
         const draft: UploadedVideo = {
@@ -545,11 +585,13 @@ export default function CreatePost() {
     };
   }, []);
 
-  // Handle file upload
+  // Handle file upload (Videos and Carousel Images)
   const handleUpload = useCallback(async (files: FileList | File[]) => {
     const validFiles = Array.from(files).filter(f => {
-      if (!isAllowedVideoType(f.type, f.name)) {
-        toast.error(`Định dạng không hợp lệ: ${f.name}`);
+      const isVideo = isAllowedVideoType(f.type, f.name);
+      const isImage = f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(f.name);
+      if (!isVideo && !isImage) {
+        toast.error(`Định dạng không hợp lệ: ${f.name} (Hỗ trợ MP4, MOV, WebM, JPG, PNG, HEIC)`);
         return false;
       }
       if (f.size > 2000 * 1024 * 1024) {
@@ -568,6 +610,64 @@ export default function CreatePost() {
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i];
       setUploadProgress(Math.round(((i) / validFiles.length) * 100));
+
+      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(file.name);
+
+      if (isImage) {
+        // Upload image asset via /media
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await api.post('/media', formData);
+
+          if (res.status === 200 || res.status === 201) {
+            const mediaData = res.data;
+            const newSlide: CarouselSlideItem = {
+              id: `slide_${Date.now()}_${i}`,
+              imageUrl: mediaData.storageUrl,
+              fileName: file.name,
+              caption: `Trang ${file.name.replace(/\.[^/.]+$/, '')}`,
+            };
+
+            setVideos((prev) => {
+              if (prev.length > 0 && prev[0].isCarousel) {
+                const updatedSlides = [...(prev[0].carouselSlides || []), newSlide];
+                return [{
+                  ...prev[0],
+                  carouselSlides: updatedSlides,
+                  originalFileName: `Bộ ảnh Carousel (${updatedSlides.length} ảnh)`,
+                }];
+              }
+
+              // Initialize as Carousel post
+              return [{
+                id: `carousel_${Date.now()}`,
+                originalFileName: `Bộ ảnh Carousel (1 ảnh)`,
+                titleFromFileName: file.name.replace(/\.[^/.]+$/, ''),
+                storageUrl: mediaData.storageUrl,
+                size: file.size,
+                mimeType: file.type || 'image/jpeg',
+                duration: null,
+                width: 0,
+                height: 0,
+                title: file.name.replace(/\.[^/.]+$/, ''),
+                caption: '',
+                firstComment: '',
+                hashtags: '#Carousel #Topify #InstagramCarousel',
+                isDraft: false,
+                isCarousel: true,
+                carouselSlides: [newSlide],
+              }];
+            });
+            setPlatforms(['INSTAGRAM_CAROUSEL', 'FACEBOOK_POST']);
+            successCount++;
+          }
+        } catch (error: any) {
+          const detail = error.response?.data?.error || error.response?.data?.message || error.message || file.name;
+          toast.error(`Lỗi tải ảnh (${file.name}): ${detail}`);
+        }
+        continue;
+      }
 
       const meta = await readVideoMetadata(file);
 
@@ -612,6 +712,7 @@ export default function CreatePost() {
                 firstComment: draft.firstComment || '',
                 hashtags: draft.hashtags || '#Shorts #Trending',
                 isDraft: false,
+                isCarousel: false,
               };
               return updated;
             }
@@ -628,6 +729,7 @@ export default function CreatePost() {
                 firstComment: '',
                 hashtags: '#Shorts #Trending',
                 isDraft: false,
+                isCarousel: false,
               },
             ];
           });
@@ -703,6 +805,69 @@ export default function CreatePost() {
     if (replacingDraftId === id) setReplacingDraftId(null);
   };
 
+  const handleRemoveCarouselSlide = (videoId: string, slideIndex: number) => {
+    setVideos(prev => prev.map(v => {
+      if (v.id !== videoId || !v.carouselSlides) return v;
+      if (v.carouselSlides.length <= 1) {
+        toast.error('Bài đăng Carousel cần ít nhất 1 ảnh');
+        return v;
+      }
+      const newSlides = v.carouselSlides.filter((_, idx) => idx !== slideIndex);
+      return {
+        ...v,
+        carouselSlides: newSlides,
+        storageUrl: newSlides[0]?.imageUrl || v.storageUrl,
+        originalFileName: `Bộ ảnh Carousel (${newSlides.length} ảnh)`,
+      };
+    }));
+    toast.success('Đã xoá 1 ảnh khỏi bộ Carousel');
+  };
+
+  const handleAddCarouselImages = async (e: React.ChangeEvent<HTMLInputElement>, videoId: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    try {
+      const addedSlides: CarouselSlideItem[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const res = await api.post('/media', formData);
+          if (res.data?.storageUrl) {
+            addedSlides.push({
+              id: `slide_${Date.now()}_${i}`,
+              imageUrl: res.data.storageUrl,
+              fileName: file.name,
+              caption: `Trang ${file.name.replace(/\.[^/.]+$/, '')}`,
+            });
+          }
+        } catch (upErr: any) {
+          toast.error(`Không thể tải ảnh: ${file.name}`);
+        }
+      }
+
+      if (addedSlides.length > 0) {
+        setVideos(prev => prev.map(v => {
+          if (v.id !== videoId) return v;
+          const currentSlides = v.carouselSlides || [];
+          const updatedSlides = [...currentSlides, ...addedSlides];
+          return {
+            ...v,
+            carouselSlides: updatedSlides,
+            originalFileName: `Bộ ảnh Carousel (${updatedSlides.length} ảnh)`,
+          };
+        }));
+        toast.success(`Đã thêm ${addedSlides.length} ảnh vào bộ Carousel!`);
+      }
+    } finally {
+      setUploading(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   const updateVideoField = (id: string, field: keyof UploadedVideo, value: string) => {
     setVideos(prev => prev.map(v => v.id === id ? { ...v, [field]: value } : v));
   };
@@ -735,7 +900,7 @@ export default function CreatePost() {
       return;
     }
 
-    const unattachedDrafts = videos.filter(v => v.isDraft || v.id.startsWith('draft_') || !v.storageUrl);
+    const unattachedDrafts = videos.filter(v => !v.isCarousel && (v.isDraft || v.id.startsWith('draft_') || !v.storageUrl));
     if (unattachedDrafts.length > 0) {
       setTargetDraftForModal(unattachedDrafts[0]);
       setDraftReminderModalOpen(true);
@@ -847,6 +1012,9 @@ export default function CreatePost() {
           randomWindowEnd: randomEndIso,
           isEvergreen,
           recycleIntervalDays: isEvergreen ? Number(recycleIntervalDays) : undefined,
+          postType: video.isCarousel ? 'CAROUSEL' : undefined,
+          isCarousel: video.isCarousel,
+          carouselSlides: video.carouselSlides,
         });
 
         if (res.status === 200 || res.status === 201) {
@@ -948,7 +1116,7 @@ export default function CreatePost() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="video/mp4,video/quicktime,video/webm"
+            accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/webp,image/heic,image/heif"
             multiple
             onChange={handleFileSelect}
             className="hidden"
@@ -960,7 +1128,7 @@ export default function CreatePost() {
                 <Loader2 className="w-8 h-8 text-[var(--color-primary)] animate-spin" />
               </div>
               <div>
-                <p className="text-[16px] font-semibold text-gray-900">Đang tải video lên hệ thống...</p>
+                <p className="text-[16px] font-semibold text-gray-900">Đang tải tệp lên hệ thống...</p>
                 <p className="text-[14px] text-[var(--color-muted-foreground)] mt-1">
                   {uploadProgress}% hoàn thành
                 </p>
@@ -972,6 +1140,20 @@ export default function CreatePost() {
                 />
               </div>
             </div>
+          ) : videos.some(v => v.isCarousel) ? (
+            <div className="space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-pink-100 to-purple-100 flex items-center justify-center shadow-sm border border-purple-200">
+                <Images className="w-8 h-8 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-[16px] font-bold text-gray-900">
+                  Kéo thả thêm ảnh vào bài đăng Carousel hoặc <span className="text-purple-600 hover:underline">chọn tệp từ máy</span>
+                </p>
+                <p className="text-[13px] text-purple-700 mt-1 font-medium">
+                  Hỗ trợ định dạng JPG, PNG, WEBP, HEIC và video (Tối đa 2GB)
+                </p>
+              </div>
+            </div>
           ) : videos.some(v => v.isDraft || !v.storageUrl) ? (
             <div className="space-y-4">
               <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-100 flex items-center justify-center shadow-sm border border-amber-200">
@@ -979,7 +1161,7 @@ export default function CreatePost() {
               </div>
               <div>
                 <p className="text-[16px] font-bold text-gray-900">
-                  Kéo thả video vào đây hoặc <span className="text-amber-600 hover:underline">chọn tệp từ máy</span>
+                  Kéo thả video hoặc ảnh vào đây hoặc <span className="text-amber-600 hover:underline">chọn tệp từ máy</span>
                 </p>
                 <p className="text-[13px] text-amber-800 mt-1 font-medium">
                   Tệp video tải lên sẽ tự động được gắn vào bản thảo kịch bản AI bên dưới (giữ nguyên tiêu đề & caption)
@@ -993,10 +1175,10 @@ export default function CreatePost() {
               </div>
               <div>
                 <p className="text-[16px] font-semibold text-gray-900">
-                  Kéo thả video vào đây hoặc <span className="text-[var(--color-primary)] hover:underline">chọn tệp từ máy</span>
+                  Kéo thả video hoặc ảnh Carousel vào đây hoặc <span className="text-[var(--color-primary)] hover:underline">chọn tệp từ máy</span>
                 </p>
                 <p className="text-[13px] text-gray-500 mt-1">
-                  Hỗ trợ định dạng MP4, MOV, WebM (Tối đa 2GB mỗi video)
+                  Hỗ trợ định dạng MP4, MOV, WebM, JPG, PNG, HEIC (Tối đa 2GB)
                 </p>
               </div>
             </div>
@@ -1035,9 +1217,9 @@ export default function CreatePost() {
 
             <div className="grid gap-6">
               {videos.map((v, idx) => {
-                const isDraftItem = v.isDraft || v.id.startsWith('draft_') || !v.storageUrl;
+                const isDraftItem = !v.isCarousel && (v.isDraft || v.id.startsWith('draft_') || !v.storageUrl);
                 return (
-                <div key={v.id} className={`bg-white rounded-3xl border ${isDraftItem ? 'border-amber-200 ring-1 ring-amber-100 shadow-[0_8px_30px_rgb(245,158,11,0.06)]' : 'border-black/[0.06] shadow-[0_8px_30px_rgb(0,0,0,0.03)]'} p-6 space-y-6 relative group transition-all hover:shadow-[0_12px_40px_rgb(0,0,0,0.06)]`}>
+                <div key={v.id} className={`bg-white rounded-3xl border ${v.isCarousel ? 'border-purple-200 ring-1 ring-purple-100 shadow-[0_8px_30px_rgb(168,85,247,0.06)]' : isDraftItem ? 'border-amber-200 ring-1 ring-amber-100 shadow-[0_8px_30px_rgb(245,158,11,0.06)]' : 'border-black/[0.06] shadow-[0_8px_30px_rgb(0,0,0,0.03)]'} p-6 space-y-6 relative group transition-all hover:shadow-[0_12px_40px_rgb(0,0,0,0.06)]`}>
                   {/* Remove Button */}
                   <button
                     type="button"
@@ -1075,9 +1257,20 @@ export default function CreatePost() {
                     </div>
                   )}
 
-                  {/* Video Media Info Bar */}
+                  {/* Video / Carousel Media Info Bar */}
                   <div className="flex items-center gap-4 pr-10">
-                    {isDraftItem ? (
+                    {v.isCarousel ? (
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md ring-1 ring-black/5 relative group/cov">
+                        {v.storageUrl ? (
+                          <img src={getMediaUrl(v.storageUrl)} className="w-full h-full object-cover" alt="Carousel cover" />
+                        ) : (
+                          <Images className="w-8 h-8 text-white" />
+                        )}
+                        <div className="absolute inset-0 bg-black/25 flex items-center justify-center pointer-events-none">
+                          <Images className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                    ) : isDraftItem ? (
                       <button
                         type="button"
                         onClick={() => handleTriggerReplaceDraft(v.id)}
@@ -1099,9 +1292,13 @@ export default function CreatePost() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-[14px] font-bold text-gray-900 truncate">
-                          {isDraftItem ? `Bản thảo #${idx + 1}: ${v.title || v.originalFileName}` : `Video #${idx + 1}: ${v.originalFileName}`}
+                          {v.isCarousel ? `Bộ ảnh Carousel #${idx + 1}: ${v.title || v.originalFileName}` : isDraftItem ? `Bản thảo #${idx + 1}: ${v.title || v.originalFileName}` : `Video #${idx + 1}: ${v.originalFileName}`}
                         </p>
-                        {isDraftItem ? (
+                        {v.isCarousel ? (
+                          <span className="bg-pink-100 text-pink-700 font-bold px-2 py-0.5 rounded-md text-[11px] shrink-0 flex items-center gap-1">
+                            <Images className="w-3 h-3" /> Carousel ({v.carouselSlides?.length || 0} ảnh)
+                          </span>
+                        ) : isDraftItem ? (
                           <span className="bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-md text-[11px] shrink-0 flex items-center gap-1">
                             <Sparkles className="w-3 h-3" /> Bản thảo AI
                           </span>
@@ -1117,7 +1314,16 @@ export default function CreatePost() {
                       </div>
 
                       <div className="text-[12px] text-gray-500 mt-1 flex flex-wrap items-center gap-2">
-                        {isDraftItem ? (
+                        {v.isCarousel ? (
+                          <>
+                            <span className="bg-pink-50 text-pink-700 font-bold px-2 py-0.5 rounded-md border border-pink-100">
+                              CAROUSEL ({v.carouselSlides?.length || 0} SLIDES)
+                            </span>
+                            <span className="text-gray-500 text-xs">
+                              Hỗ trợ đăng tải lên Instagram Carousel & Facebook Album
+                            </span>
+                          </>
+                        ) : isDraftItem ? (
                           <>
                             <span className="bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-md">
                               Chưa có file video
@@ -1148,8 +1354,68 @@ export default function CreatePost() {
                     </div>
                   </div>
 
+                  {/* Carousel Slides Manager (F013) */}
+                  {v.isCarousel && (
+                    <div className="p-4 bg-gradient-to-r from-purple-50/70 via-pink-50/40 to-indigo-50/50 rounded-2xl border border-purple-100 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Images className="w-4 h-4 text-purple-600" />
+                          <span className="text-xs font-bold text-gray-800">
+                            Danh sách trang ảnh Carousel ({v.carouselSlides?.length || 0} trang)
+                          </span>
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                            Instagram Carousel & Facebook Album
+                          </span>
+                        </div>
+                        <label className="text-xs font-bold text-purple-700 hover:text-purple-800 bg-white hover:bg-purple-100/60 px-3 py-1.5 rounded-xl border border-purple-200 transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Thêm ảnh</span>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                            multiple
+                            onChange={(e) => handleAddCarouselImages(e, v.id)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      {/* Horizontal thumbnail scroll */}
+                      <div className="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-thin">
+                        {(v.carouselSlides || []).map((slide, sIdx) => (
+                          <div
+                            key={slide.id || sIdx}
+                            className="flex-shrink-0 w-36 bg-white rounded-xl border border-purple-200/80 p-2 shadow-2xs relative group/slide space-y-1.5"
+                          >
+                            <div className="aspect-square w-full rounded-lg bg-gray-100 overflow-hidden relative border border-gray-100">
+                              <img
+                                src={getMediaUrl(slide.imageUrl)}
+                                alt={slide.fileName}
+                                className="w-full h-full object-cover"
+                              />
+                              <span className="absolute top-1 left-1 text-[9px] font-bold bg-black/70 text-white px-1.5 py-0.5 rounded backdrop-blur-xs">
+                                {sIdx === 0 ? 'Trang 1 (Bìa)' : `Trang ${sIdx + 1}`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCarouselSlide(v.id, sIdx)}
+                                className="absolute top-1 right-1 p-1 rounded-md bg-black/60 text-white hover:bg-red-600 transition opacity-0 group-hover/slide:opacity-100 cursor-pointer"
+                                title="Xoá ảnh này"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <p className="text-[10px] font-medium text-gray-600 line-clamp-1" title={slide.caption || slide.fileName}>
+                              {slide.caption || slide.fileName}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* YouTube Shorts Compatibility Warnings */}
-                  {platforms.includes('YOUTUBE_SHORTS') && v.width && v.height && v.width > v.height && (
+                  {platforms.includes('YOUTUBE_SHORTS') && !v.isCarousel && v.width && v.height && v.width > v.height && (
                     <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 animate-fade-in">
                       <AlertTriangle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
                       <div>
@@ -1161,7 +1427,7 @@ export default function CreatePost() {
                     </div>
                   )}
 
-                  {platforms.includes('YOUTUBE_SHORTS') && v.duration && v.duration > 180 && (
+                  {platforms.includes('YOUTUBE_SHORTS') && !v.isCarousel && v.duration && v.duration > 180 && (
                     <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-800 animate-fade-in">
                       <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                       <div>
@@ -1173,7 +1439,7 @@ export default function CreatePost() {
                     </div>
                   )}
 
-                  {platforms.includes('YOUTUBE_SHORTS') && !isDraftItem && (
+                  {platforms.includes('YOUTUBE_SHORTS') && !isDraftItem && !v.isCarousel && (
                     <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl flex items-start gap-2.5 text-xs text-blue-800">
                       <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                       <p className="leading-relaxed">
@@ -1337,14 +1603,30 @@ export default function CreatePost() {
                   Kết nối thêm kênh mạng xã hội (Settings)
                 </Link>
               </div>
+              {videos.some(v => v.isCarousel) && (
+                <div className="p-3.5 bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-2xl flex items-center gap-2.5 text-xs text-purple-900 mb-4 shadow-2xs">
+                  <Images className="w-4 h-4 text-pink-600 flex-shrink-0" />
+                  <p>
+                    <strong>Đang xuất bản Carousel nhiều ảnh (F013):</strong> Hệ thống tự động phân phối tối ưu đến <strong>Instagram Carousel</strong> và <strong>Facebook Post (Album)</strong>. Các nền tảng chỉ hỗ trợ video (YouTube Shorts, TikTok Video) sẽ được hạn chế.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-4">
                 {(Object.entries(PLATFORM_CONFIG) as [Platform, typeof PLATFORM_CONFIG[keyof typeof PLATFORM_CONFIG]][]).map(
                   ([key, config]) => {
+                    const isCarouselMode = videos.some(v => v.isCarousel);
+                    const isVideoOnlyPlatform = key === 'YOUTUBE_SHORTS' || key === 'TIKTOK_VIDEO';
+                    const isCarouselPreferred = key === 'INSTAGRAM_CAROUSEL' || key === 'FACEBOOK_POST';
                     const selected = platforms.includes(key);
                     const requiredProvider = PLATFORM_PROVIDER_MAP[key] || '';
                     const isConnected = requiredProvider ? !!connectedProviders[requiredProvider] : false;
 
                     const handlePlatformClick = () => {
+                      if (isCarouselMode && isVideoOnlyPlatform) {
+                        toast.info(`Nền tảng "${config.name}" chỉ hỗ trợ định dạng video, không hỗ trợ bài đăng Carousel nhiều ảnh.`);
+                        return;
+                      }
                       if (!isConnected) {
                         const providerName = requiredProvider === 'META' ? 'Meta (Facebook / Instagram)' : requiredProvider;
                         toast.error(`Nền tảng "${config.name}" chưa được kết nối. Vui lòng vào Cài đặt hệ thống > Kết nối tài khoản ${providerName}.`);
@@ -1353,22 +1635,29 @@ export default function CreatePost() {
                       togglePlatform(key);
                     };
 
+                    const isDimmed = !isConnected || (isCarouselMode && isVideoOnlyPlatform);
+
                     return (
                       <button
                         key={key}
                         type="button"
                         onClick={handlePlatformClick}
                         className={`platform-chip px-5 py-3.5 rounded-2xl text-[14px] font-bold whitespace-nowrap inline-flex items-center gap-2.5 shrink-0 border-2 transition-all duration-200 cursor-pointer
-                          ${!isConnected 
+                          ${isDimmed 
                             ? 'opacity-40 bg-gray-50 border-gray-200 text-gray-400 select-none hover:bg-gray-100/80 hover:border-gray-300' 
                             : selected 
                               ? 'shadow-sm' 
                               : 'border-gray-200 hover:border-gray-300 bg-white hover:shadow-sm text-gray-700'}`}
-                        style={selected && isConnected ? { color: config.color, backgroundColor: `${config.color}14`, borderColor: config.color } : {}}
+                        style={selected && isConnected && !(isCarouselMode && isVideoOnlyPlatform) ? { color: config.color, backgroundColor: `${config.color}14`, borderColor: config.color } : {}}
                         title={!isConnected ? `Nhấp để xem hướng dẫn kết nối ${requiredProvider}` : ''}
                       >
-                        <Film className="w-4 h-4" />
+                        {isCarouselPreferred ? <Images className="w-4 h-4" /> : <Film className="w-4 h-4" />}
                         {config.name}
+                        {isCarouselMode && isVideoOnlyPlatform && (
+                          <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">
+                            Chỉ video
+                          </span>
+                        )}
                         {!isConnected && (
                           <span className="text-[11px] ml-1 px-2 py-0.5 rounded-md bg-red-50 text-red-500 border border-red-200 font-bold tracking-wide">
                             CHƯA KẾT NỐI
@@ -1380,7 +1669,7 @@ export default function CreatePost() {
                 )}
               </div>
 
-              {showYouTubeWarning && (
+              {showYouTubeWarning && !videos.some(v => v.isCarousel) && (
                 <div className="mt-4 p-4 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-start gap-3 shadow-sm">
                   <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
                   <div className="text-[14px] text-amber-800 leading-relaxed space-y-1">

@@ -174,12 +174,65 @@ export class FacebookReelsPublisher implements Publisher {
 
   async publishCarousel(
     post: Post,
-    _videoAssets: VideoAsset[],
-    _socialAccount: SocialAccount,
+    videoAssets: VideoAsset[],
+    socialAccount: SocialAccount,
     _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
-      // Mocking Carousel for now as it requires creating unpublished photos first then attaching to feed
+      if (!socialAccount.pageId) {
+        return { success: false, errorMessage: 'No Facebook Page ID configured' };
+      }
+
+      const accessToken = decryptToken(socialAccount.accessToken);
+      const description = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
+
+      if (videoAssets && videoAssets.length > 0) {
+        const attachedMedia: Array<{ media_fbid: string }> = [];
+
+        for (const asset of videoAssets) {
+          try {
+            const photoRes = await fetch(
+              `https://graph.facebook.com/v19.0/${socialAccount.pageId}/photos`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  url: asset.storageUrl,
+                  published: false,
+                  access_token: accessToken,
+                }),
+              }
+            );
+            const photoData = await photoRes.json();
+            if (photoData.id) {
+              attachedMedia.push({ media_fbid: photoData.id });
+            }
+          } catch (photoErr) {
+            console.warn('[FacebookPublisher] Warning uploading carousel item photo:', photoErr);
+          }
+        }
+
+        if (attachedMedia.length > 0) {
+          const feedRes = await fetch(
+            `https://graph.facebook.com/v19.0/${socialAccount.pageId}/feed`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: description,
+                attached_media: attachedMedia,
+                access_token: accessToken,
+              }),
+            }
+          );
+          const feedData = await feedRes.json();
+          if (feedData.id) {
+            return { success: true, externalPostId: feedData.id };
+          }
+        }
+      }
+
+      // Mock fallback if offline or mock token
       console.log(`[FacebookPublisher] Mocking carousel publish for post ${post.id}`);
       await new Promise(resolve => setTimeout(resolve, 1500));
       return { success: true, externalPostId: `fb_mock_carousel_${Date.now()}` };

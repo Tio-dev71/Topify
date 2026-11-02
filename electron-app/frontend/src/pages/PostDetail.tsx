@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Film,
+  Images,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -43,6 +44,7 @@ interface PostDetailData {
   scheduledAt: string | null;
   publishedAt: string | null;
   createdAt: string;
+  postType?: string;
   videoAsset?: {
     id?: string;
     originalFileName?: string;
@@ -402,15 +404,23 @@ export default function PostDetail() {
           <div className="lg:col-span-5 w-full max-w-[340px] xl:max-w-[360px] mx-auto self-start space-y-4">
             <div className="aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-lg border border-black/10 relative max-h-[580px] flex items-center justify-center">
               {post.videoAsset?.storageUrl ? (
-                <video
-                  src={getMediaUrl(post.videoAsset.storageUrl)}
-                  controls
-                  className="w-full h-full object-contain"
-                />
+                post.videoAsset.mimeType?.startsWith('image/') || post.postType === 'CAROUSEL' ? (
+                  <img
+                    src={getMediaUrl(post.videoAsset.storageUrl)}
+                    alt={post.title}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <video
+                    src={getMediaUrl(post.videoAsset.storageUrl)}
+                    controls
+                    className="w-full h-full object-contain"
+                  />
+                )
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-8">
-                  <Film className="w-12 h-12 mb-3" />
-                  <p className="text-sm">Không có file video</p>
+                  {post.postType === 'CAROUSEL' ? <Images className="w-12 h-12 mb-3 text-pink-400" /> : <Film className="w-12 h-12 mb-3" />}
+                  <p className="text-sm">{post.postType === 'CAROUSEL' ? 'Bộ ảnh Carousel' : 'Không có file video'}</p>
                 </div>
               )}
             </div>

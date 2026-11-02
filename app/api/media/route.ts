@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
       try {
         const converted = await convertHeicToJpeg(uploadBuffer, fileName);
         if (converted) {
-          uploadBuffer = converted.buffer;
+          uploadBuffer = Buffer.from(converted.buffer);
           finalFileName = converted.fileName;
           finalMimeType = converted.mimeType;
           finalSize = converted.size;
