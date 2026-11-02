@@ -11,6 +11,43 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.69) — Studio Nội Dung & Spin: Nâng Cấp Thuật Toán Kiểm Tra Trùng Lặp (F082) Với Điều Kiện OR (Trùng Tiêu Đề HOẶC Trùng Caption)
+
+### Phân hệ M2. Studio Nội Dung & Spin — Kiểm Tra Trùng Lặp (F082) [Electron App, Web Dashboard & Backend API]:
+- **[Khắc phục lỗi báo "Nội dung độc bản" khi nhập riêng Tiêu đề trùng lặp]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Studio Nội dung & Spin $\rightarrow$ Chọn **Kiểm Tra Trùng Lặp (F082)**.
+    - Nhập Tiêu đề bài viết: `"Special CLip của BTS là Life go on - Bản C #Shorts"` (để trống ô Caption).
+    - Nhấn `"Quét Trùng Lặp Ngay (F082)"`.
+    - *Mong đợi:* Hệ thống phát hiện bài viết trùng lặp đã có trong Workspace (bài `"Special CLip của BTS là Life go on - Bản C"`) và cảnh báo mức độ trùng lặp. Điều kiện bắt trùng lặp là **OR**: trùng tiêu đề hoặc trùng caption thì đều phải cảnh báo.
+    - *Thực tế trước khi sửa:* Hệ thống báo `"Nội dung độc bản (Unique 100%), không phát hiện trùng lặp trong không gian làm việc"`, `"MỨC ĐỘ: AN TOÀN"`, độ tương đồng lớn nhất chỉ đạt 5%, dù tiêu đề bài viết trùng hoàn toàn với bài viết đã lưu. Lỗi tương tự cũng xảy ra khi chỉ nhập Caption hoặc một trong hai trường có độ dài chênh lệch lớn.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Ghép nối tiêu đề + caption làm suy giảm hệ số Jaccard (Denominator Explosion):**
+       - Cả backend API (`app/api/content/duplicate-check/route.ts`) và client engine (`electron-app/frontend/src/lib/duplicateEngine.ts`) đều ghép chuỗi `input = "${title} ${caption}"` và `post = "${post.title} ${post.caption}"` rồi mới tính độ tương đồng trên tập hợp N-gram hợp nhất.
+       - Khi người dùng chỉ nhập tiêu đề (khoảng 20-25 N-grams) so sánh với bài cũ có kèm caption dài (hơn 400 N-grams):
+         - Số lượng N-gram chung $\approx 20$.
+         - Tổng tập hợp hợp nhất (Union) $\approx 420$.
+         - Hệ số tương đồng Jaccard = $20 / 420 \approx 0.047$ (chỉ 5%), thấp hơn ngưỡng 35%, dẫn đến hệ thống kết luận sai là "AN TOÀN" (Unique 100%).
+    2. **Xử lý từ khóa và thẻ hashtag:**
+       - Hashtag `#Shorts` không được tách riêng khỏi từ khóa, và bộ lọc `w.length > 1` vô tình loại bỏ các ký tự đơn quan trọng trong tiêu đề tiếng Việt/chữ cái như `Bản C` (từ "C").
+    3. **Giao diện chưa hiển thị lý do trùng:**
+       - Thẻ kết quả trùng lặp chỉ hiển thị tiêu đề và % mà không giải thích cụ thể bài viết bị trùng vì lý do gì (trùng tiêu đề, trùng nội dung caption hay trùng tệp media).
+  - **Giải pháp xử lý toàn diện:**
+    1. **Thuật toán đối soát độc lập theo điều kiện OR (`computeTextSimilarity` & `checkDuplicate`):**
+       - **So sánh Tiêu đề độc lập:** Đối soát `input.title` với `post.title` bằng thuật toán chuẩn hóa văn bản, phát hiện chuỗi con (substring ratio $\ge 0.5$) và tập hợp N-gram từ vựng. Trùng tiêu đề đạt mức cảnh báo cao $\ge 85\% - 100\%$.
+       - **So sánh Caption độc lập:** Đối soát `input.caption` với `post.caption` độc lập với tiêu đề để tránh bị suy giảm mẫu số.
+       - **Đối soát chéo (Cross-check):** Nếu người dùng đưa tiêu đề vào ô caption hoặc ngược lại, hệ thống vẫn tự động phát hiện nếu độ trùng lặp cao.
+       - **Tổng hợp OR logic:** `maxTextSim = Math.max(titleSim, captionSim, crossSim, combinedSim)`. Bất kỳ trường nào vượt ngưỡng đều sẽ kích hoạt cảnh báo tương ứng.
+    2. **Đồng bộ hóa hoàn toàn Client Engine (`duplicateEngine.ts`):**
+       - Viết lại hàm `checkDuplicateClient` đồng bộ 100% với logic backend để phục vụ chế độ offline hoặc dự phòng khi mạng chập chờn.
+    3. **Hiển thị nhãn lý do trùng lặp trực quan trên giao diện (`DuplicateDetectionTab.tsx`):**
+       - Hiển thị badge cụ thể: `"Trùng tiêu đề bài viết"`, `"Trùng nội dung caption"`, `"Trùng cả tiêu đề và nội dung caption"`, `"Trùng tệp video/media"`.
+       - Mở rộng độ rộng hiển thị tiêu đề bài viết cũ để tránh bị cắt cụt.
+    4. **Kiểm thử tự động (Unit Tests):**
+       - Bổ sung 2 test cases mới trong `__tests__/api/content/duplicate-check.test.ts` kiểm tra riêng biệt trường hợp chỉ nhập Tiêu đề (`BTS Life go on`) và chỉ nhập Caption. Tất cả 7 tests đều pass 100%.
+
+---
+
 ## 🚀 [2026-11-02] (v1.3.68) — Quản Lý Bài Viết & Import Hàng Loạt: Khắc Phục Lỗi Bài Viết Import Bị Thất Bại & Hỗ Trợ Tự Động Lưu Bản Thảo Chờ Gắn Video / Gắn Video Trực Tiếp
 
 ### Phân hệ M2. Quản lý bài viết & Content Studio Import (F019) [Electron App, Web Dashboard & Backend API]:

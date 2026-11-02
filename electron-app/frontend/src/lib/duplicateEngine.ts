@@ -1,6 +1,7 @@
 /**
  * Duplicate Content Detection Engine (F082)
  * Client-side N-Gram & Jaccard Similarity Algorithm with Workspace Posts Matching
+ * Supports independent Title and Caption comparison (OR condition)
  */
 
 export interface DuplicateMatch {
@@ -8,6 +9,7 @@ export interface DuplicateMatch {
   title: string;
   captionSnippet: string;
   similarity: number; // percentage (0 - 100)
+  matchedReason?: string;
   isMediaMatch: boolean;
   status: string;
   createdAt: string | Date;
@@ -24,16 +26,23 @@ export interface DuplicateCheckResult {
 }
 
 /**
- * Tokenize and generate N-grams (unigrams + bigrams + trigrams)
+ * Clean & normalize text for duplicate detection (strip hashtags like #Shorts, punctuation, excess whitespace)
  */
-export function extractNgrams(text: string): Set<string> {
-  const clean = text
+export function normalizeText(text: string): string {
+  return (text || '')
     .toLowerCase()
+    .replace(/#[\p{L}\p{N}_-]+/gu, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
 
-  const words = clean.split(' ').filter(w => w.length > 1);
+/**
+ * Tokenize and generate N-grams (unigrams + bigrams + trigrams)
+ */
+export function extractNgrams(text: string): Set<string> {
+  const clean = normalizeText(text);
+  const words = clean.split(' ').filter(Boolean);
   const ngrams = new Set<string>();
 
   // Unigrams
@@ -41,12 +50,12 @@ export function extractNgrams(text: string): Set<string> {
     ngrams.add(word);
   }
 
-  // Bigrams
+  // Bigrams (weighted capture for context)
   for (let i = 0; i < words.length - 1; i++) {
     ngrams.add(`${words[i]}_${words[i + 1]}`);
   }
 
-  // Trigrams
+  // Trigrams (capture full phrases)
   for (let i = 0; i < words.length - 2; i++) {
     ngrams.add(`${words[i]}_${words[i + 1]}_${words[i + 2]}`);
   }
@@ -70,7 +79,49 @@ export function calculateJaccardSimilarity(setA: Set<string>, setB: Set<string>)
 }
 
 /**
+ * Compute text similarity between two texts (title vs title, or caption vs caption)
+ */
+export function computeTextSimilarity(textA: string, textB: string): number {
+  const normA = normalizeText(textA);
+  const normB = normalizeText(textB);
+  if (!normA || !normB) return 0;
+
+  // Exact normalized match
+  if (normA === normB) return 1.0;
+
+  // Substring match: if one contains the other and length ratio >= 0.5
+  if (normA.includes(normB) || normB.includes(normA)) {
+    const minLen = Math.min(normA.length, normB.length);
+    const maxLen = Math.max(normA.length, normB.length);
+    const ratio = minLen / maxLen;
+    if (ratio >= 0.5) {
+      return Math.max(0.85, ratio);
+    }
+  }
+
+  // N-gram Jaccard
+  const ngramsA = extractNgrams(normA);
+  const ngramsB = extractNgrams(normB);
+  const jaccard = calculateJaccardSimilarity(ngramsA, ngramsB);
+
+  // Word containment overlap
+  const wordsA = new Set(normA.split(' ').filter(Boolean));
+  const wordsB = new Set(normB.split(' ').filter(Boolean));
+  let overlap = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) overlap++;
+  }
+  const containment = Math.max(
+    wordsA.size > 0 ? overlap / wordsA.size : 0,
+    wordsB.size > 0 ? overlap / wordsB.size : 0
+  );
+
+  return Math.max(jaccard, containment >= 0.75 ? containment * 0.95 : 0);
+}
+
+/**
  * Client-side duplicate checker against workspace posts
+ * Strictly follows OR condition: Duplicate Title OR Duplicate Caption triggers match!
  */
 export function checkDuplicateClient(
   title: string,
@@ -87,9 +138,11 @@ export function checkDuplicateClient(
 ): DuplicateCheckResult {
   const trimmedCaption = (caption || '').trim();
   const trimmedTitle = (title || '').trim();
-  const combinedInputText = `${trimmedTitle} ${trimmedCaption}`.trim();
 
-  if (combinedInputText.length < 5) {
+  const hasInputTitle = Boolean(trimmedTitle && trimmedTitle.length >= 2);
+  const hasInputCaption = Boolean(trimmedCaption && trimmedCaption.length >= 3);
+
+  if (!hasInputTitle && !hasInputCaption) {
     return {
       hasDuplicates: false,
       maxSimilarity: 0,
@@ -100,20 +153,64 @@ export function checkDuplicateClient(
     };
   }
 
-  const inputNgrams = extractNgrams(combinedInputText);
   let maxSimilarity = 0;
   const matches: DuplicateMatch[] = [];
 
   for (const post of candidatePosts) {
-    const postText = `${post.title || ''} ${post.caption || ''}`.trim();
-    if (!postText) continue;
+    let titleSim = 0;
+    let captionSim = 0;
+    let crossSim = 0;
+    let combinedSim = 0;
 
-    const postNgrams = extractNgrams(postText);
-    const textSim = calculateJaccardSimilarity(inputNgrams, postNgrams);
+    // (a) Title vs Title
+    if (hasInputTitle && post.title) {
+      titleSim = computeTextSimilarity(trimmedTitle, post.title);
+    }
+
+    // (b) Caption vs Caption
+    if (hasInputCaption && post.caption) {
+      captionSim = computeTextSimilarity(trimmedCaption, post.caption);
+    }
+
+    // (c) Cross-check
+    if (hasInputTitle && post.caption && titleSim < 0.3) {
+      const sim = computeTextSimilarity(trimmedTitle, post.caption);
+      if (sim >= threshold) {
+        crossSim = Math.max(crossSim, sim);
+      }
+    }
+    if (hasInputCaption && post.title && captionSim < 0.3) {
+      const sim = computeTextSimilarity(trimmedCaption, post.title);
+      if (sim >= threshold) {
+        crossSim = Math.max(crossSim, sim);
+      }
+    }
+
+    // (d) Combined similarity if both title & caption provided
+    if (hasInputTitle && hasInputCaption && (post.title || post.caption)) {
+      const inputFull = `${trimmedTitle} ${trimmedCaption}`.trim();
+      const postFull = `${post.title || ''} ${post.caption || ''}`.trim();
+      combinedSim = computeTextSimilarity(inputFull, postFull);
+    }
+
+    // Maximum similarity across any dimension (OR condition)
+    const textSim = Math.max(titleSim, captionSim, crossSim, combinedSim);
     const simPercentage = Math.round(textSim * 100);
 
     if (simPercentage > maxSimilarity) {
       maxSimilarity = simPercentage;
+    }
+
+    // Human-readable match reason
+    let matchedReason = '';
+    if (titleSim >= threshold && captionSim >= threshold) {
+      matchedReason = 'Trùng cả tiêu đề và nội dung caption';
+    } else if (titleSim >= threshold) {
+      matchedReason = 'Trùng tiêu đề bài viết';
+    } else if (captionSim >= threshold) {
+      matchedReason = 'Trùng nội dung caption';
+    } else if (crossSim >= threshold || combinedSim >= threshold) {
+      matchedReason = 'Trùng nội dung bài viết';
     }
 
     if (simPercentage >= Math.round(threshold * 100)) {
@@ -126,6 +223,7 @@ export function checkDuplicateClient(
             : post.caption
           : '',
         similarity: simPercentage,
+        matchedReason,
         isMediaMatch: false,
         status: post.status || 'PUBLISHED',
         createdAt: post.createdAt || new Date(),

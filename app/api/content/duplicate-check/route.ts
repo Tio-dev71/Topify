@@ -19,16 +19,23 @@ export async function OPTIONS() {
 }
 
 /**
- * Tokenize and generate N-grams (unigrams + bigrams + trigrams)
+ * Clean & normalize text for duplicate detection (strip hashtags like #Shorts, punctuation, excess whitespace)
  */
-function extractNgrams(text: string): Set<string> {
-  const clean = text
+function normalizeText(text: string): string {
+  return (text || '')
     .toLowerCase()
+    .replace(/#[\p{L}\p{N}_-]+/gu, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
 
-  const words = clean.split(' ').filter(w => w.length > 1);
+/**
+ * Tokenize and generate N-grams (unigrams + bigrams + trigrams)
+ */
+function extractNgrams(text: string): Set<string> {
+  const clean = normalizeText(text);
+  const words = clean.split(' ').filter(Boolean);
   const ngrams = new Set<string>();
 
   // Unigrams
@@ -62,6 +69,47 @@ function calculateJaccardSimilarity(setA: Set<string>, setB: Set<string>): numbe
   }
   const unionSize = setA.size + setB.size - intersectionSize;
   return unionSize > 0 ? intersectionSize / unionSize : 0;
+}
+
+/**
+ * Compute text similarity between two texts (title vs title, or caption vs caption)
+ */
+function computeTextSimilarity(textA: string, textB: string): number {
+  const normA = normalizeText(textA);
+  const normB = normalizeText(textB);
+  if (!normA || !normB) return 0;
+
+  // Exact normalized match
+  if (normA === normB) return 1.0;
+
+  // Substring match: if one contains the other and length ratio >= 0.5
+  if (normA.includes(normB) || normB.includes(normA)) {
+    const minLen = Math.min(normA.length, normB.length);
+    const maxLen = Math.max(normA.length, normB.length);
+    const ratio = minLen / maxLen;
+    if (ratio >= 0.5) {
+      return Math.max(0.85, ratio);
+    }
+  }
+
+  // N-gram Jaccard
+  const ngramsA = extractNgrams(normA);
+  const ngramsB = extractNgrams(normB);
+  const jaccard = calculateJaccardSimilarity(ngramsA, ngramsB);
+
+  // Word containment overlap
+  const wordsA = new Set(normA.split(' ').filter(Boolean));
+  const wordsB = new Set(normB.split(' ').filter(Boolean));
+  let overlap = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) overlap++;
+  }
+  const containment = Math.max(
+    wordsA.size > 0 ? overlap / wordsA.size : 0,
+    wordsB.size > 0 ? overlap / wordsB.size : 0
+  );
+
+  return Math.max(jaccard, containment >= 0.75 ? containment * 0.95 : 0);
 }
 
 // POST /api/content/duplicate-check - Check for duplicate content (text & media)
@@ -104,10 +152,12 @@ export async function POST(req: NextRequest) {
 
     const trimmedCaption = (caption || '').trim();
     const trimmedTitle = (title || '').trim();
-    const combinedInputText = `${trimmedTitle} ${trimmedCaption}`.trim();
 
     // Check if there is enough content or media to check
-    if (combinedInputText.length < 5 && !videoAssetId && (!mediaUrls || mediaUrls.length === 0)) {
+    const hasInputTitle = Boolean(trimmedTitle && trimmedTitle.length >= 2);
+    const hasInputCaption = Boolean(trimmedCaption && trimmedCaption.length >= 3);
+
+    if (!hasInputTitle && !hasInputCaption && !videoAssetId && (!mediaUrls || mediaUrls.length === 0)) {
       return NextResponse.json({
         hasDuplicates: false,
         maxSimilarity: 0,
@@ -153,7 +203,6 @@ export async function POST(req: NextRequest) {
       take: 300,
     });
 
-    const inputNgrams = extractNgrams(combinedInputText);
     const normalizedMediaUrls = new Set((mediaUrls || []).map((u: string) => u.trim()));
 
     let maxSimilarity = 0;
@@ -164,6 +213,7 @@ export async function POST(req: NextRequest) {
       title: string;
       captionSnippet: string;
       similarity: number;
+      matchedReason?: string;
       isMediaMatch: boolean;
       status: string;
       createdAt: Date;
@@ -194,14 +244,46 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3. Check text similarity
-      const postText = `${post.title || ''} ${post.caption || ''}`.trim();
-      let textSim = 0;
-      if (inputNgrams.size > 0 && postText.length > 0) {
-        const postNgrams = extractNgrams(postText);
-        textSim = calculateJaccardSimilarity(inputNgrams, postNgrams);
+      // 3. Check text similarity with OR condition (Trùng Tiêu đề HOẶC Trùng Caption)
+      let titleSim = 0;
+      let captionSim = 0;
+      let crossSim = 0;
+      let combinedSim = 0;
+
+      // (a) Title vs Title
+      if (hasInputTitle && post.title) {
+        titleSim = computeTextSimilarity(trimmedTitle, post.title);
       }
 
+      // (b) Caption vs Caption
+      if (hasInputCaption && post.caption) {
+        captionSim = computeTextSimilarity(trimmedCaption, post.caption);
+      }
+
+      // (c) Cross-check: If user entered Title only, does it match post.caption?
+      if (hasInputTitle && post.caption && titleSim < 0.3) {
+        const sim = computeTextSimilarity(trimmedTitle, post.caption);
+        if (sim >= threshold) {
+          crossSim = Math.max(crossSim, sim);
+        }
+      }
+      // If user entered Caption only, does it match post.title?
+      if (hasInputCaption && post.title && captionSim < 0.3) {
+        const sim = computeTextSimilarity(trimmedCaption, post.title);
+        if (sim >= threshold) {
+          crossSim = Math.max(crossSim, sim);
+        }
+      }
+
+      // (d) Combined similarity (when both title & caption provided)
+      if (hasInputTitle && hasInputCaption && (post.title || post.caption)) {
+        const inputFull = `${trimmedTitle} ${trimmedCaption}`.trim();
+        const postFull = `${post.title || ''} ${post.caption || ''}`.trim();
+        combinedSim = computeTextSimilarity(inputFull, postFull);
+      }
+
+      // OR logic: Maximum similarity across all dimensions
+      const textSim = Math.max(titleSim, captionSim, crossSim, combinedSim);
       const simPercentage = Math.round(textSim * 100);
 
       // If media matches, give a high similarity floor (e.g., 90%)
@@ -211,12 +293,27 @@ export async function POST(req: NextRequest) {
         maxSimilarity = finalSimScore;
       }
 
+      // Determine human-readable reason
+      let matchedReason = '';
+      if (mediaMatched) {
+        matchedReason = 'Trùng tệp video/media';
+      } else if (titleSim >= threshold && captionSim >= threshold) {
+        matchedReason = 'Trùng cả tiêu đề và nội dung caption';
+      } else if (titleSim >= threshold) {
+        matchedReason = 'Trùng tiêu đề bài viết';
+      } else if (captionSim >= threshold) {
+        matchedReason = 'Trùng nội dung caption';
+      } else if (crossSim >= threshold || combinedSim >= threshold) {
+        matchedReason = 'Trùng nội dung bài viết';
+      }
+
       if (finalSimScore >= Math.round(threshold * 100) || mediaMatched) {
         matches.push({
           postId: post.id,
-          title: post.title,
+          title: post.title || 'Bài viết trong Workspace',
           captionSnippet: post.caption ? (post.caption.length > 120 ? post.caption.slice(0, 120) + '...' : post.caption) : '',
           similarity: finalSimScore,
+          matchedReason,
           isMediaMatch: mediaMatched,
           status: post.status,
           createdAt: post.createdAt,

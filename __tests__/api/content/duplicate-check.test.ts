@@ -123,4 +123,96 @@ describe('Duplicate Content Detection API (F082)', () => {
     expect(data.isMediaDuplicate).toBe(true);
     expect(data.riskLevel).toBe('HIGH');
   });
+
+  it('detects duplicate when ONLY title is provided (OR condition: title matches even if caption is empty)', async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: 'user_1', role: 'ADMIN', workspaceId: 'ws_1' },
+    } as any);
+
+    vi.mocked(prisma.post.findMany).mockResolvedValue([
+      {
+        id: 'post_bts_1',
+        title: 'Special CLip của BTS là Life go on - Bản C',
+        caption: 'Góc chia sẻ hữu ích: Bạn đã biết bí mật này chưa? Mẹo cực hay không thể bỏ lỡ hôm nay: Bạn đang kinh doanh trong ngành Giáo dục & Khóa học và đau đầu vì bài hát? Hãy dừng lại 30 giây để khám phá giải pháp giúp tối ưu hóa thương hiệu.',
+        videoAssetId: 'video_bts',
+        status: 'PUBLISHED',
+        createdAt: new Date('2026-10-31'),
+        publishedAt: new Date('2026-10-31'),
+        media: [],
+      },
+    ] as any);
+
+    const req = new NextRequest('http://localhost/api/content/duplicate-check', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Special CLip của BTS là Life go on - Bản C #Shorts',
+        caption: '', // Empty caption
+      }),
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.hasDuplicates).toBe(true);
+    expect(data.maxSimilarity).toBeGreaterThanOrEqual(75);
+    expect(data.riskLevel).toBe('HIGH');
+    expect(data.matches[0].postId).toBe('post_bts_1');
+    expect(data.matches[0].matchedReason).toBe('Trùng tiêu đề bài viết');
+  });
+
+  it('detects duplicate when ONLY caption is provided (OR condition: caption matches even if title is empty)', async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: 'user_1', role: 'ADMIN', workspaceId: 'ws_1' },
+    } as any);
+
+    vi.mocked(prisma.post.findMany).mockResolvedValue([
+      {
+        id: 'post_bts_1',
+        title: 'Tiêu đề cũ trong workspace',
+        caption: 'Góc chia sẻ hữu ích: Bạn đã biết bí mật này chưa? Mẹo cực hay không thể bỏ lỡ hôm nay.',
+        videoAssetId: 'video_bts',
+        status: 'PUBLISHED',
+        createdAt: new Date('2026-10-31'),
+        publishedAt: new Date('2026-10-31'),
+        media: [],
+      },
+    ] as any);
+
+    const req = new NextRequest('http://localhost/api/content/duplicate-check', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: '', // Empty title
+        caption: 'Góc chia sẻ hữu ích: Bạn đã biết bí mật này chưa? Mẹo cực hay không thể bỏ lỡ hôm nay.',
+      }),
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.hasDuplicates).toBe(true);
+    expect(data.maxSimilarity).toBeGreaterThanOrEqual(75);
+    expect(data.riskLevel).toBe('HIGH');
+    expect(data.matches[0].postId).toBe('post_bts_1');
+    expect(data.matches[0].matchedReason).toBe('Trùng nội dung caption');
+  });
+
+  it('client-side checkDuplicateClient matches title correctly with OR logic', async () => {
+    const { checkDuplicateClient } = await import('../../../electron-app/frontend/src/lib/duplicateEngine');
+    const candidates = [
+      {
+        id: 'post_bts_1',
+        title: 'Special CLip của BTS là Life go on - Bản C',
+        caption: 'Góc chia sẻ hữu ích: Bạn đã biết bí mật này chưa? Mẹo cực hay không thể bỏ lỡ hôm nay.',
+      },
+    ];
+
+    const result = checkDuplicateClient('Special CLip của BTS là Life go on - Bản C #Shorts', '', candidates);
+    expect(result.hasDuplicates).toBe(true);
+    expect(result.maxSimilarity).toBeGreaterThanOrEqual(75);
+    expect(result.riskLevel).toBe('HIGH');
+    expect(result.matches[0].postId).toBe('post_bts_1');
+    expect(result.matches[0].matchedReason).toBe('Trùng tiêu đề bài viết');
+  });
 });

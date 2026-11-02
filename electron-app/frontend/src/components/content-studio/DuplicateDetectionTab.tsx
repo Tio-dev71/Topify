@@ -225,16 +225,23 @@ export function DuplicateDetectionTab({ onSendToSpin }: { onSendToSpin?: (text: 
                     {result.matches.map((m: any, i: number) => (
                       <div
                         key={i}
-                        className="p-3 bg-amber-50/50 rounded-xl border border-amber-200/60 text-xs text-gray-800 space-y-1"
+                        className="p-3 bg-amber-50/50 rounded-xl border border-amber-200/60 text-xs text-gray-800 space-y-1.5"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-amber-950 truncate max-w-[200px]">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-amber-950 truncate max-w-[260px] sm:max-w-[340px]" title={m.title}>
                             {m.title || 'Bài viết trong Workspace'}
                           </span>
-                          <span className="font-mono text-amber-800 font-bold">
+                          <span className="font-mono text-amber-800 font-bold shrink-0">
                             {formatPct(m.similarity)}% trùng
                           </span>
                         </div>
+                        {m.matchedReason && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-block text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                              {m.matchedReason}
+                            </span>
+                          </div>
+                        )}
                         {m.captionSnippet || m.caption ? (
                           <p className="line-clamp-2 text-gray-600 italic">
                             "{m.captionSnippet || m.caption}"
