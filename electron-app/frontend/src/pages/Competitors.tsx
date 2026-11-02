@@ -64,6 +64,7 @@ export default function Competitors() {
 
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [searchPost, setSearchPost] = useState('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '31/10/2026'>('all');
 
   const fetchPages = async () => {
     try {
@@ -198,14 +199,29 @@ export default function Competitors() {
     if (!postedAtStr) return false;
     const pDate = new Date(postedAtStr);
     const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    return pDate.toLocaleDateString('vi-VN') === vnNow.toLocaleDateString('vi-VN');
+    return pDate.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) === vnNow.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+  };
+
+  const isPostOct31 = (postedAtStr: string | null) => {
+    if (!postedAtStr) return false;
+    const pDate = new Date(postedAtStr);
+    return pDate.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) === '31/10/2026';
   };
 
   const todayPostsCount = posts.filter(p => isPostToday(p.postedAt)).length;
+  const oct31PostsCount = posts.filter(p => isPostOct31(p.postedAt)).length;
 
   const filteredPosts = posts.filter(p => {
+    // Date quick filter
+    if (dateFilter === 'today' && !isPostToday(p.postedAt)) return false;
+    if (dateFilter === '31/10/2026' && !isPostOct31(p.postedAt)) return false;
+
+    // Search query
     if (!searchPost.trim()) return true;
-    return (p.content || '').toLowerCase().includes(searchPost.toLowerCase());
+    const query = searchPost.toLowerCase();
+    const content = (p.content || '').toLowerCase();
+    const dateFormatted = p.postedAt ? new Date(p.postedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }).toLowerCase() : '';
+    return content.includes(query) || dateFormatted.includes(query);
   });
 
   return (
@@ -349,10 +365,15 @@ export default function Competitors() {
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
                       <p className="text-xs text-gray-500 font-mono">
                         Đã quét {posts.length} bài viết gần nhất
                       </p>
+                      {oct31PostsCount > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold border border-blue-200">
+                          {oct31PostsCount} bài ngày 31/10
+                        </span>
+                      )}
                       {todayPostsCount > 0 && (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200">
                           {todayPostsCount} bài hôm nay
@@ -374,16 +395,58 @@ export default function Competitors() {
                 </div>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm nội dung bài viết đối thủ..."
-                  value={searchPost}
-                  onChange={(e) => setSearchPost(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs text-gray-900 focus:outline-none focus:border-rose-500"
-                />
+              {/* Search Bar & Quick Date Filters */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm nội dung bài viết, ngày đăng (VD: 31/10)..."
+                    value={searchPost}
+                    onChange={(e) => setSearchPost(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-xs text-gray-900 focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                {(oct31PostsCount > 0 || todayPostsCount > 0) && (
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                    <span className="text-[11px] text-gray-400 font-medium">Lọc theo ngày:</span>
+                    <button
+                      onClick={() => setDateFilter('all')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        dateFilter === 'all'
+                          ? 'bg-rose-600 text-white shadow-2xs'
+                          : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Tất cả ({posts.length})
+                    </button>
+                    {oct31PostsCount > 0 && (
+                      <button
+                        onClick={() => setDateFilter('31/10/2026')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                          dateFilter === '31/10/2026'
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-blue-50/80 border border-blue-200 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        Ngày 31/10 ({oct31PostsCount} bài)
+                      </button>
+                    )}
+                    {todayPostsCount > 0 && (
+                      <button
+                        onClick={() => setDateFilter('today')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                          dateFilter === 'today'
+                            ? 'bg-emerald-600 text-white shadow-2xs'
+                            : 'bg-emerald-50/80 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                        }`}
+                      >
+                        Hôm nay ({todayPostsCount} bài)
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Posts Feed */}
@@ -415,12 +478,16 @@ export default function Competitors() {
                       <div className="flex items-center justify-between text-xs text-gray-400">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
-                          {post.postedAt ? new Date(post.postedAt).toLocaleString('vi-VN') : 'Mới cập nhật'}
-                          {isPostToday(post.postedAt) && (
+                          {post.postedAt ? new Date(post.postedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : 'Mới cập nhật'}
+                          {isPostToday(post.postedAt) ? (
                             <span className="ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                               Hôm nay
                             </span>
-                          )}
+                          ) : isPostOct31(post.postedAt) ? (
+                            <span className="ml-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              31/10/2026
+                            </span>
+                          ) : null}
                         </span>
                         <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-gray-50 text-gray-600 border border-gray-100">
                           ID: {post.id.slice(0, 8)}

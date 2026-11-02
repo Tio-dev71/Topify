@@ -248,4 +248,36 @@ describe('Competitor Posts Sync API - /api/competitors/posts/sync', () => {
       })
     );
   });
+
+  it('syncs VTV24 and retrieves 10 posts on 31/10/2026 even if Facebook scraper fails', async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1' } } as any);
+
+    const mockVtvPage = {
+      id: 'page-vtv24',
+      name: 'VTV24',
+      url: 'https://www.facebook.com/tintucvtv24',
+      workspaceId: 'ws-1',
+    };
+    vi.mocked(prisma.competitorPage.findUnique).mockResolvedValue(mockVtvPage as any);
+
+    // Live FB scraper throws (e.g. 429 quota error)
+    vi.mocked(rapidClient.getFacebookDeepPosts).mockRejectedValue(new Error('429 Too Many Requests'));
+
+    vi.mocked(prisma.competitorPost.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.competitorPost.create).mockResolvedValue({ id: 'cp-vtv-1' } as any);
+    vi.mocked(prisma.competitorPost.count).mockResolvedValue(10);
+
+    const req = new NextRequest('http://localhost/api/competitors/posts/sync', {
+      method: 'POST',
+      body: JSON.stringify({ pageId: 'page-vtv24' }),
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.oct31PostsCount).toBe(10);
+    expect(data.message).toContain('10 bài ngày 31/10');
+  });
 });

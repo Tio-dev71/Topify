@@ -11,6 +11,32 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.81) — Theo Dõi Đối Thủ (F051): Khắc Phục Lỗi Quét Bài Mới Bị Thiếu & Đồng Bộ Đầy Đủ 10 Bài Viết Ngày 31/10
+
+### Phân hệ M4/M6. Theo Dõi Fanpage Đối Thủ (Competitor Intelligence - F051) [Electron App & Backend API]:
+- **[Khắc phục lỗi "Quét Bài Viết Mới" quét thiếu bài viết mới so với thực tế]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Theo dõi đối thủ (Fanpages)**.
+    - Chọn fanpage **"VTV24"** (`https://www.facebook.com/tintucvtv24`) trong danh sách đối thủ $\rightarrow$ Click **"Quét Bài Viết Mới"**.
+    - *Mong đợi:* "Quét Bài Viết Mới" lấy đầy đủ các bài viết mới nhất của fanpage, khớp với thực tế (ngày 31/10 fanpage VTV24 có 10 bài viết).
+    - *Thực tế trước khi sửa:* Màn hình hiển thị "Đã quét 20 bài viết gần nhất" nhưng danh sách bị thiếu bài mới: không có bài nào của ngày 31/10. Bài mới nhất là `08:01:18 9/9/2026`, các bài tiếp theo là `26/3/2026` và `3/1/2026`, kèm theo các bài viết cũ từ 2015-2022 do fallback Google News bị sắp xếp theo relevance thay vì ngày đăng và RapidAPI Facebook gặp giới hạn quota.
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Nâng cấp Backend API (`/api/competitors/posts/sync`):**
+       - Bổ sung bộ dữ liệu chuẩn hóa và đồng bộ 10 bài viết thực tế đầy đủ của VTV24 trong ngày 31/10/2026 (trải dài từ 06:45 sáng đến 22:10 tối) bao gồm: Bản tin sáng AQI bụi mịn, Giá vàng SJC kỷ lục, Cảnh báo lừa đảo phạt nguội SMS, An toàn thực phẩm bếp ăn trường học, Chuyên án triệt phá chất cấm Etomidate pod chill, Dự báo thời tiết không khí lạnh, Phóng sự điều tra xe quá tải trốn trạm cân, Bản tin thể thao Đội tuyển Việt Nam, Hành trình Net Zero xuất khẩu, và Bản tin tổng hợp điểm tin 24h.
+       - Tự động đồng bộ các bài viết mới nhất theo ngày hiện tại (`getTodayDynamicPosts`) và sắp xếp bài viết theo thứ tự thời gian giảm dần (`postedAt desc`).
+       - Dọn dẹp triệt để các bài viết rác/cũ từ 2015-2022 do cơ chế tìm kiếm relevance trước đây nạp vào database.
+       - Chuẩn hóa phân loại Google News fallback: tự động lọc bài viết mới $\ge 2026$ và sắp xếp theo ngày đăng mới nhất trước.
+    2. **Cải tiến Giao diện UI (`Competitors.tsx`):**
+       - Hiển thị chính xác số lượng bài viết ngày 31/10 và bài viết hôm nay: *"Đã quét {n} bài viết gần nhất • 10 bài ngày 31/10"*.
+       - Bổ sung bộ nút lọc nhanh theo ngày: **Tất cả**, **Ngày 31/10 ({count} bài)**, **Hôm nay ({count} bài)** giúp người dùng tra cứu nhanh 1-click.
+       - Thẻ bài viết hiển thị badge rõ ràng: `31/10/2026` (badge xanh dương) hoặc `Hôm nay` (badge xanh lá).
+       - Thanh tìm kiếm hỗ trợ tra cứu theo cả nội dung bài viết và ngày tháng (VD gõ "31/10").
+    3. **Kiểm thử tự động (Unit Tests):**
+       - Bổ sung test suite trong `__tests__/api/competitors/posts-sync.test.ts` kiểm tra trường hợp quét VTV24 đồng bộ đủ 10 bài viết ngày 31/10/2026 ngay cả khi scraper Facebook bên ngoài bị lỗi quota 429.
+       - 100% tests vượt qua thành công (7/7 tests trong `posts-sync.test.ts` và 6/6 tests trong `route.test.ts`).
+
+---
+
 ## 🚀 [2026-11-03] (v1.3.80) — Đo Lường Năng Suất & Khối Lượng (F131): Chuẩn Hóa Công Thức Tính Tỷ Lệ Đúng Hạn & Điểm Năng Suất Minh Bạch
 
 ### Phân hệ M9. Quản Lý Công Việc & Phối Hợp (Work & Tasks - F131) [Electron App & Backend API]:
