@@ -11,6 +11,40 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.77) — CRM Toàn Diện (M4): Hoàn Thiện Trọn Bộ 5 Phân Hệ CRM F098, F099, F100, F101, F102 Theo Chuẩn Checklist QA
+
+### Phân hệ M4. Giao Tiếp & Bán Hàng (CRM) — Trọn Bộ 5 Hạng Mục Checklist [Electron App, Web Dashboard & Backend API]:
+- **[Tích hợp toàn diện các màn hình & tính năng F098, F099, F100, F101, F102]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Checklist M4:**
+    - Mở app Topify $\rightarrow$ Click nhóm menu **Giao tiếp & Bán hàng (CRM)** $\rightarrow$ Đối chiếu với checklist M4.
+    - *Mong đợi:* Có đầy đủ màn hình và chức năng của cả 5 hạng mục theo checklist:
+      1. **F098 Activity & Follow-up:** Quản lý cuộc gọi, lịch hẹn, tin nhắn, việc cần làm và nhắc việc liên quan khách hàng.
+      2. **F099 Custom Field:** Tạo và quản lý các trường dữ liệu tùy biến cho CRM (lưu trữ trong `customData`).
+      3. **F100 Lead Scoring:** Chấm điểm lead tự động theo quy tắc chuẩn 100đ (Hồ sơ 30đ, Tương tác MXH 30đ, Ý định chốt đơn 40đ) và phân loại HOT (🔥), WARM (⚡), COLD (❄️).
+      4. **F101 Duplicate Detection & Merge:** Tự động phát hiện trùng lặp (Exact SĐT, Exact Email, Fuzzy Name) và hợp nhất hồ sơ có kiểm soát với giao diện đối chiếu 2 cột.
+      5. **F102 Form → CRM:** Form thu thập lead nhúng website / landing page đổ trực tiếp CRM qua webhook endpoint và mô phỏng trực tiếp.
+    - *Thực tế trước khi sửa:* Menu Sidebar CRM chưa hiển thị các mục F098, F099, F100, F101, F102, checklist QA đánh dấu trạng thái "Chưa có".
+  - **Giải pháp xử lý triệt để:**
+    1. **Backend API Mới:**
+       - `app/api/crm/activities/route.ts`: CRUD đầy đủ hoạt động chăm sóc khách hàng (CALL, MEETING, MESSAGE, TASK, NOTE) hỗ trợ lọc theo trạng thái, ngày hẹn, liên kết khách hàng, ghi audit log và tính toán thống kê.
+       - `app/api/crm/custom-fields/route.ts`: Quản lý định nghĩa các trường tùy biến (Text, Number, Select, Date, Boolean) lưu trong cài đặt workspace và hỗ trợ gán dữ liệu `customData` cho từng khách hàng.
+    2. **5 Giao Diện Tab Thành Phần Chuyên Sâu (Modular CRM Components):**
+       - `ActivitiesTab.tsx` (F098): Quản lý dòng thời gian hoạt động, lọc cuộc gọi/họp/tin nhắn/task, đánh dấu hoàn thành, tạo mới hoạt động và xóa.
+       - `CustomFieldsTab.tsx` (F099): Bảng quản lý định nghĩa trường dữ liệu và trình chỉnh sửa gán `customData` theo thời gian thực cho bất kỳ khách hàng nào với JSON preview.
+       - `LeadScoringTab.tsx` (F100): Trực quan hóa 3 nhóm tiêu chí 30/30/40, bộ lọc phân loại HOT/WARM/COLD, bảng chi tiết từng lý do cộng điểm và nút tính lại điểm 1 chạm.
+       - `DuplicateMergeTab.tsx` (F101): Giải thích trực quan 3 quy tắc quét trùng, danh sách các nhóm trùng lặp kèm độ tin cậy và nút mở modal đối chiếu 2 cột để hợp nhất an toàn.
+       - `EmbedFormTab.tsx` (F102): Cung cấp mã HTML/JS nhúng website với nút sao chép 1 chạm, Form Simulator tương tác trực tiếp với CRM và bảng danh sách lead thu thập từ landing page.
+    3. **Thanh Điều Hướng Sub-Navbar & Đồng Bộ Tuyến Đường (Routes):**
+       - Tích hợp thanh Sub-Navbar gồm 6 tab module (F093, F098, F099, F100, F101, F102) ngay đầu trang CRM `Customers.tsx`.
+       - Đồng bộ menu Sidebar (`Sidebar.tsx`) với 5 đường dẫn mới (`/crm/activities`, `/crm/custom-fields`, `/crm/lead-scoring`, `/crm/duplicate-merge`, `/crm/embed-form`).
+       - Cấu hình điều hướng đồng bộ URL qua `HashRouter` và `react-router-dom`.
+    4. **Kiểm Thử Toàn Diện (Vitest Unit Tests):**
+       - Bổ sung `__tests__/api/crm/activities.test.ts` (6/6 tests passed).
+       - Bổ sung `__tests__/api/crm/custom-fields.test.ts` (4/4 tests passed).
+       - Tổng cộng 38/38 tests CRM pass 100%.
+
+---
+
 ## 🚀 [2026-11-03] (v1.3.76) — CRM & Cơ Hội Bán Hàng: Hiển Thị Đầy Đủ Nguồn Lead (F097) & Người Phụ Trách (F096) Trên Thẻ Deal Kanban
 
 ### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Cơ Hội Bán Hàng (Deals - F096 | Lead Source - F097) [Electron App & Web Dashboard]:

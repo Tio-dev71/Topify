@@ -57,6 +57,12 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/crm/customers" element={<Customers defaultTab="f093" />} />
+          <Route path="/crm/activities" element={<Customers defaultTab="f098" />} />
+          <Route path="/crm/custom-fields" element={<Customers defaultTab="f099" />} />
+          <Route path="/crm/lead-scoring" element={<Customers defaultTab="f100" />} />
+          <Route path="/crm/duplicate-merge" element={<Customers defaultTab="f101" />} />
+          <Route path="/crm/embed-form" element={<Customers defaultTab="f102" />} />
           <Route path="/deals" element={<Deals />} />
           <Route path="/crm/deals" element={<Deals />} />
           <Route path="/pipelines" element={<Pipelines />} />

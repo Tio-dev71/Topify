@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users,
   Search,
@@ -32,6 +33,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
+import ActivitiesTab from '../components/crm/ActivitiesTab';
+import CustomFieldsTab from '../components/crm/CustomFieldsTab';
+import LeadScoringTab from '../components/crm/LeadScoringTab';
+import DuplicateMergeTab from '../components/crm/DuplicateMergeTab';
+import EmbedFormTab from '../components/crm/EmbedFormTab';
 
 export interface CustomerItem {
   id: string;
@@ -74,7 +80,39 @@ export interface DuplicateGroupItem {
   }>;
 }
 
-export default function Customers() {
+export default function Customers({
+  defaultTab = 'f093',
+}: {
+  defaultTab?: 'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102';
+}) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102'>(defaultTab);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') as any;
+    if (tabParam && ['f093', 'f098', 'f099', 'f100', 'f101', 'f102'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    } else if (defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [defaultTab, searchParams]);
+
+  const handleTabChange = (tab: 'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102') => {
+    setActiveTab(tab);
+    const routeMap: Record<string, string> = {
+      f093: '/crm/customers',
+      f098: '/crm/activities',
+      f099: '/crm/custom-fields',
+      f100: '/crm/lead-scoring',
+      f101: '/crm/duplicate-merge',
+      f102: '/crm/embed-form',
+    };
+    if (routeMap[tab]) {
+      navigate(routeMap[tab]);
+    }
+  };
+
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
@@ -268,9 +306,8 @@ export default function Customers() {
     }
   };
 
-  // Open Duplicate Merge Scanner (F101)
-  const handleOpenMergeScanner = async () => {
-    setShowMergeModal(true);
+  // Fetch Duplicate Groups (F101)
+  const fetchDuplicateGroups = async () => {
     setLoadingDuplicates(true);
     try {
       const res = await api.get('/crm/customers/duplicates');
@@ -287,6 +324,24 @@ export default function Customers() {
     } finally {
       setLoadingDuplicates(false);
     }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'f101') {
+      fetchDuplicateGroups();
+    }
+  }, [activeTab]);
+
+  // Open Duplicate Merge Scanner (F101)
+  const handleOpenMergeScanner = async () => {
+    setShowMergeModal(true);
+    await fetchDuplicateGroups();
+  };
+
+  const handleOpenMergeWithGroup = (group: DuplicateGroupItem) => {
+    setSelectedGroup(group);
+    setSelectedMasterId(group.customers[0]?.id || '');
+    setShowMergeModal(true);
   };
 
   // Execute Merge
@@ -405,9 +460,139 @@ export default function Customers() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* ────────────────────────────────────────────────────────────────────────
-          HEADER
+          CRM MODULE NAVIGATION TABS (F093, F098, F099, F100, F101, F102)
           ──────────────────────────────────────────────────────────────────────── */}
-      <div className="space-y-4">
+      <div className="bg-white dark:bg-slate-800 p-2.5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-xs">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+          {[
+            {
+              id: 'f093',
+              label: 'Hồ sơ khách hàng',
+              code: 'F093',
+              icon: Users,
+              badge: stats.total > 0 ? `${stats.total}` : undefined,
+            },
+            {
+              id: 'f098',
+              label: 'Hoạt động & Chăm sóc',
+              code: 'F098',
+              icon: Calendar,
+              badge: 'Follow-up',
+            },
+            {
+              id: 'f099',
+              label: 'Trường tùy biến',
+              code: 'F099',
+              icon: SlidersHorizontal,
+              badge: 'Custom Field',
+            },
+            {
+              id: 'f100',
+              label: 'Chấm điểm Lead',
+              code: 'F100',
+              icon: Flame,
+              badge: stats.hotCount > 0 ? `${stats.hotCount} HOT` : '30/30/40',
+              badgeColor: stats.hotCount > 0 ? 'bg-rose-50 text-rose-600 border-rose-200' : undefined,
+            },
+            {
+              id: 'f101',
+              label: 'Quét trùng & Hợp nhất',
+              code: 'F101',
+              icon: GitMerge,
+              badge: stats.duplicateGroupsCount > 0 ? `${stats.duplicateGroupsCount} nhóm` : 'Fuzzy/Exact',
+              badgeColor: stats.duplicateGroupsCount > 0 ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse' : undefined,
+            },
+            {
+              id: 'f102',
+              label: 'Nhúng Form Thu Lead',
+              code: 'F102',
+              icon: Code2,
+              badge: 'Form → CRM',
+            },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleTabChange(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                  isActive
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm ring-2 ring-indigo-300 dark:ring-indigo-700'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900'
+                }`}
+              >
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-medium ${
+                    isActive
+                      ? 'bg-white/20 text-white border border-white/30'
+                      : tab.badgeColor || 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600'
+                  }`}
+                >
+                  {tab.code}
+                </span>
+                {tab.badge && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                      isActive
+                        ? 'bg-white text-indigo-700 font-bold'
+                        : tab.badgeColor || 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ────────────────────────────────────────────────────────────────────────
+          TAB CONTENT
+          ──────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'f098' && (
+        <ActivitiesTab customers={customers} />
+      )}
+
+      {activeTab === 'f099' && (
+        <CustomFieldsTab customers={customers} onCustomerUpdated={fetchCustomers} />
+      )}
+
+      {activeTab === 'f100' && (
+        <LeadScoringTab
+          customers={customers}
+          onRecalculate={fetchCustomers}
+          onSeedDemo={handleSeedDemo}
+          onViewDetail={handleViewDetail}
+          seeding={seeding}
+        />
+      )}
+
+      {activeTab === 'f101' && (
+        <DuplicateMergeTab
+          duplicateGroups={duplicateGroups}
+          loading={loadingDuplicates}
+          onScanDuplicates={fetchDuplicateGroups}
+          onOpenMergeModal={handleOpenMergeWithGroup}
+          onSeedDemo={handleSeedDemo}
+          seeding={seeding}
+        />
+      )}
+
+      {activeTab === 'f102' && (
+        <EmbedFormTab customers={customers} onLeadCaptured={fetchCustomers} />
+      )}
+
+      {activeTab === 'f093' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {/* ────────────────────────────────────────────────────────────────────────
+              HEADER
+              ──────────────────────────────────────────────────────────────────────── */}
+          <div className="space-y-4">
         {/* Top Header: Title & Main Action Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -847,6 +1032,8 @@ export default function Customers() {
           </div>
         )}
       </div>
+      </div>
+      )}
 
       {/* ────────────────────────────────────────────────────────────────────────
           MODAL: QUÉT & HỢP NHẤT HỒ SƠ CÓ KIỂM SOÁT (F101 MERGE MODAL)
