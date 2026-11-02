@@ -11,6 +11,50 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.84) — M4 CRM: Hoàn Thiện Màn Hình & Tính Năng F092 Lead (Quản Lý Khách Hàng Tiềm Năng Đa Nguồn)
+
+### Phân hệ M4. Quản Lý Khách Hàng Tiềm Năng & CRM (Leads - F092) [Electron App & Backend API]:
+- **[Khắc phục thiếu màn hình/chức năng F092 Lead theo QA Checklist]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click nhóm menu **Giao tiếp & Bán hàng (CRM)** $\rightarrow$ Kiểm tra màn hình/chức năng F092 Lead.
+    - Đối chiếu với trạng thái hạng mục trong checklist M4.
+    - *Mong đợi:* Có đầy đủ màn hình và chức năng F092 Lead: quản lý khách hàng tiềm năng đa kênh từ Hộp thư (Inbox), Web Form (Landing Page), Nhập file (Import), và Giới thiệu (Referral).
+    - *Thực tế trước khi sửa:*
+      1. Menu sidebar nhóm "Giao tiếp & Bán hàng (CRM)" chưa có mục định danh `Khách hàng tiềm năng (F092)` khiến QA không tìm thấy tính năng.
+      2. Thanh tab CRM Hub tại `Customers.tsx` bắt đầu từ `F093`, thiếu tab `F092` Lead.
+      3. Thiếu Backend API `/api/crm/leads` phục vụ phân loại, tính chỉ số KPI, lọc đa nguồn, nhập hàng loạt từ Excel/CSV và 1-click chuyển đổi Lead thành Khách hàng chính thức & Cơ hội bán hàng (Deal).
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Bổ sung Menu Sidebar & Routing Độc Lập:**
+       - Thêm mục menu `Khách hàng tiềm năng (F092)` trong nhóm CRM tại [Sidebar.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/layout/Sidebar.tsx) với Badge `F092` và Icon `UserCheck`.
+       - Bổ sung định tuyến trong [App.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/App.tsx) ánh xạ `/crm/leads` và `/leads` về `Customers defaultTab="f092"`.
+    2. **Xây dựng Backend API Quản lý Lead F092 (`app/api/crm/leads/route.ts`):**
+       - `GET /api/crm/leads`: Trả về danh sách Lead cùng bộ chỉ số KPI đa nguồn: `total`, `inboxCount`, `formCount`, `importCount`, `referralCount`, `conversionRate`, `totalEstimatedValue`. Hỗ trợ lọc theo nguồn, trạng thái, người phụ trách, và tìm kiếm text.
+       - `POST /api/crm/leads`:
+         - `action === 'create'`: Thêm lead mới thủ công đầy đủ thông tin.
+         - `action === 'bulk_import'`: Nhập dữ liệu hàng loạt từ file CSV/Excel với kiểm tra hợp lệ SĐT/Email.
+         - `action === 'convert'`: Cơ chế 1-Click chuyển đổi Lead thành Khách hàng chính thức (F093) và tự động tạo Cơ hội bán hàng (Deal - F096) trong pipeline.
+       - `PATCH /api/crm/leads`: Cập nhật trạng thái vòng đời (NEW $\rightarrow$ CONTACTING $\rightarrow$ QUALIFIED $\rightarrow$ UNQUALIFIED $\rightarrow$ CONVERTED) và ghi chú.
+       - `DELETE /api/crm/leads`: Xóa khách hàng tiềm năng.
+    3. **Phát triển Giao diện UI Lead Chuyên Nghiệp (`LeadsTab.tsx`):**
+       - 6 thẻ KPI tổng quan: Tổng Lead, Từ Inbox (Chat/MXH), Từ Web Form (F102), Từ Import file, Từ Giới thiệu (Referral), và Tỷ lệ chuyển đổi (%).
+       - Thanh lọc nhanh theo từng nguồn: Tất cả nguồn, Hộp thư (Inbox), Web Form (Landing Page), Nhập File (Import), Giới thiệu (Referral) kèm số lượng đếm trực tiếp.
+       - Bảng danh sách Lead trực quan: Cột thông tin liên hệ, huy hiệu nguồn có màu và icon riêng, nhu cầu & giá trị hợp đồng dự kiến (VNĐ), điểm tiềm năng Lead Score (HOT/WARM/COLD), dropdown đổi trạng thái nhanh, người phụ trách.
+       - Nút **"Chuyển đổi" (1-Click)** kèm Modal xác nhận tạo Deal.
+       - Modal **"Nhập File Excel/CSV"** có sẵn template mẫu để tải về, khu vực kéo thả file và xem trước dữ liệu (Preview) trước khi xác nhận nhập.
+       - Tích hợp liền mạch vào hệ thống Tabs CRM tại [Customers.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Customers.tsx).
+  - **Tệp thay đổi:**
+    - [Sidebar.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/layout/Sidebar.tsx)
+    - [App.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/App.tsx)
+    - [Customers.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Customers.tsx)
+    - [LeadsTab.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/crm/LeadsTab.tsx)
+    - [leads/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/crm/leads/route.ts)
+    - [leads.test.ts](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/crm/leads.test.ts)
+    - `package.json`, `electron-app/package.json`, `electron-app/frontend/package.json`
+  - **Kiểm thử tự động:**
+    - `npx vitest run __tests__/api/crm/leads.test.ts`: **11/11 tests passed**.
+    - `npx vitest run __tests__/api/crm/`: **49/49 tests passed (100%)**.
+
+
 ## 🚀 [2026-11-03] (v1.3.83) — M6 Social Listening: Hoàn Thiện Màn Hình & Tính Năng F110 (Trending / Viral Content) và F112 (Keyword / Viral Alert)
 
 ### Phân hệ M6. Lắng Nghe & Giám Sát Mạng Xã Hội (Social Listening - F110 | F112) [Electron App & Backend API]:

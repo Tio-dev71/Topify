@@ -43,6 +43,7 @@ import {
   GitMerge,
   Code2,
   PhoneCall,
+  UserCheck,
 } from 'lucide-react';
 
 interface NavSection {
@@ -99,6 +100,7 @@ const navSections: NavSection[] = [
     title: 'GIAO TIẾP & BÁN HÀNG (CRM)',
     items: [
       { key: 'Hộp thư hợp nhất', href: '/inbox', icon: MessageSquare },
+      { key: 'Khách hàng tiềm năng (F092)', href: '/crm/leads', icon: UserCheck, badge: 'F092' },
       { key: 'Hồ sơ khách hàng (F093)', href: '/customers', icon: Users },
       { key: 'Cơ hội bán hàng (F096)', href: '/deals', icon: Target },
       { key: 'Kênh bán hàng (F094/F095)', href: '/pipelines', icon: Kanban },
@@ -348,7 +350,7 @@ export function Sidebar() {
             <div className="mt-2.5 pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[11px] text-gray-600 px-1">
               <span>Topify Desktop</span>
               <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-[#5B3DF5] font-semibold border border-[#5B3DF5]/20">
-                v1.3.83
+                v1.3.84
               </span>
             </div>
           )}

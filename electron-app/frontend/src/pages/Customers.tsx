@@ -30,9 +30,11 @@ import {
   Tag,
   FileText,
   ShoppingBag,
+  UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
+import LeadsTab from '../components/crm/LeadsTab';
 import ActivitiesTab from '../components/crm/ActivitiesTab';
 import CustomFieldsTab from '../components/crm/CustomFieldsTab';
 import LeadScoringTab from '../components/crm/LeadScoringTab';
@@ -83,24 +85,25 @@ export interface DuplicateGroupItem {
 export default function Customers({
   defaultTab = 'f093',
 }: {
-  defaultTab?: 'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102';
+  defaultTab?: 'f092' | 'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102';
 }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'f092' | 'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102'>(defaultTab);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab') as any;
-    if (tabParam && ['f093', 'f098', 'f099', 'f100', 'f101', 'f102'].includes(tabParam)) {
+    if (tabParam && ['f092', 'f093', 'f098', 'f099', 'f100', 'f101', 'f102'].includes(tabParam)) {
       setActiveTab(tabParam);
     } else if (defaultTab) {
       setActiveTab(defaultTab);
     }
   }, [defaultTab, searchParams]);
 
-  const handleTabChange = (tab: 'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102') => {
+  const handleTabChange = (tab: 'f092' | 'f093' | 'f098' | 'f099' | 'f100' | 'f101' | 'f102') => {
     setActiveTab(tab);
     const routeMap: Record<string, string> = {
+      f092: '/crm/leads',
       f093: '/crm/customers',
       f098: '/crm/activities',
       f099: '/crm/custom-fields',
@@ -460,11 +463,19 @@ export default function Customers({
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* ────────────────────────────────────────────────────────────────────────
-          CRM MODULE NAVIGATION TABS (F093, F098, F099, F100, F101, F102)
+          CRM MODULE NAVIGATION TABS (F092, F093, F098, F099, F100, F101, F102)
           ──────────────────────────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-800 p-2.5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-xs">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
           {[
+            {
+              id: 'f092',
+              label: 'Khách hàng tiềm năng',
+              code: 'F092',
+              icon: UserCheck,
+              badge: 'Leads',
+              badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            },
             {
               id: 'f093',
               label: 'Hồ sơ khách hàng',
@@ -554,6 +565,10 @@ export default function Customers({
       {/* ────────────────────────────────────────────────────────────────────────
           TAB CONTENT
           ──────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'f092' && (
+        <LeadsTab onCustomerConverted={fetchCustomers} />
+      )}
+
       {activeTab === 'f098' && (
         <ActivitiesTab customers={customers} />
       )}

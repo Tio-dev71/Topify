@@ -56,6 +56,8 @@ function App() {
           <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/inbox" element={<Inbox />} />
+          <Route path="/crm/leads" element={<Customers defaultTab="f092" />} />
+          <Route path="/leads" element={<Customers defaultTab="f092" />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/crm/customers" element={<Customers defaultTab="f093" />} />
           <Route path="/crm/activities" element={<Customers defaultTab="f098" />} />
