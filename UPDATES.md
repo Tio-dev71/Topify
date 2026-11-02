@@ -11,6 +11,19 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.66) — Studio Nội Dung & Spin: Khắc Phục Lỗi Hiển Thị Trùng 2 Nút Chỉnh Sửa Trên Thẻ Content Brief (F077)
+
+### Phân hệ M2. Studio Nội dung & Spin — Quản Lý Content Brief (F077) [Electron App]:
+- **[Tối ưu giao diện & Trải nghiệm thẻ Content Brief] Loại bỏ nút bút chì thừa ở phần header thẻ brief, giữ lại nút "Chỉnh sửa" chuẩn ở thanh hành động bên dưới:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Studio Nội dung & Spin $\rightarrow$ Content Brief (F077).
+    - Thẻ brief hiển thị đồng thời 2 nút chỉnh sửa trùng chức năng: một biểu tượng bút chì (`<Edit2>`) ở cạnh nhãn "Hạn" trên phần header và một nút `"Chỉnh sửa"` kèm text ở hàng công cụ dưới chân thẻ.
+  - **Giải pháp xử lý:**
+    - Gỡ bỏ nút biểu tượng bút chì thừa ở header thẻ brief ([`ContentBriefsTab.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ContentBriefsTab.tsx)).
+    - Giữ nguyên hiển thị nhãn Hạn (`deadline`) gọn gàng và duy nhất một nút bấm `"Chỉnh sửa"` rõ ràng ở thanh hành động phía dưới thẻ brief.
+
+---
+
 ## 🚀 [2026-11-02] (v1.3.65) — Quản Lý Bài Viết: Khắc Phục Lỗi Không Tự Động Đăng "Bình Luận Đầu Tiên" Trên YouTube (Shorts & Standard Video)
 
 ### Phân hệ M2. Quản lý Bài viết — Xuất bản Đa Kênh & YouTube Data API [Electron App, Web Dashboard & Backend API]:

@@ -367,22 +367,12 @@ export function ContentBriefsTab() {
                       {b.status || 'DRAFT'} ({statusCfg.label})
                     </span>
 
-                    <div className="flex items-center gap-1.5">
-                      {b.deadline && (
-                        <span className="text-[11px] text-rose-600 font-semibold flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
-                          <Clock className="w-3 h-3" />
-                          Hạn: {new Date(b.deadline).toLocaleDateString('vi-VN')}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditModal(b)}
-                        className="p-1 rounded-lg text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition cursor-pointer"
-                        title="Chỉnh sửa brief"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {b.deadline && (
+                      <span className="text-[11px] text-rose-600 font-semibold flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                        <Clock className="w-3 h-3" />
+                        Hạn: {new Date(b.deadline).toLocaleDateString('vi-VN')}
+                      </span>
+                    )}
                   </div>
 
                   {/* Title */}
