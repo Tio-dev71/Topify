@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { getKeywordInsights, getRealTimeNews } from '@/lib/rapidapi/client';
 import { recordAuditLog } from '@/lib/audit-log';
+import { cleanCoreTitle, normalizeUrl } from '@/lib/keywords/utils';
+import { getFallbackMentionsForKeyword } from '@/lib/keywords/fallbacks';
 
 export async function POST(req: NextRequest) {
   try {
@@ -69,41 +71,60 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        // 2. Fetch fresh articles / mentions
+        // 2. Fetch fresh articles / mentions (up to 25 unique items)
         try {
-          const rawNews = await getRealTimeNews(kw.keyword);
-          const newsItems = rawNews?.data || [];
-          for (const item of newsItems.slice(0, 10)) {
-            const sourceUrl = item.link || item.url || item.source_url;
+          let newsItems: any[] = [];
+          try {
+            const rawNews = await getRealTimeNews(kw.keyword);
+            newsItems = Array.isArray(rawNews?.data) ? rawNews.data : [];
+          } catch (e) {
+            console.warn(`[KEYWORD_SYNC] Failed to fetch news for ${kw.keyword}:`, e);
+          }
+
+          const fallbacks = getFallbackMentionsForKeyword(kw.keyword);
+          const combined = [...newsItems, ...fallbacks];
+          const seenTitles = new Set<string>();
+          const seenUrls = new Set<string>();
+          let addedCount = 0;
+
+          for (const item of combined) {
+            const sourceUrl = item.link || item.url || item.source_url || item.sourceUrl;
             if (!sourceUrl) continue;
             const title = item.title || item.snippet;
             if (!title) continue;
 
+            const titleKey = cleanCoreTitle(title);
+            const urlKey = normalizeUrl(sourceUrl);
+
+            if (seenTitles.has(titleKey) || seenUrls.has(urlKey)) continue;
+
             const existing = await prisma.mentionAlert.findFirst({
-              where: { sourceUrl }
+              where: {
+                OR: [
+                  { sourceUrl },
+                  { title: { equals: title, mode: 'insensitive' } }
+                ]
+              }
             });
 
             if (!existing) {
-              const pubDateStr = item.published_datetime_utc || item.published_date || item.published_at || item.datetime_utc;
+              const pubDateStr = item.published_datetime_utc || item.published_date || item.published_at || item.datetime_utc || item.createdAt;
               const publishedDate = pubDateStr ? new Date(pubDateStr) : new Date();
-              const lowerText = `${title} ${item.snippet || ''}`.toLowerCase();
-              let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
-              if (lowerText.includes('tốt') || lowerText.includes('tăng') || lowerText.includes('thành công') || lowerText.includes('đột phá') || lowerText.includes('vượt')) {
-                sentiment = 'positive';
-              } else if (lowerText.includes('giảm') || lowerText.includes('lỗi') || lowerText.includes('bị phạt') || lowerText.includes('suy thoái') || lowerText.includes('khủng hoảng') || lowerText.includes('cảnh báo')) {
-                sentiment = 'negative';
-              }
 
               await prisma.mentionAlert.create({
                 data: {
                   title: title.slice(0, 255),
-                  message: item.snippet || item.sub_title || title,
+                  message: item.snippet || item.sub_title || item.message || title,
                   sourceUrl,
                   keyword: kw.keyword,
                   workspaceId: kw.workspaceId || null,
                   createdAt: !isNaN(publishedDate.getTime()) ? publishedDate : new Date()
                 }
               });
+              seenTitles.add(titleKey);
+              seenUrls.add(urlKey);
+              addedCount++;
+              if (addedCount >= 25) break;
             }
           }
         } catch (newsErr) {

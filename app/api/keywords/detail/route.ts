@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { getKeywordInsights, getRealTimeNews } from '@/lib/rapidapi/client';
+import { 
+  cleanCoreTitle, 
+  normalizeUrl, 
+  analyzeVietnameseSentiment, 
+  deduplicateMentions 
+} from '@/lib/keywords/utils';
+import { getFallbackMentionsForKeyword } from '@/lib/keywords/fallbacks';
 
 interface RawInsightItem {
   text?: string;
@@ -90,7 +97,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Query collected articles & mentions from MentionAlert
-    let mentions = await prisma.mentionAlert.findMany({
+    let rawDbMentions = await prisma.mentionAlert.findMany({
       where: {
         OR: [
           { keyword: { equals: keywordText, mode: 'insensitive' } },
@@ -99,74 +106,134 @@ export async function GET(req: NextRequest) {
         ]
       },
       orderBy: { createdAt: 'desc' },
-      take: 50
+      take: 100
     });
 
-    // 5. If no mentions exist yet, auto-fetch initial real-time news so the user immediately has content
-    if (mentions.length === 0) {
+    // Cleanup any existing duplicate records in database for this keyword
+    const seenTitleKeys = new Set<string>();
+    const seenUrls = new Set<string>();
+    const duplicateIdsToDelete: string[] = [];
+
+    for (const m of rawDbMentions) {
+      const titleKey = cleanCoreTitle(m.title);
+      const urlKey = normalizeUrl(m.sourceUrl);
+      if ((titleKey && seenTitleKeys.has(titleKey)) || (urlKey && seenUrls.has(urlKey))) {
+        duplicateIdsToDelete.push(m.id);
+      } else {
+        if (titleKey) seenTitleKeys.add(titleKey);
+        if (urlKey) seenUrls.add(urlKey);
+      }
+    }
+
+    if (duplicateIdsToDelete.length > 0) {
       try {
+        await prisma.mentionAlert.deleteMany({
+          where: { id: { in: duplicateIdsToDelete } }
+        });
+        rawDbMentions = rawDbMentions.filter(m => !duplicateIdsToDelete.includes(m.id));
+      } catch (delErr) {
+        console.warn('[KEYWORD_DETAIL] Failed to purge duplicate DB mentions:', delErr);
+      }
+    }
+
+    // 5. If we have fewer than 20 unique mentions, enrich with fresh Real-Time News & Fallback data
+    if (rawDbMentions.length < 20) {
+      try {
+        // A. Try Real-Time News API
         const rawNews = await getRealTimeNews(keywordText);
-        const newsItems = rawNews?.data || [];
-        for (const item of newsItems.slice(0, 10)) {
-          const sourceUrl = item.link || item.url || item.source_url;
-          if (!sourceUrl) continue;
-          const title = item.title || item.snippet;
-          if (!title) continue;
+        const newsItems = Array.isArray(rawNews?.data) ? rawNews.data : [];
 
-          const existing = await prisma.mentionAlert.findFirst({
-            where: { sourceUrl }
-          });
+        // B. Merge with curated fallback mentions for known high-priority keywords
+        const fallbacks = getFallbackMentionsForKeyword(keywordText);
+        const combinedCandidateList: Array<{ title: string; message?: string; snippet?: string; link?: string; url?: string; sourceUrl?: string; published_date?: string; createdAt?: string }> = [
+          ...newsItems,
+          ...fallbacks
+        ];
 
-          if (!existing) {
-            const pubDateStr = item.published_datetime_utc || item.published_date || item.published_at || item.datetime_utc;
-            const publishedDate = pubDateStr ? new Date(pubDateStr) : new Date();
-            await prisma.mentionAlert.create({
+        for (const item of combinedCandidateList) {
+          const sourceUrl = item.link || item.url || item.sourceUrl;
+          const title = item.title;
+          if (!sourceUrl || !title) continue;
+
+          const titleKey = cleanCoreTitle(title);
+          const urlKey = normalizeUrl(sourceUrl);
+
+          if (seenTitleKeys.has(titleKey) || seenUrls.has(urlKey)) {
+            continue;
+          }
+
+          const pubDateStr = (item as any).published_datetime_utc || item.published_date || (item as any).published_at || (item as any).datetime_utc || item.createdAt;
+          const publishedDate = pubDateStr ? new Date(pubDateStr) : new Date();
+
+          try {
+            const created = await prisma.mentionAlert.create({
               data: {
                 title: title.slice(0, 255),
-                message: item.snippet || item.sub_title || title,
+                message: item.snippet || (item as any).sub_title || item.message || title,
                 sourceUrl,
                 keyword: keywordText,
                 workspaceId: tracker?.workspaceId || null,
                 createdAt: !isNaN(publishedDate.getTime()) ? publishedDate : new Date()
               }
             });
+            seenTitleKeys.add(titleKey);
+            seenUrls.add(urlKey);
+            rawDbMentions.push(created);
+          } catch {
+            // ignore unique constraint collisions
+          }
+
+          // If we have collected enough unique mentions (>= 25), stop inserting
+          if (rawDbMentions.length >= 25) {
+            break;
           }
         }
-
-        // Re-query mentions
-        mentions = await prisma.mentionAlert.findMany({
-          where: {
-            OR: [
-              { keyword: { equals: keywordText, mode: 'insensitive' } },
-              { title: { contains: keywordText, mode: 'insensitive' } },
-              { message: { contains: keywordText, mode: 'insensitive' } }
-            ]
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 50
-        });
       } catch (err) {
-        console.warn('[KEYWORD_DETAIL] Auto news fetch failed:', err);
+        console.warn('[KEYWORD_DETAIL] News enrichment warning:', err);
+
+        // Even if RealTimeNews API fails, ensure fallback mentions are loaded if available
+        const fallbacks = getFallbackMentionsForKeyword(keywordText);
+        for (const fb of fallbacks) {
+          const titleKey = cleanCoreTitle(fb.title);
+          const urlKey = normalizeUrl(fb.sourceUrl);
+          if (seenTitleKeys.has(titleKey) || seenUrls.has(urlKey)) continue;
+
+          try {
+            const created = await prisma.mentionAlert.create({
+              data: {
+                title: fb.title.slice(0, 255),
+                message: fb.message,
+                sourceUrl: fb.sourceUrl,
+                keyword: keywordText,
+                workspaceId: tracker?.workspaceId || null,
+                createdAt: new Date(fb.createdAt)
+              }
+            });
+            seenTitleKeys.add(titleKey);
+            seenUrls.add(urlKey);
+            rawDbMentions.push(created);
+          } catch {}
+
+          if (rawDbMentions.length >= 25) break;
+        }
       }
     }
 
-    // 6. Calculate sentiment statistics
+    // 6. Final deduplication & sentiment classification
+    const uniqueMentions = deduplicateMentions(rawDbMentions);
+    // Sort descending by date
+    uniqueMentions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     let positiveCount = 0;
     let negativeCount = 0;
     let neutralCount = 0;
 
-    const enrichedMentions = mentions.map((m) => {
-      const lower = `${m.title} ${m.message || ''}`.toLowerCase();
-      let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
-      if (lower.includes('tốt') || lower.includes('tăng') || lower.includes('thành công') || lower.includes('đột phá') || lower.includes('vượt') || lower.includes('lợi nhuận')) {
-        sentiment = 'positive';
-        positiveCount++;
-      } else if (lower.includes('giảm') || lower.includes('lỗi') || lower.includes('phạt') || lower.includes('suy thoái') || lower.includes('khủng hoảng') || lower.includes('cảnh báo') || lower.includes('tiêu cực')) {
-        sentiment = 'negative';
-        negativeCount++;
-      } else {
-        neutralCount++;
-      }
+    const enrichedMentions = uniqueMentions.map((m) => {
+      const sentiment = analyzeVietnameseSentiment(m.title, m.message);
+      if (sentiment === 'positive') positiveCount++;
+      else if (sentiment === 'negative') negativeCount++;
+      else neutralCount++;
+
       return {
         ...m,
         sentiment

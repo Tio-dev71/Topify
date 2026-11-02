@@ -40,15 +40,20 @@ export default function Keywords() {
   const [selectedKeyword, setSelectedKeyword] = useState<KeywordItem | null>(null);
   const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
 
   const handleOpenDetail = async (item: KeywordItem) => {
     setSelectedKeyword(item);
     setDetailData(null);
     setDetailLoading(true);
+    setSentimentFilter('all');
     try {
       const res = await api.get(`/keywords/detail?id=${item.id}&keyword=${encodeURIComponent(item.keyword)}`);
       if (res.data) {
         setDetailData(res.data);
+        if (typeof res.data.stats?.totalMentions === 'number') {
+          setKeywords(prev => prev.map(k => k.id === item.id ? { ...k, mentionCount: res.data.stats.totalMentions } : k));
+        }
       }
     } catch {
       // Fallback if network issue
@@ -445,39 +450,101 @@ export default function Keywords() {
                 {/* Tin tức thời gian thực */}
                 {detailData?.mentions && detailData.mentions.length > 0 && (
                   <div className="space-y-2">
-                    <span className="font-bold text-gray-700 flex items-center gap-1.5">
-                      <Newspaper className="w-3.5 h-3.5 text-indigo-600" />
-                      Tin tức & Bài viết gần nhất liên quan
-                    </span>
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                      {detailData.mentions.slice(0, 4).map((m: any) => (
-                        <a
-                          key={m.id}
-                          href={m.sourceUrl || '#'}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-2.5 rounded-xl border border-gray-100 bg-white hover:bg-gray-50 transition block space-y-1 group"
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                      <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                        <Newspaper className="w-3.5 h-3.5 text-indigo-600" />
+                        Tin tức & Bài viết gần nhất liên quan ({detailData.mentions.length} bài)
+                      </span>
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setSentimentFilter('all')}
+                          className={`px-2 py-0.5 rounded-md font-medium transition ${
+                            sentimentFilter === 'all'
+                              ? 'bg-gray-900 text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <h4 className="font-bold text-gray-800 group-hover:text-indigo-600 line-clamp-1 text-[11px]">
-                              {m.title}
-                            </h4>
-                            <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-indigo-600 flex-shrink-0" />
-                          </div>
-                          <p className="text-gray-500 line-clamp-1 text-[10px]">
-                            {m.message}
-                          </p>
-                          <div className="flex items-center gap-2 text-[9px] text-gray-400">
-                            <span>{new Date(m.createdAt).toLocaleDateString('vi-VN')}</span>
-                            <span className={`px-1.5 py-0.5 rounded ${
-                              m.sentiment === 'positive' ? 'bg-emerald-50 text-emerald-700' :
-                              m.sentiment === 'negative' ? 'bg-rose-50 text-rose-700' : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {m.sentiment === 'positive' ? 'Tích cực' : m.sentiment === 'negative' ? 'Tiêu cực' : 'Trung tính'}
-                            </span>
-                          </div>
-                        </a>
-                      ))}
+                          Tất cả ({detailData.mentions.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSentimentFilter('positive')}
+                          className={`px-2 py-0.5 rounded-md font-medium transition ${
+                            sentimentFilter === 'positive'
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          }`}
+                        >
+                          Tích cực ({detailData.stats?.positiveCount || 0})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSentimentFilter('neutral')}
+                          className={`px-2 py-0.5 rounded-md font-medium transition ${
+                            sentimentFilter === 'neutral'
+                              ? 'bg-gray-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          Trung tính ({detailData.stats?.neutralCount || 0})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSentimentFilter('negative')}
+                          className={`px-2 py-0.5 rounded-md font-medium transition ${
+                            sentimentFilter === 'negative'
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                          }`}
+                        >
+                          Tiêu cực ({detailData.stats?.negativeCount || 0})
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                      {detailData.mentions
+                        .filter((m: any) => sentimentFilter === 'all' || m.sentiment === sentimentFilter)
+                        .map((m: any) => {
+                          let domain = '';
+                          try {
+                            if (m.sourceUrl) {
+                              domain = new URL(m.sourceUrl).hostname.replace(/^www\./, '');
+                            }
+                          } catch {}
+
+                          return (
+                            <a
+                              key={m.id}
+                              href={m.sourceUrl || '#'}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-2.5 rounded-xl border border-gray-100 bg-white hover:bg-gray-50 transition block space-y-1 group"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <h4 className="font-bold text-gray-800 group-hover:text-indigo-600 line-clamp-1 text-[11px]">
+                                  {m.title}
+                                </h4>
+                                <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-indigo-600 flex-shrink-0" />
+                              </div>
+                              <p className="text-gray-500 line-clamp-1 text-[10px]">
+                                {m.message}
+                              </p>
+                              <div className="flex items-center gap-2 text-[9px] text-gray-400">
+                                {domain && <span className="font-medium text-gray-500">{domain}</span>}
+                                {domain && <span>•</span>}
+                                <span>{new Date(m.createdAt).toLocaleDateString('vi-VN')}</span>
+                                <span className={`px-1.5 py-0.5 rounded font-medium ${
+                                  m.sentiment === 'positive' ? 'bg-emerald-50 text-emerald-700' :
+                                  m.sentiment === 'negative' ? 'bg-rose-50 text-rose-700' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {m.sentiment === 'positive' ? 'Tích cực' : m.sentiment === 'negative' ? 'Tiêu cực' : 'Trung tính'}
+                                </span>
+                              </div>
+                            </a>
+                          );
+                        })}
                     </div>
                   </div>
                 )}
