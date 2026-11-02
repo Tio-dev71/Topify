@@ -11,6 +11,90 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.64) — Thư Viện Media (F114): Hỗ Trợ Toàn Diện Định Dạng Ảnh Apple HEIC/HEIF — Tự Động Chuyển Đổi JPEG & Xem Trước Trực Tiếp
+
+### Phân hệ M2. Thư viện Media & Tệp tin (F114) [Electron App, Web Dashboard & Backend API]:
+- **[Hỗ trợ định dạng Apple HEIC/HEIF] Khắc phục triệt để lỗi ảnh HEIC hiển thị biểu tượng ảnh vỡ và không mở/xem trước được:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester (F114):**
+    - Mở app Topify $\rightarrow$ Thư viện Media (Tệp tin).
+    - Tải file ảnh `IMG_0007.HEIC` (2.5 MB) lên thành công.
+    - *Mong đợi:* File tải lên thành công thì mở/xem được nội dung. Nếu định dạng không được hỗ trợ thì có thông báo rõ ràng hoặc tự động tối ưu hóa sang định dạng web tiêu chuẩn.
+    - *Thực tế trước khi sửa:* File `IMG_0007.HEIC` hiện trong thư viện nhưng thẻ file chỉ hiển thị biểu tượng ảnh mặc định kèm tên file, không xem trước được thumbnail. Khi bấm biểu tượng con mắt để xem chi tiết, ảnh bị lỗi không mở được.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    - Bộ giải mã chuẩn của Chromium / Electron không tích hợp native codec cho định dạng HEIC (do vấn đề bản quyền sáng chế HEVC/Apple).
+    - Phía máy chủ trước đây lưu trữ tệp `.HEIC` nguyên bản, dẫn đến việc thẻ `<img>` trong Electron/trình duyệt không thể render cả thumbnail lẫn modal xem trước.
+  - **Giải pháp xử lý toàn diện:**
+    1. **Tự động chuyển đổi định dạng trên Client (`MediaLibrary.tsx`):**
+       - Tích hợp thư viện `heic2any` trên frontend Electron.
+       - Khi người dùng chọn tệp `.heic` / `.heif`, app tự động chuyển đổi sang định dạng `image/jpeg` chất lượng cao (quality 0.92) với tên tệp chuẩn hóa `IMG_0007.jpg`.
+       - Hiển thị toast thông báo trạng thái: *"Đang tự động chuyển đổi ảnh HEIC sang JPEG chất lượng cao..."* và cập nhật ngay lập tức.
+    2. **Cơ chế chuyển đổi dự phòng & Bảo vệ trên Máy chủ (`app/api/media/route.ts` & `lib/media/heic.ts`):**
+       - Bổ sung module `lib/media/heic.ts` tự động phát hiện và chuyển đổi HEIC sang JPEG bằng `heif-convert` (Linux) hoặc `sips` (macOS).
+       - Đảm bảo bất kỳ tệp HEIC nào được gửi lên server qua API đều được chuẩn hóa thành JPEG hợp lệ trước khi lưu trữ vào storage và cơ sở dữ liệu.
+    3. **Bộ chuyển đổi theo yêu cầu (On-the-fly) tại Uploads Route (`app/api/uploads/[...path]/route.ts`):**
+       - Khi có yêu cầu truy cập các tệp `.heic` đã tồn tại trước đó trong hệ thống, máy chủ tự động chuyển đổi sang JPEG, lưu bản cache `.jpg` và phản hồi với `Content-Type: image/jpeg`.
+       - Giúp các tệp HEIC đã lưu trước đây vẫn hiển thị hình ảnh bình thường trên mọi trình duyệt.
+    4. **Xử lý hiển thị thông minh trong Modal & Thẻ Media:**
+       - Tự động giải mã thumbnail cho các tệp HEIC cũ trong thư viện.
+       - Trong modal xem trước, nếu gặp tệp HEIC chưa chuyển đổi, hệ thống hiển thị thông báo hướng dẫn rõ ràng kèm nút *"Tải về xem trên máy"*.
+
+---
+
+## 🚀 [2026-11-02] (v1.3.63) — Khắc Phục Trùng Lặp Nút "Thêm Kế Hoạch Mới" (F074) & Tối Ưu Hóa Trải Nghiệm Upload Video & Khắc Phục Lỗi Foreign Key DB
+
+### Phân hệ M2. Chủ đề nội dung & Kế hoạch (F073 - F074) [Electron App]:
+- **[Sửa Lỗi Trùng Lặp Giao Diện] Khắc phục hiển thị đồng thời 2 nút "Thêm Kế Hoạch Mới" trên màn hình Kế hoạch tháng/quý (Plans):**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester (F074 / BUG-075):**
+    - Mở app Topify $\rightarrow$ Click Chủ đề nội dung (Pillars).
+    - Chọn tab "Kế hoạch tháng/quý (Plans)".
+    - Màn hình xuất hiện cùng lúc 2 nút "+ Thêm Kế Hoạch Mới": 1 nút ở thanh chuyển đổi tab trên cùng, 1 nút ở tiêu đề khối "Lập Kế Hoạch Nội Dung Tháng & Quý (F074)".
+  - **Giải pháp:**
+    - Cập nhật [`ContentPillarsTab.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ContentPillarsTab.tsx): Nút trên thanh chuyển đổi tab trên cùng chỉ hiển thị `Thêm Trụ Cột Mới` khi đang ở tab `Trụ cột (Pillars)`.
+    - Khi chuyển sang tab `Kế hoạch tháng/quý (Plans)`, thanh trên cùng chỉ giữ bộ chuyển tab; trên toàn màn hình chỉ duy nhất 1 nút `+ Thêm Kế Hoạch Mới` được đặt tại tiêu đề khối chức năng kế hoạch.
+
+### Phân hệ M2. Quản lý Bài viết — Tạo bài đăng & Upload Video (F015 - F016):
+- **Tối ưu hóa route `/api/upload`**:
+  - Bổ sung `OPTIONS` handler trả về HTTP 204 với đầy đủ CORS headers, ngăn chặn lỗi CORS preflight từ Desktop App.
+  - Tự động bảo vệ và đối chiếu User/Workspace ID trước khi ghi nhận `VideoAsset` để ngăn chặn triệt để lỗi vi phạm khóa ngoại Prisma (`VideoAsset_createdById_fkey`).
+  - Hỗ trợ validation file video theo cả MIME type và extension (`.mp4`, `.mov`, `.webm`).
+  - Thêm thông báo hướng dẫn và nút "Thay video khác" nổi bật khi người dùng áp dụng kịch bản AI vào video hiện có.
+
+---
+
+## 🚀 [2026-11-02] (v1.3.62) — Quản Lý Bài Viết: Khắc Phục Triệt Để Lỗi Import Bài Viết Hàng Loạt (F019) — Sửa Lỗi FormData Boundary & Chuẩn Hóa Bộ Lọc Thông Báo Lỗi Database
+
+### Phân hệ M2. Quản lý Bài viết — Import Bài Viết Hàng Loạt (F019) [Electron App, Web Dashboard & Backend API]:
+- **[Sửa Lỗi Boundary FormData & Cơ Chế Bắt Lỗi F019] Khắc phục triệt để thông báo lỗi sai lệch *"Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu"* khi tải tệp Excel/CSV mẫu lên ứng dụng:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester (F019):**
+    - Mở app Topify $\rightarrow$ Quản lý bài viết.
+    - Mở modal "Import Bài Viết Hàng Loạt (Excel & Google Drive)".
+    - Chọn "Tải tệp từ máy tính (.xlsx, .csv)", tải lên file dữ liệu hợp lệ (đúng file mẫu).
+    - *Mong đợi:* File được import thành công, hiển thị danh sách bài viết ở bước xem trước (Bảng xem trước dữ liệu).
+    - *Thực tế trước khi sửa:* Hệ thống báo lỗi popup đỏ: *"Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu. Vui lòng thử lại sau giây lát hoặc liên hệ hỗ trợ."* Không thể phân tích hay xem trước tệp bài viết.
+  - **Nguyên nhân cốt lõi (Root Cause Analysis):**
+    1. **Mất Boundary trong Axios Multipart Header ([ImportPostsModal.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Tại dòng 440, client gọi `api.post('/content-studio/import/parse', formData, { headers: { 'Content-Type': 'multipart/form-data' } })`. Khi truyền tường minh header `multipart/form-data` trong Axios, trình duyệt/Electron bị ghi đè và mất tham số phân đoạn `boundary=----WebKitFormBoundary...`.
+       - Phía máy chủ Next.js (Node.js runtime / Undici) khi thực thi `await req.formData()` không tìm thấy boundary trong Content-Type nên ném ngoại lệ: `TypeError: Failed to parse body as FormData.`
+    2. **Hàm định dạng lỗi `formatFriendlyImportError` phân loại sai nguyên nhân ([import-engine.ts](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts) & [ImportPostsModal.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Danh sách nhận diện lỗi cơ sở dữ liệu trước đây vô tình chứa các từ khóa quá rộng như `typeerror`, `500`, `cmu`, `workspaceid`.
+       - Khi `req.formData()` gặp lỗi `TypeError` về boundary truyền tải, hàm này đã tự động biến đổi thành thông điệp sai bản chất: *"Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu"*, khiến người dùng và đội ngũ kỹ thuật lầm tưởng database bị ngắt kết nối.
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Sửa Header Upload Phía Frontend ([ImportPostsModal.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/content-studio/ImportPostsModal.tsx)):**
+       - Loại bỏ header tĩnh `{ headers: { 'Content-Type': 'multipart/form-data' } }`, để Axios và trình duyệt tự động đính kèm `boundary` phân cách chính xác cho payload `FormData`.
+    2. **Phòng Vệ Đa Tầng Tại Backend API ([app/api/content-studio/import/parse/route.ts](file:///Users/tiodev/Desktop/Topify.nosync/app/api/content-studio/import/parse/route.ts)):**
+       - Bọc `await req.formData()` trong khối `try/catch` an toàn. Nếu `req.formData()` gặp trục trặc định dạng boundary, hệ thống tự động kích hoạt cơ chế Fallback đọc `req.arrayBuffer()` trực tiếp để nhận diện và parse file Excel/CSV mà không làm gián đoạn request.
+       - Hỗ trợ thêm các content-type nhị phân khác (`application/octet-stream`, `spreadsheet`, `csv`).
+    3. **Tách Biệt Lỗi Dữ Liệu & Lỗi Kết Nối CSDL ([lib/content-studio/import-engine.ts](file:///Users/tiodev/Desktop/Topify.nosync/lib/content-studio/import-engine.ts)):**
+       - Chuẩn hóa hàm `formatFriendlyImportError`: chỉ gán thông báo lỗi CSDL khi thực sự phát sinh lỗi Prisma/Database (`prisma`, `findmany`, `invocation`, `relation`, `foreign key`, `econnrefused`).
+       - Tách riêng nhánh lỗi truyền tải tệp (`formdata`, `multipart`, `boundary`) với thông điệp rõ ràng: *"Lỗi truyền tải dữ liệu tệp bảng tính. Vui lòng thử lại hoặc kiểm tra định dạng tệp."*
+    4. **Kiểm Thử & Xác Nhận (Verification):**
+       - **Route Tests ([__tests__/api/content-studio/import-routes.test.ts](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/import-routes.test.ts)):** Bổ sung test case giả lập tình huống mất boundary của `formData` và xác nhận fallback `arrayBuffer` trả về HTTP 200 thành công 100%. Toàn bộ 7/7 route tests passed.
+       - **Engine Tests ([__tests__/api/content-studio/import.test.ts](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/content-studio/import.test.ts)):** Toàn bộ 25/25 import engine tests passed 100%.
+       - **Production Server Verification:** Triển khai bản vá trực tiếp lên VPS `157.66.100.35`, kiểm thử endpoint `POST /api/content-studio/import/parse` với file mẫu thực tế qua HTTPS, kết quả trả về `HTTP/2 200` với danh sách hàng bài viết đầy đủ.
+       - **Đồng bộ phiên bản:** Nâng cấp hệ thống lên **v1.3.62**.
+
+---
+
 ## 🚀 [2026-10-28] (v1.3.61) — Làm Sạch Toàn Diện Dữ Liệu Ảo (Clean Slate / Zero State) Trên Toàn Hệ Thống (CSDL & Frontend/Backend Fallback) Sẵn Sàng Cho Tester Kiểm Thử Thực Tế
 
 ### Tổng Quan Nhiệm Vụ (Task Overview):

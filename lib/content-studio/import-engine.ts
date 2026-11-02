@@ -345,25 +345,24 @@ export function formatFriendlyImportError(rawError: any, fallbackMessage: string
     lower.includes('invocation') ||
     lower.includes('socialaccountstatus') ||
     lower.includes('invalid value for argument') ||
-    lower.includes('workspaceid') ||
-    lower.includes('userid') ||
-    lower.includes('syntax error') ||
     lower.includes('relation') ||
     lower.includes('foreign key') ||
     lower.includes('unique constraint') ||
     lower.includes('econnrefused') ||
-    lower.includes('etimedout') ||
-    lower.includes('assertionerror') ||
-    lower.includes('undici') ||
-    lower.includes('webidl') ||
-    lower.includes('typeerror') ||
-    lower.includes('rangeerror') ||
-    lower.includes('cannot read propert') ||
-    lower.includes('internal server error') ||
-    lower.includes('500') ||
-    lower.includes('cmu') // CUID prefix
+    lower.includes('etimedout')
   ) {
     return 'Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu. Vui lòng thử lại sau giây lát hoặc liên hệ hỗ trợ.';
+  }
+
+  // 1b. Multipart / Form body / Transmission parsing errors
+  if (
+    lower.includes('formdata') ||
+    lower.includes('multipart') ||
+    lower.includes('boundary') ||
+    lower.includes('undici') ||
+    lower.includes('webidl')
+  ) {
+    return 'Lỗi truyền tải dữ liệu tệp bảng tính. Vui lòng thử lại hoặc kiểm tra định dạng tệp.';
   }
 
   // 2. Google Sheets errors

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { getStorage } from '@/lib/storage';
+import { convertHeicToJpeg, isHeicFormat } from '@/lib/media/heic';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest) {
     const ext = (fileName.split('.').pop() || '').toLowerCase();
 
     const videoExts = ['mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'wmv', 'm4v', '3gp', 'ts', 'ogv'];
-    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic', 'heif'];
     const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
 
     // Fallback MIME mapping if not provided or generic
@@ -157,6 +158,8 @@ export async function POST(req: NextRequest) {
         svg: 'image/svg+xml',
         bmp: 'image/bmp',
         ico: 'image/x-icon',
+        heic: 'image/heic',
+        heif: 'image/heif',
         mp3: 'audio/mpeg',
         wav: 'audio/wav',
         ogg: 'audio/ogg',
@@ -174,18 +177,37 @@ export async function POST(req: NextRequest) {
     else if (mimeType.startsWith('video/') || videoExts.includes(ext)) mediaType = 'VIDEO';
     else if (mimeType.startsWith('audio/') || audioExts.includes(ext)) mediaType = 'AUDIO';
     
-    const buffer = Buffer.from(await file.arrayBuffer());
+    let uploadBuffer = Buffer.from(await file.arrayBuffer());
+    let finalFileName = fileName;
+    let finalMimeType = mimeType;
+    let finalSize = size;
+
+    // Convert HEIC/HEIF images to standard JPEG for universal browser & social media compatibility
+    if (isHeicFormat(fileName, mimeType)) {
+      try {
+        const converted = await convertHeicToJpeg(uploadBuffer, fileName);
+        if (converted) {
+          uploadBuffer = converted.buffer;
+          finalFileName = converted.fileName;
+          finalMimeType = converted.mimeType;
+          finalSize = converted.size;
+          mediaType = 'IMAGE';
+        }
+      } catch (convErr) {
+        console.warn('[Media API] HEIC conversion warning:', convErr);
+      }
+    }
     
     const storage = getStorage();
     let storageUrl: string;
     try {
-      storageUrl = await storage.upload(buffer, fileName, mimeType);
+      storageUrl = await storage.upload(uploadBuffer, finalFileName, finalMimeType);
     } catch (storageErr: any) {
       console.warn('Primary storage upload failed, attempting local fallback:', storageErr?.message || storageErr);
       const { LocalStorageAdapter } = await import('@/lib/storage') as any;
       if (LocalStorageAdapter) {
         const local = new LocalStorageAdapter();
-        storageUrl = await local.upload(buffer, fileName, mimeType);
+        storageUrl = await local.upload(uploadBuffer, finalFileName, finalMimeType);
       } else {
         throw storageErr;
       }
@@ -203,10 +225,10 @@ export async function POST(req: NextRequest) {
 
     const asset = await prisma.mediaAsset.create({
       data: {
-        fileName,
+        fileName: finalFileName,
         storageUrl,
-        mimeType: mimeType || 'application/octet-stream',
-        size,
+        mimeType: finalMimeType || 'application/octet-stream',
+        size: finalSize,
         mediaType,
         tags,
         alt,

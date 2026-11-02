@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import heic2any from 'heic2any';
 import { 
   Image as ImageIcon, 
   Video, 
@@ -38,7 +39,16 @@ export default function MediaLibrary() {
   const [viewingAsset, setViewingAsset] = useState<MediaAssetItem | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [retryUrls, setRetryUrls] = useState<Record<string, string>>({});
+  const [heicThumbnails, setHeicThumbnails] = useState<Record<string, string>>({});
+  const [modalImgError, setModalImgError] = useState(false);
+  const [isDecodingHeicModal, setIsDecodingHeicModal] = useState(false);
+  const [heicModalUrl, setHeicModalUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isHeicAsset = (name?: string, mime?: string) => {
+    const ext = (name?.split('.').pop() || '').toLowerCase();
+    return ext === 'heic' || ext === 'heif' || (mime ? mime.toLowerCase().includes('heic') || mime.toLowerCase().includes('heif') : false);
+  };
 
   const fetchAssets = async () => {
     setLoading(true);
@@ -65,19 +75,95 @@ export default function MediaLibrary() {
     fetchAssets();
   }, [search, filterType]);
 
+  // Decode thumbnails for existing HEIC images in the library
+  useEffect(() => {
+    const heicItems = assets.filter(
+      (a) => isHeicAsset(a.fileName, a.mimeType) && !heicThumbnails[a.id]
+    );
+    if (heicItems.length === 0) return;
+
+    heicItems.forEach(async (asset) => {
+      try {
+        const fullUrl = getMediaUrl(asset.storageUrl);
+        const res = await fetch(fullUrl);
+        const blob = await res.blob();
+        const converted = await heic2any({ blob, toType: 'image/jpeg', quality: 0.8 });
+        const single = Array.isArray(converted) ? converted[0] : converted;
+        const url = URL.createObjectURL(single);
+        setHeicThumbnails((prev) => ({ ...prev, [asset.id]: url }));
+      } catch (e) {
+        console.warn('Could not decode HEIC thumbnail:', asset.fileName, e);
+      }
+    });
+  }, [assets]);
+
+  // Handle modal view for HEIC assets
+  useEffect(() => {
+    setModalImgError(false);
+    setHeicModalUrl(null);
+    setIsDecodingHeicModal(false);
+
+    if (!viewingAsset) return;
+
+    if (isHeicAsset(viewingAsset.fileName, viewingAsset.mimeType)) {
+      if (heicThumbnails[viewingAsset.id]) {
+        setHeicModalUrl(heicThumbnails[viewingAsset.id]);
+        return;
+      }
+      setIsDecodingHeicModal(true);
+      const fullUrl = getMediaUrl(viewingAsset.storageUrl);
+      fetch(fullUrl)
+        .then((res) => res.blob())
+        .then((blob) => heic2any({ blob, toType: 'image/jpeg', quality: 0.92 }))
+        .then((converted) => {
+          const single = Array.isArray(converted) ? converted[0] : converted;
+          setHeicModalUrl(URL.createObjectURL(single));
+          setIsDecodingHeicModal(false);
+        })
+        .catch((err) => {
+          console.warn('Could not decode HEIC for modal view:', err);
+          setIsDecodingHeicModal(false);
+        });
+    }
+  }, [viewingAsset]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
+    let fileToUpload = file;
+    const isHeic = isHeicAsset(file.name, file.type);
 
     setIsUploading(true);
+    let conversionToastId: string | number | undefined;
+
+    if (isHeic) {
+      conversionToastId = toast.loading('Đang tự động chuyển đổi ảnh HEIC sang JPEG chất lượng cao...');
+      try {
+        const convertedBlob = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.92,
+        });
+        const singleBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        fileToUpload = new File([singleBlob], newName, { type: 'image/jpeg' });
+        if (conversionToastId) toast.dismiss(conversionToastId);
+        toast.info(`Đã tối ưu chuyển đổi ảnh: ${newName}`);
+      } catch (conversionErr) {
+        console.warn('Lỗi chuyển đổi HEIC trên client, gửi tệp gốc lên server xử lý:', conversionErr);
+        if (conversionToastId) toast.dismiss(conversionToastId);
+      }
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileToUpload);
+
     try {
       const res = await api.post('/media', formData);
 
       if (res.data) {
-        toast.success(`Đã tải lên "${file.name}" thành công!`);
+        toast.success(`Đã tải lên "${fileToUpload.name}" thành công!`);
         setAssets(prev => [res.data, ...prev.filter(a => a.id !== res.data.id)]);
         fetchAssets();
       }
@@ -133,7 +219,7 @@ export default function MediaLibrary() {
             ref={fileInputRef}
             onChange={handleFileUpload}
             className="hidden"
-            accept="image/*,video/*,audio/*,.mp4,.mov,.webm,.mkv,.avi,.flv,.wmv,.m4v,.3gp,.png,.jpg,.jpeg,.gif,.webp,.svg,.mp3,.wav,.ogg,.m4a"
+            accept="image/*,video/*,audio/*,.heic,.heif,.HEIC,.HEIF,.mp4,.mov,.webm,.mkv,.avi,.flv,.wmv,.m4v,.3gp,.png,.jpg,.jpeg,.gif,.webp,.svg,.mp3,.wav,.ogg,.m4a"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -218,7 +304,7 @@ export default function MediaLibrary() {
                 >
                   {isImg && !failedImages[asset.id] ? (
                     <img
-                      src={retryUrls[asset.id] || getMediaUrl(asset.storageUrl)}
+                      src={heicThumbnails[asset.id] || retryUrls[asset.id] || getMediaUrl(asset.storageUrl)}
                       alt={asset.fileName}
                       onError={() => {
                         const originalUrl = getMediaUrl(asset.storageUrl);
@@ -232,9 +318,14 @@ export default function MediaLibrary() {
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
                   ) : isImg ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 p-2 text-center group-hover:bg-gray-100 transition">
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 p-2 text-center group-hover:bg-gray-100 transition relative">
                       <ImageIcon className="w-8 h-8 text-indigo-400 mb-1" />
-                      <span className="text-[10px] text-gray-500 font-medium truncate max-w-full px-1">{asset.fileName}</span>
+                      <span className="text-[10px] text-gray-600 font-semibold truncate max-w-full px-1">{asset.fileName}</span>
+                      {isHeicAsset(asset.fileName, asset.mimeType) && (
+                        <span className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          Ảnh Apple HEIC
+                        </span>
+                      )}
                     </div>
                   ) : isVid ? (
                     <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white group-hover:bg-gray-800 transition">
@@ -296,12 +387,48 @@ export default function MediaLibrary() {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 flex items-center justify-center bg-gray-950">
-              {viewingAsset.mediaType === 'IMAGE' || viewingAsset.mimeType?.startsWith('image/') ? (
-                <img
-                  src={retryUrls[viewingAsset.id] || getMediaUrl(viewingAsset.storageUrl)}
-                  alt={viewingAsset.fileName}
-                  className="max-h-[60vh] max-w-full object-contain rounded-xl"
-                />
+              {isDecodingHeicModal ? (
+                <div className="p-12 text-center text-white space-y-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-400 mx-auto" />
+                  <p className="text-xs text-gray-300">Đang giải mã hiển thị ảnh định dạng Apple HEIC...</p>
+                </div>
+              ) : viewingAsset.mediaType === 'IMAGE' || viewingAsset.mimeType?.startsWith('image/') ? (
+                !modalImgError ? (
+                  <img
+                    src={heicModalUrl || heicThumbnails[viewingAsset.id] || retryUrls[viewingAsset.id] || getMediaUrl(viewingAsset.storageUrl)}
+                    alt={viewingAsset.fileName}
+                    onError={() => setModalImgError(true)}
+                    className="max-h-[60vh] max-w-full object-contain rounded-xl"
+                  />
+                ) : (
+                  <div className="p-8 text-center text-white space-y-3 max-w-md mx-auto">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-400">
+                      <ImageIcon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm text-white mb-1">
+                        {isHeicAsset(viewingAsset.fileName, viewingAsset.mimeType)
+                          ? 'Định dạng ảnh Apple HEIC'
+                          : 'Không thể xem trước tệp hình ảnh'}
+                      </h4>
+                      <p className="text-xs text-gray-400">
+                        {isHeicAsset(viewingAsset.fileName, viewingAsset.mimeType)
+                          ? 'Trình duyệt máy tính không hỗ trợ xem trực tiếp ảnh HEIC này. Bạn có thể bấm nút "Tải Về" bên dưới để mở bằng trình xem ảnh trên máy tính.'
+                          : 'Định dạng hình ảnh này không thể hiển thị trực tiếp. Vui lòng tải về máy để xem.'}
+                      </p>
+                    </div>
+                    <a
+                      href={getMediaUrl(viewingAsset.storageUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      download={viewingAsset.fileName}
+                      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Tải về xem trên máy</span>
+                    </a>
+                  </div>
+                )
               ) : viewingAsset.mediaType === 'VIDEO' || viewingAsset.mimeType?.startsWith('video/') ? (
                 <video
                   src={getMediaUrl(viewingAsset.storageUrl)}

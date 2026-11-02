@@ -60,7 +60,7 @@ export class FacebookReelsPublisher implements Publisher {
             file_size: videoBuffer.length.toString(),
             'Content-Type': 'application/octet-stream',
           },
-          body: videoBuffer,
+          body: new Uint8Array(videoBuffer),
         }
       );
 

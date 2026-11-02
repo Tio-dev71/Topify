@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 // PATCH /api/content/posts/[id]/evergreen - Toggle or update evergreen settings on a post
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -15,7 +15,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { isEvergreen, recycleIntervalDays } = body;
 

@@ -31,7 +31,7 @@ describe('Content Studio Bulk Import Engine (F019)', () => {
         'Bình luận đầu': 'Inbox ngay để nhận ưu đãi',
         'Hashtags': '#topify #kinhdoanh #viral',
         'Kênh đăng': 'tiktok, facebook',
-        'Thời gian đăng': '2026-11-01 10:30',
+        'Thời gian đăng': '2026-12-01 10:30',
         'Link video / ảnh': 'https://storage.topify.vn/videos/clip1.mp4',
       },
     ];

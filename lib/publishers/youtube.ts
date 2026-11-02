@@ -148,7 +148,7 @@ export class YouTubeShortsPublisher implements Publisher {
           'Content-Type': videoAsset.mimeType,
           'Content-Length': videoBuffer.length.toString(),
         },
-        body: videoBuffer,
+        body: new Uint8Array(videoBuffer),
       });
 
       const uploadData = await uploadRes.json();

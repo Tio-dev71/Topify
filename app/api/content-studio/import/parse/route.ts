@@ -124,9 +124,19 @@ export async function POST(req: NextRequest) {
 
     // 2. Multipart file upload (.xlsx, .xls, .csv)
     if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-      const sheetUrl = formData.get('sheetUrl') as string | null;
+      let file: File | null = null;
+      let sheetUrl: string | null = null;
+
+      // Clone request BEFORE reading formData (if supported by environment), so fallback arrayBuffer can be read if formData fails
+      const reqClone = typeof req.clone === 'function' ? req.clone() : req;
+
+      try {
+        const formData = await req.formData();
+        file = formData.get('file') as File | null;
+        sheetUrl = formData.get('sheetUrl') as string | null;
+      } catch (formErr: any) {
+        console.warn('[import/parse] req.formData() failed:', formErr?.message || formErr);
+      }
 
       if (sheetUrl) {
         const result = await fetchAndParseGoogleSheet(sheetUrl, connectedProviders);
@@ -137,6 +147,39 @@ export async function POST(req: NextRequest) {
       }
 
       if (!file) {
+        // Fallback: If formData() failed due to missing boundary parameter, read raw body from cloned request
+        try {
+          const bodySource = (reqClone && typeof reqClone.arrayBuffer === 'function') ? reqClone : req;
+          const arrayBuffer = typeof bodySource.arrayBuffer === 'function' ? await bodySource.arrayBuffer() : null;
+          if (arrayBuffer && arrayBuffer.byteLength > 0) {
+            const buffer = Buffer.from(arrayBuffer);
+            // If body contains multipart wrappers, extract the inner file payload
+            const pkIdx = buffer.indexOf(Buffer.from([0x50, 0x4b, 0x03, 0x04])); // XLSX signature
+            if (pkIdx !== -1) {
+              const boundaryMarker = buffer.indexOf(Buffer.from('\r\n--'), pkIdx);
+              const excelBuffer = boundaryMarker !== -1 ? buffer.subarray(pkIdx, boundaryMarker) : buffer.subarray(pkIdx);
+              const result = parseExcelOrCsvBuffer(excelBuffer, 'EXCEL', connectedProviders);
+              if (result.success) {
+                return NextResponse.json(result, { headers: corsHeaders });
+              }
+            } else {
+              // CSV inside multipart or raw text
+              const headerEnd = buffer.indexOf(Buffer.from('\r\n\r\n'));
+              if (headerEnd !== -1) {
+                const afterHeader = buffer.subarray(headerEnd + 4);
+                const boundaryEnd = afterHeader.indexOf(Buffer.from('\r\n--'));
+                const csvBuffer = boundaryEnd !== -1 ? afterHeader.subarray(0, boundaryEnd) : afterHeader;
+                const result = parseExcelOrCsvBuffer(csvBuffer, 'CSV', connectedProviders);
+                if (result.success) {
+                  return NextResponse.json(result, { headers: corsHeaders });
+                }
+              }
+            }
+          }
+        } catch (bufErr) {
+          console.warn('[import/parse] Fallback arrayBuffer parse failed:', bufErr);
+        }
+
         return NextResponse.json(
           { error: 'Vui lòng tải lên tệp Excel (.xlsx, .xls) hoặc .csv' },
           { status: 400, headers: corsHeaders }
@@ -152,6 +195,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: result.error || 'Lỗi đọc tệp' }, { status: 400, headers: corsHeaders });
       }
 
+      return NextResponse.json(result, { headers: corsHeaders });
+    }
+
+    // 3. Direct binary spreadsheet / CSV upload
+    if (
+      contentType.includes('application/octet-stream') ||
+      contentType.includes('spreadsheet') ||
+      contentType.includes('excel') ||
+      contentType.includes('csv')
+    ) {
+      const arrayBuffer = await req.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const isCsv = contentType.includes('csv');
+      const isPkZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4B;
+      const result = parseExcelOrCsvBuffer(buffer, isCsv && !isPkZip ? 'CSV' : 'EXCEL', connectedProviders);
+      if (!result.success) {
+        return NextResponse.json({ error: result.error || 'Lỗi đọc tệp' }, { status: 400, headers: corsHeaders });
+      }
       return NextResponse.json(result, { headers: corsHeaders });
     }
 

@@ -194,25 +194,24 @@ function formatFriendlyImportError(rawError: any, fallbackMessage: string = 'L�
     lower.includes('invocation') ||
     lower.includes('socialaccountstatus') ||
     lower.includes('invalid value for argument') ||
-    lower.includes('workspaceid') ||
-    lower.includes('userid') ||
-    lower.includes('syntax error') ||
     lower.includes('relation') ||
     lower.includes('foreign key') ||
     lower.includes('unique constraint') ||
     lower.includes('econnrefused') ||
-    lower.includes('etimedout') ||
-    lower.includes('assertionerror') ||
-    lower.includes('undici') ||
-    lower.includes('webidl') ||
-    lower.includes('typeerror') ||
-    lower.includes('rangeerror') ||
-    lower.includes('cannot read propert') ||
-    lower.includes('internal server error') ||
-    lower.includes('500') ||
-    lower.includes('cmu')
+    lower.includes('etimedout')
   ) {
     return 'Hệ thống gặp sự cố kỹ thuật khi kết nối cơ sở dữ liệu. Vui lòng thử lại sau giây lát hoặc liên hệ hỗ trợ.';
+  }
+
+  // 1b. Multipart / Form body / Transmission parsing errors
+  if (
+    lower.includes('formdata') ||
+    lower.includes('multipart') ||
+    lower.includes('boundary') ||
+    lower.includes('undici') ||
+    lower.includes('webidl')
+  ) {
+    return 'Lỗi truyền tải dữ liệu tệp bảng tính. Vui lòng thử lại hoặc kiểm tra định dạng tệp.';
   }
 
   // 2. Google Sheets errors
@@ -437,9 +436,7 @@ export function ImportPostsModal({ isOpen, onClose, onSuccess }: ImportPostsModa
       const formData = new FormData();
       formData.append('file', targetFile);
 
-      const res = await api.post('/content-studio/import/parse', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post('/content-studio/import/parse', formData);
 
       if (res.data?.success) {
         // Update connected providers if returned from backend

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { convertHeicToJpeg, isHeicFormat } from '@/lib/media/heic';
 
 export async function GET(
   req: NextRequest,
@@ -35,6 +36,8 @@ export async function GET(
       '.svg': 'image/svg+xml',
       '.bmp': 'image/bmp',
       '.ico': 'image/x-icon',
+      '.heic': 'image/heic',
+      '.heif': 'image/heif',
       '.mp3': 'audio/mpeg',
       '.wav': 'audio/wav',
       '.ogg': 'audio/ogg',
@@ -76,6 +79,38 @@ export async function GET(
     }
 
     let contentType = mimeTypes[ext];
+
+    // HEIC/HEIF on-the-fly conversion & support for browsers/Electron
+    if (ext === '.heic' || ext === '.heif' || isHeicFormat(filename)) {
+      const jpgCachedPath = filePath.replace(/\.(heic|heif)$/i, '.jpg');
+      if (fs.existsSync(jpgCachedPath)) {
+        try {
+          const jpgStat = fs.statSync(jpgCachedPath);
+          fileBuffer = fs.readFileSync(jpgCachedPath);
+          fileSize = jpgStat.size;
+          contentType = 'image/jpeg';
+        } catch (readErr) {
+          console.warn('[Uploads Route] Failed to read cached jpg:', readErr);
+        }
+      } else if (fileBuffer) {
+        try {
+          const converted = await convertHeicToJpeg(fileBuffer, filename);
+          if (converted) {
+            fileBuffer = converted.buffer;
+            fileSize = converted.size;
+            contentType = 'image/jpeg';
+            // Cache on disk for instant future responses
+            try {
+              await fs.promises.writeFile(jpgCachedPath, converted.buffer);
+            } catch (cacheErr) {
+              console.warn('[Uploads Route] Failed to write converted jpg cache:', cacheErr);
+            }
+          }
+        } catch (convErr) {
+          console.warn('[Uploads Route] Failed to convert HEIC to JPEG on the fly:', convErr);
+        }
+      }
+    }
     if (!contentType || contentType === 'application/octet-stream') {
       if (fileBuffer.length >= 8 && fileBuffer[0] === 0x89 && fileBuffer[1] === 0x50 && fileBuffer[2] === 0x4E && fileBuffer[3] === 0x47) {
         contentType = 'image/png';
@@ -90,7 +125,7 @@ export async function GET(
       }
     }
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         'Content-Type': contentType,
         'Content-Length': fileSize.toString(),

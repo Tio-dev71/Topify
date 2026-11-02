@@ -36,8 +36,41 @@ export const auth = async (...args: any[]) => {
     try {
       const token = authHeader.split(' ')[1];
       const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
-      const userId = decoded.sub || decoded.id;
+      let userId = decoded.sub || decoded.id;
       let workspaceId = decoded.workspaceId;
+
+      if (userId) {
+        // Verify user exists in database to prevent foreign key errors
+        let dbUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, workspaceId: true, role: true, name: true, email: true },
+        }).catch(() => null);
+
+        // Fallback: If not found by ID, attempt lookup by email (handles re-seeded DB or license key mismatch)
+        if (!dbUser && decoded.email) {
+          dbUser = await prisma.user.findUnique({
+            where: { email: decoded.email },
+            select: { id: true, workspaceId: true, role: true, name: true, email: true },
+          }).catch(() => null);
+        }
+
+        if (dbUser) {
+          userId = dbUser.id;
+          workspaceId = dbUser.workspaceId || workspaceId;
+          if (!workspaceId) {
+            workspaceId = await ensureUserWorkspace(userId, dbUser.name || decoded.name);
+          }
+          return {
+            user: {
+              id: userId,
+              role: dbUser.role || decoded.role,
+              name: dbUser.name || decoded.name,
+              email: dbUser.email || decoded.email,
+              workspaceId,
+            }
+          };
+        }
+      }
 
       if (!workspaceId && userId) {
         workspaceId = await ensureUserWorkspace(userId, decoded.name);

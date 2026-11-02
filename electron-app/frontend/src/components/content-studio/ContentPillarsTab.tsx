@@ -348,28 +348,15 @@ export function ContentPillarsTab() {
             </button>
           </div>
 
-          <button
-            onClick={() => {
-              if (viewMode === 'pillars') {
-                setIsModalOpen(true);
-              } else {
-                setPlanFormData({
-                  title: '',
-                  focus: '',
-                  target: '',
-                  planGroup: selectedPlanGroup === 'ALL' ? (distinctPlanGroups[0] || 'Kế hoạch Tháng 10/2026') : selectedPlanGroup,
-                  startDate: new Date().toISOString().split('T')[0],
-                  endDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-                  pillarId: pillars[0]?.id || '',
-                });
-                setIsPlanModalOpen(true);
-              }
-            }}
-            className="btn-primary py-2 px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{viewMode === 'pillars' ? 'Thêm Trụ Cột Mới' : 'Thêm Kế Hoạch Mới'}</span>
-          </button>
+          {viewMode === 'pillars' && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="btn-primary py-2 px-3.5 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Thêm Trụ Cột Mới</span>
+            </button>
+          )}
         </div>
       </div>
 

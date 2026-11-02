@@ -98,8 +98,12 @@ const readVideoMetadata = (file: File): Promise<{ duration: number; width: numbe
   });
 };
 
-const isAllowedVideoType = (type: string) => {
-  return ['video/mp4', 'video/quicktime', 'video/webm'].includes(type);
+const isAllowedVideoType = (type: string, name?: string) => {
+  const ext = (name || '').toLowerCase().split('.').pop();
+  return (
+    ['video/mp4', 'video/quicktime', 'video/webm'].includes(type) ||
+    ['mp4', 'mov', 'webm'].includes(ext || '')
+  );
 };
 
 const formatFileSize = (bytes: number) => {
@@ -308,11 +312,19 @@ export default function CreatePost() {
       if (content.hashtags) {
         updateVideoField(activeVideoForModal.id, 'hashtags', content.hashtags);
       }
+      toast.success('Đã áp dụng nội dung AI vào bài viết!');
+      if (activeVideoForModal.originalFileName && !activeVideoForModal.isDraft) {
+        toast.info(`Video đang gắn: "${activeVideoForModal.originalFileName}". Nhấp "Thay video khác" nếu muốn đổi video phù hợp với kịch bản này!`, { duration: 5000 });
+      }
     } else if (videos.length > 0) {
       updateVideoField(videos[0].id, 'title', content.title);
       updateVideoField(videos[0].id, 'caption', content.caption);
       if (content.hashtags) {
         updateVideoField(videos[0].id, 'hashtags', content.hashtags);
+      }
+      toast.success('Đã áp dụng nội dung AI vào bài viết!');
+      if (videos[0].originalFileName && !videos[0].isDraft) {
+        toast.info(`Video đang gắn: "${videos[0].originalFileName}". Nhấp "Thay video khác" nếu muốn đổi video phù hợp với kịch bản này!`, { duration: 5000 });
       }
     } else {
       const draft: UploadedVideo = {
@@ -536,7 +548,7 @@ export default function CreatePost() {
   // Handle file upload
   const handleUpload = useCallback(async (files: FileList | File[]) => {
     const validFiles = Array.from(files).filter(f => {
-      if (!isAllowedVideoType(f.type)) {
+      if (!isAllowedVideoType(f.type, f.name)) {
         toast.error(`Định dạng không hợp lệ: ${f.name}`);
         return false;
       }
@@ -568,7 +580,9 @@ export default function CreatePost() {
       formData.append('height', meta.height.toString());
 
       try {
-        const res = await api.post('/upload', formData);
+        const res = await api.post('/upload', formData, {
+          timeout: 120000,
+        });
 
         if (res.status === 200 || res.status === 201) {
           const result = res.data;
@@ -620,7 +634,8 @@ export default function CreatePost() {
           successCount++;
         }
       } catch (error: any) {
-        toast.error(`Lỗi tải lên: ${error.response?.data?.error || file.name}`);
+        const detail = error.response?.data?.error || error.response?.data?.message || error.message || file.name;
+        toast.error(`Lỗi tải lên (${file.name}): ${detail}`);
       }
     }
 
@@ -1155,6 +1170,15 @@ export default function CreatePost() {
                           YouTube Shorts chỉ phân loại dạng Shorts đối với video tối đa 3 phút (180 giây). Video này dài {v.duration}s nên sẽ được YouTube tự động xuất bản dưới dạng <strong>Video thông thường</strong>. Hệ thống vẫn hỗ trợ đăng và lên lịch hẹn giờ bình thường!
                         </p>
                       </div>
+                    </div>
+                  )}
+
+                  {platforms.includes('YOUTUBE_SHORTS') && !isDraftItem && (
+                    <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl flex items-start gap-2.5 text-xs text-blue-800">
+                      <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                      <p className="leading-relaxed">
+                        <strong>Lưu ý ảnh bìa (Thumbnail) YouTube Shorts:</strong> Theo cơ chế của YouTube, ảnh bìa Shorts được YouTube tự động trích xuất từ chính các khung hình trong tệp video này (<code>{v.originalFileName}</code>). Hãy đảm bảo tệp video tải lên khớp với chủ đề bài viết.
+                      </p>
                     </div>
                   )}
 

@@ -321,6 +321,10 @@ export function startWorker() {
     console.error(`❌ Publish Job ${job?.id} failed:`, err.message);
   });
 
+  publishWorker.on('error', (err) => {
+    console.warn('[PublishWorker Error Caught]:', err.message);
+  });
+
   const tokenWorker = new Worker('token-monitor', processTokenMonitorJob, {
     connection: connection as never,
     concurrency: 1,
@@ -330,6 +334,14 @@ export function startWorker() {
     console.log(`✅ Token Monitor Job ${job.id} completed`);
   });
 
+  tokenWorker.on('failed', (job, err) => {
+    console.error(`❌ Token Monitor Job ${job?.id} failed:`, err.message);
+  });
+
+  tokenWorker.on('error', (err) => {
+    console.warn('[TokenWorker Error Caught]:', err.message);
+  });
+
   const scraperWorker = new Worker('keyword-scraper', processKeywordScraperJob, {
     connection: connection as never,
     concurrency: 1,
@@ -337,6 +349,14 @@ export function startWorker() {
 
   scraperWorker.on('completed', (job) => {
     console.log(`✅ Keyword Scraper Job ${job.id} completed`);
+  });
+
+  scraperWorker.on('failed', (job, err) => {
+    console.error(`❌ Keyword Scraper Job ${job?.id} failed:`, err.message);
+  });
+
+  scraperWorker.on('error', (err) => {
+    console.warn('[ScraperWorker Error Caught]:', err.message);
   });
 
   console.log('🔄 BullMQ workers started (publish-reel, token-monitor, keyword-scraper)');

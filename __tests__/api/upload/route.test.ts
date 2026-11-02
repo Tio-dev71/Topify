@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { POST } from '@/app/api/upload/route';
+import { POST, OPTIONS } from '@/app/api/upload/route';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
@@ -175,5 +175,12 @@ describe('POST /api/upload', () => {
 
     expect(response.status).toBe(500);
     expect(data.error).toBe('Storage failure');
+  });
+
+  it('should respond to OPTIONS with 204 and CORS headers', async () => {
+    const res = await OPTIONS();
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-methods')).toContain('POST');
   });
 });

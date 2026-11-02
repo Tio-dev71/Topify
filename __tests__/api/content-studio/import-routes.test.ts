@@ -195,6 +195,39 @@ describe('Bulk Import API Routes (F019)', () => {
       expect(json.success).toBe(true);
       expect(json.rows[0].title).toBe('Bài đăng fallback');
     });
+
+    it('gracefully falls back to arrayBuffer when req.formData() throws due to missing boundary', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'usr_1', workspaceId: 'ws_1' },
+      } as any);
+      vi.mocked(prisma.socialAccount.findMany).mockResolvedValue([]);
+
+      const rows = [
+        {
+          'Tiêu đề': 'Bài đăng fallback khi formData lỗi',
+          'Nội dung': 'Hệ thống tự động phục hồi',
+          'Nền tảng': 'FACEBOOK',
+        },
+      ];
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+      const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+      const req = {
+        headers: new Headers({ 'content-type': 'multipart/form-data' }), // missing boundary
+        formData: async () => {
+          throw new TypeError('Failed to parse body as FormData.');
+        },
+        arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+      } as unknown as NextRequest;
+
+      const res = await parsePOST(req);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.rows[0].title).toBe('Bài đăng fallback khi formData lỗi');
+    });
   });
 
   describe('POST /api/content-studio/import/save', () => {

@@ -42,6 +42,12 @@ export const publishQueue = isBuild ? { add: async () => {} } as any : new Queue
   },
 });
 
+if (!isBuild && publishQueue && typeof publishQueue.on === 'function') {
+  publishQueue.on('error', (err: any) => {
+    console.warn('[PublishQueue Error Caught]:', err.message);
+  });
+}
+
 /**
  * Add a post to the publish queue for immediate processing
  */
@@ -109,6 +115,12 @@ export const tokenMonitorQueue = isBuild ? { add: async () => {} } as any : new 
   },
 });
 
+if (!isBuild && tokenMonitorQueue && typeof tokenMonitorQueue.on === 'function') {
+  tokenMonitorQueue.on('error', (err: any) => {
+    console.warn('[TokenMonitorQueue Error Caught]:', err.message);
+  });
+}
+
 /**
  * Schedule daily token monitor
  */
@@ -133,6 +145,12 @@ export const keywordScraperQueue = isBuild ? { add: async () => {} } as any : ne
     removeOnFail: { count: 50 },
   },
 });
+
+if (!isBuild && keywordScraperQueue && typeof keywordScraperQueue.on === 'function') {
+  keywordScraperQueue.on('error', (err: any) => {
+    console.warn('[KeywordScraperQueue Error Caught]:', err.message);
+  });
+}
 
 /**
  * Schedule daily keyword scraper
