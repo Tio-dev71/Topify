@@ -305,17 +305,17 @@ export default function Deals() {
       {loading ? (
         <div className="py-20 text-center text-xs text-gray-400">Đang tải phễu cơ hội...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+        <div className="flex gap-4 overflow-x-auto pb-4 items-start scrollbar-thin">
           {currentPipeline.stages.map((stage) => {
             const stageDeals = filteredDeals.filter(d => d.stageId === stage.id);
             const totalValue = stageDeals.reduce((sum, d) => sum + (d.value || 0), 0);
 
             return (
-              <div key={stage.id} className="bg-gray-50/70 border border-gray-200/80 rounded-2xl p-3 space-y-3">
+              <div key={stage.id} className="w-[280px] shrink-0 bg-gray-50/80 border border-gray-200/80 rounded-2xl p-3 space-y-3 shadow-2xs">
                 <div className="flex items-center justify-between pb-2 border-b border-gray-200">
                   <div className="flex items-center gap-2">
                     <span
-                      className="w-2.5 h-2.5 rounded-full"
+                      className="w-2.5 h-2.5 rounded-full ring-2 ring-white"
                       style={{ backgroundColor: stage.color || '#6366F1' }}
                     />
                     <h3 className="font-bold text-xs text-gray-900">{stage.name}</h3>
@@ -326,7 +326,7 @@ export default function Deals() {
                 </div>
 
                 <div className="text-[11px] text-gray-500 font-semibold px-1">
-                  Tổng: <span className="font-bold text-indigo-700">{totalValue.toLocaleString()} đ</span>
+                  Tổng: <span className="font-bold text-indigo-700 whitespace-nowrap font-mono">{totalValue.toLocaleString()} ₫</span>
                 </div>
 
                 <div className="space-y-2.5 min-h-[150px]">
@@ -338,45 +338,63 @@ export default function Deals() {
                     stageDeals.map((deal) => (
                       <div
                         key={deal.id}
-                        className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-2xs hover:shadow-xs transition space-y-2.5 text-xs group"
+                        className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs hover:shadow-xs hover:border-indigo-200 transition space-y-2.5 text-xs group"
                       >
-                        <div className="flex items-start justify-between gap-1">
-                          <h4 className="font-bold text-gray-900 line-clamp-2">{deal.title}</h4>
+                        {/* Title & Delete */}
+                        <div className="flex items-start justify-between gap-1.5">
+                          <h4 className="font-bold text-gray-900 line-clamp-2 leading-snug break-words" title={deal.title}>
+                            {deal.title}
+                          </h4>
                           <button
                             onClick={() => handleDelete(deal.id, deal.title)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-rose-600 p-0.5 transition shrink-0"
+                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-rose-600 p-0.5 rounded transition shrink-0"
                             title="Xóa cơ hội"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <div className="font-bold text-emerald-600 text-sm">
-                            {(deal.value || 0).toLocaleString()} đ
+                        {/* Deal Value - Prominent & Never Wrapped */}
+                        <div className="flex items-center justify-between gap-2 pt-0.5">
+                          <div className="font-bold text-emerald-600 text-sm whitespace-nowrap font-mono flex items-center gap-0.5">
+                            <span>{(deal.value || 0).toLocaleString()}</span>
+                            <span className="text-xs font-semibold">₫</span>
                           </div>
-                          
-                          {/* Quick stage switch */}
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 font-medium whitespace-nowrap">
+                            {deal.status === 'WON' ? 'Thành công' : deal.status === 'LOST' ? 'Thất bại' : 'Đang mở'}
+                          </span>
+                        </div>
+
+                        {/* Quick Stage Switcher - Dedicated Row */}
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <span className="text-[10px] text-gray-400 font-medium shrink-0">Chuyển:</span>
                           <select
                             value={deal.stageId}
                             onChange={(e) => handleMoveStage(deal.id, e.target.value)}
-                            className="text-[10px] bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-gray-600 hover:border-indigo-300 cursor-pointer focus:outline-none"
-                            title="Chuyển giai đoạn"
+                            className="w-full text-[11px] bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2 py-1 text-gray-700 cursor-pointer focus:outline-none focus:border-indigo-400 font-medium truncate transition"
+                            title="Chuyển sang giai đoạn khác"
                           >
                             {currentPipeline.stages.map(s => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
+                              <option key={s.id} value={s.id}>
+                                ➜ {s.name}
+                              </option>
                             ))}
                           </select>
                         </div>
 
+                        {/* Linked CRM Customer */}
                         {deal.customer && (
                           <div className="flex items-center justify-between text-[11px] text-gray-500 pt-2 border-t border-gray-100">
-                            <div className="flex items-center gap-1.5 truncate">
+                            <div className="flex items-center gap-1.5 truncate min-w-0">
                               <User className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                              <span className="truncate font-semibold text-gray-800">{deal.customer.name}</span>
+                              <span className="truncate font-semibold text-gray-800" title={deal.customer.name}>
+                                {deal.customer.name}
+                              </span>
                             </div>
                             {deal.customer.phone && (
-                              <span className="text-[10px] text-gray-400 shrink-0 font-mono">{deal.customer.phone}</span>
+                              <span className="text-[10px] text-gray-400 shrink-0 font-mono ml-1">
+                                {deal.customer.phone}
+                              </span>
                             )}
                           </div>
                         )}

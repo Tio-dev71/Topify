@@ -11,6 +11,31 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.75) — CRM & Cơ Hội Bán Hàng: Tối Ưu Thẻ Deal, Giá Trị Hợp Đồng Chống Vỡ Layout & Trình Diễn Kanban Chuẩn Phễu Bán Hàng
+
+### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Cơ Hội Bán Hàng (Deals - F096) [Electron App]:
+- **[Khắc phục lỗi thẻ deal bị vỡ layout, giá trị hợp đồng bị xuống 2 dòng và bị ô chọn giai đoạn chèn ép]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Cơ hội bán hàng (F096)** $\rightarrow$ Quan sát các thẻ deal (ví dụ deal *"Đơn sỉ 100 áo gió - Nguyễn Văn Minh"* ở cột Khách hàng mới).
+    - *Mong đợi:* Thẻ deal hiển thị gọn gàng, giá trị hợp đồng nằm trọn vẹn trên 1 dòng, ô chọn giai đoạn không đè hoặc chèn ép giá trị, tiêu đề deal hiển thị đầy đủ và rõ ràng.
+    - *Thực tế trước khi sửa:* Giá trị hợp đồng ("15,000,000 đ") bị bẻ thành 2 dòng ("15,000,000" ở trên và "đ" ở dưới) do bị thẻ `<select>` chọn giai đoạn ("Khách hàng mới") nằm cùng hàng chèn ép. Cột 5 ("Thành công") bị rớt xuống hàng thứ 2 do layout lưới `grid-cols-4` cố định. Deal ở cột Đã gửi báo giá hiển thị tiêu đề bị cắt chữ đầu ("ội dung Q4").
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Thiếu khoảng trống trong bố cục thẻ ngang:** Giá trị tiền tệ và thẻ `<select>` chuyển giai đoạn đặt cùng một hàng flex ngang trong thẻ deal có chiều rộng giới hạn (<180px). Select mở rộng theo độ dài text của các option dài nhất, ép giá trị hợp đồng xuống dòng.
+    2. **Grid Kanban cố định 4 cột (`grid-cols-4`):** Quy trình chuẩn có 5 giai đoạn (hoặc 6 giai đoạn), dẫn đến cột giai đoạn cuối ("Thành công") bị rớt xuống hàng thứ 2, làm gãy trải nghiệm phễu chuyển đổi bán hàng.
+    3. **Dữ liệu tiêu đề bị thiếu chữ đầu trong DB:** Deal cũ mang tên `"ội dung Q4"` thay vì đầy đủ `"Hợp đồng nội dung Q4"`.
+  - **Giải pháp xử lý triệt để (`electron-app/frontend/src/pages/Deals.tsx`):**
+    1. **Tách biệt phân dòng thẻ Deal:**
+       - **Dòng Giá trị hợp đồng:** Đặt riêng trên một dòng độc lập với `font-bold text-emerald-600 text-sm whitespace-nowrap font-mono`, đảm bảo số tiền luôn luôn nằm trên 1 dòng duy nhất (ví dụ `15,000,000 ₫`), đi kèm huy hiệu trạng thái giao dịch (Đang mở, Thành công, Thất bại).
+       - **Dòng Chuyển giai đoạn:** Đặt ở hàng riêng phía dưới với nhãn `"Chuyển:"` và ô select `w-full` bo góc, có biểu tượng mũi tên chuyển tiếp `➜`, không bao giờ đè hay chèn ép số tiền.
+       - **Tiêu đề deal:** Sử dụng `break-words leading-snug line-clamp-2` hiển thị đầy đủ tiêu đề không bị che khuất.
+    2. **Thiết kế Kanban Board chuẩn luồng phễu ngang:**
+       - Chuyển container từ `grid-cols-4` sang `flex gap-4 overflow-x-auto pb-4 items-start scrollbar-thin` với mỗi cột đạt độ rộng tối ưu `w-[280px] shrink-0`.
+       - Toàn bộ các giai đoạn (từ Khách hàng mới ➔ Đang liên hệ ➔ Thương lượng ➔ Đã gửi báo giá ➔ Thành công) nằm liền mạch trên một trục thời gian ngang, thẻ deal rộng rãi và trực quan.
+    3. **Chuẩn hóa dữ liệu:**
+       - Cập nhật bản ghi tiêu đề deal trong cơ sở dữ liệu cả local và VPS production thành `"Hợp đồng nội dung Q4"`.
+
+---
+
 ## 🚀 [2026-11-03] (v1.3.74) — CRM & Kênh Bán Hàng: Khắc Phục Lỗi Mất Giai Đoạn Khi Chuyển Trang & Tối Ưu Xác Thực JWT Đa Workspace
 
 ### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Kênh Bán Hàng & Giai Đoạn (Pipelines/Stages - F094/F095) [Electron App & Backend API]:
