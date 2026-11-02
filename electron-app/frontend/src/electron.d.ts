@@ -19,6 +19,11 @@ export interface DownloadProgressEvent {
   totalBytes: number;
 }
 
+declare module 'heic2any' {
+  const heic2any: (options: any) => Promise<Blob | Blob[]>;
+  export default heic2any;
+}
+
 declare global {
   interface Window {
     electron?: {
