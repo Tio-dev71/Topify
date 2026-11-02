@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-// @ts-ignore
-import heic2any from 'heic2any';
+
+// Dynamic converter helper so bundler does not hard-fail if package is absent in production container
+const convertHeic = async (options: any) => {
+  try {
+    // @ts-ignore
+    const mod = await import('heic2any');
+    const fn = (mod as any).default || mod;
+    return await fn(options);
+  } catch (err) {
+    console.warn('heic2any not available:', err);
+    throw err;
+  }
+};
 import { 
   Image as ImageIcon, 
   Video, 
@@ -88,7 +99,7 @@ export default function MediaLibrary() {
         const fullUrl = getMediaUrl(asset.storageUrl);
         const res = await fetch(fullUrl);
         const blob = await res.blob();
-        const converted = await heic2any({ blob, toType: 'image/jpeg', quality: 0.8 });
+        const converted = await convertHeic({ blob, toType: 'image/jpeg', quality: 0.8 });
         const single = Array.isArray(converted) ? converted[0] : converted;
         const url = URL.createObjectURL(single);
         setHeicThumbnails((prev) => ({ ...prev, [asset.id]: url }));
@@ -115,7 +126,7 @@ export default function MediaLibrary() {
       const fullUrl = getMediaUrl(viewingAsset.storageUrl);
       fetch(fullUrl)
         .then((res) => res.blob())
-        .then((blob) => heic2any({ blob, toType: 'image/jpeg', quality: 0.92 }))
+        .then((blob) => convertHeic({ blob, toType: 'image/jpeg', quality: 0.92 }))
         .then((converted) => {
           const single = Array.isArray(converted) ? converted[0] : converted;
           setHeicModalUrl(URL.createObjectURL(single));
@@ -141,7 +152,7 @@ export default function MediaLibrary() {
     if (isHeic) {
       conversionToastId = toast.loading('Đang tự động chuyển đổi ảnh HEIC sang JPEG chất lượng cao...');
       try {
-        const convertedBlob = await heic2any({
+        const convertedBlob = await convertHeic({
           blob: file,
           toType: 'image/jpeg',
           quality: 0.92,
