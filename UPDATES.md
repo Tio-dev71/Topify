@@ -11,6 +11,27 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.73) — CRM & Hồ Sơ Khách Hàng: Tái Cấu Trúc Header F093, Chống Co Hẹp Tiêu Đề Và Tách Toolbar Tiện Ích Thông Minh
+
+### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Hồ Sơ Khách Hàng & Doanh Nghiệp (F093) [Electron App]:
+- **[Khắc phục lỗi tiêu đề và mô tả ở header bị co ép thành 3 dòng do cụm nút bên phải chiếm hết chiều ngang]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Hồ sơ khách hàng (F093)** $\rightarrow$ Quan sát header màn hình *"Hồ sơ Khách hàng & Doanh nghiệp (Contact & Company - F093)"*.
+    - *Mong đợi:* Tiêu đề và mô tả hiển thị rộng rãi, thoáng đãng, không bị ngắt thành nhiều dòng vụn vặt và không bị co ép bởi cụm 4 nút thao tác.
+    - *Thực tế trước khi sửa:* Tiêu đề *"Hồ sơ Khách hàng & Doanh nghiệp (Contact & Company - F093)"* bị co hẹp thành 3 dòng ngắn vụn, mô tả cũng bị ép thành 5 dòng đứng, do cụm 4 nút dài ("Nạp mẫu test F100/F101", "Quét trùng (2)", "Nhúng Form Landing Page (F102)", "Thêm khách hàng") với `shrink-0 sm:flex-nowrap` chiếm tới hơn 730px chiều ngang trên cùng một hàng flex.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    - Container header dùng `flex-col sm:flex-row justify-between` với cụm nút có thuộc tính `shrink-0 sm:flex-nowrap`.
+    - Khi cửa sổ ứng dụng ở độ phân giải phổ biến (1200px - 1440px), sidebar chiếm 240px, phần nội dung còn lại ~912px. Cụm nút chiếm mất 730px, khiến cột tiêu đề chỉ còn vỏn vẹn ~166px đến 180px, dẫn đến chữ bị ngắt dòng liên tục.
+  - **Giải pháp xử lý triệt để (`electron-app/frontend/src/pages/Customers.tsx`):**
+    1. **Tách biệt phân tầng Header & Action Button:**
+       - **Hàng 1 (Header chính):** Chứa Icon thương hiệu, Tiêu đề *"Hồ sơ Khách hàng & Doanh nghiệp"* kèm huy hiệu phân hệ `Contact & Company - F093` và dòng mô tả chi tiết với không gian rộng rãi (`flex-1 min-w-0 max-w-4xl`), hiển thị liền mạch trên 1 dòng duy nhất.
+       - Góc trên bên phải hàng 1 chỉ giữ nút hành động chính (Primary CTA): `+ Thêm khách hàng` (`btn-primary`), vừa đúng quy chuẩn UX vừa đảm bảo tiêu đề luôn có trên 800px chiều ngang.
+    2. **Thanh Công cụ Tiện ích CRM Riêng Biệt (Sub-toolbar):**
+       - Đưa cụm công cụ hỗ trợ (`Nạp mẫu test F100/F101`, `Quét trùng (N)`, `Nhúng Form Landing Page (F102)`) xuống thanh tiện ích chuyên dụng ngay phía trên hàng thẻ thống kê (Stats cards).
+       - Có đường viền ngăn cách trang nhã (`border-t border-gray-100`), nhãn "Công cụ CRM:" và câu chỉ dẫn tự động hóa CRM, giúp giao diện thông thoáng, chuyên nghiệp và responsive hoàn hảo ở mọi kích thước màn hình.
+
+---
+
 ## 🚀 [2026-11-03] (v1.3.72) — CRM & Kênh Bán Hàng: Cho Phép Xem Chi Tiết, Chỉnh Sửa Tên, Màu Sắc, Thứ Tự Các Giai Đoạn (Pipelines - F094 | Stages - F095)
 
 ### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Kênh Bán Hàng & Giai Đoạn (Pipelines/Stages - F094/F095) [Electron App & Backend API]:

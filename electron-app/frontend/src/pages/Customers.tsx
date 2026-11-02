@@ -407,60 +407,79 @@ export default function Customers() {
       {/* ────────────────────────────────────────────────────────────────────────
           HEADER
           ──────────────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-xs">
-              <Users className="w-5 h-5" />
+      <div className="space-y-4">
+        {/* Top Header: Title & Main Action Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-xs shrink-0">
+                <Users className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2.5 flex-wrap">
+                  <span>Hồ sơ Khách hàng &amp; Doanh nghiệp</span>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono whitespace-nowrap">
+                    Contact &amp; Company - F093
+                  </span>
+                </h1>
+              </div>
             </div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-              Hồ sơ Khách hàng & Doanh nghiệp (Contact & Company - F093)
-            </h1>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed max-w-4xl">
+              Quản lý hồ sơ liên hệ &amp; doanh nghiệp (F093), nguồn lead &amp; người phụ trách (F097), chăm sóc &amp; nhắc việc (F098), trường tùy biến (F099), Lead Scoring (F100) &amp; Quét trùng (F101).
+            </p>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Quản lý hồ sơ liên hệ & doanh nghiệp (F093), nguồn lead & người phụ trách (F097), chăm sóc & nhắc việc (F098), trường tùy biến (F099), Lead Scoring (F100) & Quét trùng (F101).
-          </p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="btn-primary h-10 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-xs whitespace-nowrap hover:shadow-indigo-500/20 active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>Thêm khách hàng</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
-          <button
-            onClick={handleSeedDemo}
-            disabled={seeding}
-            className="h-9 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-2xs"
-            title="Nạp 5 khách hàng mẫu để kiểm thử Lead Scoring & Quét trùng"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${seeding ? 'animate-spin text-indigo-500' : ''}`} />
-            <span>Nạp mẫu test F100/F101</span>
-          </button>
+        {/* CRM Utilities & Smart Tools Toolbar */}
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-gray-100">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-xs font-semibold text-gray-400 mr-0.5 hidden sm:inline">Công cụ CRM:</span>
 
-          <button
-            onClick={handleOpenMergeScanner}
-            className={`h-9 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all shadow-2xs ${
-              stats.duplicateGroupsCount > 0
-                ? 'bg-amber-500 hover:bg-amber-600 text-white animate-bounce-subtle'
-                : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <GitMerge className="w-3.5 h-3.5 shrink-0" />
-            <span>Quét trùng ({stats.duplicateGroupsCount})</span>
-          </button>
+            <button
+              onClick={handleSeedDemo}
+              disabled={seeding}
+              className="h-8.5 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-2xs"
+              title="Nạp 5 khách hàng mẫu để kiểm thử Lead Scoring & Quét trùng"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${seeding ? 'animate-spin text-indigo-500' : ''}`} />
+              <span>Nạp mẫu test F100/F101</span>
+            </button>
 
-          <button
-            onClick={() => setShowEmbedModal(true)}
-            className="h-9 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 dark:bg-purple-950/40 dark:border-purple-800 dark:text-purple-300 transition-colors shadow-2xs"
-            title="Nhúng Form website / landing page đổ trực tiếp CRM (F102)"
-          >
-            <Code2 className="w-3.5 h-3.5 shrink-0 text-purple-600" />
-            <span>Nhúng Form Landing Page (F102)</span>
-          </button>
+            <button
+              onClick={handleOpenMergeScanner}
+              className={`h-8.5 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-2xs ${
+                stats.duplicateGroupsCount > 0
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white animate-bounce-subtle'
+                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <GitMerge className="w-3.5 h-3.5 shrink-0" />
+              <span>Quét trùng ({stats.duplicateGroupsCount})</span>
+            </button>
 
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="h-9 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs hover:shadow-indigo-500/20 active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>Thêm khách hàng</span>
-          </button>
+            <button
+              onClick={() => setShowEmbedModal(true)}
+              className="h-8.5 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 dark:bg-purple-950/40 dark:border-purple-800 dark:text-purple-300 transition-colors shadow-2xs"
+              title="Nhúng Form website / landing page đổ trực tiếp CRM (F102)"
+            >
+              <Code2 className="w-3.5 h-3.5 shrink-0 text-purple-600" />
+              <span>Nhúng Form Landing Page (F102)</span>
+            </button>
+          </div>
+
+          <div className="text-[11px] text-gray-400 hidden lg:inline">
+            Tự động chấm điểm Lead (F100) &amp; Cảnh báo trùng lặp (F101)
+          </div>
         </div>
       </div>
 
