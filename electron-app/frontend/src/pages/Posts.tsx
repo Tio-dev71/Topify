@@ -24,6 +24,8 @@ import {
   Filter,
   SlidersHorizontal,
   Plus,
+  Send,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -104,6 +106,28 @@ export default function Posts() {
   const [search, setSearch] = useState('');
   const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSendingComment, setIsSendingComment] = useState(false);
+
+  const handleSendFirstComment = async () => {
+    if (!selectedPost || !selectedPost.firstComment) return;
+    setIsSendingComment(true);
+    const toastId = toast.loading('Đang gửi bình luận đầu tiên lên nền tảng...');
+    try {
+      const res = await api.post(`/posts/${selectedPost.id}/comment`);
+      toast.dismiss(toastId);
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Đã gửi bình luận đầu tiên thành công!');
+      } else {
+        toast.error(res.data?.message || 'Không thể gửi bình luận');
+      }
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      const serverMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message;
+      toast.error(`Lỗi khi gửi bình luận: ${serverMsg}`);
+    } finally {
+      setIsSendingComment(false);
+    }
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
@@ -958,11 +982,25 @@ export default function Posts() {
 
                 {/* First comment */}
                 <div className="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-100">
-                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                    <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
-                    Bình luận đầu tiên
-                  </p>
-                  <p className="text-xs font-medium text-gray-900">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
+                      Bình luận đầu tiên
+                    </p>
+                    {selectedPost.firstComment && selectedPost.status === 'PUBLISHED' && (
+                      <button
+                        type="button"
+                        onClick={handleSendFirstComment}
+                        disabled={isSendingComment}
+                        className="text-[11px] font-semibold text-amber-900 bg-amber-200/80 hover:bg-amber-300 px-2.5 py-1 rounded-lg transition inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        title="Gửi hoặc thử lại đăng bình luận đầu tiên lên nền tảng"
+                      >
+                        {isSendingComment ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                        <span>Gửi bình luận</span>
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs font-medium text-gray-900 leading-relaxed">
                     {selectedPost.firstComment || <span className="text-gray-400 italic">Không có bình luận đầu</span>}
                   </p>
                 </div>

@@ -62,8 +62,8 @@ export async function GET(req: NextRequest) {
       scopes = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
       statePrefix = 'google_drive';
     } else {
-      // Scopes cho YouTube: upload + readonly + userinfo. Bỏ scope youtube.force-ssl để tránh bị Google chặn lỗi 403 access_denied
-      scopes = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+      // Scopes cho YouTube: upload + readonly + force-ssl (bắt buộc để đăng bình luận đầu tiên qua commentThreads.insert) + userinfo
+      scopes = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
       statePrefix = 'youtube';
     }
 

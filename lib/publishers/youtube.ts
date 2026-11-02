@@ -153,12 +153,17 @@ export class YouTubeShortsPublisher implements Publisher {
 
       const uploadData = await uploadRes.json();
       if (uploadData.id) {
-        // Step 3: Post the first comment if provided (retry up to 3 times as YouTube takes a moment to index new videos for comments)
-        if (post.firstComment) {
-          for (let attempt = 1; attempt <= 3; attempt++) {
+        // Step 3: Post the first comment if provided (retry with backoff as YouTube takes a moment to index new videos for comments)
+        if (post.firstComment && post.firstComment.trim()) {
+          console.log(`[YouTube] Preparing to post first comment on video ${uploadData.id}: "${post.firstComment.trim()}"`);
+          // Wait 3s initially for YouTube to create and index the video resource in commentThreads
+          await new Promise(r => setTimeout(r, 3000));
+
+          let commentPosted = false;
+          for (let attempt = 1; attempt <= 4; attempt++) {
             try {
               if (attempt > 1) {
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 3000 + attempt * 1000));
               }
               const commentRes = await fetch('https://www.googleapis.com/youtube/v3/commentThreads?part=snippet', {
                 method: 'POST',
@@ -171,22 +176,31 @@ export class YouTubeShortsPublisher implements Publisher {
                     videoId: uploadData.id,
                     topLevelComment: {
                       snippet: {
-                        textOriginal: post.firstComment,
+                        textOriginal: post.firstComment.trim(),
                       },
                     },
                   },
                 }),
               });
               if (commentRes.ok) {
-                console.log(`✅ YouTube first comment posted successfully on attempt ${attempt}`);
+                const commentData = await commentRes.json();
+                console.log(`✅ YouTube first comment posted successfully on attempt ${attempt} (commentId: ${commentData?.id})`);
+                commentPosted = true;
                 break;
               } else {
                 const commentErr = await commentRes.text();
-                console.warn(`YouTube comment attempt ${attempt} warning (${commentRes.status}):`, commentErr);
+                console.warn(`[YouTube] Comment attempt ${attempt} notice (${commentRes.status}):`, commentErr);
+                if (commentErr.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
+                  console.warn('[YouTube] Token lacks youtube.force-ssl scope. User needs to reconnect YouTube account to grant comment permission.');
+                  break;
+                }
               }
             } catch (commentError) {
               console.error(`Attempt ${attempt} to post YouTube first comment failed:`, commentError);
             }
+          }
+          if (!commentPosted) {
+            console.warn(`[YouTube] Could not post first comment on video ${uploadData.id}`);
           }
         }
         return { success: true, externalPostId: uploadData.id };

@@ -11,6 +11,33 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-02] (v1.3.65) — Quản Lý Bài Viết: Khắc Phục Lỗi Không Tự Động Đăng "Bình Luận Đầu Tiên" Trên YouTube (Shorts & Standard Video)
+
+### Phân hệ M2. Quản lý Bài viết — Xuất bản Đa Kênh & YouTube Data API [Electron App, Web Dashboard & Backend API]:
+- **[Sửa lỗi YouTube First Comment] Khắc phục triệt để lỗi bài đăng thành công trên YouTube nhưng không xuất hiện "Bình luận đầu tiên":**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Quản lý bài viết $\rightarrow$ Tạo bài đăng mới.
+    - Chọn video, chọn nền tảng YouTube (YouTube thường hoặc YouTube Shorts).
+    - Nhập "Bình luận đầu tiên" (ví dụ: *"Hihiiihiii"*).
+    - Đăng bài thành công (trạng thái "Đã đăng"). Mở bài viết trên YouTube kiểm tra thì hoàn toàn không có bình luận đầu tiên.
+  - **Nguyên nhân cốt lõi (Root Cause Analysis):**
+    1. **Thiếu OAuth Scope bắt buộc ([`app/api/social/google/route.ts`](file:///Users/tiodev/Desktop/Topify.nosync/app/api/social/google/route.ts)):**
+       - Phương thức `commentThreads.insert` của YouTube Data API v3 bắt buộc phải có scope `https://www.googleapis.com/auth/youtube.force-ssl`.
+       - Trước đây, cấu hình Google OAuth trong Topify chỉ yêu cầu `youtube.upload` và `youtube.readonly`, dẫn đến khi worker gọi API đăng bình luận thì Google trả về lỗi `403 PERMISSION_DENIED: Request had insufficient authentication scopes (ACCESS_TOKEN_SCOPE_INSUFFICIENT)`.
+    2. **Độ trễ khởi tạo chỉ mục video mới trên YouTube ([`lib/publishers/youtube.ts`](file:///Users/tiodev/Desktop/Topify.nosync/lib/publishers/youtube.ts)):**
+       - Video sau khi tải lên thành công cần 3-5 giây để hệ thống YouTube hoàn tất lập chỉ mục comment thread. Gọi API đăng bình luận tức thì (0ms) dễ bị lỗi video chưa sẵn sàng (`commentsDisabled` / `videoNotFound`).
+  - **Giải pháp xử lý toàn diện:**
+    1. **Cập nhật đầy đủ Scope Google OAuth (`app/api/social/google/route.ts`):**
+       - Bổ sung `https://www.googleapis.com/auth/youtube.force-ssl` vào luồng kết nối tài khoản Google/YouTube, cấp đủ quyền cho API `commentThreads.insert`.
+    2. **Tối ưu hóa cơ chế thử lại & Backoff thông minh (`lib/publishers/youtube.ts`):**
+       - Thêm thời gian chờ khởi tạo ban đầu 3 giây sau khi upload video thành công.
+       - Tăng số lần thử lại lên tối đa 4 lần với khoảng cách thời gian tăng dần (3s, 4s, 5s), log chi tiết `commentId` khi thành công.
+    3. **Thêm Endpoint & Nút hành động "Gửi bình luận" trực tiếp (`POST /api/posts/[id]/comment`):**
+       - Tạo API chuyên biệt cho phép đăng hoặc thử lại bình luận đầu tiên cho bất kỳ bài viết nào đã xuất bản thành công trên YouTube hoặc Facebook.
+       - Bổ sung nút bấm `"Gửi bình luận"` ngay tại khối hiển thị "Bình luận đầu tiên" trong modal chi tiết bài viết ([`Posts.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Posts.tsx) và [`PostDetail.tsx`](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/PostDetail.tsx)), hỗ trợ người dùng chủ động gửi bình luận chỉ với 1 click.
+
+---
+
 ## 🚀 [2026-11-02] (v1.3.64) — Thư Viện Media (F114): Hỗ Trợ Toàn Diện Định Dạng Ảnh Apple HEIC/HEIF — Tự Động Chuyển Đổi JPEG & Xem Trước Trực Tiếp
 
 ### Phân hệ M2. Thư viện Media & Tệp tin (F114) [Electron App, Web Dashboard & Backend API]:

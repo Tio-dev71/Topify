@@ -21,3 +21,4 @@ describe('HEIC Format Utilities', () => {
     expect(result).toBeNull();
   });
 });
+
