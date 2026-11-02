@@ -94,10 +94,27 @@ export default function Pipelines() {
         if (current.stages && current.stages.length > 0) {
           const sorted = [...current.stages].sort((a, b) => a.sortOrder - b.sortOrder);
           setStages(sorted);
+          try {
+            localStorage.setItem('topify_pipeline_stages', JSON.stringify(sorted));
+          } catch {}
+        }
+      } else {
+        // Fallback to local cached stages if available
+        const cached = localStorage.getItem('topify_pipeline_stages');
+        if (cached) {
+          try {
+            setStages(JSON.parse(cached));
+          } catch {}
         }
       }
     } catch {
-      // Keep DEFAULT_STAGES if offline or network error
+      // Fallback to local cached stages if network issue
+      const cached = localStorage.getItem('topify_pipeline_stages');
+      if (cached) {
+        try {
+          setStages(JSON.parse(cached));
+        } catch {}
+      }
     } finally {
       setLoading(false);
     }
@@ -165,18 +182,26 @@ export default function Pipelines() {
 
       setStages(updatedStages);
 
-      // Persist to backend if active pipeline exists
-      if (activePipeline?.id) {
-        await api.patch('/crm/pipelines', {
-          id: activePipeline.id,
-          stages: updatedStages.map((s, idx) => ({
-            id: s.id.startsWith('stage_') ? undefined : s.id,
-            name: s.name,
-            color: s.color || '#3B82F6',
-            sortOrder: idx + 1,
-          })),
-        });
-        await fetchPipelines();
+      // Persist to backend
+      const res = await api.patch('/crm/pipelines', {
+        id: activePipeline?.id,
+        stages: updatedStages.map((s, idx) => ({
+          id: s.id.startsWith('stage_') ? undefined : s.id,
+          name: s.name,
+          color: s.color || '#3B82F6',
+          sortOrder: idx + 1,
+        })),
+      });
+
+      if (res.data) {
+        setActivePipeline(res.data);
+        if (res.data.stages && res.data.stages.length > 0) {
+          const sorted = [...res.data.stages].sort((a, b) => a.sortOrder - b.sortOrder);
+          setStages(sorted);
+          try {
+            localStorage.setItem('topify_pipeline_stages', JSON.stringify(sorted));
+          } catch {}
+        }
       }
 
       toast.success(`Đã cập nhật giai đoạn "${editForm.name}" thành công!`);
@@ -208,62 +233,86 @@ export default function Pipelines() {
     }));
 
     setStages(updatedWithOrder);
+    try {
+      localStorage.setItem('topify_pipeline_stages', JSON.stringify(updatedWithOrder));
+    } catch {}
 
-    if (activePipeline?.id) {
-      try {
-        await api.patch('/crm/pipelines', {
-          id: activePipeline.id,
-          stages: updatedWithOrder.map((s, idx) => ({
-            id: s.id.startsWith('stage_') ? undefined : s.id,
-            name: s.name,
-            color: s.color || '#3B82F6',
-            sortOrder: idx + 1,
-          })),
-        });
-      } catch (err: any) {
-        toast.error('Lỗi khi cập nhật thứ tự: ' + (err.response?.data?.error || err.message));
+    try {
+      const res = await api.patch('/crm/pipelines', {
+        id: activePipeline?.id,
+        stages: updatedWithOrder.map((s, idx) => ({
+          id: s.id.startsWith('stage_') ? undefined : s.id,
+          name: s.name,
+          color: s.color || '#3B82F6',
+          sortOrder: idx + 1,
+        })),
+      });
+      if (res.data?.stages) {
+        setActivePipeline(res.data);
+        const sorted = [...res.data.stages].sort((a, b) => a.sortOrder - b.sortOrder);
+        setStages(sorted);
+        try {
+          localStorage.setItem('topify_pipeline_stages', JSON.stringify(sorted));
+        } catch {}
       }
+      toast.success(`Đã đổi vị trí giai đoạn sang thứ tự ${targetIndex + 1}`);
+    } catch (err: any) {
+      toast.error('Lỗi khi cập nhật thứ tự: ' + (err.response?.data?.error || err.message));
     }
-    toast.success(`Đã đổi vị trí giai đoạn sang thứ tự ${targetIndex + 1}`);
   };
 
   // Add new stage
   const handleAddStage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStage.name.trim()) return;
+    const stageName = newStage.name.trim();
+    if (!stageName) return;
 
     setSaving(true);
-    const item: Stage = {
-      id: 'stage_' + Date.now().toString(),
-      name: newStage.name.trim(),
-      color: newStage.color,
-      sortOrder: stages.length + 1,
-    };
+    try {
+      const item: Stage = {
+        id: 'stage_' + Date.now().toString(),
+        name: stageName,
+        color: newStage.color,
+        sortOrder: stages.length + 1,
+      };
 
-    const nextStages = [...stages, item];
-    setStages(nextStages);
-
-    if (activePipeline?.id) {
+      const nextStages = [...stages, item];
+      setStages(nextStages);
       try {
-        await api.patch('/crm/pipelines', {
-          id: activePipeline.id,
-          stages: nextStages.map((s, idx) => ({
-            id: s.id.startsWith('stage_') ? undefined : s.id,
-            name: s.name,
-            color: s.color || '#3B82F6',
-            sortOrder: idx + 1,
-          })),
-        });
-        await fetchPipelines();
-      } catch (err: any) {
-        toast.error('Lỗi khi thêm giai đoạn: ' + (err.response?.data?.error || err.message));
-      }
-    }
+        localStorage.setItem('topify_pipeline_stages', JSON.stringify(nextStages));
+      } catch {}
 
-    toast.success(`Đã thêm giai đoạn "${newStage.name}"`);
-    setNewStage({ name: '', color: '#3B82F6' });
-    setIsAddModalOpen(false);
-    setSaving(false);
+      const res = await api.patch('/crm/pipelines', {
+        id: activePipeline?.id,
+        stages: nextStages.map((s, idx) => ({
+          id: s.id.startsWith('stage_') ? undefined : s.id,
+          name: s.name,
+          color: s.color || '#3B82F6',
+          sortOrder: idx + 1,
+        })),
+      });
+
+      if (res.data) {
+        setActivePipeline(res.data);
+        if (res.data.stages && res.data.stages.length > 0) {
+          const sorted = [...res.data.stages].sort((a, b) => a.sortOrder - b.sortOrder);
+          setStages(sorted);
+          try {
+            localStorage.setItem('topify_pipeline_stages', JSON.stringify(sorted));
+          } catch {}
+        }
+      }
+
+      toast.success(`Đã thêm giai đoạn "${stageName}" thành công!`);
+      setNewStage({ name: '', color: '#3B82F6' });
+      setIsAddModalOpen(false);
+    } catch (err: any) {
+      // Revert if error
+      setStages(stages);
+      toast.error('Lỗi khi thêm giai đoạn: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Delete stage
@@ -277,30 +326,43 @@ export default function Pipelines() {
       return;
     }
 
-    const filtered = stages.filter(s => s.id !== id).map((s, idx) => ({
-      ...s,
-      sortOrder: idx + 1,
-    }));
-    setStages(filtered);
-
-    if (activePipeline?.id) {
+    setSaving(true);
+    try {
+      const filtered = stages.filter(s => s.id !== id).map((s, idx) => ({
+        ...s,
+        sortOrder: idx + 1,
+      }));
+      setStages(filtered);
       try {
-        await api.patch('/crm/pipelines', {
-          id: activePipeline.id,
-          stages: filtered.map((s, idx) => ({
-            id: s.id.startsWith('stage_') ? undefined : s.id,
-            name: s.name,
-            color: s.color || '#3B82F6',
-            sortOrder: idx + 1,
-          })),
-        });
-        await fetchPipelines();
-      } catch (err: any) {
-        toast.error('Lỗi khi xóa giai đoạn: ' + (err.response?.data?.error || err.message));
-      }
-    }
+        localStorage.setItem('topify_pipeline_stages', JSON.stringify(filtered));
+      } catch {}
 
-    toast.success(`Đã xóa giai đoạn "${name}"`);
+      const res = await api.patch('/crm/pipelines', {
+        id: activePipeline?.id,
+        stages: filtered.map((s, idx) => ({
+          id: s.id.startsWith('stage_') ? undefined : s.id,
+          name: s.name,
+          color: s.color || '#3B82F6',
+          sortOrder: idx + 1,
+        })),
+      });
+
+      if (res.data?.stages) {
+        setActivePipeline(res.data);
+        const sorted = [...res.data.stages].sort((a, b) => a.sortOrder - b.sortOrder);
+        setStages(sorted);
+        try {
+          localStorage.setItem('topify_pipeline_stages', JSON.stringify(sorted));
+        } catch {}
+      }
+
+      toast.success(`Đã xóa giai đoạn "${name}" thành công`);
+    } catch (err: any) {
+      toast.error('Lỗi khi xóa giai đoạn: ' + (err.response?.data?.error || err.message));
+      await fetchPipelines();
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Create new pipeline (F094)

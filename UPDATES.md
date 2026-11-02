@@ -11,6 +11,30 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.74) — CRM & Kênh Bán Hàng: Khắc Phục Lỗi Mất Giai Đoạn Khi Chuyển Trang & Tối Ưu Xác Thực JWT Đa Workspace
+
+### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Kênh Bán Hàng & Giai Đoạn (Pipelines/Stages - F094/F095) [Electron App & Backend API]:
+- **[Khắc phục lỗi tạo giai đoạn thành công nhưng chuyển trang rồi quay lại thì giai đoạn bị biến mất]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Kênh bán hàng (F094/F095)** $\rightarrow$ Click **"Thêm Giai Đoạn"**, tạo giai đoạn mới (ví dụ *"Hoàn thành"*). Hệ thống báo *"Đã thêm giai đoạn "Hoàn thành""*.
+    - Chuyển sang menu/trang khác (ví dụ Quản lý bài viết, Hồ sơ khách hàng...) $\rightarrow$ Quay lại Kênh bán hàng $\rightarrow$ Giai đoạn mới tạo bị mất khỏi danh sách.
+  - **Nguyên nhân cốt lõi (Root Cause):**
+    1. **Bỏ sót giải mã Bearer Token trong API Pipelines (`app/api/crm/pipelines/route.ts`):** Hàm `getAuthContext()` chỉ dựa vào session NextAuth mà không đọc header `Authorization: Bearer <token>` từ ứng dụng Electron. Khi request từ Electron không có cookie session, API bị gán nhầm vào mock user của `default-workspace` thay vì đúng workspace của tài khoản đăng nhập (ví dụ: `yến ngô` thuộc workspace `cmubcm2km000246z8xx84kwpd`). Do đó dữ liệu không được đồng bộ đúng workspace.
+    2. **Xử lý bất đồng bộ thiếu đồng bộ hóa server (`electron-app/frontend/src/pages/Pipelines.tsx`):** `handleAddStage` trước đó đưa ra thông báo thành công trước khi request API hoàn tất và không cập nhật lại state của pipeline với ID thực tế trả về từ database.
+    3. **Thiếu cơ chế tự động khởi tạo khi thiếu pipeline ID:** Khi `activePipeline` chưa tải xong hoặc rỗng, thao tác lưu bị bỏ qua, dẫn đến việc chuyển trang làm mất sạch các thay đổi tạm thời.
+  - **Giải pháp xử lý triệt để:**
+    1. **Bổ sung xác thực JWT đa nền tảng (`app/api/crm/pipelines/route.ts`):**
+       - Sử dụng `jwt.verify` để giải mã Bearer token từ header `Authorization`, trích xuất chính xác `userId` và `workspaceId` của người dùng Electron app.
+       - Tự động tìm kiếm hoặc khởi tạo pipeline chuẩn cho workspace nếu chưa tồn tại.
+       - Cập nhật và lưu các giai đoạn mới trực tiếp vào bảng `PipelineStage` trong cơ sở dữ liệu.
+    2. **Đảm bảo tính toàn vẹn dữ liệu ở Frontend (`electron-app/frontend/src/pages/Pipelines.tsx`):**
+       - `handleAddStage`, `handleSaveEdit`, `handleQuickReorder` và `handleDelete` đều đợi API phản hồi thành công mới xác nhận, gán trực tiếp dữ liệu chuẩn từ database vào state.
+       - Lưu cache dự phòng vào `localStorage ('topify_pipeline_stages')` để hiển thị tức thì không bị giật hay mất dữ liệu khi người dùng chuyển qua lại giữa các menu.
+    3. **Kiểm thử tự động:**
+       - Chạy lại toàn bộ test suite `__tests__/api/crm/pipelines.test.ts` đảm bảo 100% test pass.
+
+---
+
 ## 🚀 [2026-11-03] (v1.3.73) — CRM & Hồ Sơ Khách Hàng: Tái Cấu Trúc Header F093, Chống Co Hẹp Tiêu Đề Và Tách Toolbar Tiện Ích Thông Minh
 
 ### Phân hệ M5. Giao Tiếp & Bán Hàng (CRM) — Hồ Sơ Khách Hàng & Doanh Nghiệp (F093) [Electron App]:

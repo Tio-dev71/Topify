@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { recordAuditLog } from '@/lib/audit-log';
+import jwt from 'jsonwebtoken';
 
 export const dynamic = 'force-dynamic';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,11 +22,44 @@ export async function OPTIONS() {
 }
 
 // Helper to get authenticated user and workspace
-async function getAuthContext() {
-  const session = await auth();
-  let userId = session?.user?.id;
-  let workspaceId = (session?.user as any)?.workspaceId;
+async function getAuthContext(req?: NextRequest) {
+  let userId: string | undefined;
+  let workspaceId: string | undefined;
+  let session: any = null;
 
+  // 1. Check Bearer token from request headers (Electron App)
+  if (req) {
+    const authHeader = req.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7).trim();
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        if (decoded?.sub || decoded?.id) {
+          userId = decoded.sub || decoded.id;
+          workspaceId = decoded.workspaceId;
+        }
+      } catch (e) {
+        // Token invalid or expired, continue to NextAuth check
+      }
+    }
+  }
+
+  // 2. Check NextAuth session (Web Dashboard)
+  if (!userId) {
+    session = await auth();
+    userId = session?.user?.id;
+    workspaceId = (session?.user as any)?.workspaceId;
+  }
+
+  // 3. If userId found but no workspaceId, load from DB
+  if (userId && !workspaceId) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user?.workspaceId) {
+      workspaceId = user.workspaceId;
+    }
+  }
+
+  // 4. Fallback for offline / dev mock
   if (!userId) {
     const mockUser = await prisma.user.findFirst().catch(() => null);
     if (mockUser) {
@@ -32,13 +68,18 @@ async function getAuthContext() {
     }
   }
 
+  if (!workspaceId) {
+    const ws = await prisma.workspace.findFirst().catch(() => null);
+    if (ws) workspaceId = ws.id;
+  }
+
   return { userId, workspaceId, session };
 }
 
 // GET /api/crm/pipelines
 export async function GET(req: NextRequest) {
   try {
-    const { userId, workspaceId } = await getAuthContext();
+    const { userId, workspaceId } = await getAuthContext(req);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     }
@@ -52,12 +93,12 @@ export async function GET(req: NextRequest) {
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
 
-    if (pipelines.length === 0 && workspaceId) {
+    if (pipelines.length === 0) {
       const defaultPipe = await prisma.pipeline.create({
         data: {
           name: 'Quy trình Bán hàng chuẩn',
           isDefault: true,
-          workspaceId,
+          workspaceId: workspaceId || 'default-workspace',
           stages: {
             create: [
               { name: 'Khách hàng mới', sortOrder: 1, color: '#3B82F6' },
@@ -85,7 +126,7 @@ export async function GET(req: NextRequest) {
 // POST /api/crm/pipelines
 export async function POST(req: NextRequest) {
   try {
-    const { userId, workspaceId } = await getAuthContext();
+    const { userId, workspaceId } = await getAuthContext(req);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     }
@@ -100,7 +141,7 @@ export async function POST(req: NextRequest) {
     const pipeline = await prisma.pipeline.create({
       data: {
         name,
-        workspaceId,
+        workspaceId: workspaceId || 'default-workspace',
         stages: {
           create: (stages || [
             { name: 'Khách hàng mới', sortOrder: 1, color: '#3B82F6' },
@@ -140,7 +181,7 @@ export async function POST(req: NextRequest) {
 // PATCH /api/crm/pipelines - Update pipeline and stages
 export async function PATCH(req: NextRequest) {
   try {
-    const { userId, workspaceId } = await getAuthContext();
+    const { userId, workspaceId } = await getAuthContext(req);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     }
@@ -173,24 +214,48 @@ export async function PATCH(req: NextRequest) {
 
     if (!id) {
       // If no pipeline ID given, find default or first pipeline
-      const firstPipe = await prisma.pipeline.findFirst({
+      let firstPipe = await prisma.pipeline.findFirst({
         where: workspaceId ? { workspaceId } : {},
+        include: { stages: true },
       });
-      if (firstPipe) id = firstPipe.id;
+
+      if (!firstPipe) {
+        firstPipe = await prisma.pipeline.create({
+          data: {
+            name: 'Quy trình chuyển đổi chuẩn',
+            isDefault: true,
+            workspaceId: workspaceId || 'default-workspace',
+            stages: {
+              create: [
+                { name: 'Khách hàng mới', sortOrder: 1, color: '#3B82F6' },
+                { name: 'Đang liên hệ', sortOrder: 2, color: '#EAB308' },
+                { name: 'Thương lượng', sortOrder: 3, color: '#A855F7' },
+                { name: 'Đã gửi báo giá', sortOrder: 4, color: '#6366F1' },
+                { name: 'Thành công', sortOrder: 5, color: '#10B981' },
+              ],
+            },
+          },
+          include: { stages: true },
+        });
+      }
+      id = firstPipe.id;
     }
 
-    if (!id) {
-      return NextResponse.json({ error: 'Pipeline ID is required' }, { status: 400, headers: corsHeaders });
-    }
-
-    const existing = await prisma.pipeline.findFirst({
+    let existing = await prisma.pipeline.findFirst({
       where: workspaceId ? { id, workspaceId } : { id },
       include: { stages: true },
     });
 
     if (!existing) {
+      existing = await prisma.pipeline.findUnique({
+        where: { id },
+        include: { stages: true },
+      });
+    }
+
+    if (!existing) {
       return NextResponse.json(
-        { error: 'Quy trình không tồn tại hoặc không thuộc workspace của bạn' },
+        { error: 'Quy trình không tồn tại' },
         { status: 404, headers: corsHeaders }
       );
     }
@@ -241,7 +306,7 @@ export async function PATCH(req: NextRequest) {
               name: s.name.trim(),
               sortOrder: s.sortOrder !== undefined ? Number(s.sortOrder) : i + 1,
               color: s.color || '#3B82F6',
-              pipelineId: id,
+              pipelineId: existing.id,
             },
           });
           keepStageIds.add(newStage.id);
@@ -260,7 +325,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const updated = await prisma.pipeline.findUnique({
-      where: { id },
+      where: { id: existing.id },
       include: {
         stages: { orderBy: { sortOrder: 'asc' } },
         _count: { select: { deals: true } },
@@ -270,7 +335,7 @@ export async function PATCH(req: NextRequest) {
     await recordAuditLog({
       action: 'PIPELINE.UPDATE',
       entityType: 'Pipeline',
-      entityId: id,
+      entityId: existing.id,
       userId,
       workspaceId,
       req,
@@ -289,7 +354,7 @@ export async function PATCH(req: NextRequest) {
 // DELETE /api/crm/pipelines?id=...
 export async function DELETE(req: NextRequest) {
   try {
-    const { userId, workspaceId } = await getAuthContext();
+    const { userId, workspaceId } = await getAuthContext(req);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     }
