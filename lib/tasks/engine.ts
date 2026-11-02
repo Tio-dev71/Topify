@@ -207,18 +207,42 @@ export function evaluateMemberProductivity(
   const completedCount = completedTasks.length;
   const overdueCount = overdueTasks.length;
 
-  // On-time rate
-  const onTimeRate = totalAssigned > 0 
-    ? Math.max(0, Math.min(100, Math.round(((totalAssigned - overdueCount) / totalAssigned) * 100))) 
-    : 100;
+  // On-time rate:
+  // - If member has no completed tasks: 0% (no finished tasks to evaluate on-time delivery)
+  // - If member has completed tasks: completedCount / (completedCount + overdueCount) * 100
+  let onTimeRate = 0;
+  if (completedCount > 0) {
+    onTimeRate = Math.max(0, Math.min(100, Math.round((completedCount / (completedCount + overdueCount)) * 100)));
+  }
 
-  // Productivity score: based on completed count + onTimeRate - overdue penalty
-  let productivityScore = 70;
+  // Productivity score (0 - 100):
+  // - If 0 tasks assigned: 0/100 (no work assigned)
+  // - If tasks assigned:
+  //   * Completion score: (completedCount / totalAssigned) * 50
+  //   * On-time / In-progress score:
+  //     - If completedCount > 0: (onTimeRate / 100) * 35
+  //     - If completedCount === 0: overdueCount === 0 ? 15 : 0 (credit for active work within schedule)
+  //   * Workload bonus:
+  //     - If activeCount > 0 && overdueCount === 0: 15
+  //     - If completedCount === totalAssigned: 15
+  //     - Else: Math.max(0, 15 - overdueCount * 10)
+  //   * Overdue penalty: (overdueCount / totalAssigned) * 40
+  let productivityScore = 0;
   if (totalAssigned > 0) {
     const completionWeight = (completedCount / totalAssigned) * 50;
-    const onTimeWeight = (onTimeRate / 100) * 40;
-    const overduePenalty = (overdueCount / totalAssigned) * 30;
-    productivityScore = Math.max(20, Math.min(100, Math.round(completionWeight + onTimeWeight - overduePenalty + 10)));
+    const onTimeWeight = completedCount > 0 ? (onTimeRate / 100) * 35 : (overdueCount === 0 ? 15 : 0);
+    const workloadBonus =
+      activeCount > 0 && overdueCount === 0
+        ? 15
+        : completedCount === totalAssigned
+        ? 15
+        : Math.max(0, 15 - overdueCount * 10);
+    const overduePenalty = (overdueCount / totalAssigned) * 40;
+
+    productivityScore = Math.max(
+      0,
+      Math.min(100, Math.round(completionWeight + onTimeWeight + workloadBonus - overduePenalty))
+    );
   }
 
   // Overloaded if active tasks >= 5 or urgent tasks >= 3

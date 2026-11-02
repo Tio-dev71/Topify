@@ -373,16 +373,33 @@ export default function Tasks() {
       const completedCount = completedTasks.length;
       const overdueCount = overdueTasks.length;
 
-      const onTimeRate = totalAssigned > 0
-        ? Math.max(0, Math.min(100, Math.round(((totalAssigned - overdueCount) / totalAssigned) * 100)))
-        : 100;
+      // On-time rate:
+      // - 0% if no tasks completed (cannot claim 100% on-time without completed work)
+      // - completedCount / (completedCount + overdueCount) * 100
+      let onTimeRate = 0;
+      if (completedCount > 0) {
+        onTimeRate = Math.max(0, Math.min(100, Math.round((completedCount / (completedCount + overdueCount)) * 100)));
+      }
 
-      let productivityScore = 70;
+      // Productivity score (0 - 100):
+      // - 0 if totalAssigned === 0 (no work assigned)
+      // - Based on completion (50%), on-time/progress (35%), active workload bonus (15%), minus overdue penalty
+      let productivityScore = 0;
       if (totalAssigned > 0) {
         const completionWeight = (completedCount / totalAssigned) * 50;
-        const onTimeWeight = (onTimeRate / 100) * 40;
-        const overduePenalty = (overdueCount / totalAssigned) * 30;
-        productivityScore = Math.max(20, Math.min(100, Math.round(completionWeight + onTimeWeight - overduePenalty + 10)));
+        const onTimeWeight = completedCount > 0 ? (onTimeRate / 100) * 35 : (overdueCount === 0 ? 15 : 0);
+        const workloadBonus =
+          activeCount > 0 && overdueCount === 0
+            ? 15
+            : completedCount === totalAssigned
+            ? 15
+            : Math.max(0, 15 - overdueCount * 10);
+        const overduePenalty = (overdueCount / totalAssigned) * 40;
+
+        productivityScore = Math.max(
+          0,
+          Math.min(100, Math.round(completionWeight + onTimeWeight + workloadBonus - overduePenalty))
+        );
       }
 
       const isOverloaded = activeCount >= 4 || urgentActiveCount >= 2;
@@ -1502,17 +1519,59 @@ export default function Tasks() {
               <span className="text-[11px] text-blue-400">Toàn bộ phòng ban đang chạy</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
-              <span className="text-xs text-[var(--color-muted-foreground)]">Tỷ lệ đúng hạn (On-time Rate)</span>
-              <div className="text-2xl font-bold text-emerald-500">
-                {Math.round(
-                  (productivityMetrics.reduce((acc, m) => acc + m.onTimeRate, 0) /
-                    (productivityMetrics.length || 1))
-                )}
-                %
-              </div>
-              <span className="text-[11px] text-[var(--color-muted-foreground)]">Duy trì hiệu suất cao</span>
-            </div>
+            {(() => {
+              const totalCompleted = tasks.filter((t) => t.status === 'DONE').length;
+              const now = Date.now();
+              const totalOverdue = tasks.filter(
+                (t) => t.status !== 'DONE' && t.dueDate && new Date(t.dueDate).getTime() < now
+              ).length;
+              const overallOnTimeRate =
+                totalCompleted > 0
+                  ? Math.round((totalCompleted / (totalCompleted + totalOverdue)) * 100)
+                  : 0;
+
+              let statusText = 'Đang trong hạn thực hiện';
+              let statusColor = 'text-blue-400';
+              let rateColor = 'text-slate-400';
+
+              if (tasks.length === 0) {
+                statusText = 'Chưa có công việc';
+                statusColor = 'text-[var(--color-muted-foreground)]';
+                rateColor = 'text-[var(--color-muted-foreground)]';
+              } else if (totalCompleted === 0) {
+                if (totalOverdue > 0) {
+                  statusText = `${totalOverdue} việc trễ hạn`;
+                  statusColor = 'text-rose-500';
+                  rateColor = 'text-rose-500';
+                } else {
+                  statusText = 'Đang trong tiến độ xử lý';
+                  statusColor = 'text-blue-400';
+                  rateColor = 'text-blue-400';
+                }
+              } else {
+                if (overallOnTimeRate >= 80) {
+                  statusText = 'Duy trì hiệu suất cao';
+                  statusColor = 'text-emerald-500';
+                  rateColor = 'text-emerald-500';
+                } else if (overallOnTimeRate >= 50) {
+                  statusText = 'Cần chú ý tiến độ';
+                  statusColor = 'text-amber-500';
+                  rateColor = 'text-amber-500';
+                } else {
+                  statusText = 'Cảnh báo trễ hạn cao';
+                  statusColor = 'text-rose-500';
+                  rateColor = 'text-rose-500';
+                }
+              }
+
+              return (
+                <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
+                  <span className="text-xs text-[var(--color-muted-foreground)]">Tỷ lệ đúng hạn (On-time Rate)</span>
+                  <div className={`text-2xl font-bold ${rateColor}`}>{overallOnTimeRate}%</div>
+                  <span className={`text-[11px] ${statusColor}`}>{statusText}</span>
+                </div>
+              );
+            })()}
 
             <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
               <span className="text-xs text-[var(--color-muted-foreground)]">Đã hoàn tất (Completion)</span>
@@ -1590,12 +1649,37 @@ export default function Tasks() {
                     <td className="py-3 px-3">
                       <div className="space-y-1">
                         <div className="flex items-center justify-between font-semibold">
-                          <span>{member.onTimeRate}%</span>
+                          <span
+                            className={
+                              member.totalAssigned === 0
+                                ? 'text-[var(--color-muted-foreground)]'
+                                : member.onTimeRate >= 80
+                                ? 'text-emerald-500'
+                                : member.onTimeRate >= 50
+                                ? 'text-amber-500'
+                                : member.completedCount === 0
+                                ? 'text-[var(--color-muted-foreground)]'
+                                : 'text-rose-500'
+                            }
+                          >
+                            {member.onTimeRate}%
+                          </span>
+                          {member.totalAssigned > 0 && member.completedCount === 0 && (
+                            <span className="text-[10px] text-[var(--color-muted-foreground)] font-normal">
+                              (Chưa xong)
+                            </span>
+                          )}
                         </div>
                         <div className="w-24 h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${
-                              member.onTimeRate >= 80 ? 'bg-emerald-500' : member.onTimeRate >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              member.onTimeRate >= 80
+                                ? 'bg-emerald-500'
+                                : member.onTimeRate >= 60
+                                ? 'bg-amber-500'
+                                : member.onTimeRate > 0
+                                ? 'bg-rose-500'
+                                : 'bg-transparent'
                             }`}
                             style={{ width: `${member.onTimeRate}%` }}
                           />
@@ -1603,11 +1687,26 @@ export default function Tasks() {
                       </div>
                     </td>
                     <td className="py-3 px-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-[var(--color-foreground)]">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`font-bold text-sm ${
+                            member.totalAssigned === 0
+                              ? 'text-[var(--color-muted-foreground)]'
+                              : member.productivityScore >= 70
+                              ? 'text-emerald-500'
+                              : member.productivityScore >= 40
+                              ? 'text-blue-400'
+                              : 'text-amber-500'
+                          }`}
+                        >
                           {member.productivityScore}
                         </span>
                         <span className="text-[10px] text-[var(--color-muted-foreground)]">/100</span>
+                        {member.totalAssigned === 0 && (
+                          <span className="text-[9px] text-[var(--color-muted-foreground)] bg-[var(--color-muted)] px-1.5 py-0.5 rounded">
+                            Chưa giao việc
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -1619,6 +1718,10 @@ export default function Tasks() {
                       ) : member.activeCount >= 3 ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
                           <span>Bận rộn</span>
+                        </span>
+                      ) : member.totalAssigned === 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                          <span>Chưa nhận việc</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">

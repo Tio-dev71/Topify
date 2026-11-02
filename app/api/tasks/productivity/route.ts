@@ -90,9 +90,9 @@ export async function GET(req: NextRequest) {
       return new Date(t.dueDate).getTime() < Date.now();
     }).length;
 
-    const teamOnTimeRate = totalTeamTasks > 0
-      ? Math.round(((totalTeamTasks - overdueTeamTasks) / totalTeamTasks) * 100)
-      : 100;
+    const teamOnTimeRate = completedTeamTasks > 0
+      ? Math.round((completedTeamTasks / (completedTeamTasks + overdueTeamTasks)) * 100)
+      : 0;
 
     const teamCompletionRate = totalTeamTasks > 0
       ? Math.round((completedTeamTasks / totalTeamTasks) * 100)

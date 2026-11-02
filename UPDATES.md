@@ -11,6 +11,33 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-03] (v1.3.80) — Đo Lường Năng Suất & Khối Lượng (F131): Chuẩn Hóa Công Thức Tính Tỷ Lệ Đúng Hạn & Điểm Năng Suất Minh Bạch
+
+### Phân hệ M9. Quản Lý Công Việc & Phối Hợp (Work & Tasks - F131) [Electron App & Backend API]:
+- **[Khắc phục lỗi Tỷ lệ đúng hạn và Điểm năng suất tính chưa đúng tiêu chí]:**
+  - **Vấn đề ghi nhận từ Báo cáo QA & Tester:**
+    - Mở app Topify $\rightarrow$ Click **Quản lý công việc (Tasks)** $\rightarrow$ Chọn tab **"Năng suất & Khối lượng (F131)"**.
+    - Quan sát bảng theo dõi từng thành viên và 4 thẻ thống kê tổng quan ở trên đầu.
+    - *Mong đợi:* Thành viên chưa hoàn thành việc nào hoặc chưa được giao việc không được tính tỷ lệ đúng hạn 100%. Điểm năng suất phản ánh chính xác khối lượng việc và kết quả thực tế. Thẻ tổng quan đồng bộ với tiến độ phòng ban.
+    - *Thực tế trước khi sửa:*
+      1. Cả 3 thành viên đều hiển thị "Tỷ lệ đúng hạn 100%" dù số việc "Đã xong = 0" và "Trễ hạn = 0".
+      2. Điểm năng suất bất hợp lý: Nguyễn Văn A (Đang phụ trách 1, Đã xong 0) chỉ được 50/100; trong khi Trần Thị B và Lê Hoàng C (0 việc được giao) lại được mặc định 70/100.
+      3. Thẻ tổng quan hiển thị "Tỷ lệ đúng hạn 100% - Duy trì hiệu suất cao" trong khi số việc hoàn tất là "0/1 (0% tổng số việc)".
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Chuẩn hóa công thức Tỷ lệ đúng hạn (On-time Rate):**
+       - Thành viên chưa có việc hoàn tất (`completedCount === 0`) hoặc chưa nhận việc (`totalAssigned === 0`): Tỷ lệ đúng hạn hiển thị chính xác **0%** kèm nhãn ghi chú rõ ràng `(Chưa xong)` hoặc `Chưa nhận việc`, không bị làm tròn sai lên 100%.
+       - Thành viên đã có việc hoàn tất (`completedCount > 0`): Tỷ lệ đúng hạn đo lường theo tỷ lệ hoàn thành đúng tiến độ so với số việc quá hạn: `Math.round((completedCount / (completedCount + overdueCount)) * 100)`.
+    2. **Chuẩn hóa công thức Điểm năng suất (Productivity Score - 0 đến 100):**
+       - Thành viên chưa được giao việc (`totalAssigned === 0`): Điểm năng suất là **0/100** kèm badge nhãn *"Chưa giao việc"*, trạng thái khối lượng *"Chưa nhận việc"*.
+       - Thành viên có việc được giao (`totalAssigned > 0`): Tính toán khoa học dựa trên 4 thành phần minh bạch:
+         - **Kết quả hoàn thành (Tối đa 50 điểm):** `(completedCount / totalAssigned) * 50`.
+         - **Tiến độ & Tỷ lệ đúng hạn (Tối đa 35 điểm):** Nếu có việc hoàn tất thì tính `(onTimeRate / 100) * 35`; nếu đang xử lý trong hạn chưa trễ thì ghi nhận `15 điểm` nỗ lực tiến độ.
+         - **Thưởng khối lượng tích cực (Tối đa 15 điểm):** Ghi nhận thành viên duy trì việc đang chạy trong hạn hoặc hoàn thành 100% việc được giao.
+         - **Phạt trễ hạn:** Trừ điểm trực tiếp theo tỷ lệ việc trễ hạn `(overdueCount / totalAssigned) * 40`.
+    3. **Thẻ thống kê tổng quan (Top KPI Cards):**
+       - Tính tỷ lệ đúng hạn toàn bộ phòng ban dựa trên tổng số việc đã nghiệm thu đúng hạn và tổng số việc trễ hạn thực tế.
+       - Phụ đề trạng thái phản ánh chuẩn theo ngữ cảnh: *"Đang trong hạn thực hiện"* (khi chưa có việc trễ), *"Có việc trễ hạn"* (khi có việc quá hạn), và *"Duy trì hiệu suất cao"* (khi tỷ lệ hoàn thành đúng hạn đạt $\ge 80\%$).
+
 ## 🚀 [2026-11-03] (v1.3.79) — Thư Viện Mẫu Quy Trình (Task Templates - F130): Hỗ Trợ Tạo, Tùy Biến, Lưu Trữ & Xóa Mẫu Quy Trình Chuẩn Hóa
 
 ### Phân hệ M9. Quản Lý Công Việc & Phối Hợp (Work & Tasks - F130) [Electron App & Backend API]:
