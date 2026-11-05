@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Zap, 
   History, 
@@ -7,20 +8,35 @@ import {
   Sparkles,
   Layers,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ThumbsUp
 } from 'lucide-react';
 import { WorkflowRulesTab, type AutomationRule } from '../components/automation/WorkflowRulesTab';
 import { ExecutionLogsTab } from '../components/automation/ExecutionLogsTab';
 import { SocialInteractTab } from '../components/automation/SocialInteractTab';
+import { FacebookPostAutomationTab } from '../components/automation/FacebookPostAutomationTab';
 import { RuleBuilderModal } from '../components/automation/RuleBuilderModal';
 import { TemplatesModal } from '../components/automation/TemplatesModal';
 
 export default function Automation() {
-  const [activeTab, setActiveTab] = useState<'workflows' | 'logs' | 'social'>('workflows');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromQuery = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'workflows' | 'logs' | 'social' | 'fb_posts'>('fb_posts');
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (tabFromQuery === 'workflows' || tabFromQuery === 'logs' || tabFromQuery === 'social' || tabFromQuery === 'fb_posts') {
+      setActiveTab(tabFromQuery);
+    }
+  }, [tabFromQuery]);
+
+  const handleTabChange = (tab: 'workflows' | 'logs' | 'social' | 'fb_posts') => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   const handleOpenCreateModal = () => {
     setEditingRule(null);
@@ -82,7 +98,25 @@ export default function Automation() {
       {/* Tabs Navigation */}
       <div className="flex items-center gap-2 border-b border-gray-200/80 px-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('workflows')}
+          onClick={() => handleTabChange('fb_posts')}
+          className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+            activeTab === 'fb_posts'
+              ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
+              : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
+          }`}
+        >
+          <ThumbsUp className="w-4 h-4 text-purple-600" />
+          <span>Quét & Tương Tác FB Post</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+            Like 50đ · Cmt 70đ
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-mono">
+            F145
+          </span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('workflows')}
           className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'workflows'
               ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
@@ -97,7 +131,7 @@ export default function Automation() {
         </button>
 
         <button
-          onClick={() => setActiveTab('logs')}
+          onClick={() => handleTabChange('logs')}
           className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'logs'
               ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
@@ -112,7 +146,7 @@ export default function Automation() {
         </button>
 
         <button
-          onClick={() => setActiveTab('social')}
+          onClick={() => handleTabChange('social')}
           className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'social'
               ? 'border-purple-600 text-purple-700 bg-purple-50/50 rounded-t-xl'
@@ -120,12 +154,16 @@ export default function Automation() {
           }`}
         >
           <Share2 className="w-4 h-4" />
-          Tương Tác Mạng Xã Hội (Social Auto-Interact)
+          Tương Tác Nuôi Nick (Social Auto-Interact)
         </button>
       </div>
 
       {/* Tab Contents */}
       <div className="pt-2">
+        {activeTab === 'fb_posts' && (
+          <FacebookPostAutomationTab />
+        )}
+
         {activeTab === 'workflows' && (
           <WorkflowRulesTab
             key={`rules_${refreshKey}`}
@@ -133,7 +171,7 @@ export default function Automation() {
             onOpenTemplatesModal={() => setShowTemplatesModal(true)}
             onEditRule={handleEditRule}
             onRefreshLogs={handleRefresh}
-            onNavigateToLogs={() => setActiveTab('logs')}
+            onNavigateToLogs={() => handleTabChange('logs')}
           />
         )}
 

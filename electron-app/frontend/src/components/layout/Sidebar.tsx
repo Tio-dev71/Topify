@@ -43,6 +43,7 @@ import {
   GitMerge,
   Code2,
   PhoneCall,
+  ThumbsUp,
   UserCheck,
 } from 'lucide-react';
 
@@ -85,6 +86,7 @@ const navSections: NavSection[] = [
     title: 'MẠNG XÃ HỘI & TỰ ĐỘNG HÓA',
     items: [
       { key: 'Tự động hóa', href: '/automation', icon: Play },
+      { key: 'Auto Like & Cmt FB (F145)', href: '/automation?tab=fb_posts', icon: ThumbsUp, badge: '50đ/70đ' },
       { key: 'Tài khoản Facebook', href: '/accounts', icon: Users },
       { key: 'Quản lý Proxy', href: '/proxies', icon: Globe },
       { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart },
@@ -350,7 +352,7 @@ export function Sidebar() {
             <div className="mt-2.5 pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[11px] text-gray-600 px-1">
               <span>Topify Desktop</span>
               <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-[#5B3DF5] font-semibold border border-[#5B3DF5]/20">
-                v1.3.84
+                v1.3.85
               </span>
             </div>
           )}

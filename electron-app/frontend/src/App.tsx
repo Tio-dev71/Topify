@@ -106,6 +106,8 @@ function App() {
           <Route path="/downloader" element={<Downloader />} />
           <Route path="/proxies" element={<Proxies />} />
           <Route path="/automation" element={<Automation />} />
+          <Route path="/automation/facebook-posts" element={<Automation />} />
+          <Route path="/facebook-automation" element={<Automation />} />
           <Route path="/buff" element={<BuffSystem />} />
           <Route path="/wallet" element={<WalletEarnings />} />
           <Route path="/referral" element={<WalletEarnings defaultTab="referral" />} />

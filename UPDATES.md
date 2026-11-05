@@ -11,6 +11,40 @@ Mỗi khi có tính năng mới hoặc thay đổi mã nguồn quan trọng:
 1. Thêm một mục mới ở trên cùng với ngày tháng và phiên bản.
 3. Mô tả ngắn gọn: Vấn đề giải quyết, giải pháp kỹ thuật, danh sách file thay đổi và cách test.
 
+## 🚀 [2026-11-05] (v1.3.85) — M11/M7 Automation: Ra Mắt Tính Năng Tự Động Quét Bài Viết & Chạy Like, Comment Facebook Kèm Bảng Tính Chi Phí (Like 50đ · Comment 70đ)
+
+### Phân hệ M11. Automation & M7. Facebook Growth [Electron Desktop App & Backend API]:
+- **[Yêu cầu & Tính năng mới]:**
+  - **Mô tả yêu cầu người dùng:**
+    - Tập trung vào tính năng automation Facebook:
+    - 1. Có phần quét bài viết mới nhất từ Fanpage / Group Facebook.
+    - 2. Tự động chạy Like và Comments cho các bài viết đã quét.
+    - 3. Bảng kê tính chi phí và tổng tiền thanh toán: Đơn giá cố định **Like = 50 VNĐ**, **Comment = 70 VNĐ**. Bao nhiêu lượt like/comment được chạy tự động thì tự động nhân lên tức thời theo công thức `(Số like × 50đ) + (Số comment × 70đ)`.
+  - **Giải pháp kỹ thuật đã triển khai:**
+    1. **Xây dựng Backend API Quản lý Quét Bài & Tính Cước Tự Động (`app/api/automation/facebook-posts/route.ts`):**
+       - Đơn giá chuẩn hóa: `LIKE_UNIT_PRICE = 50`, `COMMENT_UNIT_PRICE = 70` (VNĐ).
+       - `GET /api/automation/facebook-posts`: Trả về biểu phí, danh sách chiến dịch, tổng số bài đã quét, tổng lượt like/comment đã chạy, tổng tiền đã thực thi.
+       - `POST action: 'scan'`: Quét các bài viết mới nhất từ link Fanpage hoặc danh sách đối thủ, trích xuất ID, caption, thumbnail ảnh, số tương tác hiện tại và ngày đăng.
+       - `POST action: 'start'`: Khởi tạo chiến dịch tự động hóa `fb_auto_posts_interact` với cấu hình danh sách bài viết chọn lọc, số like mỗi bài, số comment mỗi bài, nội dung comment hoặc AI sinh tự động, và tính cước dự kiến.
+       - `POST action: 'update_progress'`: Cập nhật tiến độ số lượt like/comment đã chạy thời gian thực và tự động tính tổng tiền thanh toán lũy tiến theo số lượt thực tế.
+       - `POST action: 'pay'`: Tích hợp trừ số dư Ví Topify (Wallet), kiểm tra số dư hợp lệ và tự động sinh bản ghi giao dịch `WalletTransaction` (Type: `EXPENSE`).
+    2. **Tích hợp Automation Engine & Runner Nền Tảng Electron (`electron-app/automation-actions.js` & `electron-app/automation-runner.js`):**
+       - Bổ sung hàm thực thi `taskFbAutoPostsInteract` cho phép duyệt qua từng bài viết trong danh sách, tự động Like bài viết, tự động gõ nội dung bình luận (hỗ trợ cả nội dung mẫu và Topify AI phân tích ngữ cảnh), sau đó ghi nhận lịch sử thực thi và nghỉ giãn cách an toàn tránh checkpoint.
+    3. **Giao diện Trực quan & Toàn diện (`FacebookPostAutomationTab.tsx`):**
+       - 4 Thẻ KPI & Bảng kê tài chính thời gian thực: Bài viết đã quét, Số Like (x50đ), Số Comment (x70đ), Tổng tiền thanh toán (VNĐ) với công thức minh bạch.
+       - Bộ công cụ quét bài viết: Nhập URL hoặc chọn nhanh (VTV24, VinFast, The Coffee House), chọn số bài muốn quét (5-30 bài), toggle tự động quét định kỳ.
+       - Danh sách bài viết trực quan: Checkbox chọn bài, xem ảnh bìa, trích đoạn nội dung, link bài gốc, cước dự tính từng bài.
+       - Bộ điều khiển cấu hình: Thanh trượt số Like (0-200), số Comment (0-100), tùy chọn AI sinh comment thông minh, chọn dàn nick Facebook LIVE.
+       - Tiến trình chạy thời gian thực: Progress bar, đếm số lượt like/comment hoàn tất, nhảy số tiền đã tiêu tốn theo thời gian thực.
+       - Lịch sử hóa đơn & Nút thanh toán 1-click qua Ví Topify.
+    4. **Cập nhật Điều Hướng & Điều Phối UI:**
+       - Thêm tab `Quét & Tương Tác FB Post (Like 50đ · Cmt 70đ - F145)` trong [Automation.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/Automation.tsx).
+       - Thêm banner chuyển đổi 1-click tại [BuffSystem.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/pages/BuffSystem.tsx).
+       - Thêm menu định tuyến độc lập tại [Sidebar.tsx](file:///Users/tiodev/Desktop/Topify.nosync/electron-app/frontend/src/components/layout/Sidebar.tsx) (`Auto Like & Cmt FB (F145)`) kèm Badge `50đ/70đ`.
+    5. **Kiểm thử tự động:**
+       - Viết bộ kiểm thử toàn diện [__tests__/api/automation/facebook-posts.test.ts](file:///Users/tiodev/Desktop/Topify.nosync/__tests__/api/automation/facebook-posts.test.ts) đạt 12/12 test cases PASS.
+
+
 ## 🚀 [2026-11-03] (v1.3.84) — M4 CRM: Hoàn Thiện Màn Hình & Tính Năng F092 Lead (Quản Lý Khách Hàng Tiềm Năng Đa Nguồn)
 
 ### Phân hệ M4. Quản Lý Khách Hàng Tiềm Năng & CRM (Leads - F092) [Electron App & Backend API]:

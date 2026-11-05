@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Play, 
   Plus, 
@@ -14,7 +15,9 @@ import {
   Bot, 
   ExternalLink, 
   X, 
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import api from '../lib/axios';
 import { toast } from 'sonner';
@@ -354,6 +357,36 @@ export default function BuffSystem() {
             <Plus className="w-4 h-4" /> Tạo Đơn Buff
           </button>
         </div>
+      </div>
+
+      {/* Featured Banner: Auto Scan & Like 50đ, Comment 70đ */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-200">
+            <Sparkles className="w-5 h-5 text-yellow-300" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-gray-900 text-sm">
+                Tính Năng Mới: Tự Động Quét Bài Viết & Chạy Tương Tác Có Bảng Tính Cước
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                Like: 50đ · Comment: 70đ
+              </span>
+            </div>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Tự động quét bài viết mới nhất trên Fanpage và chạy seeding Like/Comment, chi phí tính lũy tiến nhân theo số lượt thực tế.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          to="/automation?tab=fb_posts"
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap"
+        >
+          <span>Mở Auto Quét & Like/Cmt</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

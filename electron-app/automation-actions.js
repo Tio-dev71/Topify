@@ -1185,6 +1185,80 @@ async function taskFbBuffPost(page, config, profileId) {
   }
 }
 
+/**
+ * Tự động chạy Like (50đ) & Comment (70đ) cho danh sách nhiều bài viết mới
+ */
+async function taskFbAutoPostsInteract(page, config, profileId) {
+  console.log(`[AutoPostsInteract] Bắt đầu tự động tương tác bài viết cho profile: ${profileId}`);
+
+  let postList = [];
+  if (Array.isArray(config.posts) && config.posts.length > 0) {
+    postList = config.posts;
+  } else if (Array.isArray(config.targetUrls) && config.targetUrls.length > 0) {
+    postList = config.targetUrls.map(u => ({ url: u }));
+  } else if (config.targetUrl) {
+    postList = [{ url: config.targetUrl }];
+  }
+
+  if (postList.length === 0) {
+    throw new Error('Không có bài viết nào được cung cấp để chạy tự động.');
+  }
+
+  let totalLikesDone = 0;
+  let totalCommentsDone = 0;
+
+  for (let idx = 0; idx < postList.length; idx++) {
+    if (config.checkStop && config.checkStop()) {
+      console.log(`[AutoPostsInteract] Người dùng bấm dừng tác vụ.`);
+      break;
+    }
+
+    const currentPost = postList[idx];
+    const postUrl = currentPost.url || currentPost;
+    if (!postUrl) continue;
+
+    console.log(`[AutoPostsInteract] (${idx + 1}/${postList.length}) Tương tác bài viết: ${postUrl}`);
+
+    const postConfig = {
+      ...config,
+      targetUrl: postUrl,
+      buffActionType: config.buffActionType || 'BOTH',
+      useAiComment: config.useAiComment,
+      comments: config.comments,
+    };
+
+    try {
+      await taskFbBuffPost(page, postConfig, profileId);
+      totalLikesDone++;
+      totalCommentsDone++;
+
+      // Log progress to history
+      await logHistory(
+        profileId,
+        'POST_INTERACTION',
+        postUrl,
+        `Tương tác tự động thành công: Like (50đ) + Comment (70đ) bài viết [${idx + 1}/${postList.length}]`
+      );
+    } catch (postErr) {
+      console.warn(`[AutoPostsInteract] Cảnh báo tương tác bài ${postUrl}:`, postErr.message);
+      await logHistory(profileId, 'POST_WARNING', postUrl, `Tương tác bài [${idx + 1}/${postList.length}] ghi nhận: ${postErr.message}`);
+    }
+
+    const delay = ((config.delaySeconds || 5) * 1000) + Math.random() * 2000;
+    if (idx < postList.length - 1) {
+      console.log(`[AutoPostsInteract] Nghỉ ${Math.round(delay / 1000)}s trước khi qua bài viết kế tiếp...`);
+      await safeWait(page, delay);
+    }
+  }
+
+  return {
+    success: true,
+    totalLikesDone,
+    totalCommentsDone,
+    totalCost: (totalLikesDone * 50) + (totalCommentsDone * 70),
+  };
+}
+
 async function fillPostCaption(page, captionText) {
   if (!captionText || !captionText.trim()) return false;
   const cleanCaption = captionText.trim();
@@ -1724,6 +1798,7 @@ module.exports = {
   taskFbAddFriendsGroup,
   taskFbInviteToGroup,
   taskFbBuffPost,
+  taskFbAutoPostsInteract,
   taskFbPostGroup,
   generateAIComment
 };

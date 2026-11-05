@@ -121,6 +121,7 @@ const {
   taskFbAddFriendsGroup,
   taskFbInviteToGroup,
   taskFbBuffPost,
+  taskFbAutoPostsInteract,
   taskFbPostGroup
 } = require('./automation-actions');
 
@@ -522,6 +523,9 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
         break;
       case 'fb_buff_post':
         await taskFbBuffPost(page, config, safeProfileId);
+        break;
+      case 'fb_auto_posts_interact':
+        await taskFbAutoPostsInteract(page, config, safeProfileId);
         break;
       case 'fb_auto_interact':
         await taskFbAutoInteract(page, config, safeProfileId);
