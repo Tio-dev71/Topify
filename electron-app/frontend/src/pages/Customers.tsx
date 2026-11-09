@@ -64,6 +64,7 @@ export interface CustomerItem {
   totalDealValue: number;
   isDuplicateCandidate?: boolean;
   customData?: any;
+  workspaceId?: string;
 }
 
 export interface DuplicateGroupItem {
@@ -118,6 +119,7 @@ export default function Customers({
   };
 
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
 
@@ -153,8 +155,9 @@ export default function Customers({
         phone: `09${Math.floor(Math.random() * 90000000 + 10000000)}`,
         email: `lead.landing${Date.now().toString().slice(-4)}@topify.vn`,
         source: 'LANDING_PAGE',
-        tags: 'LandingPage, TuVanKhoaHoc, F102',
+        tags: 'LandingPage, TuVanKhoaHoc, FormCapture, F102, LEAD',
         notes: 'Lead gửi tự động qua Form nhúng Landing Page (F102)',
+        workspaceId: workspaceId || undefined,
       });
       if (res.data?.success) {
         toast.success('Bắn Lead từ Landing Page thành công! Lead đã xuất hiện trong danh sách CRM.');
@@ -280,6 +283,9 @@ export default function Customers({
         setCustomers(list);
         if (res.data.stats) {
           setStats(res.data.stats);
+        }
+        if (res.data.workspaceId) {
+          setWorkspaceId(res.data.workspaceId);
         }
       }
     } catch (err) {
@@ -600,7 +606,11 @@ export default function Customers({
       )}
 
       {activeTab === 'f102' && (
-        <EmbedFormTab customers={customers} onLeadCaptured={fetchCustomers} />
+        <EmbedFormTab
+          customers={customers}
+          workspaceId={workspaceId}
+          onLeadCaptured={fetchCustomers}
+        />
       )}
 
       {activeTab === 'f093' && (
@@ -1427,8 +1437,8 @@ export default function Customers({
               </label>
               <div className="relative">
                 <pre className="p-3.5 bg-slate-900 text-slate-100 text-[11px] font-mono rounded-2xl overflow-x-auto leading-relaxed border border-slate-800 max-h-48">
-{`<form action="https://topify.vn/api/crm/forms/embed" method="POST" id="topify-lead-form">
-  <input type="text" name="name" placeholder="Họ và tên" required />
+{`<form action="https://topify.vn/api/crm/forms/embed${workspaceId ? `?workspaceId=${workspaceId}` : ''}" method="POST" id="topify-lead-form">
+  ${workspaceId ? `<input type="hidden" name="workspaceId" value="${workspaceId}" />\n  ` : ''}<input type="text" name="name" placeholder="Họ và tên" required />
   <input type="tel" name="phone" placeholder="Số điện thoại" required />
   <input type="email" name="email" placeholder="Email nhận ưu đãi" />
   <input type="hidden" name="source" value="LANDING_PAGE" />
@@ -1438,7 +1448,7 @@ export default function Customers({
                 <button
                   type="button"
                   onClick={() => {
-                    const snippet = `<form action="https://topify.vn/api/crm/forms/embed" method="POST" id="topify-lead-form">\n  <input type="text" name="name" placeholder="Họ và tên" required />\n  <input type="tel" name="phone" placeholder="Số điện thoại" required />\n  <input type="email" name="email" placeholder="Email nhận ưu đãi" />\n  <input type="hidden" name="source" value="LANDING_PAGE" />\n  <button type="submit">Đăng ký ngay</button>\n</form>`;
+                    const snippet = `<form action="https://topify.vn/api/crm/forms/embed${workspaceId ? `?workspaceId=${workspaceId}` : ''}" method="POST" id="topify-lead-form">\n  ${workspaceId ? `<input type="hidden" name="workspaceId" value="${workspaceId}" />\n  ` : ''}<input type="text" name="name" placeholder="Họ và tên" required />\n  <input type="tel" name="phone" placeholder="Số điện thoại" required />\n  <input type="email" name="email" placeholder="Email nhận ưu đãi" />\n  <input type="hidden" name="source" value="LANDING_PAGE" />\n  <button type="submit">Đăng ký ngay</button>\n</form>`;
                     navigator.clipboard.writeText(snippet);
                     setCopiedSnippet(true);
                     toast.success('Đã sao chép mã nhúng HTML!');
