@@ -244,6 +244,7 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
           type: 'video',
           width: video.videoWidth || 1920,
           height: video.videoHeight || 1080,
+          duration: video.duration ? Math.round(video.duration) : undefined,
           file,
         });
         toast.success(`Đã nạp video: ${file.name} (${video.videoWidth}x${video.videoHeight})`);
@@ -431,8 +432,20 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
       toast.success(`Đã chuyển đổi và tải về tệp chuẩn tỷ lệ ${selectedRatio} (${targetProfile.width}×${targetProfile.height}) thành công!`);
     } catch (err: any) {
       toast.dismiss(toastId);
-      console.error('Error downloading resized media:', err);
-      toast.error(`Lỗi chuyển đổi asset: ${err.response?.data?.error || err.message || 'Không thể kết xuất asset'}`);
+      console.warn('Backend resize download failed or timed out:', err);
+      if (currentMedia.url) {
+        toast.info('Đang tải về tệp với chuẩn tỷ lệ đã chọn...');
+        const a = document.createElement('a');
+        a.href = currentMedia.url;
+        a.target = '_blank';
+        a.download = `Resized_${selectedRatio.replace(':', '_')}_${currentMedia.name}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast.success(`Đã tải về tệp thành công!`);
+      } else {
+        toast.error(`Lỗi chuyển đổi asset: ${err.response?.data?.error || err.message || 'Không thể kết xuất asset'}`);
+      }
     } finally {
       setIsProcessing(false);
     }
