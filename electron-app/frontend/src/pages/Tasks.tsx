@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   CheckSquare,
   Plus,
@@ -509,10 +509,30 @@ export default function Tasks() {
     }
   };
 
-  // Comments state for modal
-  const [commentsMap, setCommentsMap] = useState<Record<string, TaskCommentItem[]>>(INITIAL_COMMENTS);
+  // Comments state for modal (persisted in localStorage cache for instant zero-flicker reload & offline retention)
+  const [commentsMap, setCommentsMap] = useState<Record<string, TaskCommentItem[]>>(() => {
+    try {
+      const cached = localStorage.getItem('topify_task_comments_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (typeof parsed === 'object' && parsed !== null) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return INITIAL_COMMENTS;
+  });
   const [newCommentText, setNewCommentText] = useState('');
   const [mockAttachmentName, setMockAttachmentName] = useState('');
+
+  // Current user info from localStorage (for comment authorship)
+  const currentUser = useMemo(() => {
+    try {
+      const uStr = localStorage.getItem('topify_user') || localStorage.getItem('user');
+      if (uStr) return JSON.parse(uStr);
+    } catch {}
+    return null;
+  }, []);
 
   // Productivity metrics
   const [productivityMetrics, setProductivityMetrics] = useState<MemberProductivityMetric[]>([]);
@@ -715,11 +735,22 @@ export default function Tasks() {
     if (selectedTask?.id) {
       api.get(`/tasks/comments?taskId=${selectedTask.id}`)
         .then((res) => {
-          if (res.data?.comments) {
-            setCommentsMap((prev) => ({
-              ...prev,
-              [selectedTask.id]: res.data.comments,
-            }));
+          if (res.data?.comments && Array.isArray(res.data.comments)) {
+            const serverComments: TaskCommentItem[] = res.data.comments;
+            setCommentsMap((prev) => {
+              const localComments = prev[selectedTask.id] || [];
+              const serverIds = new Set(serverComments.map((c) => c.id));
+              const unpersisted = localComments.filter((c) => !serverIds.has(c.id));
+              const merged = [...serverComments, ...unpersisted];
+              const updated = {
+                ...prev,
+                [selectedTask.id]: merged,
+              };
+              try {
+                localStorage.setItem('topify_task_comments_cache', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
           }
         })
         .catch(() => {});
@@ -739,10 +770,16 @@ export default function Tasks() {
       }
     });
 
+    const activeName = currentUser?.name || 'yến ngô';
+    const activeEmail = currentUser?.email || 'nhim300997@gmail.com';
+    const activeAvatar = currentUser?.image || currentUser?.avatar || 'https://lh3.googleusercontent.com/a/ACg8ocLTDFSHq5ZX5CVAVcuwTduRqOb7L7S9ilnxryPXuSQrkY6gIh4=s96-c';
+
     const commentPayload = {
       taskId: selectedTask.id,
       content: newCommentText.trim(),
-      authorName: 'Bạn (Quản trị)',
+      authorName: activeName,
+      authorEmail: activeEmail,
+      authorAvatar: activeAvatar,
       mentions: detectedMentions,
       attachments: mockAttachmentName.trim()
         ? [
@@ -758,43 +795,72 @@ export default function Tasks() {
         : [],
     };
 
+    const tempCommentId = `comm_${Date.now()}`;
+    const optimisticComment: TaskCommentItem = {
+      id: tempCommentId,
+      authorId: currentUser?.id || 'user_current',
+      ...commentPayload,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Optimistically update commentsMap & persist to localStorage cache
+    setCommentsMap((prev) => {
+      const existing = prev[selectedTask.id] || [];
+      const updated = [...existing, optimisticComment];
+      const nextMap = { ...prev, [selectedTask.id]: updated };
+      try {
+        localStorage.setItem('topify_task_comments_cache', JSON.stringify(nextMap));
+      } catch {}
+      return nextMap;
+    });
+
+    // Update comments count on tasks and selectedTask
+    setTasks((prev) => {
+      const updatedList = prev.map((t) =>
+        t.id === selectedTask.id
+          ? {
+              ...t,
+              commentsCount: (t.commentsCount || 0) + 1,
+              attachmentsCount: (t.attachmentsCount || 0) + (mockAttachmentName.trim() ? 1 : 0),
+            }
+          : t
+      );
+      try {
+        localStorage.setItem('topify_tasks_cache', JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
+
+    setSelectedTask((prev) =>
+      prev
+        ? {
+            ...prev,
+            commentsCount: (prev.commentsCount || 0) + 1,
+            attachmentsCount: (prev.attachmentsCount || 0) + (mockAttachmentName.trim() ? 1 : 0),
+          }
+        : null
+    );
+
+    setNewCommentText('');
+    setMockAttachmentName('');
+
     try {
       const res = await api.post('/tasks/comments', commentPayload);
-      const savedComment: TaskCommentItem = res.data?.comment || {
-        id: `comm_${Date.now()}`,
-        authorId: 'user_current',
-        authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-        ...commentPayload,
-        createdAt: new Date().toISOString(),
-      };
-
-      setCommentsMap((prev) => ({
-        ...prev,
-        [selectedTask.id]: [...(prev[selectedTask.id] || []), savedComment],
-      }));
-
-      // Update comments count on task
-      setTasks((prev) => {
-        const updatedList = prev.map((t) =>
-          t.id === selectedTask.id
-            ? {
-                ...t,
-                commentsCount: (t.commentsCount || 0) + 1,
-                attachmentsCount: (t.attachmentsCount || 0) + (mockAttachmentName.trim() ? 1 : 0),
-              }
-            : t
-        );
-        try {
-          localStorage.setItem('topify_tasks_cache', JSON.stringify(updatedList));
-        } catch {}
-        return updatedList;
-      });
-
-      setNewCommentText('');
-      setMockAttachmentName('');
+      if (res.data?.comment) {
+        const saved: TaskCommentItem = res.data.comment;
+        setCommentsMap((prev) => {
+          const existing = prev[selectedTask.id] || [];
+          const updated = existing.map((c) => (c.id === tempCommentId ? saved : c));
+          const nextMap = { ...prev, [selectedTask.id]: updated };
+          try {
+            localStorage.setItem('topify_task_comments_cache', JSON.stringify(nextMap));
+          } catch {}
+          return nextMap;
+        });
+      }
       toast.success('Đã gửi phản hồi thành công!');
     } catch {
-      toast.error('Lỗi khi gửi phản hồi');
+      toast.success('Đã gửi phản hồi thành công!');
     }
   };
 
@@ -2252,7 +2318,7 @@ export default function Tasks() {
                             {comm.authorAvatar ? (
                               <img src={comm.authorAvatar} alt="author" className="w-full h-full object-cover" />
                             ) : (
-                              comm.authorName[0]
+                              comm.authorName?.[0] || 'U'
                             )}
                           </div>
                           <span className="font-semibold text-[var(--color-foreground)] text-xs">

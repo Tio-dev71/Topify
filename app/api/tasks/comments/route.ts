@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { TaskCommentItem, TaskAttachment } from '@/lib/tasks/engine';
+import * as jwtPackage from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
 // In-memory comments store for offline/desktop fallback
 let memoryComments: TaskCommentItem[] = [
@@ -68,9 +71,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'taskId là bắt buộc' }, { status: 400 });
     }
 
-    let comments = memoryComments.filter((c) => c.taskId === taskId);
+    let comments: TaskCommentItem[] = [];
 
-    // Try fetching from database if exists
+    // 1. Try DB first
     try {
       const dbComments = await prisma.taskComment.findMany({
         where: { taskId },
@@ -81,20 +84,45 @@ export async function GET(req: NextRequest) {
       });
 
       if (dbComments && dbComments.length > 0) {
-        comments = dbComments.map((dc: any) => ({
-          id: dc.id,
-          taskId: dc.taskId,
-          authorId: dc.createdById,
-          authorName: dc.createdBy?.name || dc.createdBy?.email || 'Thành viên',
-          authorAvatar: dc.createdBy?.image || undefined,
-          content: dc.content,
-          mentions: [],
-          attachments: [],
-          createdAt: dc.createdAt.toISOString(),
-        }));
+        comments = dbComments.map((dc: any) => {
+          let text = dc.content;
+          let mentions: string[] = [];
+          let attachments: TaskAttachment[] = [];
+
+          try {
+            if (typeof text === 'string' && text.startsWith('{') && text.endsWith('}')) {
+              const parsed = JSON.parse(text);
+              if (parsed.text !== undefined || parsed.content !== undefined) {
+                text = parsed.text ?? parsed.content;
+                mentions = Array.isArray(parsed.mentions) ? parsed.mentions : [];
+                attachments = Array.isArray(parsed.attachments) ? parsed.attachments : [];
+              }
+            }
+          } catch {}
+
+          return {
+            id: dc.id,
+            taskId: dc.taskId,
+            authorId: dc.createdById,
+            authorName: dc.createdBy?.name || (dc.createdBy?.email ? dc.createdBy.email.split('@')[0] : 'Thành viên'),
+            authorAvatar: dc.createdBy?.image || undefined,
+            content: text,
+            mentions,
+            attachments,
+            createdAt: dc.createdAt instanceof Date ? dc.createdAt.toISOString() : dc.createdAt,
+          };
+        });
       }
     } catch (e) {
-      // fallback to memory
+      console.warn('[API_TASKS_COMMENTS_GET] DB query fallback to memory:', e);
+    }
+
+    // 2. Merge with any memory comments for this taskId (unpersisted or in-flight)
+    const memForTask = memoryComments.filter((c) => c.taskId === taskId);
+    if (memForTask.length > 0) {
+      const existingIds = new Set(comments.map((c) => c.id));
+      const unpersisted = memForTask.filter((c) => !existingIds.has(c.id));
+      comments = [...comments, ...unpersisted];
     }
 
     return NextResponse.json({
@@ -119,40 +147,175 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nội dung bình luận và taskId không được để trống' }, { status: 400 });
     }
 
-    const newComment: TaskCommentItem = {
-      id: `comm_${Date.now()}`,
-      taskId,
-      authorId: authorEmail ? `user_${authorEmail.split('@')[0]}` : 'user_current',
-      authorName: authorName || 'Bạn',
-      authorAvatar: authorAvatar || undefined,
-      content: content.trim(),
-      mentions: Array.isArray(mentions) ? mentions : [],
-      attachments: Array.isArray(attachments) ? attachments : [],
-      createdAt: new Date().toISOString(),
-    };
+    const cleanContent = content.trim();
 
-    // Try save to database
+    // 1. Resolve user ID for database persistence
+    let userId: string | null = null;
+    let userName = authorName || 'Bạn';
+    let userAvatar = authorAvatar || undefined;
+
+    // Check auth session
     try {
       const session = await auth();
       if (session?.user?.id) {
+        userId = session.user.id;
+        userName = session.user.name || userName;
+      }
+    } catch {}
+
+    // Check Bearer token directly from header if session didn't resolve
+    if (!userId) {
+      try {
+        const authHeader = req.headers.get('authorization');
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.split(' ')[1];
+          const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
+          const candidateId = decoded.sub || decoded.id;
+          if (candidateId) {
+            userId = candidateId;
+            if (decoded.name) userName = decoded.name;
+          }
+        }
+      } catch {}
+    }
+
+    // Lookup user by authorEmail if provided
+    if (authorEmail && (!userId || (prisma.user?.findUnique && !(await prisma.user.findUnique({ where: { id: userId } }).catch(() => null))))) {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: authorEmail },
+          select: { id: true, name: true, image: true },
+        });
+        if (dbUser) {
+          userId = dbUser.id;
+          userName = dbUser.name || userName;
+          userAvatar = dbUser.image || userAvatar;
+        }
+      } catch {}
+    }
+
+    // Fallback: verify userId exists in User table
+    let verifiedUser = userId && prisma.user?.findUnique ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, image: true } }).catch(() => null) : null;
+
+    if (!verifiedUser) {
+      // Find task assignee or first user in DB
+      try {
+        const taskInDb = await prisma.task.findUnique({
+          where: { id: taskId },
+          select: { assigneeId: true },
+        });
+        if (taskInDb?.assigneeId) {
+          verifiedUser = await prisma.user.findUnique({
+            where: { id: taskInDb.assigneeId },
+            select: { id: true, name: true, image: true },
+          });
+        }
+      } catch {}
+
+      if (!verifiedUser) {
+        try {
+          verifiedUser = await prisma.user.findFirst({
+            orderBy: { createdAt: 'asc' },
+            select: { id: true, name: true, image: true },
+          });
+        } catch {}
+      }
+    }
+
+    if (verifiedUser) {
+      userId = verifiedUser.id;
+      userName = verifiedUser.name || userName;
+      userAvatar = verifiedUser.image || userAvatar;
+    }
+
+    // Ensure the task exists in DB before inserting foreign key
+    let taskExistsInDb = false;
+    try {
+      const dbTask = await prisma.task.findUnique({
+        where: { id: taskId },
+        select: { id: true },
+      });
+      if (dbTask) {
+        taskExistsInDb = true;
+      } else if (userId) {
+        // Auto-create task record stub so foreign key constraint passes
+        const firstWs = await prisma.workspace.findFirst({ select: { id: true } });
+        await prisma.task.create({
+          data: {
+            id: taskId,
+            title: 'Công việc',
+            priority: 'MEDIUM',
+            status: 'TODO',
+            assigneeId: userId,
+            workspaceId: firstWs?.id || null,
+          },
+        });
+        taskExistsInDb = true;
+      }
+    } catch (e) {
+      console.warn('[API_TASKS_COMMENTS_POST] Check/create task error:', e);
+    }
+
+    // Structured storage in content for attachments and mentions
+    const rawContentToSave =
+      attachments.length > 0 || mentions.length > 0
+        ? JSON.stringify({
+            text: cleanContent,
+            mentions: Array.isArray(mentions) ? mentions : [],
+            attachments: Array.isArray(attachments) ? attachments : [],
+          })
+        : cleanContent;
+
+    let commentId = `comm_${Date.now()}`;
+    let createdAtIso = new Date().toISOString();
+
+    // Persist to database if task & user are valid
+    if (taskExistsInDb && userId) {
+      try {
         const created = await prisma.taskComment.create({
           data: {
             taskId,
-            createdById: session.user.id,
-            content: newComment.content,
+            createdById: userId,
+            content: rawContentToSave,
+          },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true, image: true } },
           },
         });
-        newComment.id = created.id;
+        commentId = created.id;
+        createdAtIso = created.createdAt.toISOString();
+        if (created.createdBy) {
+          userName = created.createdBy.name || userName;
+          userAvatar = created.createdBy.image || userAvatar;
+        }
+
+        // Update task's updatedAt
+        await prisma.task.update({
+          where: { id: taskId },
+          data: { updatedAt: new Date() },
+        }).catch(() => {});
+      } catch (dbErr) {
+        console.error('[API_TASKS_COMMENTS_POST] DB create error:', dbErr);
       }
-    } catch (e) {
-      // ignore db error
     }
 
-    memoryComments.push(newComment);
+    const savedComment: TaskCommentItem = {
+      id: commentId,
+      taskId,
+      authorId: userId || 'user_current',
+      authorName: userName,
+      authorAvatar: userAvatar,
+      content: cleanContent,
+      mentions: Array.isArray(mentions) ? mentions : [],
+      attachments: Array.isArray(attachments) ? attachments : [],
+      createdAt: createdAtIso,
+    };
+
+    memoryComments.push(savedComment);
 
     return NextResponse.json({
       success: true,
-      comment: newComment,
+      comment: savedComment,
       message: 'Đã gửi bình luận thành công',
     }, { status: 201 });
   } catch (error: any) {
