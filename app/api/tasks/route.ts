@@ -439,16 +439,21 @@ export async function POST(req: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    // If template was selected, add template steps
+    // If template was selected, add template steps and default description if missing
     if (templateId) {
       const tpl = BUILT_IN_TASK_TEMPLATES.find((t) => t.id === templateId);
-      if (tpl && newTask.subtasks.length === 0) {
-        newTask.subtasks = tpl.steps.map((st, i) => ({
-          id: `sub_tpl_${Date.now()}_${i}`,
-          title: st.title,
-          isCompleted: false,
-          assigneeName: st.defaultRole,
-        }));
+      if (tpl) {
+        if (!newTask.description) {
+          newTask.description = tpl.description || null;
+        }
+        if (newTask.subtasks.length === 0) {
+          newTask.subtasks = tpl.steps.map((st, i) => ({
+            id: `sub_tpl_${Date.now()}_${i}`,
+            title: st.title,
+            isCompleted: false,
+            assigneeName: st.defaultRole,
+          }));
+        }
       }
     }
 

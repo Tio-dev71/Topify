@@ -33,6 +33,7 @@ import {
   MoreVertical,
   Trash2,
   Edit3,
+  AlignLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -980,16 +981,14 @@ export default function Tasks() {
 
     // Handle template subtasks if selected
     let subtasksList: Array<{ id: string; title: string; isCompleted: boolean; assigneeName?: string }> = [];
-    if (newSelectedTemplateId) {
-      const tpl = templates.find((t) => t.id === newSelectedTemplateId);
-      if (tpl) {
-        subtasksList = tpl.steps.map((st, i) => ({
-          id: `sub_${Date.now()}_${i}`,
-          title: st.title,
-          isCompleted: false,
-          assigneeName: st.defaultRole,
-        }));
-      }
+    const tpl = newSelectedTemplateId ? templates.find((t) => t.id === newSelectedTemplateId) : null;
+    if (tpl) {
+      subtasksList = tpl.steps.map((st, i) => ({
+        id: `sub_${Date.now()}_${i}`,
+        title: st.title,
+        isCompleted: false,
+        assigneeName: st.defaultRole,
+      }));
     } else {
       subtasksList = newSubtaskInputs
         .filter((s) => s.trim().length > 0)
@@ -1000,10 +999,12 @@ export default function Tasks() {
         }));
     }
 
+    const finalDescription = newDescription.trim() || tpl?.description || null;
+
     const localTask: EnrichedTask = {
       id: `task_${Date.now()}`,
       title: newTitle.trim(),
-      description: newDescription.trim() || null,
+      description: finalDescription,
       priority: newPriority,
       status: 'TODO',
       dueDate: newDueDate ? new Date(newDueDate).toISOString() : null,
@@ -1054,10 +1055,16 @@ export default function Tasks() {
         isRecurring: localTask.isRecurring,
         recurRule: localTask.recurRule,
         subtasks: localTask.subtasks,
+        templateId: newSelectedTemplateId || undefined,
       });
 
       if (res.data?.success && res.data?.task) {
-        const serverTask: EnrichedTask = res.data.task;
+        const serverTask: EnrichedTask = {
+          ...localTask,
+          ...res.data.task,
+          description: res.data.task.description || localTask.description,
+          dueDate: res.data.task.dueDate || localTask.dueDate,
+        };
         // Keep selected collaborator names if server returned fallback
         if (serverTask.collaborators && serverTask.collaborators.length > 0) {
           serverTask.collaborators = serverTask.collaborators.map((c) => {
@@ -1998,45 +2005,78 @@ export default function Tasks() {
             </div>
 
             {/* Modal Content */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-              {/* Title & Description */}
-              <div className="space-y-2">
-                <h2 className="text-lg font-bold text-[var(--color-foreground)]">
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+              {/* Title & Quick Badges */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-mono text-[var(--color-muted-foreground)] bg-[var(--color-muted)] px-2 py-0.5 rounded">
+                    Mã: {selectedTask.id}
+                  </span>
+                  {selectedTask.dueDate && (
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 ${
+                      selectedTask.status === 'DONE'
+                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                        : new Date(selectedTask.dueDate).getTime() < Date.now()
+                        ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                        : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                    }`}>
+                      <Calendar className="w-3 h-3" />
+                      <span>Hạn: {new Date(selectedTask.dueDate).toLocaleDateString('vi-VN')}</span>
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl font-bold text-[var(--color-foreground)] leading-snug">
                   {selectedTask.title}
                 </h2>
-                {selectedTask.description && (
-                  <p className="text-sm text-[var(--color-muted-foreground)] leading-relaxed">
+              </div>
+
+              {/* Task Description Card */}
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)]">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider">
+                  <AlignLeft className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Mô tả chi tiết công việc</span>
+                </div>
+                {selectedTask.description ? (
+                  <p className="text-xs text-[var(--color-foreground)] leading-relaxed whitespace-pre-wrap pl-5">
                     {selectedTask.description}
+                  </p>
+                ) : (
+                  <p className="text-xs text-[var(--color-muted-foreground)] italic pl-5">
+                    Chưa có mô tả chi tiết cho công việc này. Bấm &quot;Chỉnh sửa&quot; để bổ sung mô tả.
                   </p>
                 )}
               </div>
 
-              {/* Members Metadata (F124) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
-                <div>
-                  <span className="text-[11px] font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider">
-                    Người phụ trách chính (Assignee)
+              {/* Comprehensive Metadata 4-Box Grid (Assignee, Collaborators, Due Date, Recurring) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Người phụ trách chính (Assignee) */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)] space-y-1.5">
+                  <span className="text-[10px] font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider flex items-center gap-1">
+                    <User className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Người phụ trách chính (Assignee)</span>
                   </span>
-                  <div className="flex items-center gap-2.5 mt-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold text-xs">
+                  <div className="flex items-center gap-2.5 pt-1">
+                    <div className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold text-xs shrink-0">
                       {(selectedTask.assignee?.name || 'A')[0]}
                     </div>
-                    <div>
-                      <div className="font-semibold text-[var(--color-foreground)]">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-xs text-[var(--color-foreground)] truncate">
                         {selectedTask.assignee?.name || 'Chưa phân công'}
                       </div>
-                      <div className="text-[10px] text-[var(--color-muted-foreground)]">
-                        {selectedTask.assignee?.email}
+                      <div className="text-[10px] text-[var(--color-muted-foreground)] truncate">
+                        {selectedTask.assignee?.email || 'N/A'}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div>
-                  <span className="text-[11px] font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider">
-                    Người phối hợp (Collaborators)
+                {/* 2. Người phối hợp (Collaborators - F124) */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)] space-y-1.5">
+                  <span className="text-[10px] font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Người phối hợp (Collaborators)</span>
                   </span>
-                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
                     {selectedTask.collaborators.length > 0 ? (
                       selectedTask.collaborators.map((c) => {
                         const member = teamMembers.find((m) => m.id === c.id || m.email?.toLowerCase() === c.email?.toLowerCase());
@@ -2044,64 +2084,151 @@ export default function Tasks() {
                         return (
                           <div
                             key={c.id}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)]"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)] shadow-xs"
                           >
                             <div className="w-4 h-4 rounded-full bg-slate-600 text-white flex items-center justify-center font-bold text-[8px]">
                               {displayName ? displayName[0].toUpperCase() : 'U'}
                             </div>
-                            <span className="font-medium text-[var(--color-foreground)]">{displayName}</span>
+                            <span className="font-medium text-[11px] text-[var(--color-foreground)]">{displayName}</span>
                           </div>
                         );
                       })
                     ) : (
-                      <span className="text-[11px] text-[var(--color-muted-foreground)] italic mt-1 block">
+                      <span className="text-[11px] text-[var(--color-muted-foreground)] italic pt-1 block">
                         Chưa có người phối hợp
                       </span>
                     )}
                   </div>
                 </div>
+
+                {/* 3. Hạn hoàn thành (Due Date) */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)] space-y-1.5">
+                  <span className="text-[10px] font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Hạn hoàn thành (Due Date)</span>
+                  </span>
+                  <div className="pt-1">
+                    {selectedTask.dueDate ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-[var(--color-foreground)]">
+                          {new Date(selectedTask.dueDate).toLocaleString('vi-VN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          })}
+                        </span>
+                        {selectedTask.status === 'DONE' ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                            Hoàn thành
+                          </span>
+                        ) : new Date(selectedTask.dueDate).getTime() < Date.now() ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center gap-1">
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            <span>Trễ hạn</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                            Đang trong hạn
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-[var(--color-muted-foreground)] italic">
+                        Không giới hạn thời gian
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Chu kỳ lặp lại & Thời gian tạo (F129) */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)] space-y-1.5">
+                  <span className="text-[10px] font-semibold text-[var(--color-muted-foreground)] uppercase tracking-wider flex items-center gap-1">
+                    <Repeat className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Chu kỳ & Thời gian (F129)</span>
+                  </span>
+                  <div className="pt-1 flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-[var(--color-foreground)]">
+                      {selectedTask.isRecurring
+                        ? `Lặp lại: ${
+                            selectedTask.recurRule === 'DAILY'
+                              ? 'Hàng ngày'
+                              : selectedTask.recurRule === 'WEEKLY'
+                              ? 'Hàng tuần'
+                              : selectedTask.recurRule === 'BIWEEKLY'
+                              ? 'Mỗi 2 tuần'
+                              : selectedTask.recurRule === 'MONTHLY'
+                              ? 'Hàng tháng'
+                              : selectedTask.recurRule || 'Theo chu kỳ'
+                          }`
+                        : 'Một lần (Không lặp lại)'}
+                    </span>
+                    <span className="text-[10px] text-[var(--color-muted-foreground)]">
+                      Tạo: {new Date(selectedTask.createdAt).toLocaleDateString('vi-VN')}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Checklist Subtasks */}
-              {selectedTask.subtasks.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-[var(--color-foreground)] flex items-center gap-1.5">
-                      <CheckSquare className="w-4 h-4 text-[var(--color-primary)]" />
-                      <span>Các bước quy trình (Checklist)</span>
-                    </span>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-[var(--color-foreground)] flex items-center gap-1.5">
+                    <CheckSquare className="w-4 h-4 text-[var(--color-primary)]" />
+                    <span>Các bước quy trình (Checklist)</span>
+                  </span>
+                  {selectedTask.subtasks.length > 0 && (
                     <span className="text-[11px] text-[var(--color-muted-foreground)] font-semibold">
                       {selectedTask.subtasks.filter((s) => s.isCompleted).length} / {selectedTask.subtasks.length} hoàn thành
                     </span>
-                  </div>
-
-                  <div className="space-y-2 border border-[var(--color-border)] rounded-xl p-3 bg-[var(--color-card)]">
-                    {selectedTask.subtasks.map((st) => (
-                      <label
-                        key={st.id}
-                        className="flex items-start gap-2.5 p-1.5 rounded-lg hover:bg-[var(--color-muted)]/40 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={st.isCompleted}
-                          onChange={() => handleToggleSubtask(selectedTask.id, st.id)}
-                          className="mt-0.5 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className={`text-xs ${st.isCompleted ? 'line-through text-[var(--color-muted-foreground)]' : 'text-[var(--color-foreground)] font-medium'}`}>
-                            {st.title}
-                          </span>
-                          {st.assigneeName && (
-                            <span className="ml-2 text-[10px] bg-[var(--color-muted)] text-[var(--color-muted-foreground)] px-1.5 py-0.2 rounded">
-                              {st.assigneeName}
-                            </span>
-                          )}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
+                  )}
                 </div>
-              )}
+
+                {selectedTask.subtasks.length > 0 ? (
+                  <>
+                    {/* Progress bar */}
+                    <div className="w-full bg-[var(--color-muted)] h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-indigo-500 h-full transition-all duration-300"
+                        style={{
+                          width: `${(selectedTask.subtasks.filter((s) => s.isCompleted).length / selectedTask.subtasks.length) * 100}%`,
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2 border border-[var(--color-border)] rounded-xl p-3 bg-[var(--color-card)]">
+                      {selectedTask.subtasks.map((st) => (
+                        <label
+                          key={st.id}
+                          className="flex items-start gap-2.5 p-1.5 rounded-lg hover:bg-[var(--color-muted)]/40 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={st.isCompleted}
+                            onChange={() => handleToggleSubtask(selectedTask.id, st.id)}
+                            className="mt-0.5 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-0"
+                          />
+                          <div className="flex-1">
+                            <span className={`text-xs ${st.isCompleted ? 'line-through text-[var(--color-muted-foreground)]' : 'text-[var(--color-foreground)] font-medium'}`}>
+                              {st.title}
+                            </span>
+                            {st.assigneeName && (
+                              <span className="ml-2 text-[10px] bg-[var(--color-muted)] text-[var(--color-muted-foreground)] px-1.5 py-0.5 rounded">
+                                {st.assigneeName}
+                              </span>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-3 rounded-xl border border-dashed border-[var(--color-border)] text-center text-xs text-[var(--color-muted-foreground)] italic">
+                    Chưa có danh sách checklist cho công việc này.
+                  </div>
+                )}
+              </div>
 
               {/* Comments & Discussion (F128) */}
               <div className="space-y-4 pt-4 border-t border-[var(--color-border)]">
@@ -2239,13 +2366,26 @@ export default function Tasks() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-[var(--color-border)] flex items-center justify-end bg-[var(--color-muted)]/20">
-              <button
-                onClick={() => setSelectedTask(null)}
-                className="px-4 py-2 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium transition-colors"
-              >
-                Đóng
-              </button>
+            <div className="p-4 border-t border-[var(--color-border)] flex items-center justify-between bg-[var(--color-muted)]/20">
+              <span className="text-[11px] text-[var(--color-muted-foreground)]">
+                Tạo lúc: {new Date(selectedTask.createdAt).toLocaleString('vi-VN')}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEditTaskModal(selectedTask)}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Chỉnh sửa công việc</span>
+                </button>
+                <button
+                  onClick={() => setSelectedTask(null)}
+                  className="px-4 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium transition-colors"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2412,7 +2552,16 @@ export default function Tasks() {
                 </label>
                 <select
                   value={newSelectedTemplateId}
-                  onChange={(e) => setNewSelectedTemplateId(e.target.value)}
+                  onChange={(e) => {
+                    const tplId = e.target.value;
+                    setNewSelectedTemplateId(tplId);
+                    if (tplId) {
+                      const tpl = templates.find((t) => t.id === tplId);
+                      if (tpl?.description && !newDescription.trim()) {
+                        setNewDescription(tpl.description);
+                      }
+                    }
+                  }}
                   className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
                 >
                   <option value="">-- Tự thiết lập checklist thủ công --</option>
