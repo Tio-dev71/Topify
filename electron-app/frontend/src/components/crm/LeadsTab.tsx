@@ -15,7 +15,8 @@ import {
   X,
   UserCheck,
   Building,
-  Target
+  Target,
+  Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../lib/axios';
@@ -90,6 +91,25 @@ export default function LeadsTab({
   const [selectedLeadForConvert, setSelectedLeadForConvert] = useState<LeadItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<LeadItem | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadItem | null>(null);
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    id: '',
+    name: '',
+    phone: '',
+    email: '',
+    company: '',
+    source: 'INBOX' as LeadItem['source'],
+    sourceDetail: '',
+    status: 'NEW' as LeadItem['status'],
+    demand: '',
+    estimatedValue: 10000000,
+    assignedTo: 'Chưa gán',
+    notes: '',
+  });
+  const [submittingEdit, setSubmittingEdit] = useState(false);
 
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -218,6 +238,66 @@ export default function LeadsTab({
       toast.error(err.response?.data?.error || 'Lỗi thêm khách hàng tiềm năng');
     } finally {
       setSubmittingCreate(false);
+    }
+  };
+
+  // Open Edit Modal
+  const handleOpenEditModal = (lead: LeadItem) => {
+    setSelectedLeadForEdit(lead);
+    setEditForm({
+      id: lead.id,
+      name: lead.name || '',
+      phone: lead.phone || '',
+      email: lead.email || '',
+      company: lead.company || '',
+      source: lead.source || 'INBOX',
+      sourceDetail: lead.sourceDetail || '',
+      status: lead.status || 'NEW',
+      demand: lead.demand || '',
+      estimatedValue: lead.estimatedValue || 0,
+      assignedTo: lead.assignedTo || (workspaceMembers[0]?.name || 'Chưa gán'),
+      notes: lead.notes || '',
+    });
+    setShowEditModal(true);
+  };
+
+  // Save Edit Lead
+  const handleSaveEditLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.name.trim() || !editForm.phone.trim()) {
+      toast.error('Vui lòng điền đầy đủ Họ và tên cùng Số điện thoại');
+      return;
+    }
+
+    setSubmittingEdit(true);
+    try {
+      const res = await api.patch('/crm/leads', {
+        id: editForm.id,
+        name: editForm.name.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
+        company: editForm.company.trim(),
+        source: editForm.source,
+        sourceDetail: editForm.sourceDetail.trim(),
+        status: editForm.status,
+        demand: editForm.demand.trim(),
+        estimatedValue: Number(editForm.estimatedValue),
+        assignedTo: editForm.assignedTo,
+        notes: editForm.notes.trim(),
+      });
+
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Cập nhật thông tin khách hàng tiềm năng thành công!');
+        setShowEditModal(false);
+        setSelectedLeadForEdit(null);
+        fetchLeads();
+      } else {
+        toast.error(res.data?.error || 'Không thể cập nhật khách hàng tiềm năng');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi cập nhật khách hàng tiềm năng');
+    } finally {
+      setSubmittingEdit(false);
     }
   };
 
@@ -889,6 +969,15 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
 
                           <button
                             type="button"
+                            onClick={() => handleOpenEditModal(lead)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                            title="Chỉnh sửa thông tin lead"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => {
                               setSelectedLeadForDetail(lead);
                               setShowDetailModal(true);
@@ -1400,8 +1489,240 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                 >
                   Đóng
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const lead = selectedLeadForDetail;
+                    setShowDetailModal(false);
+                    handleOpenEditModal(lead);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer transition shadow-xs"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Sửa thông tin</span>
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────────────────────────────────
+          MODAL 5: CHỈNH SỬA THÔNG TIN LEAD (EDIT LEAD MODAL - F092)
+          ──────────────────────────────────────────────────────────────────────── */}
+      {showEditModal && selectedLeadForEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+                  F092
+                </span>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                  Chỉnh sửa Khách hàng tiềm năng
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedLeadForEdit(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditLead} className="p-5 space-y-4 overflow-y-auto grow">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Họ và tên <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Số điện thoại <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono text-gray-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Tên công ty / Doanh nghiệp
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.company}
+                    onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Nguồn Lead (F092)
+                  </label>
+                  <select
+                    value={editForm.source}
+                    onChange={(e) => setEditForm({ ...editForm, source: e.target.value as any })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-medium text-gray-900 dark:text-white"
+                  >
+                    <option value="INBOX">💬 Hộp thư (Inbox / Fanpage)</option>
+                    <option value="FORM">🌐 Web Form (Landing Page)</option>
+                    <option value="IMPORT">📊 Nhập File (Import Excel)</option>
+                    <option value="REFERRAL">🤝 Giới thiệu (Referral)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Trạng thái tiếp nhận
+                  </label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-medium text-gray-900 dark:text-white"
+                  >
+                    <option value="NEW">Mới tiếp nhận</option>
+                    <option value="CONTACTING">Đang liên hệ</option>
+                    <option value="QUALIFIED">Tiềm năng</option>
+                    <option value="UNQUALIFIED">Không phù hợp</option>
+                    <option value="CONVERTED">Đã chuyển đổi</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Chi tiết nguồn
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Landing page báo giá, Form F102..."
+                  value={editForm.sourceDetail}
+                  onChange={(e) => setEditForm({ ...editForm, sourceDetail: e.target.value })}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Nhu cầu quan tâm
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Cần tư vấn dịch vụ Topify Enterprise"
+                  value={editForm.demand}
+                  onChange={(e) => setEditForm({ ...editForm, demand: e.target.value })}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Giá trị hợp đồng ước tính (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    step="1000000"
+                    value={editForm.estimatedValue}
+                    onChange={(e) => setEditForm({ ...editForm, estimatedValue: Number(e.target.value) })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Người phụ trách
+                  </label>
+                  <select
+                    value={editForm.assignedTo}
+                    onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 dark:text-white"
+                  >
+                    {workspaceMembers.length > 0 ? (
+                      workspaceMembers.map((m) => (
+                        <option key={m.email} value={m.name || m.email}>
+                          {m.name || m.email} ({m.role === 'ADMIN' ? 'Admin' : 'Nhân viên'})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="yến ngô">yến ngô (Admin)</option>
+                        <option value="minh@topify.vn">minh@topify.vn (Nhân viên)</option>
+                        <option value="Nguyễn Văn A">Nguyễn Văn A</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Ghi chú bổ sung
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ghi chú thêm về cuộc gọi, sở thích, yêu cầu..."
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full text-xs p-3 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-slate-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedLeadForEdit(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEdit}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {submittingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

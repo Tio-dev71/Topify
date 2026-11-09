@@ -290,6 +290,60 @@ describe('CRM Leads Management API (F092) - /api/crm/leads', () => {
       expect(patchData.lead.status).toBe('QUALIFIED');
       expect(patchData.lead.notes).toBe('Đã gọi điện tư vấn, khách rất hài lòng');
     });
+
+    it('updates full lead information (name, phone, email, company, source, demand, estimatedValue, assignedTo)', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'u_1', workspaceId: 'ws_1' },
+      } as any);
+
+      // Create lead
+      const createReq = new NextRequest('http://localhost/api/crm/leads', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'create',
+          name: 'Nguyễn Văn Cũ',
+          phone: '0988111222',
+        }),
+      });
+      const createRes = await POST(createReq);
+      const createData = await createRes.json();
+      const leadId = createData.lead.id;
+
+      const patchReq = new NextRequest('http://localhost/api/crm/leads', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: leadId,
+          name: 'Nguyễn Văn Mới',
+          phone: '0988999888',
+          email: 'moi.nguyen@company.com',
+          company: 'Công ty Cổ phần Mới',
+          source: 'REFERRAL',
+          sourceDetail: 'Giới thiệu bởi Đối tác X',
+          demand: 'Tư vấn phần mềm toàn diện',
+          estimatedValue: 35000000,
+          assignedTo: 'Trần Thị B',
+          status: 'QUALIFIED',
+          notes: 'Đã hoàn tất cập nhật thông tin',
+        }),
+      });
+
+      const patchRes = await PATCH(patchReq);
+      const patchData = await patchRes.json();
+
+      expect(patchRes.status).toBe(200);
+      expect(patchData.success).toBe(true);
+      expect(patchData.lead.name).toBe('Nguyễn Văn Mới');
+      expect(patchData.lead.phone).toBe('0988999888');
+      expect(patchData.lead.email).toBe('moi.nguyen@company.com');
+      expect(patchData.lead.company).toBe('Công ty Cổ phần Mới');
+      expect(patchData.lead.source).toBe('REFERRAL');
+      expect(patchData.lead.sourceDetail).toBe('Giới thiệu bởi Đối tác X');
+      expect(patchData.lead.demand).toBe('Tư vấn phần mềm toàn diện');
+      expect(patchData.lead.estimatedValue).toBe(35000000);
+      expect(patchData.lead.assignedTo).toBe('Trần Thị B');
+      expect(patchData.lead.status).toBe('QUALIFIED');
+      expect(patchData.lead.notes).toBe('Đã hoàn tất cập nhật thông tin');
+    });
   });
 
   describe('DELETE /api/crm/leads - Delete lead', () => {

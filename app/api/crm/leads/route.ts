@@ -531,6 +531,8 @@ export async function POST(req: NextRequest) {
             demand: newLead.demand,
             estimatedValue: newLead.estimatedValue,
             assignedTo: newLead.assignedTo,
+            company: newLead.company,
+            sourceDetail: newLead.sourceDetail,
           },
         },
       });
@@ -567,14 +569,33 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { id, status, notes, assignedTo, demand, estimatedValue } = body;
+    const {
+      id,
+      name,
+      phone,
+      email,
+      company,
+      source,
+      sourceDetail,
+      status,
+      notes,
+      assignedTo,
+      demand,
+      estimatedValue,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Thiếu id khách hàng tiềm năng' }, { status: 400 });
     }
 
-    const targetLead = initialLeads.find((l) => l.id === id);
+    let targetLead = initialLeads.find((l) => l.id === id);
     if (targetLead) {
+      if (name !== undefined) targetLead.name = String(name).trim();
+      if (phone !== undefined) targetLead.phone = String(phone).replace(/[\s\-\.\(\)]/g, '');
+      if (email !== undefined) targetLead.email = email ? String(email).trim() : undefined;
+      if (company !== undefined) targetLead.company = company ? String(company).trim() : undefined;
+      if (source !== undefined) targetLead.source = source;
+      if (sourceDetail !== undefined) targetLead.sourceDetail = sourceDetail;
       if (status) targetLead.status = status;
       if (notes !== undefined) targetLead.notes = notes;
       if (assignedTo !== undefined) targetLead.assignedTo = assignedTo;
@@ -583,26 +604,107 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Update in DB if exists
+    let dbCustomer: any = null;
     try {
-      await prisma.customer.updateMany({
-        where: { id },
-        data: {
-          notes: notes !== undefined ? notes : undefined,
-          customData: {
-            leadStatus: status,
-            assignedTo,
-            demand,
-            estimatedValue,
+      if (typeof (prisma as any).customer?.findUnique === 'function') {
+        const existing = await prisma.customer.findUnique({
+          where: { id },
+        });
+        if (existing) {
+          const existingCustom = (existing.customData as any) || {};
+          const updatedCustom = {
+            ...existingCustom,
+            isLead: true,
+            ...(company !== undefined && { company: company ? String(company).trim() : undefined }),
+            ...(sourceDetail !== undefined && { sourceDetail: sourceDetail ? String(sourceDetail).trim() : undefined }),
+            ...(demand !== undefined && { demand: demand ? String(demand).trim() : undefined }),
+            ...(estimatedValue !== undefined && { estimatedValue: Number(estimatedValue) }),
+            ...(assignedTo !== undefined && { assignedTo: assignedTo ? String(assignedTo).trim() : undefined }),
+            ...(status !== undefined && { leadStatus: status }),
+          };
+
+          const cleanSource = source ? String(source).toUpperCase() : undefined;
+
+          if (typeof (prisma as any).customer?.update === 'function') {
+            dbCustomer = await prisma.customer.update({
+              where: { id },
+              data: {
+                ...(name !== undefined && { name: String(name).trim() }),
+                ...(phone !== undefined && { phone: String(phone).replace(/[\s\-\.\(\)]/g, '') }),
+                ...(email !== undefined && { email: email ? String(email).trim() : null }),
+                ...(cleanSource !== undefined && {
+                  source: cleanSource,
+                  tags: `Lead, F092, ${cleanSource}`,
+                }),
+                ...(notes !== undefined && { notes: notes ? String(notes).trim() : null }),
+                customData: updatedCustom,
+              },
+            });
+          }
+        }
+      } else if (typeof (prisma as any).customer?.updateMany === 'function') {
+        await (prisma as any).customer.updateMany({
+          where: { id },
+          data: {
+            notes: notes !== undefined ? notes : undefined,
+            customData: {
+              leadStatus: status,
+              assignedTo,
+              demand,
+              estimatedValue,
+            },
           },
-        },
-      });
-    } catch {
-      // Ignore DB error
+        });
+      }
+    } catch (dbErr) {
+      console.error('[API_LEADS_PATCH_DB]', dbErr);
     }
+
+    if (!targetLead && dbCustomer) {
+      const custom = (dbCustomer.customData as any) || {};
+      const rawSource = (dbCustomer.source || 'INBOX').toUpperCase();
+      const cleanSource: LeadItem['source'] =
+        rawSource === 'FORM' || rawSource === 'LANDING_PAGE'
+          ? 'FORM'
+          : rawSource === 'IMPORT'
+          ? 'IMPORT'
+          : rawSource === 'REFERRAL'
+          ? 'REFERRAL'
+          : 'INBOX';
+
+      targetLead = {
+        id: dbCustomer.id,
+        name: dbCustomer.name || 'Khách tiềm năng mới',
+        phone: dbCustomer.phone || '',
+        email: dbCustomer.email || undefined,
+        company: custom.company || undefined,
+        source: cleanSource,
+        sourceDetail: custom.sourceDetail || `Kênh ${cleanSource}`,
+        status: custom.leadStatus || 'NEW',
+        leadScore: custom.leadScore || 80,
+        temperature: (custom.leadScore || 80) >= 85 ? 'HOT' : (custom.leadScore || 80) >= 60 ? 'WARM' : 'COLD',
+        demand: custom.demand || dbCustomer.notes || 'Cần tư vấn dịch vụ',
+        estimatedValue: Number(custom.estimatedValue) || 10000000,
+        assignedTo: custom.assignedTo || 'Chưa gán',
+        assignedAvatar: custom.assignedAvatar,
+        notes: dbCustomer.notes || undefined,
+        createdAt: dbCustomer.createdAt ? new Date(dbCustomer.createdAt).toISOString() : new Date().toISOString(),
+        convertedCustomerId: custom.convertedCustomerId,
+        convertedDealId: custom.convertedDealId,
+      };
+    }
+
+    await recordAuditLog({
+      userId: session.user.id,
+      action: 'UPDATE',
+      entityType: 'LEAD',
+      entityId: id,
+      metadata: { name: targetLead?.name, status, assignedTo },
+    }).catch(() => null);
 
     return NextResponse.json({
       success: true,
-      message: 'Đã cập nhật thông tin khách hàng tiềm năng',
+      message: 'Đã cập nhật thông tin khách hàng tiềm năng thành công',
       lead: targetLead,
       stats: computeLeadStats(initialLeads),
     });
