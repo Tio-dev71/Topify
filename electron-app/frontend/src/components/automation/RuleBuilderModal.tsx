@@ -136,10 +136,24 @@ export function RuleBuilderModal({ isOpen, ruleToEdit, onClose, onSuccess }: Rul
       };
 
       if (ruleToEdit) {
-        await api.patch('/automations', { id: ruleToEdit.id, ...payload });
+        const res = await api.patch('/automations', { id: ruleToEdit.id, ...payload });
+        if (res.data?.automation) {
+          try {
+            const cached = JSON.parse(localStorage.getItem('topify_automation_rules_cache') || '[]');
+            const next = cached.map((r: any) => r.id === ruleToEdit.id ? res.data.automation : r);
+            localStorage.setItem('topify_automation_rules_cache', JSON.stringify(next));
+          } catch {}
+        }
         toast.success('Đã cập nhật kịch bản thành công');
       } else {
-        await api.post('/automations', payload);
+        const res = await api.post('/automations', payload);
+        if (res.data?.automation) {
+          try {
+            const cached = JSON.parse(localStorage.getItem('topify_automation_rules_cache') || '[]');
+            const next = [res.data.automation, ...cached.filter((r: any) => r.id !== res.data.automation.id)];
+            localStorage.setItem('topify_automation_rules_cache', JSON.stringify(next));
+          } catch {}
+        }
         toast.success('Đã tạo kịch bản tự động hóa mới thành công');
       }
 
@@ -329,6 +343,8 @@ export function RuleBuilderModal({ isOpen, ruleToEdit, onClose, onSuccess }: Rul
                       <option value="tag">Thẻ tag (Tag)</option>
                       <option value="source">Nguồn (Source)</option>
                       <option value="status">Trạng thái (Status)</option>
+                      <option value="owner">Người phụ trách (Owner)</option>
+                      <option value="time">Khung giờ (Time)</option>
                       <option value="message_contains">Nội dung tin nhắn</option>
                     </select>
 

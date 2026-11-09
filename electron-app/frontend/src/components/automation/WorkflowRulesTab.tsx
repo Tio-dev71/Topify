@@ -61,8 +61,15 @@ export function WorkflowRulesTab({
   onRefreshLogs,
   onNavigateToLogs,
 }: WorkflowRulesTabProps) {
-  const [rules, setRules] = useState<AutomationRule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rules, setRules] = useState<AutomationRule[]>(() => {
+    try {
+      const cached = localStorage.getItem('topify_automation_rules_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(rules.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTrigger, setFilterTrigger] = useState('ALL');
   const [testingRuleId, setTestingRuleId] = useState<string | null>(null);
@@ -75,10 +82,13 @@ export function WorkflowRulesTab({
 
   const fetchRules = async () => {
     try {
-      setLoading(true);
+      if (rules.length === 0) setLoading(true);
       const res = await api.get('/automations');
       if (res.data?.automations) {
         setRules(res.data.automations);
+        try {
+          localStorage.setItem('topify_automation_rules_cache', JSON.stringify(res.data.automations));
+        } catch {}
       }
     } catch (e: any) {
       console.error('Error fetching automations', e);
@@ -92,7 +102,13 @@ export function WorkflowRulesTab({
     const newStatus = !rule.isActive;
     try {
       await api.patch('/automations', { id: rule.id, isActive: newStatus });
-      setRules(prev => prev.map(r => r.id === rule.id ? { ...r, isActive: newStatus } : r));
+      setRules(prev => {
+        const next = prev.map(r => r.id === rule.id ? { ...r, isActive: newStatus } : r);
+        try {
+          localStorage.setItem('topify_automation_rules_cache', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       toast.success(newStatus ? `Đã kích hoạt kịch bản "${rule.name}"` : `Đã tạm dừng kịch bản "${rule.name}"`);
     } catch (e) {
       toast.error('Lỗi khi thay đổi trạng thái kịch bản');
@@ -103,7 +119,13 @@ export function WorkflowRulesTab({
     if (!window.confirm(`Bạn có chắc chắn muốn xóa kịch bản "${ruleName}"?`)) return;
     try {
       await api.delete(`/automations?id=${ruleId}`);
-      setRules(prev => prev.filter(r => r.id !== ruleId));
+      setRules(prev => {
+        const next = prev.filter(r => r.id !== ruleId);
+        try {
+          localStorage.setItem('topify_automation_rules_cache', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
       toast.success('Đã xóa kịch bản thành công');
     } catch (e) {
       toast.error('Không thể xóa kịch bản');

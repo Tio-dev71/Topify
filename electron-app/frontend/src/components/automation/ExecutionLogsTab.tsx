@@ -35,8 +35,15 @@ export interface AutomationExecutionLog {
 }
 
 export function ExecutionLogsTab() {
-  const [logs, setLogs] = useState<AutomationExecutionLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<AutomationExecutionLog[]>(() => {
+    try {
+      const cached = localStorage.getItem('topify_automation_logs_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(logs.length === 0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
@@ -49,10 +56,13 @@ export function ExecutionLogsTab() {
 
   const fetchLogs = async () => {
     try {
-      setLoading(true);
+      if (logs.length === 0) setLoading(true);
       const res = await api.get(`/automations/logs?status=${statusFilter}`);
       if (res.data?.logs) {
         setLogs(res.data.logs);
+        try {
+          localStorage.setItem('topify_automation_logs_cache', JSON.stringify(res.data.logs));
+        } catch {}
       }
     } catch (e: any) {
       console.error('Error fetching logs', e);
@@ -68,9 +78,18 @@ export function ExecutionLogsTab() {
       const res = await api.post('/automations/logs', { logId: log.id });
       if (res.data?.success) {
         toast.success(res.data.message || 'Thử lại lượt chạy thành công!');
+        if (res.data?.log) {
+          setLogs(prev => {
+            const next = prev.map(l => l.id === log.id ? res.data.log : l);
+            try {
+              localStorage.setItem('topify_automation_logs_cache', JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+        }
         fetchLogs();
         if (inspectingLog?.id === log.id) {
-          setInspectingLog(res.data.log);
+          setInspectingLog(res.data.log || { ...log, status: 'SUCCESS' });
         }
       }
     } catch (e: any) {

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/db';
 import { 
   INITIAL_AUTOMATION_TEMPLATES, 
   memoryAutomationRules, 
   AutomationRuleItem 
 } from '@/lib/automation/flow-engine';
+import { resolveUserAndWorkspace } from '@/app/api/automations/route';
 
 // GET /api/automations/templates - List all pre-built automation templates (F145)
 export async function GET() {
@@ -21,6 +23,7 @@ export async function GET() {
 // POST /api/automations/templates - 1-Click Apply template to create a new active rule
 export async function POST(req: NextRequest) {
   try {
+    const { workspaceId } = await resolveUserAndWorkspace(req);
     const body = await req.json();
     const { templateId, customName } = body;
 
@@ -39,7 +42,26 @@ export async function POST(req: NextRequest) {
       isActive: true,
       executionCount: 0,
       createdAt: new Date().toISOString(),
+      workspaceId: workspaceId || undefined,
     };
+
+    try {
+      const created = await prisma.automationRule.create({
+        data: {
+          name: newRule.name,
+          description: newRule.description,
+          trigger: newRule.trigger as any,
+          conditions: newRule.conditions as any,
+          actions: newRule.actions as any,
+          isActive: true,
+          workspaceId: workspaceId || null,
+        },
+      });
+      newRule.id = created.id;
+      newRule.createdAt = created.createdAt.toISOString();
+    } catch (e) {
+      console.warn('[API_AUTOMATIONS_TEMPLATE_APPLY] DB create error fallback:', e);
+    }
 
     memoryAutomationRules.unshift(newRule);
 

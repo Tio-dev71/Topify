@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { 
   evaluateConditions, 
   evaluateConditionsDetailed,
@@ -8,6 +8,95 @@ import {
   AutomationCondition,
   AutomationAction
 } from '@/lib/automation/flow-engine';
+import { GET as GET_RULES, POST as POST_RULES, PATCH as PATCH_RULES } from '@/app/api/automations/route';
+import { POST as POST_TEMPLATES } from '@/app/api/automations/templates/route';
+import { GET as GET_LOGS, POST as POST_LOGS } from '@/app/api/automations/logs/route';
+import { NextRequest } from 'next/server';
+
+vi.mock('@/lib/auth', () => ({
+  auth: vi.fn().mockResolvedValue({
+    user: { id: 'user_test_1', workspaceId: 'ws_test_1', name: 'Test User' },
+  }),
+}));
+
+vi.mock('@/lib/db', () => {
+  const mockRules: any[] = [];
+  const mockLogs: any[] = [];
+
+  return {
+    default: {
+      automationRule: {
+        findMany: vi.fn().mockImplementation(() => Promise.resolve(mockRules)),
+        create: vi.fn().mockImplementation(({ data }: any) => {
+          const created = {
+            id: `rule_db_${Date.now()}`,
+            name: data.name,
+            description: data.description,
+            trigger: data.trigger,
+            conditions: data.conditions,
+            actions: data.actions,
+            isActive: data.isActive ?? true,
+            workspaceId: data.workspaceId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            _count: { logs: 0 },
+          };
+          mockRules.unshift(created);
+          return Promise.resolve(created);
+        }),
+        update: vi.fn().mockImplementation(({ where, data }: any) => {
+          const found = mockRules.find(r => r.id === where.id);
+          if (found) {
+            Object.assign(found, data, { updatedAt: new Date() });
+            return Promise.resolve(found);
+          }
+          return Promise.resolve({ id: where.id, ...data, createdAt: new Date(), updatedAt: new Date(), _count: { logs: 0 } });
+        }),
+        delete: vi.fn().mockResolvedValue({ id: 'deleted' }),
+      },
+      automationRuleLog: {
+        findMany: vi.fn().mockImplementation(() => Promise.resolve(mockLogs)),
+        findUnique: vi.fn().mockImplementation(({ where }: any) => {
+          const found = mockLogs.find(l => l.id === where.id);
+          return Promise.resolve(found || null);
+        }),
+        create: vi.fn().mockImplementation(({ data }: any) => {
+          const created = {
+            id: `log_db_${Date.now()}`,
+            ruleId: data.ruleId,
+            status: data.status,
+            input: data.input,
+            output: data.output,
+            error: data.error,
+            createdAt: new Date(),
+            rule: { id: data.ruleId, name: 'Test Rule', trigger: { type: 'COMMENT' } },
+          };
+          mockLogs.unshift(created);
+          return Promise.resolve(created);
+        }),
+        update: vi.fn().mockImplementation(({ where, data }: any) => {
+          const found = mockLogs.find(l => l.id === where.id);
+          if (found) {
+            Object.assign(found, data);
+            return Promise.resolve(found);
+          }
+          return Promise.resolve({ id: where.id, ...data });
+        }),
+      },
+      workspace: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'ws_test_1' }),
+      },
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'user_test_1', workspaceId: 'ws_test_1' }),
+        findFirst: vi.fn().mockResolvedValue({ id: 'user_test_1', workspaceId: 'ws_test_1' }),
+      },
+    },
+  };
+});
+
+vi.mock('@/lib/audit-log', () => ({
+  recordAuditLog: vi.fn(),
+}));
 
 describe('M11 Automation Workflow Rules & Engine', () => {
   describe('Rule ID and Label Layout Helpers', () => {
@@ -187,6 +276,82 @@ describe('M11 Automation Workflow Rules & Engine', () => {
         expect(tpl.trigger).toBeDefined();
         expect(Array.isArray(tpl.actions)).toBe(true);
       }
+    });
+  });
+
+  describe('M11 Automation APIs Persistence & End-to-End Workflow', () => {
+    let createdRuleId: string;
+
+    it('POST /api/automations creates a new rule and persists to DB (F140)', async () => {
+      const payload = {
+        name: 'Kịch bản Test F140 Tự Động',
+        description: 'Tự động phản hồi tin nhắn khách hàng mới',
+        trigger: {
+          type: 'MESSAGE',
+          config: { channel: 'FACEBOOK', event: 'FIRST_MESSAGE' },
+        },
+        conditions: [
+          { field: 'keyword', operator: 'contains', value: 'báo giá, tư vấn' },
+          { field: 'status', operator: 'equals', value: 'NEW' },
+        ],
+        actions: [
+          { type: 'MESSAGE', config: { templateText: 'Dạ shop đã gửi tin nhắn rồi ạ!' } },
+          { type: 'TAG', config: { tag: 'Tu_Van' } },
+        ],
+        isActive: true,
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/automations', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const res = await POST_RULES(req);
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.automation).toBeDefined();
+      expect(data.automation.name).toBe('Kịch bản Test F140 Tự Động');
+      expect(data.automation.id).toBeDefined();
+      createdRuleId = data.automation.id;
+    });
+
+    it('GET /api/automations lists persisted rules (F140-F143)', async () => {
+      const req = new NextRequest('http://localhost:3000/api/automations');
+      const res = await GET_RULES(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.automations)).toBe(true);
+      expect(data.automations.some((r: any) => r.id === createdRuleId)).toBe(true);
+    });
+
+    it('POST /api/automations/templates applies a template and persists to DB (F145)', async () => {
+      const tpl = INITIAL_AUTOMATION_TEMPLATES[0];
+      const req = new NextRequest('http://localhost:3000/api/automations/templates', {
+        method: 'POST',
+        body: JSON.stringify({
+          templateId: tpl.id,
+          customName: 'Mẫu Áp Dụng Từ Template F145',
+        }),
+      });
+
+      const res = await POST_TEMPLATES(req);
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.rule).toBeDefined();
+      expect(data.rule.name).toBe('Mẫu Áp Dụng Từ Template F145');
+      expect(data.rule.id).toBeDefined();
+    });
+
+    it('GET /api/automations/logs lists execution logs with retry functionality (F144)', async () => {
+      const req = new NextRequest('http://localhost:3000/api/automations/logs');
+      const res = await GET_LOGS(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.logs)).toBe(true);
     });
   });
 });
