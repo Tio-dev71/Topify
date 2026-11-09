@@ -63,6 +63,7 @@ export interface CustomerItem {
   dealsCount: number;
   totalDealValue: number;
   isDuplicateCandidate?: boolean;
+  customData?: any;
 }
 
 export interface DuplicateGroupItem {

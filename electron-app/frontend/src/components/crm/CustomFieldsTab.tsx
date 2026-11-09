@@ -31,6 +31,7 @@ interface CustomerOption {
   name: string | null;
   phone: string | null;
   email: string | null;
+  source?: string | null;
   customData?: any;
 }
 
@@ -46,6 +47,10 @@ export default function CustomFieldsTab({
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Internal customers list fallback
+  const [internalCustomers, setInternalCustomers] = useState<CustomerOption[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+
   // Selected customer for preview / testing
   const [selectedCustId, setSelectedCustId] = useState<string>('');
   const [customerValues, setCustomerValues] = useState<Record<string, any>>({});
@@ -58,6 +63,22 @@ export default function CustomFieldsTab({
   const [newFieldOptions, setNewFieldOptions] = useState('');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
   const [newFieldDesc, setNewFieldDesc] = useState('');
+
+  const customerList = customers && customers.length > 0 ? customers : internalCustomers;
+
+  const fetchInternalCustomers = async () => {
+    setLoadingCustomers(true);
+    try {
+      const res = await api.get('/crm/customers?limit=100');
+      if (res.data?.customers) {
+        setInternalCustomers(res.data.customers);
+      }
+    } catch (e) {
+      console.error('Failed to load customers in CustomFieldsTab', e);
+    } finally {
+      setLoadingCustomers(false);
+    }
+  };
 
   const fetchFields = async () => {
     setLoading(true);
@@ -75,21 +96,41 @@ export default function CustomFieldsTab({
 
   useEffect(() => {
     fetchFields();
-    if (customers.length > 0 && !selectedCustId) {
-      setSelectedCustId(customers[0].id);
-      setCustomerValues((customers[0].customData as any) || {});
+    if (!customers || customers.length === 0) {
+      fetchInternalCustomers();
     }
-  }, [customers]);
+  }, []);
+
+  useEffect(() => {
+    if (customerList.length > 0) {
+      if (!selectedCustId) {
+        // Prefer customer that already has customData in DB, otherwise first customer
+        const custWithData = customerList.find(c => c.customData && Object.keys(c.customData).length > 0);
+        const target = custWithData || customerList[0];
+        setSelectedCustId(target.id);
+        setCustomerValues((target.customData as any) || {});
+      } else {
+        const current = customerList.find(c => c.id === selectedCustId);
+        if (current && current.customData && Object.keys(customerValues).length === 0) {
+          setCustomerValues((current.customData as any) || {});
+        }
+      }
+    }
+  }, [customers, internalCustomers]);
 
   const handleSelectCustomer = (custId: string) => {
     setSelectedCustId(custId);
-    const cust = customers.find(c => c.id === custId);
+    if (!custId) {
+      setCustomerValues({});
+      return;
+    }
+    const cust = customerList.find(c => c.id === custId);
     setCustomerValues((cust?.customData as any) || {});
   };
 
   const handleSaveCustomerValues = async () => {
     if (!selectedCustId) {
-      toast.error('Vui lòng chọn khách hàng');
+      toast.error('Vui lòng chọn khách hàng để gán dữ liệu');
       return;
     }
 
@@ -99,7 +140,12 @@ export default function CustomFieldsTab({
         id: selectedCustId,
         customData: customerValues,
       });
-      toast.success('Đã lưu các trường tùy biến vào hồ sơ khách hàng thành công!');
+      const cust = customerList.find(c => c.id === selectedCustId);
+      toast.success(`Đã lưu dữ liệu tùy biến vào hồ sơ "${cust?.name || 'khách hàng'}" thành công!`);
+      // Update local state immediately
+      setInternalCustomers(prev =>
+        prev.map(c => (c.id === selectedCustId ? { ...c, customData: customerValues } : c))
+      );
       if (onCustomerUpdated) onCustomerUpdated();
     } catch {
       toast.error('Lỗi khi lưu dữ liệu tùy biến');
@@ -157,7 +203,7 @@ export default function CustomFieldsTab({
     }
   };
 
-  const selectedCust = customers.find(c => c.id === selectedCustId);
+  const selectedCust = customerList.find(c => c.id === selectedCustId);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -278,72 +324,111 @@ export default function CustomFieldsTab({
             </div>
 
             {/* Customer Picker */}
-            <div>
-              <label className="font-bold text-gray-700 text-xs block mb-1">Chọn khách hàng:</label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-gray-700 text-xs block">Chọn khách hàng thực tế:</label>
+                <span className="text-[10px] text-gray-400">
+                  {loadingCustomers ? 'Đang tải...' : `${customerList.length} khách trong Workspace`}
+                </span>
+              </div>
               <select
                 value={selectedCustId}
                 onChange={e => handleSelectCustomer(e.target.value)}
                 className="w-full p-2.5 rounded-xl border border-gray-200 text-xs bg-white focus:outline-none focus:border-indigo-500 font-medium"
               >
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || 'Khách không tên'} {c.phone ? `(${c.phone})` : ''}
-                  </option>
-                ))}
+                <option value="">-- Chọn khách hàng ({customerList.length} khách trong Workspace) --</option>
+                {customerList.map(c => {
+                  const hasData = c.customData && Object.keys(c.customData).length > 0;
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name || 'Khách không tên'} {c.phone ? `(${c.phone})` : ''} {hasData ? '• [Đã có customData]' : ''}
+                    </option>
+                  );
+                })}
               </select>
+
+              {/* Selected Customer Info Badge */}
+              {selectedCust && (
+                <div className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-100 flex items-center justify-between text-[11px] animate-in fade-in">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-purple-200 text-purple-800 flex items-center justify-center font-bold text-xs shrink-0">
+                      {(selectedCust.name || 'K')[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 truncate leading-tight">
+                        {selectedCust.name || 'Khách không tên'}
+                      </p>
+                      <p className="text-[10px] text-gray-500 font-mono truncate">
+                        {selectedCust.phone || 'Chưa có SĐT'} • {selectedCust.email || 'Chưa có Email'}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedCust.source && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white text-purple-700 border border-purple-200 uppercase shrink-0">
+                      {selectedCust.source}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Dynamic Fields Form */}
             <div className="space-y-3 pt-2">
-              {fields.map((field) => (
-                <div key={field.id} className="space-y-1">
-                  <label className="text-[11px] font-bold text-gray-700 block">
-                    {field.name} {field.required && <span className="text-rose-500">*</span>}
-                  </label>
-
-                  {field.type === 'SELECT' ? (
-                    <select
-                      value={customerValues[field.key] || ''}
-                      onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
-                      className="w-full p-2 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="">-- Chọn {field.name} --</option>
-                      {field.options?.map((opt, i) => (
-                        <option key={i} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  ) : field.type === 'NUMBER' ? (
-                    <input
-                      type="number"
-                      value={customerValues[field.key] || ''}
-                      onChange={e => setCustomerValues({ ...customerValues, [field.key]: Number(e.target.value) })}
-                      placeholder={`Nhập ${field.name}...`}
-                      className="w-full p-2 rounded-lg border border-gray-200 text-xs font-mono focus:outline-none focus:border-indigo-500"
-                    />
-                  ) : field.type === 'DATE' ? (
-                    <input
-                      type="date"
-                      value={customerValues[field.key] || ''}
-                      onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
-                      className="w-full p-2 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:border-indigo-500"
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={customerValues[field.key] || ''}
-                      onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
-                      placeholder={`Nhập ${field.name}...`}
-                      className="w-full p-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-indigo-500"
-                    />
-                  )}
+              {fields.length === 0 ? (
+                <div className="p-4 rounded-xl bg-gray-50 border border-dashed border-gray-200 text-center text-xs text-gray-400">
+                  Chưa có trường tùy biến nào. Hãy tạo trường mới ở cột bên trái trước khi gán dữ liệu.
                 </div>
-              ))}
+              ) : (
+                fields.map((field) => (
+                  <div key={field.id} className="space-y-1">
+                    <label className="text-[11px] font-bold text-gray-700 block">
+                      {field.name} {field.required && <span className="text-rose-500">*</span>}
+                    </label>
+
+                    {field.type === 'SELECT' ? (
+                      <select
+                        value={customerValues[field.key] || ''}
+                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
+                        className="w-full p-2 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="">-- Chọn {field.name} --</option>
+                        {field.options?.map((opt, i) => (
+                          <option key={i} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : field.type === 'NUMBER' ? (
+                      <input
+                        type="number"
+                        value={customerValues[field.key] ?? ''}
+                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value === '' ? '' : Number(e.target.value) })}
+                        placeholder={`Nhập ${field.name}...`}
+                        className="w-full p-2 rounded-lg border border-gray-200 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                      />
+                    ) : field.type === 'DATE' ? (
+                      <input
+                        type="date"
+                        value={customerValues[field.key] || ''}
+                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
+                        className="w-full p-2 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:border-indigo-500"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={customerValues[field.key] || ''}
+                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
+                        placeholder={`Nhập ${field.name}...`}
+                        className="w-full p-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-indigo-500"
+                      />
+                    )}
+                  </div>
+                ))
+              )}
             </div>
 
             <button
               onClick={handleSaveCustomerValues}
-              disabled={savingValues || !selectedCustId}
-              className="w-full btn-primary py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"
+              disabled={savingValues || !selectedCustId || fields.length === 0}
+              className="w-full btn-primary py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingValues ? (
                 <span>Đang lưu...</span>
@@ -357,8 +442,15 @@ export default function CustomFieldsTab({
 
             {/* JSON Output preview */}
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-gray-500 uppercase">Đối tượng customData trong DB:</span>
-              <pre className="text-[10px] text-gray-700 font-mono overflow-x-auto p-1 bg-white rounded border border-gray-100 max-h-28">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-gray-500 uppercase">Đối tượng customData trong DB:</span>
+                <span className="text-[10px] text-gray-400 font-mono">
+                  {Object.keys(customerValues).length > 0
+                    ? `${Object.keys(customerValues).length} thuộc tính`
+                    : 'Trống {}'}
+                </span>
+              </div>
+              <pre className="text-[10px] text-gray-700 font-mono overflow-x-auto p-1.5 bg-white rounded border border-gray-100 max-h-36">
                 {JSON.stringify(customerValues, null, 2)}
               </pre>
             </div>
