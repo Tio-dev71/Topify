@@ -13,8 +13,15 @@ export async function GET(req: NextRequest) {
     const pageId = searchParams.get('pageId');
     const limit = parseInt(searchParams.get('limit') || '100');
 
+    const where: any = {
+      postedAt: { lte: new Date() },
+    };
+    if (pageId) {
+      where.pageId = pageId;
+    }
+
     const posts = await prisma.competitorPost.findMany({
-      where: pageId ? { pageId } : {},
+      where,
       orderBy: { postedAt: 'desc' },
       take: limit
     });

@@ -48,13 +48,24 @@ export default function DownloadPage() {
               Hỗ trợ Windows 10, 11 (64-bit). Tự động cập nhật phiên bản mới nhất.
             </p>
             <a
-              href={`/downloads/Topify-Automation-${electronPkg.version}-win.exe?v=${electronPkg.version}`}
+              href={`/api/download?os=windows`}
               download={`Topify-Automation-${electronPkg.version}-win.exe`}
               className="w-full bg-[#0078d7] hover:bg-[#0063b1] text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm shadow-blue-500/20"
             >
               <Download className="w-5 h-5" />
               Tải cho Windows (EXE)
             </a>
+            <div className="mt-3 text-center">
+              <a
+                href={`https://github.com/Tio-dev71/Topify/releases/download/v${electronPkg.version}/Topify-Automation-${electronPkg.version}-win.exe`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-gray-400 hover:text-blue-600 inline-flex items-center gap-1 transition"
+              >
+                <span>Link dự phòng GitHub</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
 
           {/* macOS Download */}
@@ -67,13 +78,24 @@ export default function DownloadPage() {
               Hỗ trợ macOS 10.15 trở lên (Intel & Apple Silicon M1/M2/M3).
             </p>
             <a
-              href={`/downloads/Topify-Automation-${electronPkg.version}-mac.dmg?v=${electronPkg.version}`}
+              href={`/api/download?os=mac`}
               download={`Topify-Automation-${electronPkg.version}-mac.dmg`}
               className="w-full bg-gray-900 hover:bg-black text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm shadow-gray-900/20"
             >
               <Download className="w-5 h-5" />
               Tải cho macOS (DMG)
             </a>
+            <div className="mt-3 text-center">
+              <a
+                href={`https://github.com/Tio-dev71/Topify/releases/download/v${electronPkg.version}/Topify-Automation-${electronPkg.version}-mac.dmg`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-gray-400 hover:text-gray-900 inline-flex items-center gap-1 transition"
+              >
+                <span>Link dự phòng GitHub</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
         </div>
 

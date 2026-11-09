@@ -66,8 +66,8 @@ function VideoCardPreview({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const rawUrl = getMediaUrl(asset.storageUrl);
-  // Using #t=0.5 directs HTML5 video to decode frame at 0.5s instead of pure black at 0.0s
-  const videoSrc = rawUrl.includes('?') ? `${rawUrl}&t=0.5` : `${rawUrl}#t=0.5`;
+  // Using #t=0.5 at the end of the URL (after any query parameters) directs HTML5 video to decode frame at 0.5s instead of pure black at 0.0s
+  const videoSrc = rawUrl.includes('#') ? rawUrl : `${rawUrl}#t=0.5`;
 
   useEffect(() => {
     if (customThumbnail) {
@@ -92,7 +92,9 @@ function VideoCardPreview({
       if (v.duration && !duration) {
         setDuration(Math.round(v.duration));
       }
-      v.currentTime = Math.min(1.0, (v.duration || 1) / 2);
+      try {
+        v.currentTime = Math.min(1.0, Math.max(0.2, (v.duration || 1) / 3));
+      } catch {}
     };
 
     v.onseeked = () => {
@@ -135,6 +137,19 @@ function VideoCardPreview({
   return (
     <div
       onClick={onOpenPreview}
+      onMouseEnter={() => {
+        try {
+          videoRef.current?.play().catch(() => {});
+        } catch {}
+      }}
+      onMouseLeave={() => {
+        if (videoRef.current) {
+          try {
+            videoRef.current.pause();
+            videoRef.current.currentTime = 0.5;
+          } catch {}
+        }
+      }}
       className="w-full h-full relative flex items-center justify-center bg-gray-950 overflow-hidden cursor-pointer group select-none"
     >
       {extractedThumb ? (
@@ -150,10 +165,14 @@ function VideoCardPreview({
           className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
           preload="metadata"
           muted
+          loop
           playsInline
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
             if (el.duration && !duration) setDuration(Math.round(el.duration));
+            try {
+              el.currentTime = Math.min(1.0, Math.max(0.2, (el.duration || 1) / 3));
+            } catch {}
           }}
           onError={() => setHasError(true)}
         />

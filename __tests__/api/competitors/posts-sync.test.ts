@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { POST } from '@/app/api/competitors/posts/sync/route';
+import { POST, getTodayDynamicPosts } from '@/app/api/competitors/posts/sync/route';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import prisma from '@/lib/db';
 import { auth } from '@/lib/auth';
@@ -16,6 +16,7 @@ vi.mock('@/lib/db', () => {
       create: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
+      deleteMany: vi.fn(),
     },
   };
   return {
@@ -96,7 +97,7 @@ describe('Competitor Posts Sync API - /api/competitors/posts/sync', () => {
     const now = new Date();
     const mockPosts: any[] = [];
     for (let i = 0; i < 15; i++) {
-      const postTime = new Date(now.getTime() - i * 10 * 60 * 1000); // within today (past 2.5 hours)
+      const postTime = new Date(now.getTime() - (i + 1) * 60 * 1000); // within last 16 mins (always today)
       mockPosts.push({
         post_id: `post-pho-today-${i}`,
         message: `Hôm nay Phở ra mắt bài viết số ${i + 1}`,
@@ -279,5 +280,59 @@ describe('Competitor Posts Sync API - /api/competitors/posts/sync', () => {
     expect(data.success).toBe(true);
     expect(data.oct31PostsCount).toBe(10);
     expect(data.message).toContain('10 bài ngày 31/10');
+  });
+
+  it('guarantees that getTodayDynamicPosts generates rich posts strictly <= current time with no future timestamps', () => {
+    const posts = getTodayDynamicPosts('VTV24', 'https://www.facebook.com/tintucvtv24');
+    const now = new Date();
+
+    expect(Array.isArray(posts)).toBe(true);
+    expect(posts.length).toBeGreaterThanOrEqual(4);
+
+    for (const post of posts) {
+      expect(post.postedAt.getTime()).toBeLessThanOrEqual(now.getTime());
+      expect(post.externalId).toMatch(/^sync_today_/);
+      expect(post.content).toBeTruthy();
+      expect(post.mediaUrl).toBeTruthy();
+      expect(post.likesCount).toBeGreaterThan(0);
+      expect(post.commentsCount).toBeGreaterThan(0);
+      expect(post.sharesCount).toBeGreaterThan(0);
+    }
+  });
+
+  it('purges future posts (postedAt > now) from the database during sync', async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: 'user-1' } } as any);
+    const mockPage = {
+      id: 'page-purge-test',
+      name: 'VTV24',
+      url: 'https://www.facebook.com/tintucvtv24',
+      workspaceId: 'ws-1',
+    };
+    vi.mocked(prisma.competitorPage.findUnique).mockResolvedValue(mockPage as any);
+    vi.mocked(rapidClient.getFacebookDeepPosts).mockRejectedValue(new Error('Network error'));
+    vi.mocked(prisma.competitorPost.deleteMany).mockResolvedValue({ count: 2 });
+    vi.mocked(prisma.competitorPost.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.competitorPost.create).mockResolvedValue({ id: 'cp-new' } as any);
+    vi.mocked(prisma.competitorPost.count).mockResolvedValue(15);
+
+    const req = new NextRequest('http://localhost/api/competitors/posts/sync', {
+      method: 'POST',
+      body: JSON.stringify({ pageId: 'page-purge-test' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    // Verify deleteMany was called with postedAt: { gt: expect.any(Date) }
+    expect(prisma.competitorPost.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          pageId: 'page-purge-test',
+          postedAt: expect.objectContaining({
+            gt: expect.any(Date),
+          }),
+        }),
+      })
+    );
   });
 });

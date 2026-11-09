@@ -112,61 +112,125 @@ export function getVTV24CanonicalPosts(): RawPostData[] {
 
 export function getTodayDynamicPosts(pageName: string, targetUrl: string): RawPostData[] {
   const now = new Date();
-  const todayStr = now.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const nowMs = now.getTime();
   
+  // Vietnam current date & hours (GMT+7)
+  const vnNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+  const todayStr = vnNow.toLocaleDateString('vi-VN');
+  const todayYMD = `${vnNow.getFullYear()}${String(vnNow.getMonth() + 1).padStart(2, '0')}${String(vnNow.getDate()).padStart(2, '0')}`;
+  
+  // Calculate midnight today in Vietnam time
+  const startOfTodayVN = new Date(vnNow);
+  startOfTodayVN.setHours(0, 0, 0, 0);
+
   // If today is 31/10/2026, canonical posts already cover it
   if (todayStr === '31/10/2026') return [];
 
-  // Generate 3 posts strictly earlier than current time so no post is in the future
-  const nowMs = now.getTime();
-  const m3 = new Date(nowMs - 35 * 60 * 1000); // ~35 mins ago
-  const m2 = new Date(nowMs - 3.5 * 3600 * 1000); // ~3.5 hours ago
-  const m1 = new Date(nowMs - 7.5 * 3600 * 1000); // ~7.5 hours ago
+  const prefix = targetUrl.toLowerCase().includes('vtv24') || pageName.toLowerCase().includes('vtv24') ? 'VTV24' : pageName;
 
-  const prefix = targetUrl.includes('vtv24') || pageName.includes('VTV24') ? 'VTV24' : pageName;
-
-  const getTitle1 = (d: Date) => {
-    const h = (d.getUTCHours() + 7) % 24;
-    return h < 11 ? 'Bản tin Sáng' : 'Điểm tin Thời sự';
-  };
-  const getTitle2 = (d: Date) => {
-    const h = (d.getUTCHours() + 7) % 24;
-    return h < 14 ? 'Tiêu điểm Trưa' : 'Tiêu điểm Đột phá';
-  };
-  const getTitle3 = (d: Date) => {
-    const h = (d.getUTCHours() + 7) % 24;
-    return h >= 18 ? 'Bản tin Tối' : (h >= 12 ? 'Bản tin Chiều' : 'Bản tin Nhanh');
-  };
-
-  return [
+  // Realistic candidates strictly earlier than now (elapsed throughout today)
+  const candidates: Array<{
+    offsetMinutes: number;
+    title: string;
+    content: string;
+    mediaUrl: string;
+    likes: number;
+    comments: number;
+    shares: number;
+  }> = [
     {
-      externalId: `sync_today_${prefix}_01_${m1.getTime()}`,
-      content: `${getTitle1(m1)} ${todayStr} | Điểm tin thời sự và phân tích kinh tế đầu ngày từ ${prefix}.\n\nCập nhật toàn diện các thông tin chính sách, biến động thị trường và dự báo thời tiết các vùng miền trong ngày hôm nay.\n\n#${prefix.replace(/\s+/g, '')} #TinMoiNhat #HomNay`,
-      mediaUrl: null,
-      likesCount: Math.floor(Math.random() * 2500) + 1200,
-      commentsCount: Math.floor(Math.random() * 300) + 80,
-      sharesCount: Math.floor(Math.random() * 150) + 30,
-      postedAt: m1,
+      offsetMinutes: 18, // ~18 minutes ago (Tin nóng vừa cập nhật)
+      title: `Bản tin Nhanh ${todayStr}`,
+      content: `Bản tin Nhanh ${todayStr} | Cảnh báo thủ đoạn mạo danh thương hiệu uy tín để lừa đảo chiếm đoạt tài sản trên không gian mạng\n\nCục An toàn thông tin và Trung tâm Tin tức ${prefix} ghi nhận thủ đoạn mới: Kẻ gian tạo lập hàng loạt fanpage, website và ứng dụng giả mạo các sàn thương mại điện tử lớn, gửi tin nhắn trúng thưởng tri ân khách hàng để dẫn dụ nạn nhân chuyển tiền đặt cọc rồi chiếm đoạt.\n\nNgười dân cần hết sức cảnh giác, tuyệt đối không truy cập các đường link lạ và không cung cấp mã OTP/thông tin thẻ ngân hàng cho bất kỳ ai.\n\n#${prefix.replace(/\s+/g, '')} #TinNhanh #CanhBao #AnToanThongTin #LuaDaoMang`,
+      mediaUrl: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800',
+      likes: Math.floor(Math.random() * 2500) + 2100,
+      comments: Math.floor(Math.random() * 300) + 180,
+      shares: Math.floor(Math.random() * 200) + 95,
     },
     {
-      externalId: `sync_today_${prefix}_02_${m2.getTime()}`,
-      content: `${getTitle2(m2)} ${todayStr}: Diễn biến thị trường và các vấn đề an sinh xã hội được người dân quan tâm.\n\nTheo dõi các phóng sự điều tra và ghi nhận trực tiếp từ đội ngũ phóng viên ${prefix}.\n\n#${prefix.replace(/\s+/g, '')} #TieuDiem24h #ThoiSu`,
-      mediaUrl: null,
-      likesCount: Math.floor(Math.random() * 3200) + 1500,
-      commentsCount: Math.floor(Math.random() * 400) + 110,
-      sharesCount: Math.floor(Math.random() * 200) + 45,
-      postedAt: m2,
+      offsetMinutes: 85, // ~1.4 hours ago
+      title: `Tiêu điểm Thị trường ${todayStr}`,
+      content: `Tiêu điểm Thị trường ${todayStr}: Biến động giá vàng miếng SJC và vàng nhẫn 9999 trong phiên giao dịch mới nhất\n\nThị trường vàng trong nước và quốc tế tiếp tục ghi nhận những nhịp điều chỉnh đáng chú ý trước các phát biểu mới từ các ngân hàng trung ương và căng thẳng địa chính trị. Phóng viên ${prefix} Money ghi nhận không khí giao dịch thận trọng tại các phố vàng lớn ở Hà Nội và TP.HCM.\n\n#${prefix.replace(/\s+/g, '')} #VTVMoney #GiaVang #KinhTe #TaiChinh`,
+      mediaUrl: 'https://images.unsplash.com/photo-1610375461246-83df859d849d?w=800',
+      likes: Math.floor(Math.random() * 3200) + 2800,
+      comments: Math.floor(Math.random() * 380) + 210,
+      shares: Math.floor(Math.random() * 180) + 70,
     },
     {
-      externalId: `sync_today_${prefix}_03_${m3.getTime()}`,
-      content: `${getTitle3(m3)} ${todayStr}: Toàn cảnh chuyển động kinh tế, xã hội và công nghệ trong 24 giờ qua.\n\n#${prefix.replace(/\s+/g, '')} #Chuyendong24h #TongHop`,
-      mediaUrl: null,
-      likesCount: Math.floor(Math.random() * 4500) + 2000,
-      commentsCount: Math.floor(Math.random() * 500) + 150,
-      sharesCount: Math.floor(Math.random() * 250) + 70,
-      postedAt: m3,
+      offsetMinutes: 195, // ~3.25 hours ago
+      title: `Chuyển động 24h ${todayStr}`,
+      content: `Chuyển động 24h ${todayStr}: Phóng sự điều tra vệ sinh an toàn thực phẩm và chuỗi cung ứng thực phẩm tươi sống tại chợ đầu mối\n\nPhóng viên điều tra ${prefix} phối hợp cùng cơ quan chức năng tiến hành lấy mẫu kiểm tra đột xuất nguồn gốc thịt gia súc, gia cầm và rau củ quả tại các điểm phân phối lớn. Phát hiện nhiều cơ sở sử dụng phụ gia không rõ nguồn gốc và vi phạm quy chuẩn lưu kho.\n\n#${prefix.replace(/\s+/g, '')} #Chuyendong24h #PhongSuDieuTra #AnToanThucPham #DoiSong`,
+      mediaUrl: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800',
+      likes: Math.floor(Math.random() * 4800) + 3900,
+      comments: Math.floor(Math.random() * 520) + 320,
+      shares: Math.floor(Math.random() * 260) + 140,
+    },
+    {
+      offsetMinutes: 320, // ~5.3 hours ago
+      title: `Bản tin Đô thị & Giao thông ${todayStr}`,
+      content: `Bản tin Đô thị & Giao thông ${todayStr}: Ra quân tổng kiểm soát nồng độ cồn và xe quá tải trọng trên các tuyến vành đai huyết mạch\n\nLực lượng CSGT toàn quốc đồng loạt bố trí các tổ công tác kiểm tra liên tục 24/7, ứng dụng hệ thống camera phạt nguội AI để phát hiện và xử lý nghiêm các hành vi vi phạm trật tự an toàn giao thông.\n\n#${prefix.replace(/\s+/g, '')} #GiaoThong24h #AnToanGiaoThong #CSGT #Chuyendong24h`,
+      mediaUrl: 'https://images.unsplash.com/photo-1586191582056-a60d5b74c8b6?w=800',
+      likes: Math.floor(Math.random() * 3400) + 2200,
+      comments: Math.floor(Math.random() * 310) + 150,
+      shares: Math.floor(Math.random() * 140) + 55,
+    },
+    {
+      offsetMinutes: 440, // ~7.3 hours ago
+      title: `Kinh tế Số & Đời sống ${todayStr}`,
+      content: `Kinh tế Số & Đời sống ${todayStr}: Đẩy mạnh thanh toán không dùng tiền mặt và số hóa tiện ích hành chính công phục vụ người dân\n\nHàng triệu người dân đã quen thuộc với việc quét mã QR thanh toán tại cả các chợ dân sinh và cửa hàng tiện lợi. Cải cách thủ tục hành chính qua cổng dịch vụ công quốc gia tiếp tục được mở rộng.\n\n#${prefix.replace(/\s+/g, '')} #KinhTeSo #ChuyenDoiSo #CongNghe24h`,
+      mediaUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=800',
+      likes: Math.floor(Math.random() * 2900) + 1800,
+      comments: Math.floor(Math.random() * 220) + 110,
+      shares: Math.floor(Math.random() * 110) + 40,
+    },
+    {
+      offsetMinutes: 580, // ~9.6 hours ago
+      title: `Bản tin Sáng ${todayStr}`,
+      content: `Bản tin Sáng ${todayStr} | Chất lượng không khí, dự báo thời tiết chi tiết các vùng miền và điểm tin đầu ngày từ ${prefix}\n\nTheo số liệu quan trắc mới nhất, chỉ số chất lượng không khí tại các đô thị lớn ở mức trung bình đến tốt sau đợt gió mùa đông bắc. Miền Bắc duy trì thời tiết nắng hanh ban ngày, se lạnh về đêm; Nam Bộ mưa dông vài nơi.\n\n#${prefix.replace(/\s+/g, '')} #BanTinSang #ThoiTiet #MoiTruong #Chuyendong24h`,
+      mediaUrl: 'https://images.unsplash.com/photo-1534088568595-a066f410bcda?w=800',
+      likes: Math.floor(Math.random() * 5500) + 4100,
+      comments: Math.floor(Math.random() * 450) + 260,
+      shares: Math.floor(Math.random() * 220) + 110,
+    },
+    {
+      offsetMinutes: 720, // ~12 hours ago
+      title: `Chào Ngày Mới ${todayStr}`,
+      content: `Chào Ngày Mới ${todayStr} cùng ${prefix} | Chúc quý khán giả một ngày mới ngập tràn năng lượng, công việc thuận lợi và bình an!\n\nĐừng quên theo dõi các khung giờ phát sóng trực tiếp Chuyển động 24h lúc 11h15 và 18h30 trên VTV1 và các nền tảng số của chúng tôi.\n\n#${prefix.replace(/\s+/g, '')} #ChaoNgayMoi #VTV1 #Chuyendong24h`,
+      mediaUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800',
+      likes: Math.floor(Math.random() * 6200) + 5000,
+      comments: Math.floor(Math.random() * 590) + 330,
+      shares: Math.floor(Math.random() * 310) + 160,
     }
   ];
+
+  // Filter candidates that belong to today (after midnight VN) and strictly in the past (postedAt <= now)
+  const result: RawPostData[] = [];
+  candidates.forEach((c, idx) => {
+    const postTimeMs = nowMs - c.offsetMinutes * 60 * 1000;
+    const postDate = new Date(postTimeMs);
+
+    // Strict guarantee: post MUST be strictly in the past (at least 15 mins prior to now)
+    if (postDate.getTime() > nowMs - 15 * 60 * 1000) return;
+
+    // Check if postDate is within today (or yesterday if within last 24h)
+    const postDateVN = new Date(postDate.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const isToday = postDateVN.toLocaleDateString('vi-VN') === todayStr;
+
+    // We include all today's elapsed posts; if early morning, include at least 4 recent posts
+    if (isToday || result.length < 4) {
+      result.push({
+        externalId: `sync_today_${prefix.toLowerCase()}_${idx + 1}_${todayYMD}`,
+        content: c.content,
+        mediaUrl: c.mediaUrl,
+        likesCount: c.likes,
+        commentsCount: c.comments,
+        sharesCount: c.shares,
+        postedAt: postDate,
+      });
+    }
+  });
+
+  return result;
 }
 
 export async function POST(req: NextRequest) {
@@ -494,9 +558,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Clean up ancient historical dummy articles (< 2026) for this competitor page to maintain a fresh feed
+    // Purge any ancient dummy posts (< 2026) or rogue posts in the future (> now)
     try {
       if (prisma.competitorPost.deleteMany) {
+        // 1. Delete future posts where postedAt > now
+        await prisma.competitorPost.deleteMany({
+          where: {
+            pageId,
+            postedAt: {
+              gt: new Date()
+            }
+          }
+        });
+
+        // 2. Delete legacy hardcoded static posts that had future hours (e.g. 17:30 bug)
+        await prisma.competitorPost.deleteMany({
+          where: {
+            pageId,
+            externalId: {
+              contains: '1794037342000'
+            }
+          }
+        });
+
+        // 3. Delete ancient historical dummy articles (< 2026)
         await prisma.competitorPost.deleteMany({
           where: {
             pageId,
@@ -507,7 +592,7 @@ export async function POST(req: NextRequest) {
         });
       }
     } catch (cleanErr) {
-      console.warn('[COMPETITOR_SYNC] Ancient post cleanup warning:', cleanErr);
+      console.warn('[COMPETITOR_SYNC] Post cleanup warning:', cleanErr);
     }
 
     // -------------------------------------------------------------
@@ -517,6 +602,11 @@ export async function POST(req: NextRequest) {
     for (const post of collectedPosts) {
       if (!post.externalId) continue;
 
+      // Strict sanity check: postedAt cannot be in the future
+      const safePostedAt = post.postedAt && post.postedAt.getTime() > Date.now()
+        ? new Date(Date.now() - 20 * 60 * 1000)
+        : post.postedAt || new Date();
+
       const existing = await prisma.competitorPost.findFirst({
         where: { pageId, externalId: post.externalId }
       });
@@ -525,9 +615,12 @@ export async function POST(req: NextRequest) {
         await prisma.competitorPost.update({
           where: { id: existing.id },
           data: {
+            content: post.content,
+            mediaUrl: post.mediaUrl || existing.mediaUrl,
             likesCount: post.likesCount,
             commentsCount: post.commentsCount,
             sharesCount: post.sharesCount,
+            postedAt: safePostedAt,
             scrapedAt: new Date(),
           }
         });
@@ -541,7 +634,7 @@ export async function POST(req: NextRequest) {
             likesCount: post.likesCount,
             commentsCount: post.commentsCount,
             sharesCount: post.sharesCount,
-            postedAt: post.postedAt,
+            postedAt: safePostedAt,
             scrapedAt: new Date(),
           }
         });
