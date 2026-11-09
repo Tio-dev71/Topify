@@ -38,6 +38,29 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
         take: 100,
       });
+
+      if (dbLogs.length === 0 && workspaceId) {
+        const fallbackLogs = await prisma.automationRuleLog.findMany({
+          where: {
+            ruleId: ruleId || undefined,
+            status: status && status !== 'ALL' ? status.toLowerCase() : undefined,
+          },
+          include: {
+            rule: {
+              select: {
+                id: true,
+                name: true,
+                trigger: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        });
+        if (fallbackLogs.length > 0) {
+          dbLogs = fallbackLogs;
+        }
+      }
     } catch (dbErr) {
       console.warn('[API_AUTOMATION_LOGS] DB query error fallback:', dbErr);
       dbLogs = [];

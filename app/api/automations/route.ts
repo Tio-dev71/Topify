@@ -91,6 +91,17 @@ export async function GET(req: NextRequest) {
         include: { _count: { select: { logs: true } } },
         orderBy: { createdAt: 'desc' },
       });
+
+      if (automations.length === 0 && workspaceId) {
+        const fallbackDbAutomations = await prisma.automationRule.findMany({
+          include: { _count: { select: { logs: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        });
+        if (fallbackDbAutomations.length > 0) {
+          automations = fallbackDbAutomations;
+        }
+      }
     } catch (dbErr) {
       console.warn('[API_AUTOMATIONS_GET] DB query error:', dbErr);
       automations = [];

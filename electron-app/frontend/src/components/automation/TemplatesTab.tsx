@@ -219,3 +219,4 @@ export function TemplatesTab({ onAppliedSuccess, onNavigateToWorkflows }: Templa
     </div>
   );
 }
+

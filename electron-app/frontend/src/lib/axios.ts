@@ -17,6 +17,16 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    try {
+      const uStr = localStorage.getItem('topify_user') || localStorage.getItem('user');
+      if (uStr) {
+        const u = JSON.parse(uStr);
+        if (u?.workspaceId) {
+          config.headers['x-workspace-id'] = u.workspaceId;
+        }
+      }
+    } catch {}
+
     return config;
   },
   (error) => {
