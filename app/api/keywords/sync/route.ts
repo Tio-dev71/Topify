@@ -3,8 +3,8 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { getKeywordInsights, getRealTimeNews } from '@/lib/rapidapi/client';
 import { recordAuditLog } from '@/lib/audit-log';
-import { cleanCoreTitle, normalizeUrl } from '@/lib/keywords/utils';
-import { getFallbackMentionsForKeyword } from '@/lib/keywords/fallbacks';
+import { cleanCoreTitle, normalizeUrl, fetchGoogleNewsMentions } from '@/lib/keywords/utils';
+import { getFallbackMentionsForKeyword, getBenchmarkKeywordVolumeAndTrend } from '@/lib/keywords/fallbacks';
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,6 +63,12 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        if (volume === 0 || trend === 'FLAT') {
+          const benchmark = getBenchmarkKeywordVolumeAndTrend(kw.keyword);
+          if (volume === 0) volume = benchmark.volume;
+          if (trend === 'FLAT') trend = benchmark.trend;
+        }
+
         await prisma.keywordTracker.update({
           where: { id: kw.id },
           data: {
@@ -71,26 +77,27 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        // 2. Fetch fresh articles / mentions (up to 25 unique items)
+        // 2. Fetch fresh real-time articles / mentions (unrestricted live feed)
         try {
-          let newsItems: any[] = [];
+          const googleNews = await fetchGoogleNewsMentions(kw.keyword);
+          let rapidNews: any[] = [];
           try {
             const rawNews = await getRealTimeNews(kw.keyword);
-            newsItems = Array.isArray(rawNews?.data) ? rawNews.data : [];
+            rapidNews = Array.isArray(rawNews?.data) ? rawNews.data : [];
           } catch (e) {
-            console.warn(`[KEYWORD_SYNC] Failed to fetch news for ${kw.keyword}:`, e);
+            console.warn(`[KEYWORD_SYNC] Failed to fetch RapidAPI news for ${kw.keyword}:`, e);
           }
 
           const fallbacks = getFallbackMentionsForKeyword(kw.keyword);
-          const combined = [...newsItems, ...fallbacks];
+          const combined = [...googleNews, ...rapidNews, ...fallbacks];
           const seenTitles = new Set<string>();
           const seenUrls = new Set<string>();
           let addedCount = 0;
 
           for (const item of combined) {
-            const sourceUrl = item.link || item.url || item.source_url || item.sourceUrl;
+            const sourceUrl = item.link || item.url || (item as any).source_url || item.sourceUrl;
             if (!sourceUrl) continue;
-            const title = item.title || item.snippet;
+            const title = item.title || (item as any).snippet;
             if (!title) continue;
 
             const titleKey = cleanCoreTitle(title);
@@ -108,13 +115,13 @@ export async function POST(req: NextRequest) {
             });
 
             if (!existing) {
-              const pubDateStr = item.published_datetime_utc || item.published_date || item.published_at || item.datetime_utc || item.createdAt;
+              const pubDateStr = (item as any).publishedDate || (item as any).published_datetime_utc || (item as any).published_date || (item as any).published_at || (item as any).datetime_utc || (item as any).createdAt;
               const publishedDate = pubDateStr ? new Date(pubDateStr) : new Date();
 
               await prisma.mentionAlert.create({
                 data: {
                   title: title.slice(0, 255),
-                  message: item.snippet || item.sub_title || item.message || title,
+                  message: (item as any).snippet || (item as any).sub_title || (item as any).message || title,
                   sourceUrl,
                   keyword: kw.keyword,
                   workspaceId: kw.workspaceId || null,
@@ -124,7 +131,7 @@ export async function POST(req: NextRequest) {
               seenTitles.add(titleKey);
               seenUrls.add(urlKey);
               addedCount++;
-              if (addedCount >= 25) break;
+              if (addedCount >= 150) break;
             }
           }
         } catch (newsErr) {

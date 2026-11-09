@@ -38,6 +38,32 @@ export default function Keywords() {
   const [newKeyword, setNewKeyword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [selectedKeyword, setSelectedKeyword] = useState<KeywordItem | null>(null);
+
+  const getTrendStyle = (trend: string | null | undefined) => {
+    const t = (trend || '').toUpperCase().trim();
+    if (t === 'UP' || t.startsWith('+')) {
+      return {
+        label: t === 'UP' ? 'Tăng (+18%)' : t,
+        icon: <TrendingUp className="w-3.5 h-3.5" />,
+        boxClass: 'bg-emerald-50/60 border-emerald-100 text-emerald-800',
+        titleClass: 'text-emerald-700'
+      };
+    }
+    if (t === 'DOWN' || t.startsWith('-')) {
+      return {
+        label: t === 'DOWN' ? 'Giảm (-12%)' : t,
+        icon: <TrendingDown className="w-3.5 h-3.5" />,
+        boxClass: 'bg-rose-50/60 border-rose-100 text-rose-800',
+        titleClass: 'text-rose-700'
+      };
+    }
+    return {
+      label: 'Ổn định (FLAT)',
+      icon: <Minus className="w-3.5 h-3.5" />,
+      boxClass: 'bg-gray-50/70 border-gray-100 text-gray-700',
+      titleClass: 'text-gray-500'
+    };
+  };
   const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
@@ -250,13 +276,18 @@ export default function Keywords() {
                     <span className="text-[10px] text-gray-400 block font-semibold uppercase">Lượng tìm kiếm</span>
                     <span className="text-sm font-bold text-gray-900">{(item.volume || 0).toLocaleString()}</span>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100">
-                    <span className="text-[10px] text-emerald-700 block font-semibold uppercase">Tăng trưởng</span>
-                    <span className="text-sm font-bold text-emerald-800 flex items-center gap-1">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      {item.trend || '+24%'}
-                    </span>
-                  </div>
+                  {(() => {
+                    const trendInfo = getTrendStyle(item.trend);
+                    return (
+                      <div className={`p-2.5 rounded-xl border ${trendInfo.boxClass}`}>
+                        <span className={`text-[10px] block font-semibold uppercase ${trendInfo.titleClass}`}>Tăng trưởng</span>
+                        <span className="text-sm font-bold flex items-center gap-1">
+                          {trendInfo.icon}
+                          {trendInfo.label}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -365,14 +396,19 @@ export default function Keywords() {
                     <span className="text-[10px] text-gray-500 block">lượt/tháng (Google)</span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1">
-                    <span className="text-[10px] text-emerald-700 block font-semibold uppercase">Xu hướng (3T)</span>
-                    <span className="text-base font-bold text-emerald-800 flex items-center gap-1">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      {detailData?.trendRate || selectedKeyword.trend || 'Ổn định'}
-                    </span>
-                    <span className="text-[10px] text-emerald-600 block">Google Search</span>
-                  </div>
+                  {(() => {
+                    const trendInfo = getTrendStyle(detailData?.trendRate || selectedKeyword.trend);
+                    return (
+                      <div className={`p-3 rounded-xl border space-y-1 ${trendInfo.boxClass}`}>
+                        <span className={`text-[10px] block font-semibold uppercase ${trendInfo.titleClass}`}>Xu hướng (3T)</span>
+                        <span className="text-base font-bold flex items-center gap-1">
+                          {trendInfo.icon}
+                          {detailData?.trendRate || trendInfo.label}
+                        </span>
+                        <span className={`text-[10px] block ${trendInfo.titleClass}`}>Google Search</span>
+                      </div>
+                    );
+                  })()}
 
                   <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 space-y-1">
                     <span className="text-[10px] text-amber-700 block font-semibold uppercase">Cạnh tranh Ads</span>

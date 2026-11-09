@@ -200,6 +200,38 @@ export const FALLBACK_KEYWORD_MENTIONS: Record<string, FallbackMention[]> = {
       message: 'Tăng cường thanh kiểm tra các cơ sở kinh doanh mỹ phẩm online mạo danh thương hiệu dược mỹ phẩm uy tín của Pháp, Hàn Quốc.',
       sourceUrl: 'https://tuoitre.vn/siet-chat-quan-ly-my-pham-kem-chong-nang-nhap-khau-100261101.htm',
       createdAt: '2026-11-01T09:40:00.000Z'
+    },
+    {
+      title: 'Cách thoa lại kem chống nắng trong ngày không làm hỏng lớp trang điểm',
+      message: 'Chuyên gia hướng dẫn phương pháp dặm lại kem chống nắng dạng xịt và dạng sáp tiện lợi cho dân văn phòng.',
+      sourceUrl: 'https://vnexpress.net/cach-thoa-lai-kem-chong-nang-trong-ngay-4812900.html',
+      createdAt: '2026-11-03T14:15:00.000Z'
+    },
+    {
+      title: 'Hiểm họa khôn lường từ kem chống nắng tự chế, kem trộn gắn mác organic',
+      message: 'Nhiều trường hợp bị viêm da tiếp xúc kích ứng nặng nề sau khi sử dụng kem chống nắng handmade không qua kiểm định.',
+      sourceUrl: 'https://thanhnien.vn/hiem-hoa-tu-kem-chong-nang-tu-che-185261029.htm',
+      createdAt: '2026-10-29T10:00:00.000Z'
+    }
+  ],
+  'pubg': [
+    {
+      title: 'PUBG Mobile Global Championship 2026: Đại diện Việt Nam sẵn sàng xuất trận',
+      message: 'Đội tuyển thể thao điện tử Việt Nam chính thức lên đường tham dự vòng loại khu vực Đông Nam Á với quyết tâm giành vé đến giải vô địch thế giới.',
+      sourceUrl: 'https://thanhnien.vn/pubg-mobile-global-championship-2026-185261102.htm',
+      createdAt: '2026-11-02T16:00:00.000Z'
+    },
+    {
+      title: 'Bản cập nhật PUBG 32.2 ra mắt: Tối ưu bản đồ Taego và ra mắt vũ khí mới',
+      message: 'Nhà phát triển Krafton tung bản vá cân bằng súng bắn tỉa và cải thiện hệ thống chống gian lận AI mới.',
+      sourceUrl: 'https://gamek.vn/ban-cap-nhat-pubg-32-2-ra-mat-178261101.chn',
+      createdAt: '2026-11-01T11:30:00.000Z'
+    },
+    {
+      title: 'Giải đấu PUBG Sinh viên toàn quốc 2026 thu hút hơn 200 trường đại học tranh tài',
+      message: 'Sân chơi eSports phong trào sôi động dành cho cộng đồng game thủ trẻ với tổng giá trị giải thưởng lên đến 500 triệu đồng.',
+      sourceUrl: 'https://dantri.com.vn/the-thao/giai-dau-pubg-sinh-vien-toan-quoc-20261028.htm',
+      createdAt: '2026-10-28T09:15:00.000Z'
     }
   ]
 };

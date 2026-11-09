@@ -108,3 +108,71 @@ export function deduplicateMentions<T extends { title?: string | null; sourceUrl
   return results;
 }
 
+/**
+ * Fetch live, unrestricted news articles and mentions for a keyword via Google News RSS (Vietnamese feed).
+ * Returns real articles with titles, snippets, source links and timestamps from top Vietnamese publications.
+ */
+export async function fetchGoogleNewsMentions(query: string): Promise<Array<{
+  title: string;
+  snippet: string;
+  sourceUrl: string;
+  publishedDate: Date;
+}>> {
+  try {
+    const axios = (await import('axios')).default;
+    const cheerio = await import('cheerio');
+    const encoded = encodeURIComponent(query.trim());
+    const rssUrl = `https://news.google.com/rss/search?q=${encoded}&hl=vi&gl=VN&ceid=VN:vi`;
+
+    const res = await axios.get(rssUrl, {
+      timeout: 8000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+      }
+    });
+
+    const xml = res.data;
+    if (typeof xml !== 'string') return [];
+
+    const $ = cheerio.load(xml, { xmlMode: true });
+    const items: Array<{
+      title: string;
+      snippet: string;
+      sourceUrl: string;
+      publishedDate: Date;
+    }> = [];
+
+    $('item').each((_, el) => {
+      const rawTitle = $(el).find('title').text().trim();
+      const rawLink = $(el).find('link').text().trim();
+      const pubDateStr = $(el).find('pubDate').text().trim();
+      const rawDesc = $(el).find('description').text().trim();
+
+      // Clean HTML tags from description
+      const descText = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+      if (rawTitle && rawLink) {
+        const pubDate = pubDateStr ? new Date(pubDateStr) : new Date();
+        // Exclude future dates if any
+        const safePubDate = !isNaN(pubDate.getTime()) && pubDate.getTime() <= Date.now()
+          ? pubDate
+          : new Date();
+
+        items.push({
+          title: rawTitle,
+          snippet: descText || rawTitle,
+          sourceUrl: rawLink,
+          publishedDate: safePubDate
+        });
+      }
+    });
+
+    return items;
+  } catch (err) {
+    console.warn(`[GoogleNewsRSS] Warning fetching RSS for query "${query}":`, err);
+    return [];
+  }
+}
+
+

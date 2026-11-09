@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { getKeywordInsights, getRealTimeNews } from '@/lib/rapidapi/client';
 import { recordAuditLog } from '@/lib/audit-log';
-import { cleanCoreTitle, normalizeUrl } from '@/lib/keywords/utils';
+import { cleanCoreTitle, normalizeUrl, fetchGoogleNewsMentions } from '@/lib/keywords/utils';
 import { getFallbackMentionsForKeyword, getBenchmarkKeywordVolumeAndTrend } from '@/lib/keywords/fallbacks';
 
 export async function GET(req: NextRequest) {
@@ -23,6 +23,17 @@ export async function GET(req: NextRequest) {
 
     const enrichedKeywords = await Promise.all(
       keywords.map(async (kw) => {
+        // Auto-heal empty volume or FLAT trend for newly added keywords
+        if (kw.volume === 0 || kw.trend === 'FLAT') {
+          const benchmark = getBenchmarkKeywordVolumeAndTrend(kw.keyword);
+          if (kw.volume === 0) kw.volume = benchmark.volume;
+          if (kw.trend === 'FLAT') kw.trend = benchmark.trend;
+          await prisma.keywordTracker.update({
+            where: { id: kw.id },
+            data: { volume: kw.volume, trend: kw.trend }
+          }).catch(() => {});
+        }
+
         const mentionCount = await prisma.mentionAlert.count({
           where: {
             OR: [
@@ -102,26 +113,31 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // 2. Fetch initial news / mentions for this keyword (up to 25 unique items)
+    // 2. Fetch comprehensive real-time news & mentions for this keyword (unrestricted, up to 150 unique items)
     try {
-      let newsItems: any[] = [];
+      // 2A. Primary Live Source: Google News RSS (unrestricted Vietnamese media feeds)
+      const googleNews = await fetchGoogleNewsMentions(cleanKeyword);
+
+      // 2B. Secondary Source: RapidAPI real-time news data
+      let rapidNews: any[] = [];
       try {
         const rawNews = await getRealTimeNews(cleanKeyword);
-        newsItems = Array.isArray(rawNews?.data) ? rawNews.data : [];
+        rapidNews = Array.isArray(rawNews?.data) ? rawNews.data : [];
       } catch (newsErr) {
         console.warn('[KEYWORDS_POST] Failed to query RapidAPI real-time news:', newsErr);
       }
 
+      // 2C. Curated benchmarks & fallbacks
       const fallbacks = getFallbackMentionsForKeyword(cleanKeyword);
-      const combined = [...newsItems, ...fallbacks];
+      const combined = [...googleNews, ...rapidNews, ...fallbacks];
       const seenTitles = new Set<string>();
       const seenUrls = new Set<string>();
       let addedCount = 0;
 
       for (const item of combined) {
-        const sourceUrl = item.link || item.url || item.source_url || item.sourceUrl;
+        const sourceUrl = item.link || item.url || (item as any).source_url || item.sourceUrl;
         if (!sourceUrl) continue;
-        const title = item.title || item.snippet;
+        const title = item.title || (item as any).snippet;
         if (!title) continue;
 
         const titleKey = cleanCoreTitle(title);
@@ -139,13 +155,13 @@ export async function POST(req: NextRequest) {
         });
 
         if (!existing) {
-          const pubDateStr = item.published_datetime_utc || item.published_date || item.published_at || item.datetime_utc || item.createdAt;
+          const pubDateStr = (item as any).publishedDate || (item as any).published_datetime_utc || (item as any).published_date || (item as any).published_at || (item as any).datetime_utc || (item as any).createdAt;
           const publishedDate = pubDateStr ? new Date(pubDateStr) : new Date();
 
           await prisma.mentionAlert.create({
             data: {
               title: title.slice(0, 255),
-              message: item.snippet || item.sub_title || item.message || title,
+              message: (item as any).snippet || (item as any).sub_title || (item as any).message || title,
               sourceUrl,
               keyword: cleanKeyword,
               workspaceId: workspaceId || null,
@@ -155,7 +171,8 @@ export async function POST(req: NextRequest) {
           seenTitles.add(titleKey);
           seenUrls.add(urlKey);
           addedCount++;
-          if (addedCount >= 25) break;
+          // High ceiling to capture maximum articles without arbitrary low cap
+          if (addedCount >= 150) break;
         }
       }
     } catch (e) {

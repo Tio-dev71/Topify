@@ -6,7 +6,8 @@ import {
   cleanCoreTitle, 
   normalizeUrl, 
   analyzeVietnameseSentiment, 
-  deduplicateMentions 
+  deduplicateMentions,
+  fetchGoogleNewsMentions
 } from '@/lib/keywords/utils';
 import { getFallbackMentionsForKeyword } from '@/lib/keywords/fallbacks';
 
@@ -136,22 +137,31 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 5. If we have fewer than 20 unique mentions, enrich with fresh Real-Time News & Fallback data
-    if (rawDbMentions.length < 20) {
+    // 5. If we have fewer than 50 unique mentions, enrich with fresh live news (Google News RSS + Real-Time News + Fallback)
+    if (rawDbMentions.length < 50) {
       try {
-        // A. Try Real-Time News API
-        const rawNews = await getRealTimeNews(keywordText);
-        const newsItems = Array.isArray(rawNews?.data) ? rawNews.data : [];
+        // A. Primary: Live Google News RSS (unrestricted)
+        const googleNews = await fetchGoogleNewsMentions(keywordText);
 
-        // B. Merge with curated fallback mentions for known high-priority keywords
+        // B. Secondary: Real-Time News API
+        let newsItems: any[] = [];
+        try {
+          const rawNews = await getRealTimeNews(keywordText);
+          newsItems = Array.isArray(rawNews?.data) ? rawNews.data : [];
+        } catch {
+          // fallback if rapidapi fails
+        }
+
+        // C. Merge with curated fallback mentions for known high-priority keywords
         const fallbacks = getFallbackMentionsForKeyword(keywordText);
-        const combinedCandidateList: Array<{ title: string; message?: string; snippet?: string; link?: string; url?: string; sourceUrl?: string; published_date?: string; createdAt?: string }> = [
+        const combinedCandidateList = [
+          ...googleNews,
           ...newsItems,
           ...fallbacks
         ];
 
         for (const item of combinedCandidateList) {
-          const sourceUrl = item.link || item.url || item.sourceUrl;
+          const sourceUrl = item.link || (item as any).url || item.sourceUrl;
           const title = item.title;
           if (!sourceUrl || !title) continue;
 
@@ -162,14 +172,14 @@ export async function GET(req: NextRequest) {
             continue;
           }
 
-          const pubDateStr = (item as any).published_datetime_utc || item.published_date || (item as any).published_at || (item as any).datetime_utc || item.createdAt;
+          const pubDateStr = (item as any).publishedDate || (item as any).published_datetime_utc || (item as any).published_date || (item as any).published_at || (item as any).datetime_utc || (item as any).createdAt;
           const publishedDate = pubDateStr ? new Date(pubDateStr) : new Date();
 
           try {
             const created = await prisma.mentionAlert.create({
               data: {
                 title: title.slice(0, 255),
-                message: item.snippet || (item as any).sub_title || item.message || title,
+                message: (item as any).snippet || (item as any).sub_title || (item as any).message || title,
                 sourceUrl,
                 keyword: keywordText,
                 workspaceId: tracker?.workspaceId || null,
@@ -183,8 +193,7 @@ export async function GET(req: NextRequest) {
             // ignore unique constraint collisions
           }
 
-          // If we have collected enough unique mentions (>= 25), stop inserting
-          if (rawDbMentions.length >= 25) {
+          if (rawDbMentions.length >= 150) {
             break;
           }
         }
@@ -214,7 +223,7 @@ export async function GET(req: NextRequest) {
             rawDbMentions.push(created);
           } catch {}
 
-          if (rawDbMentions.length >= 25) break;
+          if (rawDbMentions.length >= 150) break;
         }
       }
     }
