@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Rocket,
   Plus,
@@ -29,6 +29,7 @@ import {
   MessageSquare,
   Users,
   Edit3,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -38,6 +39,7 @@ export type CampaignObjectiveType = 'REVENUE' | 'LEADS' | 'REACH' | 'APP_INSTALL
 export type ChannelKey = 'TIKTOK' | 'FACEBOOK' | 'INSTAGRAM' | 'YOUTUBE' | 'SHOPEE';
 export type PhaseKey = 'TEASER' | 'KICKOFF' | 'PEAK_SALE' | 'POST_SALE';
 export type AssetApprovalStatus = 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+export type AssetType = 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO';
 
 export interface CampaignKPI {
   id: string;
@@ -133,10 +135,51 @@ const INITIAL_ASSETS: CampaignAssetItem[] = [];
 
 export default function Campaigns() {
   const [activeTab, setActiveTab] = useState<'campaigns' | 'progress' | 'assets' | 'report'>('campaigns');
-  const [campaigns, setCampaigns] = useState<EnrichedCampaign[]>(INITIAL_CAMPAIGNS);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
-  const [assets, setAssets] = useState<CampaignAssetItem[]>(INITIAL_ASSETS);
+
+  // Campaigns state (persisted to localStorage cache for zero-flicker retention)
+  const [campaigns, setCampaigns] = useState<EnrichedCampaign[]>(() => {
+    try {
+      const cached = localStorage.getItem('topify_campaigns_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_CAMPAIGNS;
+  });
+
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem('topify_campaigns_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+      }
+    } catch {}
+    return '';
+  });
+
+  const [assets, setAssets] = useState<CampaignAssetItem[]>(() => {
+    try {
+      const cached = localStorage.getItem('topify_campaign_assets_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_ASSETS;
+  });
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Current logged in user (Admin / yến ngô)
+  const currentUser = useMemo(() => {
+    try {
+      const uStr = localStorage.getItem('topify_user') || localStorage.getItem('user');
+      if (uStr) return JSON.parse(uStr);
+    } catch {}
+    return null;
+  }, []);
 
   useEffect(() => {
     const fetchCampaigns = async () => {
@@ -144,9 +187,25 @@ export default function Campaigns() {
       try {
         const res = await api.get('/campaigns');
         if (res.data?.success && Array.isArray(res.data?.campaigns)) {
-          setCampaigns(res.data.campaigns);
-          if (res.data.campaigns.length > 0) {
-            setSelectedCampaignId(res.data.campaigns[0].id);
+          const fetched: EnrichedCampaign[] = res.data.campaigns;
+          let merged = [...fetched];
+          try {
+            const cached = localStorage.getItem('topify_campaigns_cache');
+            if (cached) {
+              const cachedCamps: EnrichedCampaign[] = JSON.parse(cached);
+              const fetchedIds = new Set(fetched.map((c) => c.id));
+              const unpersisted = cachedCamps.filter((c) => !fetchedIds.has(c.id));
+              merged = [...fetched, ...unpersisted];
+            }
+          } catch {}
+
+          setCampaigns(merged);
+          try {
+            localStorage.setItem('topify_campaigns_cache', JSON.stringify(merged));
+          } catch {}
+
+          if (merged.length > 0 && !selectedCampaignId) {
+            setSelectedCampaignId(merged[0].id);
           }
         }
       } catch (err) {
@@ -157,6 +216,27 @@ export default function Campaigns() {
     };
     fetchCampaigns();
   }, []);
+
+  // Fetch Assets when selectedCampaignId changes
+  useEffect(() => {
+    const query = selectedCampaignId ? `?campaignId=${selectedCampaignId}` : '';
+    api.get(`/campaigns/assets${query}`)
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data?.assets)) {
+          setAssets((prev) => {
+            const serverAssets: CampaignAssetItem[] = res.data.assets;
+            const serverIds = new Set(serverAssets.map((a) => a.id));
+            const unpersisted = prev.filter((a) => !serverIds.has(a.id));
+            const merged = [...serverAssets, ...unpersisted];
+            try {
+              localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [selectedCampaignId]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,13 +274,40 @@ export default function Campaigns() {
   useEffect(() => {
     api.get('/team')
       .then((res) => {
-        if (res.data?.members && Array.isArray(res.data.members) && res.data.members.length > 0) {
-          setWorkspaceMembers(res.data.members);
-          setNewAssignee(res.data.members[0].id || res.data.members[0].email);
-        }
+        const membersList = (res.data?.members && Array.isArray(res.data.members) && res.data.members.length > 0)
+          ? res.data.members
+          : [];
+        const adminMember = {
+          id: currentUser?.id || 'user_admin',
+          name: currentUser?.name || 'yến ngô',
+          email: currentUser?.email || 'nhim300997@gmail.com',
+          role: 'ADMIN',
+          image: currentUser?.image || currentUser?.avatar || 'https://lh3.googleusercontent.com/a/ACg8ocLTDFSHq5ZX5CVAVcuwTduRqOb7L7S9ilnxryPXuSQrkY6gIh4=s96-c',
+        };
+        const hasAdmin = membersList.some((m: any) => m.email === adminMember.email || m.id === adminMember.id);
+        const finalList = hasAdmin ? membersList : [adminMember, ...membersList];
+        setWorkspaceMembers(finalList);
+        setNewAssignee(finalList[0]?.id || finalList[0]?.email);
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        const adminMember = {
+          id: currentUser?.id || 'user_admin',
+          name: currentUser?.name || 'yến ngô',
+          email: currentUser?.email || 'nhim300997@gmail.com',
+          role: 'ADMIN',
+          image: currentUser?.image || currentUser?.avatar || 'https://lh3.googleusercontent.com/a/ACg8ocLTDFSHq5ZX5CVAVcuwTduRqOb7L7S9ilnxryPXuSQrkY6gIh4=s96-c',
+        };
+        setWorkspaceMembers([adminMember]);
+        setNewAssignee(adminMember.id);
+      });
+  }, [currentUser]);
+
+  // F137: Asset Upload State & Modal
+  const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
+  const [newAssetName, setNewAssetName] = useState('');
+  const [newAssetType, setNewAssetType] = useState<AssetType>('IMAGE');
+  const [newAssetFileUrl, setNewAssetFileUrl] = useState('');
+  const [newAssetFileSize, setNewAssetFileSize] = useState('2.5');
 
   // Edit Campaign State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -424,6 +531,8 @@ export default function Campaigns() {
         kpis: newCamp.kpis,
         budgetCategories: newCamp.budgetCategories,
         phases: newCamp.phases,
+        ownerName: newCamp.ownerName,
+        ownerAvatar: newCamp.ownerAvatar,
       });
 
       if (res.data?.success && res.data?.campaign) {
@@ -444,26 +553,102 @@ export default function Campaigns() {
     toast.success('Đã tạo và lưu chiến dịch mới thành công (F133 - F136)!');
   };
 
-  // Handle Approve / Reject Asset
-  const handleUpdateAssetStatus = (assetId: string, status: AssetApprovalStatus) => {
-    setAssets((prev) =>
-      prev.map((a) => {
+  // Handle Approve / Reject Asset (F137)
+  const handleUpdateAssetStatus = async (assetId: string, status: AssetApprovalStatus) => {
+    const reviewerName = currentUser?.name ? `${currentUser.name} (Quản trị)` : 'Bạn (Quản trị)';
+    const finalNote = reviewNote || (status === 'APPROVED' ? 'Đã phê duyệt đạt chuẩn.' : 'Cần chỉnh sửa lại theo yêu cầu.');
+
+    setAssets((prev) => {
+      const updated = prev.map((a) => {
         if (a.id === assetId) {
           return {
             ...a,
             approvalStatus: status,
-            reviewedBy: 'Bạn (Quản trị)',
-            reviewerNote: reviewNote || (status === 'APPROVED' ? 'Đã phê duyệt đạt chuẩn.' : 'Cần chỉnh sửa lại theo yêu cầu.'),
+            reviewedBy: reviewerName,
+            reviewerNote: finalNote,
             updatedAt: new Date().toISOString(),
           };
         }
         return a;
-      })
-    );
+      });
+      try {
+        localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    try {
+      await api.patch('/campaigns/assets', {
+        id: assetId,
+        approvalStatus: status,
+        reviewerNote: finalNote,
+        reviewedBy: reviewerName,
+      });
+    } catch (err) {
+      console.warn('Sync asset review status warning:', err);
+    }
 
     setReviewAssetTarget(null);
     setReviewNote('');
     toast.success(status === 'APPROVED' ? 'Đã phê duyệt tài nguyên!' : 'Đã từ chối tài nguyên và gửi phản hồi.');
+  };
+
+  // Handle Create / Upload New Creative Asset (F137)
+  const handleCreateAsset = async () => {
+    if (!newAssetName.trim()) {
+      toast.error('Vui lòng nhập tên tài nguyên');
+      return;
+    }
+    const targetCampId = selectedCampaignId || campaigns[0]?.id || 'camp_default';
+    const targetCamp = campaigns.find((c) => c.id === targetCampId);
+    const fileSizeNum = parseFloat(newAssetFileSize) ? Math.round(parseFloat(newAssetFileSize) * 1024 * 1024) : 2500000;
+
+    const newAsset: CampaignAssetItem = {
+      id: `asset_${Date.now()}`,
+      campaignId: targetCampId,
+      name: newAssetName.trim(),
+      type: newAssetType,
+      fileUrl: newAssetFileUrl.trim() || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1080&h=1920&fit=crop',
+      fileSize: fileSizeNum,
+      approvalStatus: 'PENDING_REVIEW',
+      uploadedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAssets((prev) => {
+      const next = [newAsset, ...prev];
+      try {
+        localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    try {
+      const res = await api.post('/campaigns/assets', {
+        campaignId: targetCampId,
+        name: newAsset.name,
+        type: newAsset.type,
+        fileUrl: newAsset.fileUrl,
+        fileSize: newAsset.fileSize,
+      });
+      if (res.data?.success && res.data?.asset) {
+        setAssets((prev) => {
+          const synced = prev.map((a) => (a.id === newAsset.id ? res.data.asset : a));
+          try {
+            localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(synced));
+          } catch {}
+          return synced;
+        });
+      }
+    } catch (err) {
+      console.warn('Backend asset creation warning:', err);
+    }
+
+    setIsAddAssetModalOpen(false);
+    setNewAssetName('');
+    setNewAssetFileUrl('');
+    setNewAssetFileSize('15');
+    toast.success('Đã tải lên và thêm tài nguyên mới vào kho xét duyệt (F137)!');
   };
 
   const CHANNEL_BADGE_STYLES: Record<string, string> = {
@@ -1078,137 +1263,157 @@ export default function Campaigns() {
       {/* ==================================================================== */}
       {activeTab === 'assets' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-base font-bold text-[var(--color-foreground)]">
-                Kho Tài Nguyên Sáng Tạo & Luồng Duyệt (Asset & Approval Flow)
+              <h3 className="text-base font-bold text-[var(--color-foreground)] flex items-center gap-2">
+                <span>Kho Tài Nguyên Sáng Tạo & Luồng Duyệt (Asset & Approval Flow - F137)</span>
+                {currentCampaign && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-semibold border border-indigo-500/20">
+                    {currentCampaign.name}
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
                 Kiểm duyệt chất lượng hình ảnh, kịch bản và video trailer trước khi xuất bản rộng rãi trên các kênh.
               </p>
             </div>
+            <button
+              onClick={() => setIsAddAssetModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 transition-all flex items-center gap-1.5 w-max"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Tải lên Asset mới</span>
+            </button>
           </div>
 
           {/* Asset List Table */}
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[var(--color-muted)]/50 text-[var(--color-muted-foreground)] font-semibold border-b border-[var(--color-border)]">
-                <tr>
-                  <th className="py-3 px-4">Tên tài nguyên</th>
-                  <th className="py-3 px-3">Loại tệp</th>
-                  <th className="py-3 px-3">Kích thước</th>
-                  <th className="py-3 px-3">Trạng thái duyệt</th>
-                  <th className="py-3 px-3">Người duyệt & Ghi chú</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-border)]">
-                {assets.map((ast) => (
-                  <tr key={ast.id} className="hover:bg-[var(--color-muted)]/30 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
-                          {ast.type === 'VIDEO' ? <Video className="w-4 h-4" /> : ast.type === 'DOCUMENT' ? <FileText className="w-4 h-4" /> : <Image className="w-4 h-4" />}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-[var(--color-foreground)]">{ast.name}</div>
-                          <div className="text-[10px] text-[var(--color-muted-foreground)]">
-                            Đăng tải: {formatDateWithYear(ast.uploadedAt)}
+          {(() => {
+            const displayedAssets = selectedCampaignId
+              ? assets.filter((a) => a.campaignId === selectedCampaignId)
+              : assets;
+
+            return (
+              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[var(--color-muted)]/50 text-[var(--color-muted-foreground)] font-semibold border-b border-[var(--color-border)]">
+                    <tr>
+                      <th className="py-3 px-4">Tên tài nguyên</th>
+                      <th className="py-3 px-3">Loại tệp</th>
+                      <th className="py-3 px-3">Kích thước</th>
+                      <th className="py-3 px-3">Trạng thái duyệt</th>
+                      <th className="py-3 px-3">Người duyệt & Ghi chú</th>
+                      <th className="py-3 px-4 text-right">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border)]">
+                    {displayedAssets.map((ast) => (
+                      <tr key={ast.id} className="hover:bg-[var(--color-muted)]/30 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                              {ast.type === 'VIDEO' ? <Video className="w-4 h-4" /> : ast.type === 'DOCUMENT' ? <FileText className="w-4 h-4" /> : <Image className="w-4 h-4" />}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-[var(--color-foreground)]">{ast.name}</div>
+                              <div className="text-[10px] text-[var(--color-muted-foreground)]">
+                                Đăng tải: {formatDateWithYear(ast.uploadedAt)}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </td>
+                        </td>
 
-                    <td className="py-3 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--color-muted)] text-[var(--color-foreground)]">
-                        {ast.type}
-                      </span>
-                    </td>
+                        <td className="py-3 px-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--color-muted)] text-[var(--color-foreground)]">
+                            {ast.type}
+                          </span>
+                        </td>
 
-                    <td className="py-3 px-3 text-[var(--color-muted-foreground)]">
-                      {Math.round(ast.fileSize / 1024 / 1024 * 10) / 10} MB
-                    </td>
+                        <td className="py-3 px-3 text-[var(--color-muted-foreground)]">
+                          {Math.round(ast.fileSize / 1024 / 1024 * 10) / 10} MB
+                        </td>
 
-                    <td className="py-3 px-3">
-                      {ast.approvalStatus === 'APPROVED' ? (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1 w-max">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Đã duyệt</span>
-                        </span>
-                      ) : ast.approvalStatus === 'REJECTED' ? (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center gap-1 w-max">
-                          <X className="w-3 h-3" />
-                          <span>Từ chối</span>
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1 w-max">
-                          <Clock className="w-3 h-3" />
-                          <span>Chờ duyệt</span>
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3 px-3">
-                      {ast.reviewedBy ? (
-                        <div className="space-y-0.5">
-                          <div className="font-medium text-[var(--color-foreground)]">{ast.reviewedBy}</div>
-                          <div className="text-[10px] text-[var(--color-muted-foreground)] line-clamp-1 italic">
-                            "{ast.reviewerNote}"
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-[var(--color-muted-foreground)] italic">Chưa duyệt</span>
-                      )}
-                    </td>
-
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {ast.approvalStatus === 'PENDING_REVIEW' && (
-                          <>
-                            <button
-                              onClick={() => handleUpdateAssetStatus(ast.id, 'APPROVED')}
-                              className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
-                              title="Duyệt nhanh"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Duyệt</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setReviewAssetTarget(ast);
-                                setReviewNote('');
-                              }}
-                              className="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
-                              title="Từ chối kèm góp ý"
-                            >
-                              <X className="w-3.5 h-3.5" />
+                        <td className="py-3 px-3">
+                          {ast.approvalStatus === 'APPROVED' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1 w-max">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Đã duyệt</span>
+                            </span>
+                          ) : ast.approvalStatus === 'REJECTED' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center gap-1 w-max">
+                              <X className="w-3 h-3" />
                               <span>Từ chối</span>
-                            </button>
-                          </>
-                        )}
-                        <a
-                          href={ast.fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
-                          title="Xem tệp"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {assets.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-xs text-[var(--color-muted-foreground)] italic">
-                      Chưa có tài nguyên sáng tạo nào được tải lên.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1 w-max">
+                              <Clock className="w-3 h-3" />
+                              <span>Chờ duyệt</span>
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-3">
+                          {ast.reviewedBy ? (
+                            <div className="space-y-0.5">
+                              <div className="font-medium text-[var(--color-foreground)]">{ast.reviewedBy}</div>
+                              <div className="text-[10px] text-[var(--color-muted-foreground)] line-clamp-1 italic">
+                                &quot;{ast.reviewerNote}&quot;
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-[var(--color-muted-foreground)] italic">Chưa duyệt</span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {(ast.approvalStatus === 'PENDING_REVIEW' || ast.approvalStatus === 'DRAFT') && (
+                              <>
+                                <button
+                                  onClick={() => handleUpdateAssetStatus(ast.id, 'APPROVED')}
+                                  className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
+                                  title="Duyệt nhanh"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Duyệt</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setReviewAssetTarget(ast);
+                                    setReviewNote('');
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
+                                  title="Từ chối kèm góp ý"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                  <span>Từ chối</span>
+                                </button>
+                              </>
+                            )}
+                            <a
+                              href={ast.fileUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+                              title="Xem tệp"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {displayedAssets.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-xs text-[var(--color-muted-foreground)] italic">
+                          Chưa có tài nguyên nào cho chiến dịch này. Bấm &quot;Tải lên Asset mới&quot; để thêm tệp sáng tạo vào luồng duyệt!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1890,6 +2095,124 @@ export default function Campaigns() {
                 className="px-3.5 py-1.5 rounded-xl bg-rose-500 text-white hover:opacity-95 text-xs font-semibold shadow-sm"
               >
                 Xác nhận từ chối
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: UPLOAD / ADD NEW CREATIVE ASSET (F137) */}
+      {/* ==================================================================== */}
+      {isAddAssetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3">
+              <h3 className="font-bold text-sm text-[var(--color-foreground)] flex items-center gap-2">
+                <Upload className="w-4 h-4 text-indigo-500" />
+                <span>Tải lên tài nguyên sáng tạo & Đưa vào luồng duyệt (F137)</span>
+              </h3>
+              <button
+                onClick={() => setIsAddAssetModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                  Chiến dịch áp dụng
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value={currentCampaign?.name || 'Chiến dịch chung'}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/50 text-[var(--color-foreground)] text-xs cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                  Tên tài nguyên (Asset Name) *
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: Teaser Video TikTok 9:16 - Phiên bản KOL Review"
+                  value={newAssetName}
+                  onChange={(e) => setNewAssetName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                    Định dạng tệp
+                  </label>
+                  <select
+                    value={newAssetType}
+                    onChange={(e) => setNewAssetType(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none"
+                  >
+                    <option value="VIDEO">Video (MP4 / MOV)</option>
+                    <option value="IMAGE">Hình ảnh (PNG / JPG / WEBP)</option>
+                    <option value="DOCUMENT">Tài liệu / Kịch bản (PDF / DOCX)</option>
+                    <option value="AUDIO">Âm thanh / Nhạc nền (MP3 / WAV)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                    Dung lượng ước tính (MB)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="15"
+                    value={newAssetFileSize}
+                    onChange={(e) => setNewAssetFileSize(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                  Đường dẫn tệp / URL lưu trữ đám mây
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://storage.topify.vn/assets/... hoặc link Google Drive/Figma"
+                  value={newAssetFileUrl}
+                  onChange={(e) => setNewAssetFileUrl(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[11px] flex items-start gap-2">
+                <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Sau khi tải lên, tài nguyên sẽ ở trạng thái <strong>Chờ duyệt (Pending Review)</strong>. Trưởng chiến dịch hoặc Admin ({currentUser?.name || 'Bạn'}) sẽ thẩm định trước khi gắn vào kênh xuất bản.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-border)]">
+              <button
+                type="button"
+                onClick={() => setIsAddAssetModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateAsset}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Xác nhận tải lên</span>
               </button>
             </div>
           </div>
