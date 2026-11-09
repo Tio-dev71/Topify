@@ -40,7 +40,7 @@ export interface WebhookSubscriptionItem {
   endpointUrl: string;
   signingSecret: string;
   subscribedEvents: string[];
-  status: 'ACTIVE' | 'PAUSED' | 'FAILED';
+  status: 'ACTIVE' | 'PAUSED' | 'FAILED' | 'DISABLED';
   successCount: number;
   failureCount: number;
   lastDeliveryStatus?: number;
@@ -549,6 +549,23 @@ class SecurityEngineStore {
     return false;
   }
 
+  public updateApiKey(params: {
+    keyId: string;
+    name?: string;
+    roleScope?: ApiKeyItem['roleScope'];
+    ipWhitelist?: string;
+    rateLimitPerMin?: number;
+  }): ApiKeyItem {
+    const item = this.apiKeys.find((k) => k.id === params.keyId);
+    if (!item) throw new Error('API Key không tồn tại');
+    if (params.name) item.name = params.name.trim();
+    if (params.roleScope) item.roleScope = params.roleScope;
+    if (params.ipWhitelist !== undefined) item.ipWhitelist = params.ipWhitelist.trim() || '*';
+    if (params.rateLimitPerMin !== undefined) item.rateLimitPerMin = params.rateLimitPerMin;
+    this.recordAuditLog('admin@topify.app', 'OWNER', `API_KEY_UPDATED_${item.name}`, 'API_KEY', 'SUCCESS');
+    return item;
+  }
+
   // ==========================================
   // F166: WEBHOOKS METHODS
   // ==========================================
@@ -579,6 +596,31 @@ class SecurityEngineStore {
     this.webhooks.unshift(newWebhook);
     this.recordAuditLog('admin@topify.app', 'OWNER', `WEBHOOK_CREATED_${params.name}`, 'WEBHOOK', 'SUCCESS');
     return newWebhook;
+  }
+
+  public updateWebhook(params: {
+    webhookId: string;
+    name?: string;
+    endpointUrl?: string;
+    subscribedEvents?: string[];
+    status?: 'ACTIVE' | 'PAUSED' | 'FAILED' | 'DISABLED';
+  }): WebhookSubscriptionItem {
+    const wh = this.webhooks.find((w) => w.id === params.webhookId);
+    if (!wh) throw new Error('Webhook không tồn tại');
+    if (params.name) wh.name = params.name.trim();
+    if (params.endpointUrl) wh.endpointUrl = params.endpointUrl.trim();
+    if (params.subscribedEvents) wh.subscribedEvents = params.subscribedEvents;
+    if (params.status) wh.status = params.status;
+    this.recordAuditLog('admin@topify.app', 'OWNER', `WEBHOOK_UPDATED_${wh.name}`, 'WEBHOOK', 'SUCCESS');
+    return wh;
+  }
+
+  public deleteWebhook(webhookId: string): boolean {
+    const idx = this.webhooks.findIndex((w) => w.id === webhookId);
+    if (idx === -1) return false;
+    const removed = this.webhooks.splice(idx, 1)[0];
+    this.recordAuditLog('admin@topify.app', 'OWNER', `WEBHOOK_DELETED_${removed.name}`, 'WEBHOOK', 'SUCCESS');
+    return true;
   }
 
   public testWebhookPing(webhookId: string): { success: boolean; statusCode: number; durationMs: number } {

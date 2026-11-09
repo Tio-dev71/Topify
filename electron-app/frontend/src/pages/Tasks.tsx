@@ -13,6 +13,7 @@ import {
   MessageSquare,
   AlertCircle,
   CheckCircle2,
+  Check,
   ListFilter,
   LayoutGrid,
   List,
@@ -31,6 +32,7 @@ import {
   RefreshCw,
   MoreVertical,
   Trash2,
+  Edit3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -207,6 +209,24 @@ export default function Tasks() {
   // Team members (synced with workspace or fallback)
   const [teamMembers, setTeamMembers] = useState(TEAM_MEMBERS);
 
+  // Load real team members from workspace
+  useEffect(() => {
+    api.get('/team')
+      .then((res) => {
+        if (res.data?.members && Array.isArray(res.data.members) && res.data.members.length > 0) {
+          const mapped = res.data.members.map((m: any, idx: number) => ({
+            id: m.id || m.email,
+            name: m.name || m.email.split('@')[0],
+            email: m.email,
+            role: m.role === 'ADMIN' ? 'Quản trị viên (Admin)' : 'Nhân viên (Staff)',
+            avatar: m.image || `https://images.unsplash.com/photo-${1534528741775 + idx}?w=100&h=100&fit=crop`,
+          }));
+          setTeamMembers(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Load team members from workspace
   useEffect(() => {
     const fetchMembers = async () => {
@@ -347,6 +367,92 @@ export default function Tasks() {
   const [newRecurRule, setNewRecurRule] = useState<RecurFrequency>('WEEKLY');
   const [newSelectedTemplateId, setNewSelectedTemplateId] = useState<string>('');
   const [newSubtaskInputs, setNewSubtaskInputs] = useState<string[]>(['']);
+
+  // Edit Task Form State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<EnrichedTask | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPriority, setEditPriority] = useState<TaskPriority>('MEDIUM');
+  const [editStatus, setEditStatus] = useState<TaskStatus>('TODO');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editAssigneeId, setEditAssigneeId] = useState('');
+  const [editCollaboratorIds, setEditCollaboratorIds] = useState<string[]>([]);
+  const [editIsRecurring, setEditIsRecurring] = useState(false);
+  const [editRecurRule, setEditRecurRule] = useState<RecurFrequency>('WEEKLY');
+
+  const openEditTaskModal = (task: EnrichedTask) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditDescription(task.description || '');
+    setEditPriority(task.priority);
+    setEditStatus(task.status);
+    setEditDueDate(task.dueDate ? task.dueDate.split('T')[0] : '');
+    setEditAssigneeId(task.assigneeId || '');
+    setEditCollaboratorIds(task.collaboratorIds || []);
+    setEditIsRecurring(task.isRecurring);
+    setEditRecurRule((task.recurRule as RecurFrequency) || 'WEEKLY');
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask || !editTitle.trim()) {
+      toast.error('Vui lòng nhập tiêu đề công việc');
+      return;
+    }
+
+    const assignee = teamMembers.find((m) => m.id === editAssigneeId) || null;
+    const collaborators = teamMembers.filter((m) => editCollaboratorIds.includes(m.id));
+
+    const updatedTask: EnrichedTask = {
+      ...editingTask,
+      title: editTitle.trim(),
+      description: editDescription.trim() || null,
+      priority: editPriority,
+      status: editStatus,
+      dueDate: editDueDate ? new Date(editDueDate).toISOString() : null,
+      assigneeId: editAssigneeId || null,
+      assignee,
+      collaboratorIds: editCollaboratorIds,
+      collaborators,
+      isRecurring: editIsRecurring,
+      recurRule: editIsRecurring ? editRecurRule : null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === editingTask.id ? updatedTask : t));
+      try {
+        localStorage.setItem('topify_tasks_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (selectedTask && selectedTask.id === editingTask.id) {
+      setSelectedTask(updatedTask);
+    }
+
+    setIsEditModalOpen(false);
+
+    try {
+      await api.patch('/tasks', {
+        id: editingTask.id,
+        title: updatedTask.title,
+        description: updatedTask.description,
+        priority: updatedTask.priority,
+        status: updatedTask.status,
+        dueDate: updatedTask.dueDate,
+        assigneeId: updatedTask.assigneeId,
+        collaboratorIds: updatedTask.collaboratorIds,
+        isRecurring: updatedTask.isRecurring,
+        recurRule: updatedTask.recurRule,
+      });
+      toast.success('Đã cập nhật công việc thành công!');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi cập nhật công việc');
+    }
+  };
 
   // Comments state for modal
   const [commentsMap, setCommentsMap] = useState<Record<string, TaskCommentItem[]>>(INITIAL_COMMENTS);
@@ -549,8 +655,24 @@ export default function Tasks() {
     }
   };
 
-  // Add Comment with mentions & attachments
-  const handleAddComment = (e: React.FormEvent) => {
+  // Load comments from API when selectedTask opens
+  useEffect(() => {
+    if (selectedTask?.id) {
+      api.get(`/tasks/comments?taskId=${selectedTask.id}`)
+        .then((res) => {
+          if (res.data?.comments) {
+            setCommentsMap((prev) => ({
+              ...prev,
+              [selectedTask.id]: res.data.comments,
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedTask?.id]);
+
+  // Add Comment with mentions & attachments (F128)
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTask || !newCommentText.trim()) return;
 
@@ -562,13 +684,10 @@ export default function Tasks() {
       }
     });
 
-    const newComment: TaskCommentItem = {
-      id: `comm_${Date.now()}`,
+    const commentPayload = {
       taskId: selectedTask.id,
-      authorId: 'user_current',
-      authorName: 'Bạn (Quản trị)',
-      authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
       content: newCommentText.trim(),
+      authorName: 'Bạn (Quản trị)',
       mentions: detectedMentions,
       attachments: mockAttachmentName.trim()
         ? [
@@ -582,34 +701,46 @@ export default function Tasks() {
             },
           ]
         : [],
-      createdAt: new Date().toISOString(),
     };
 
-    setCommentsMap((prev) => ({
-      ...prev,
-      [selectedTask.id]: [...(prev[selectedTask.id] || []), newComment],
-    }));
+    try {
+      const res = await api.post('/tasks/comments', commentPayload);
+      const savedComment: TaskCommentItem = res.data?.comment || {
+        id: `comm_${Date.now()}`,
+        authorId: 'user_current',
+        authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+        ...commentPayload,
+        createdAt: new Date().toISOString(),
+      };
 
-    // Update comments count on task
-    setTasks((prev) => {
-      const updatedList = prev.map((t) =>
-        t.id === selectedTask.id
-          ? {
-              ...t,
-              commentsCount: (t.commentsCount || 0) + 1,
-              attachmentsCount: (t.attachmentsCount || 0) + (mockAttachmentName.trim() ? 1 : 0),
-            }
-          : t
-      );
-      try {
-        localStorage.setItem('topify_tasks_cache', JSON.stringify(updatedList));
-      } catch {}
-      return updatedList;
-    });
+      setCommentsMap((prev) => ({
+        ...prev,
+        [selectedTask.id]: [...(prev[selectedTask.id] || []), savedComment],
+      }));
 
-    setNewCommentText('');
-    setMockAttachmentName('');
-    toast.success('Đã gửi bình luận thành công!');
+      // Update comments count on task
+      setTasks((prev) => {
+        const updatedList = prev.map((t) =>
+          t.id === selectedTask.id
+            ? {
+                ...t,
+                commentsCount: (t.commentsCount || 0) + 1,
+                attachmentsCount: (t.attachmentsCount || 0) + (mockAttachmentName.trim() ? 1 : 0),
+              }
+            : t
+        );
+        try {
+          localStorage.setItem('topify_tasks_cache', JSON.stringify(updatedList));
+        } catch {}
+        return updatedList;
+      });
+
+      setNewCommentText('');
+      setMockAttachmentName('');
+      toast.success('Đã gửi phản hồi thành công!');
+    } catch {
+      toast.error('Lỗi khi gửi phản hồi');
+    }
   };
 
   // 1-Click Apply Template
@@ -1769,6 +1900,14 @@ export default function Tasks() {
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
+                  onClick={() => openEditTaskModal(selectedTask)}
+                  className="p-1.5 rounded-xl hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors"
+                  title="Chỉnh sửa công việc này"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleDeleteTask(selectedTask.id, selectedTask.title)}
                   className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
                   title="Xóa công việc này"
@@ -2263,6 +2402,196 @@ export default function Tasks() {
                   className="px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 text-xs font-semibold shadow-sm"
                 >
                   Tạo công việc
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* EDIT TASK MODAL */}
+      {/* ==================================================================== */}
+      {isEditModalOpen && editingTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-2xl max-h-[90vh] bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-[var(--color-border)] flex items-center justify-between">
+              <h3 className="font-bold text-sm text-[var(--color-foreground)] flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-indigo-500" />
+                <span>Chỉnh sửa công việc: {editingTask.title}</span>
+              </h3>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1 rounded-lg text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateTask} className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              {/* Title */}
+              <div className="space-y-1">
+                <label className="font-semibold text-[var(--color-foreground)]">Tiêu đề công việc *</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--color-foreground)] font-medium"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <label className="font-semibold text-[var(--color-foreground)]">Mô tả chi tiết</label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-[var(--color-foreground)] resize-none"
+                />
+              </div>
+
+              {/* Priority & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Độ ưu tiên</label>
+                  <select
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-foreground)] focus:outline-none"
+                  >
+                    <option value="LOW">🟢 Thấp (Low)</option>
+                    <option value="MEDIUM">🟡 Trung bình (Medium)</option>
+                    <option value="HIGH">🟠 Cao (High)</option>
+                    <option value="URGENT">🔴 Khẩn cấp (Urgent)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Trạng thái tiến độ</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as TaskStatus)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-foreground)] focus:outline-none"
+                  >
+                    <option value="TODO">Cần làm (TODO)</option>
+                    <option value="IN_PROGRESS">Đang thực hiện (IN_PROGRESS)</option>
+                    <option value="REVIEW">Chờ duyệt (REVIEW)</option>
+                    <option value="DONE">Đã hoàn thành (DONE)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Due Date & Assignee */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Hạn hoàn thành (Deadline)</label>
+                  <input
+                    type="date"
+                    value={editDueDate}
+                    onChange={(e) => setEditDueDate(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-foreground)] focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Người phụ trách chính</label>
+                  <select
+                    value={editAssigneeId}
+                    onChange={(e) => setEditAssigneeId(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-foreground)] focus:outline-none"
+                  >
+                    <option value="">Chưa phân công</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Collaborators */}
+              <div className="space-y-1">
+                <label className="font-semibold text-[var(--color-foreground)]">Người cùng phối hợp</label>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {teamMembers.map((m) => {
+                    const isSelected = editCollaboratorIds.includes(m.id);
+                    return (
+                      <button
+                        type="button"
+                        key={m.id}
+                        onClick={() => {
+                          if (isSelected) {
+                            setEditCollaboratorIds(editCollaboratorIds.filter((id) => id !== m.id));
+                          } else {
+                            setEditCollaboratorIds([...editCollaboratorIds, m.id]);
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs transition-all ${
+                          isSelected
+                            ? 'border-indigo-500 bg-indigo-50/20 text-indigo-500 font-semibold'
+                            : 'border-[var(--color-border)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+                        }`}
+                      >
+                        <div className="w-4 h-4 rounded-full bg-slate-600 text-white flex items-center justify-center font-bold text-[8px]">
+                          {m.name[0]}
+                        </div>
+                        <span>{m.name}</span>
+                        {isSelected && <Check className="w-3 h-3 text-indigo-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Recurring Task Options */}
+              <div className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Repeat className="w-4 h-4 text-purple-500" />
+                    <span className="font-semibold text-xs text-[var(--color-foreground)]">Lặp lại chu kỳ công việc</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editIsRecurring}
+                    onChange={(e) => setEditIsRecurring(e.target.checked)}
+                    className="w-4 h-4 rounded border-[var(--color-border)] text-indigo-600"
+                  />
+                </div>
+                {editIsRecurring && (
+                  <div className="pt-2 flex items-center gap-2">
+                    <span className="text-[11px] text-[var(--color-muted-foreground)]">Tần suất lặp:</span>
+                    <select
+                      value={editRecurRule}
+                      onChange={(e) => setEditRecurRule(e.target.value as RecurFrequency)}
+                      className="p-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-foreground)] focus:outline-none"
+                    >
+                      <option value="DAILY">Hàng ngày (Daily)</option>
+                      <option value="WEEKLY">Hàng tuần (Weekly)</option>
+                      <option value="BIWEEKLY">Mỗi 2 tuần (Bi-weekly)</option>
+                      <option value="MONTHLY">Hàng tháng (Monthly)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="pt-4 border-t border-[var(--color-border)] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-semibold shadow-sm flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Cập nhật công việc</span>
                 </button>
               </div>
             </form>

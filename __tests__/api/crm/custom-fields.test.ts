@@ -10,6 +10,10 @@ vi.mock('@/lib/db', () => {
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    systemSetting: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+    },
     customer: {
       count: vi.fn(),
     },
@@ -46,12 +50,13 @@ describe('CRM Custom Fields API (F099) - /api/crm/custom-fields', () => {
         user: { id: 'u1', workspaceId: 'ws1' },
       } as any);
 
-      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
-        settings: {
-          crmCustomFields: [
-            { id: 'cf_industry', key: 'industry', name: 'Lĩnh vực kinh doanh', type: 'SELECT' },
-          ],
-        },
+      vi.mocked(prisma.systemSetting.findUnique).mockResolvedValue({
+        id: 's1',
+        key: 'crm_custom_fields_ws1',
+        value: JSON.stringify([
+          { id: 'cf_industry', key: 'industry', name: 'Lĩnh vực kinh doanh', type: 'SELECT' },
+        ]),
+        updatedAt: new Date(),
       } as any);
 
       vi.mocked(prisma.customer.count).mockResolvedValue(5);
@@ -71,11 +76,8 @@ describe('CRM Custom Fields API (F099) - /api/crm/custom-fields', () => {
         user: { id: 'u1', workspaceId: 'ws1' },
       } as any);
 
-      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
-        settings: {},
-      } as any);
-
-      vi.mocked(prisma.workspace.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.systemSetting.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.systemSetting.upsert).mockResolvedValue({} as any);
 
       const req = new NextRequest('http://localhost/api/crm/custom-fields', {
         method: 'POST',
@@ -92,7 +94,7 @@ describe('CRM Custom Fields API (F099) - /api/crm/custom-fields', () => {
       const data = await res.json();
       expect(data.field.key).toBe('contract_number');
       expect(data.field.name).toBe('Số hợp đồng kinh tế');
-      expect(prisma.workspace.update).toHaveBeenCalled();
+      expect(prisma.systemSetting.upsert).toHaveBeenCalled();
     });
   });
 
@@ -102,15 +104,16 @@ describe('CRM Custom Fields API (F099) - /api/crm/custom-fields', () => {
         user: { id: 'u1', workspaceId: 'ws1' },
       } as any);
 
-      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
-        settings: {
-          crmCustomFields: [
-            { id: '1', key: 'to_delete', name: 'Trường xóa' },
-          ],
-        },
+      vi.mocked(prisma.systemSetting.findUnique).mockResolvedValue({
+        id: 's1',
+        key: 'crm_custom_fields_ws1',
+        value: JSON.stringify([
+          { id: '1', key: 'to_delete', name: 'Trường xóa' },
+        ]),
+        updatedAt: new Date(),
       } as any);
 
-      vi.mocked(prisma.workspace.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.systemSetting.upsert).mockResolvedValue({} as any);
 
       const req = new NextRequest('http://localhost/api/crm/custom-fields?key=to_delete', {
         method: 'DELETE',
@@ -118,7 +121,7 @@ describe('CRM Custom Fields API (F099) - /api/crm/custom-fields', () => {
 
       const res = await DELETE(req);
       expect(res.status).toBe(200);
-      expect(prisma.workspace.update).toHaveBeenCalled();
+      expect(prisma.systemSetting.upsert).toHaveBeenCalled();
     });
   });
 });

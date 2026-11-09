@@ -40,6 +40,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# downloads & binaries
+public/downloads/*.dmg
+public/downloads/*.exe
+public/downloads/*.blockmap
+public/downloads/*.zip
+*.dmg
+*.exe
+
 # uploads
 /uploads
 

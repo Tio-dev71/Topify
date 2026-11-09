@@ -64,7 +64,7 @@ async function getAuthContext(req?: NextRequest) {
     const mockUser = await prisma.user.findFirst().catch(() => null);
     if (mockUser) {
       userId = mockUser.id;
-      workspaceId = mockUser.workspaceId;
+      workspaceId = mockUser.workspaceId || undefined;
     }
   }
 

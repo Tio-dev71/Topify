@@ -223,12 +223,19 @@ export async function POST(req: NextRequest) {
       workspaceId = dbUser?.workspaceId || null;
     }
 
+    const duration = formData.get('duration') ? Math.round(Number(formData.get('duration'))) : null;
+    const width = formData.get('width') ? Math.round(Number(formData.get('width'))) : null;
+    const height = formData.get('height') ? Math.round(Number(formData.get('height'))) : null;
+
     const asset = await prisma.mediaAsset.create({
       data: {
         fileName: finalFileName,
         storageUrl,
         mimeType: finalMimeType || 'application/octet-stream',
         size: finalSize,
+        width,
+        height,
+        duration,
         mediaType,
         tags,
         alt,

@@ -5,13 +5,15 @@
 export function cleanCoreTitle(t: string | null | undefined): string {
   if (!t) return '';
   return t
+    .normalize('NFC')
+    .replace(/\u00a0/g, ' ')
     .replace(/^\[(video|hình ảnh|ảnh|nóng|trực tiếp|bản tin|phóng sự)\]\s*/i, '')
     .replace(/^(vụ án|vụ việc|vụ)\s+[^:：\-–—]+[:：\-–—]\s*/i, '')
     .replace(/^(nóng|tin nóng)\s*(24h|hôm nay)?(\s*ngày\s*\d+[\/\-]\d+)?[:：\-–—]\s*/i, '')
     .replace(/^thời sự\s*(sáng|trưa|tối|ngày)?\s*(\d+[\/\-]\d+)?[:：\-–—]\s*/i, '')
     .replace(/^ngày\s*(thứ\s*\w+|\d+)\s*(xét xử|phiên tòa|hầu tòa)[^:：\-–—]*[:：\-–—]\s*/i, '')
     .toLowerCase()
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\"\'“”‘’]/g, ' ')
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\"\'“”‘’\?¿!¡]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -19,18 +21,22 @@ export function cleanCoreTitle(t: string | null | undefined): string {
 export function normalizeUrl(url: string | null | undefined): string {
   if (!url) return '';
   try {
-    const parsed = new URL(url);
-    const cleanParams = new URLSearchParams();
-    for (const [key, val] of parsed.searchParams.entries()) {
-      if (!key.startsWith('utm_') && key !== 'ref' && key !== 'source' && key !== 'fbclid' && key !== 'gidzl') {
-        cleanParams.append(key, val);
-      }
+    let cleanUrl = url.trim();
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://' + cleanUrl;
     }
-    parsed.search = cleanParams.toString();
-    parsed.hash = '';
-    return parsed.toString().replace(/\/$/, '');
+    const parsed = new URL(cleanUrl);
+    let host = parsed.hostname.toLowerCase().replace(/^(www\.|m\.)/, '');
+    let pathname = parsed.pathname.replace(/\/+$/, '');
+    return `${host}${pathname}`;
   } catch {
-    return (url || '').split('?')[0].replace(/\/$/, '').trim();
+    return (url || '')
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^(www\.|m\.)/, '')
+      .split('?')[0]
+      .replace(/\/+$/, '')
+      .trim();
   }
 }
 

@@ -29,6 +29,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, key, fullSecret });
     }
 
+    if (action === 'update' || action === 'edit') {
+      if (!keyId) {
+        return NextResponse.json({ error: 'keyId is required' }, { status: 400 });
+      }
+      const updated = securityEngineStore.updateApiKey({
+        keyId,
+        name,
+        roleScope,
+        ipWhitelist,
+        rateLimitPerMin,
+      });
+      const apiKeys = securityEngineStore.getApiKeys();
+      return NextResponse.json({ success: true, key: updated, apiKeys });
+    }
+
     if (action === 'revoke') {
       if (!keyId) {
         return NextResponse.json({ error: 'keyId is required' }, { status: 400 });

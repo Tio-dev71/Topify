@@ -23,14 +23,24 @@ export async function POST(req: NextRequest) {
     const profileIds = (task.profileIds as string[]) || [];
     if (profileIds.length > 0) {
       for (const accountId of profileIds) {
-        const account = await prisma.facebookAccount.findFirst({
-          where: {
-            OR: [
-              { id: accountId },
-              { profileId: accountId }
-            ]
+        let account: any = null;
+        if (prisma.facebookAccount?.findUnique) {
+          try {
+            account = await prisma.facebookAccount.findUnique({ where: { id: accountId } });
+          } catch {
+            account = null;
           }
-        });
+        }
+        if (!account && prisma.facebookAccount?.findFirst) {
+          account = await prisma.facebookAccount.findFirst({
+            where: {
+              OR: [
+                { id: accountId },
+                { profileId: accountId }
+              ]
+            }
+          });
+        }
         if (account && account.profileId) {
           // Set the stop flag
           browserManager.stopTask(account.profileId);
@@ -38,10 +48,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Update DB status to IDLE
+    // Update DB status to DONE
     await prisma.automationTask.update({
       where: { id: taskId },
-      data: { status: 'IDLE' }
+      data: { status: 'DONE' }
     });
 
     await recordAuditLog({

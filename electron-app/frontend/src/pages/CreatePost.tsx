@@ -254,6 +254,7 @@ export default function CreatePost() {
       prefilledTitle?: string;
       prefilledCaption?: string;
       prefilledHashtags?: string;
+      prefilledFirstComment?: string;
       prefilledMediaUrl?: string;
       prefilledMediaName?: string;
       prefilledMediaType?: 'image' | 'video';
@@ -278,7 +279,7 @@ export default function CreatePost() {
         isDraft: false,
         title: locState.prefilledTitle || 'Bộ ảnh Carousel',
         caption: locState.prefilledCaption || '',
-        firstComment: '',
+        firstComment: locState.prefilledFirstComment || '',
         hashtags: locState.prefilledHashtags || '#Carousel #Topify #InstagramCarousel',
         isCarousel: true,
         carouselSlides: locState.carouselSlides,
@@ -289,7 +290,7 @@ export default function CreatePost() {
       return;
     }
 
-    if (locState?.prefilledTitle || locState?.prefilledCaption || locState?.prefilledHashtags || locState?.prefilledMediaUrl) {
+    if (locState?.prefilledTitle || locState?.prefilledCaption || locState?.prefilledHashtags || locState?.prefilledMediaUrl || locState?.prefilledFirstComment) {
       if (videos.length === 0) {
         const isVideo = locState.prefilledMediaType === 'video' || (locState.prefilledMediaUrl && (locState.prefilledMediaUrl.endsWith('.mp4') || locState.prefilledMediaUrl.includes('video')));
         const draft: UploadedVideo = {
@@ -305,13 +306,16 @@ export default function CreatePost() {
           isDraft: !locState.prefilledMediaUrl,
           title: locState.prefilledTitle || '',
           caption: locState.prefilledCaption || '',
-          firstComment: '',
+          firstComment: locState.prefilledFirstComment || '',
           hashtags: locState.prefilledHashtags || '#Topify #ContentStudio',
         };
         setVideos([draft]);
       } else {
         updateVideoField(videos[0].id, 'title', locState.prefilledTitle || videos[0].title);
         updateVideoField(videos[0].id, 'caption', locState.prefilledCaption || videos[0].caption);
+        if (locState.prefilledFirstComment) {
+          updateVideoField(videos[0].id, 'firstComment', locState.prefilledFirstComment);
+        }
         if (locState.prefilledHashtags) {
           updateVideoField(videos[0].id, 'hashtags', locState.prefilledHashtags);
         }
@@ -903,6 +907,7 @@ export default function CreatePost() {
   // Submit all
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
 
     if (videos.length === 0) {
       toast.error('Vui lòng tải lên ít nhất 1 video.');

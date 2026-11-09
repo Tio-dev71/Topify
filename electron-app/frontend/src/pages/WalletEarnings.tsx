@@ -25,6 +25,7 @@ import {
   Users,
   Eye,
   Trash2,
+  Edit3,
   X,
   AlertCircle
 } from 'lucide-react';
@@ -62,6 +63,13 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountNumber, setNewAccountNumber] = useState('');
   const [newBankName, setNewBankName] = useState('Vietcombank');
+
+  // Edit Payment Method Modal
+  const [editingMethod, setEditingMethod] = useState<any | null>(null);
+  const [editMethodType, setEditMethodType] = useState('VIETQR');
+  const [editAccountName, setEditAccountName] = useState('');
+  const [editAccountNumber, setEditAccountNumber] = useState('');
+  const [editBankName, setEditBankName] = useState('Vietcombank');
 
   // Earning Tasks State (F150)
   const [earningTasks, setEarningTasks] = useState<any[]>([]);
@@ -287,6 +295,35 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
   };
 
   // Handle Delete Payment Method (F149)
+  const openEditMethodModal = (pm: any) => {
+    setEditingMethod(pm);
+    setEditMethodType(pm.type || 'VIETQR');
+    setEditAccountName(pm.accountName || '');
+    setEditAccountNumber(pm.accountNumber || '');
+    setEditBankName(pm.bankName || 'Vietcombank');
+  };
+
+  const handleUpdatePaymentMethod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMethod) return;
+    try {
+      const res = await api.patch('/wallet/payment-methods', {
+        id: editingMethod.id,
+        type: editMethodType,
+        accountName: editAccountName.trim().toUpperCase(),
+        accountNumber: editAccountNumber.trim(),
+        bankName: editMethodType === 'VIETQR' ? editBankName : undefined,
+      });
+      if (res.data?.success) {
+        toast.success('Đã cập nhật phương thức nhận tiền thành công');
+        setEditingMethod(null);
+        fetchWalletData();
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Lỗi khi cập nhật phương thức nhận tiền');
+    }
+  };
+
   const handleDeletePaymentMethod = async (id: string, name: string) => {
     if (!window.confirm(`Bạn có chắc chắn muốn xóa phương thức nhận tiền "${name}" khỏi danh sách?`)) {
       return;
@@ -683,13 +720,22 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                         </span>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleDeletePaymentMethod(pm.id, `${pm.bankName ? pm.bankName + ' - ' : ''}${pm.accountNumber}`)}
-                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      title="Xóa tài khoản nhận tiền này"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditMethodModal(pm)}
+                          className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+                          title="Chỉnh sửa tài khoản nhận tiền này"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePaymentMethod(pm.id, `${pm.bankName ? pm.bankName + ' - ' : ''}${pm.accountNumber}`)}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          title="Xóa tài khoản nhận tiền này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                   </div>
 
                   <div>
@@ -1242,6 +1288,102 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                   className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all shadow-sm"
                 >
                   Lưu Phương Thức
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payment Method Modal */}
+      {editingMethod && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 text-xs">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md border border-gray-100 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-purple-50/50">
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-purple-600" />
+                Chỉnh Sửa Tài Khoản Nhận Tiền
+              </h3>
+              <button onClick={() => setEditingMethod(null)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdatePaymentMethod} className="p-5 space-y-4">
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Loại phương thức *</label>
+                <select
+                  value={editMethodType}
+                  onChange={e => setEditMethodType(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 font-medium"
+                >
+                  <option value="VIETQR">Ngân hàng Việt Nam (VietQR 24/7)</option>
+                  <option value="MOMO">Ví điện tử Momo</option>
+                  <option value="PAYPAL">Cổng quốc tế PayPal</option>
+                  <option value="CRYPTO">Ví Crypto (USDT BEP20)</option>
+                </select>
+              </div>
+
+              {editMethodType === 'VIETQR' && (
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Tên ngân hàng *</label>
+                  <select
+                    value={editBankName}
+                    onChange={e => setEditBankName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 font-medium"
+                  >
+                    <option value="Vietcombank">Vietcombank</option>
+                    <option value="Techcombank">Techcombank</option>
+                    <option value="MB Bank">MB Bank (Quân Đội)</option>
+                    <option value="VietinBank">VietinBank</option>
+                    <option value="BIDV">BIDV</option>
+                    <option value="ACB">ACB</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">
+                  {editMethodType === 'MOMO' ? 'Số điện thoại Momo *' :
+                   editMethodType === 'PAYPAL' ? 'Email PayPal *' :
+                   editMethodType === 'CRYPTO' ? 'Địa chỉ ví USDT *' :
+                   'Số tài khoản ngân hàng *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nhập số tài khoản / địa chỉ..."
+                  value={editAccountNumber}
+                  onChange={e => setEditAccountNumber(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Tên chủ tài khoản (Không dấu) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: NGUYEN VAN A"
+                  value={editAccountName}
+                  onChange={e => setEditAccountName(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 uppercase"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setEditingMethod(null)}
+                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-semibold text-gray-700"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all shadow-sm"
+                >
+                  Cập Nhật Phương Thức
                 </button>
               </div>
             </form>

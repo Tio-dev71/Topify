@@ -101,10 +101,25 @@ export default function LeadsTab({
     sourceDetail: '',
     demand: '',
     estimatedValue: 10000000,
-    assignedTo: 'Nguyễn Văn A',
+    assignedTo: 'Chưa gán',
     notes: '',
   });
   const [submittingCreate, setSubmittingCreate] = useState(false);
+  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.get('/team')
+      .then((res) => {
+        if (res.data?.members && Array.isArray(res.data.members) && res.data.members.length > 0) {
+          setWorkspaceMembers(res.data.members);
+          setCreateForm((prev) => ({
+            ...prev,
+            assignedTo: res.data.members[0].name || res.data.members[0].email,
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Convert form state
   const [convertForm, setConvertForm] = useState({
@@ -705,7 +720,7 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[1050px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/75 dark:bg-slate-900/40 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                   <th className="py-3 px-4">Khách hàng tiềm năng</th>
@@ -1053,9 +1068,19 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                     onChange={(e) => setCreateForm({ ...createForm, assignedTo: e.target.value })}
                     className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                   >
-                    <option value="Nguyễn Văn A">Nguyễn Văn A (Lead Sales)</option>
-                    <option value="Trần Thị B">Trần Thị B (Account Executive)</option>
-                    <option value="Lê Hoàng C">Lê Hoàng C (Growth & CSKH)</option>
+                    {workspaceMembers.length > 0 ? (
+                      workspaceMembers.map((m) => (
+                        <option key={m.email} value={m.name || m.email}>
+                          {m.name || m.email} ({m.role === 'ADMIN' ? 'Admin' : 'Nhân viên'})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="yến ngô">yến ngô (Admin)</option>
+                        <option value="minh@topify.vn">minh@topify.vn (Nhân viên)</option>
+                        <option value="abc@company.com">abc@company.com (Nhân viên)</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>

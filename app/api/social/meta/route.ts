@@ -48,7 +48,9 @@ export async function GET(req: NextRequest) {
 
     const credentials = await getCredentials(userId);
     const clientId = credentials.META_APP_ID;
-    const redirectUri = process.env.META_REDIRECT_URI || `${req.nextUrl.origin}/api/social/meta/callback`;
+    const redirectUri = (process.env.META_REDIRECT_URI && process.env.META_REDIRECT_URI.includes(req.nextUrl.host))
+      ? process.env.META_REDIRECT_URI.trim()
+      : `${req.nextUrl.origin}/api/social/meta/callback`;
 
     if (!clientId) {
       return new NextResponse(
@@ -85,7 +87,7 @@ export async function GET(req: NextRequest) {
     const originalStateParam = token ? `meta_${token}` : 'meta';
     
     const csrfState = crypto.randomBytes(16).toString('hex');
-    const stateParam = `${originalStateParam}:${csrfState}`;
+    const stateParam = `${csrfState}::${originalStateParam}`;
     const apiVersion = process.env.META_GRAPH_API_VERSION || 'v26.0';
     const authUrl = `https://www.facebook.com/${apiVersion}/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${encodeURIComponent(stateParam)}`;
 

@@ -62,6 +62,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ persona: newPersona, personas: topifyAiStore.getPersonas() });
     }
 
+    if (action === 'update_persona' || action === 'edit_persona') {
+      const targetId = personaId || body.id;
+      if (!targetId) {
+        return NextResponse.json({ error: 'personaId is required' }, { status: 400 });
+      }
+      const updatedPersona = topifyAiStore.updatePersona(targetId, {
+        name,
+        emoji,
+        description,
+        systemPrompt,
+        welcomeMessage,
+      });
+      return NextResponse.json({ persona: updatedPersona, personas: topifyAiStore.getPersonas() });
+    }
+
     if (action === 'delete_persona') {
       if (!personaId) {
         return NextResponse.json({ error: 'personaId is required' }, { status: 400 });

@@ -56,13 +56,15 @@ export async function GET(req: NextRequest) {
     const state = restState.join('::');
 
     if (state && state.startsWith('meta_')) {
-      isDesktopClient = true;
       const token = state.replace('meta_', '');
       try {
         const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
-        // Prioritize desktop client user credentials over web session cookies
-        userId = decoded.sub || decoded.id;
-        workspaceId = decoded.workspaceId;
+        if (decoded && (decoded.sub || decoded.id)) {
+          isDesktopClient = true;
+          // Prioritize desktop client user credentials over web session cookies
+          userId = decoded.sub || decoded.id;
+          workspaceId = decoded.workspaceId;
+        }
       } catch (err) {
         console.error('Invalid token in state:', err);
       }
@@ -78,7 +80,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/login', baseUrl));
     }
 
-    if (!workspaceId) {
+    if (!workspaceId && prisma.user?.findUnique) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { workspaceId: true }
@@ -90,14 +92,16 @@ export async function GET(req: NextRequest) {
       const fullError = errorDescription || errorReason || error || 'Người dùng đã hủy hoặc không có mã xác thực';
       if (isDesktopClient) return renderDesktopError('Lỗi xác thực Meta', fullError);
       return NextResponse.redirect(
-        new URL(`/dashboard/settings?error=${encodeURIComponent(fullError)}`, baseUrl)
+        new URL(`/dashboard/settings?error=meta_auth_failed&detail=${encodeURIComponent(fullError)}`, baseUrl)
       );
     }
 
     const credentials = await getCredentials(userId);
     const clientId = credentials.META_APP_ID!;
     const clientSecret = credentials.META_APP_SECRET!;
-    const redirectUri = process.env.META_REDIRECT_URI || `${baseUrl}/api/social/meta/callback`;
+    const redirectUri = (process.env.META_REDIRECT_URI && process.env.META_REDIRECT_URI.includes(url.host))
+      ? process.env.META_REDIRECT_URI.trim()
+      : `${baseUrl}/api/social/meta/callback`;
 
     const apiVersion = process.env.META_GRAPH_API_VERSION || 'v26.0';
 

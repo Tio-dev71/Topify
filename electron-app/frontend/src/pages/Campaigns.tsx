@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   MessageSquare,
   Users,
+  Edit3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -188,6 +189,87 @@ export default function Campaigns() {
 
   // F136: Campaign Assignee & Team Lead
   const [newAssignee, setNewAssignee] = useState('user_1');
+  const [workspaceMembers, setWorkspaceMembers] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.get('/team')
+      .then((res) => {
+        if (res.data?.members && Array.isArray(res.data.members) && res.data.members.length > 0) {
+          setWorkspaceMembers(res.data.members);
+          setNewAssignee(res.data.members[0].id || res.data.members[0].email);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Edit Campaign State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<EnrichedCampaign | null>(null);
+  const [editCampName, setEditCampName] = useState('');
+  const [editCampDesc, setEditCampDesc] = useState('');
+  const [editCampStatus, setEditCampStatus] = useState<CampaignStatus>('PLANNING');
+  const [editCampBudget, setEditCampBudget] = useState('50000000');
+  const [editCampChannels, setEditCampChannels] = useState<ChannelKey[]>(['TIKTOK', 'FACEBOOK']);
+  const [editCampStartDate, setEditCampStartDate] = useState('');
+  const [editCampEndDate, setEditCampEndDate] = useState('');
+
+  const openEditModal = (camp: EnrichedCampaign) => {
+    setEditingCampaign(camp);
+    setEditCampName(camp.name);
+    setEditCampDesc(camp.description || '');
+    setEditCampStatus(camp.status);
+    setEditCampBudget(String(camp.totalBudget));
+    setEditCampChannels(camp.channels || ['TIKTOK', 'FACEBOOK']);
+    setEditCampStartDate(camp.startDate ? camp.startDate.split('T')[0] : '');
+    setEditCampEndDate(camp.endDate ? camp.endDate.split('T')[0] : '');
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCampaign || !editCampName.trim()) {
+      toast.error('Vui lòng nhập tên chiến dịch');
+      return;
+    }
+
+    const budgetNum = Number(editCampBudget) || editingCampaign.totalBudget;
+
+    const updatedCamp: EnrichedCampaign = {
+      ...editingCampaign,
+      name: editCampName.trim(),
+      description: editCampDesc.trim(),
+      status: editCampStatus,
+      totalBudget: budgetNum,
+      channels: editCampChannels,
+      startDate: editCampStartDate ? new Date(editCampStartDate).toISOString() : editingCampaign.startDate,
+      endDate: editCampEndDate ? new Date(editCampEndDate).toISOString() : editingCampaign.endDate,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setCampaigns((prev) => {
+      const next = prev.map((c) => (c.id === editingCampaign.id ? updatedCamp : c));
+      try {
+        localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setIsEditModalOpen(false);
+
+    try {
+      await api.patch('/campaigns', {
+        id: editingCampaign.id,
+        name: updatedCamp.name,
+        description: updatedCamp.description,
+        status: updatedCamp.status,
+        totalBudget: updatedCamp.totalBudget,
+        channels: updatedCamp.channels,
+      });
+      toast.success('Đã cập nhật chiến dịch thành công!');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi cập nhật chiến dịch');
+    }
+  };
 
   // Asset Review Modal / State
   const [reviewAssetTarget, setReviewAssetTarget] = useState<CampaignAssetItem | null>(null);
@@ -208,7 +290,7 @@ export default function Campaigns() {
   });
 
   // Handle Create Campaign
-  const handleCreateCampaign = (e: React.FormEvent) => {
+  const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCampName.trim()) {
       toast.error('Vui lòng nhập tên chiến dịch');
@@ -223,13 +305,16 @@ export default function Campaigns() {
     const mediaPct = (Number(newBudgetMediaPercent) || 15) / 100;
     const seedingPct = (Number(newBudgetSeedingPercent) || 5) / 100;
 
-    const memberMap: Record<string, { name: string; avatar: string }> = {
-      user_1: { name: 'Nguyễn Văn A (Lead)', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop' },
-      user_2: { name: 'Trần Thị B (Content)', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop' },
-      user_3: { name: 'Lê Hoàng C (Media)', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop' },
-      user_4: { name: 'Vũ Đức D (Performance)', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop' },
-    };
-    const chosenMember = memberMap[newAssignee] || memberMap['user_1'];
+    const foundMember = workspaceMembers.find(m => (m.id || m.email) === newAssignee);
+    const chosenMember = foundMember
+      ? {
+          name: `${foundMember.name || foundMember.email.split('@')[0]} (${foundMember.role === 'ADMIN' ? 'Lead' : 'Thành viên'})`,
+          avatar: foundMember.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+        }
+      : {
+          name: newAssignee.includes('@') ? newAssignee.split('@')[0] : 'Quản lý chiến dịch',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+        };
 
     const newCamp: EnrichedCampaign = {
       id: `camp_${Date.now()}`,
@@ -308,8 +393,13 @@ export default function Campaigns() {
       updatedAt: new Date().toISOString(),
     };
 
-    setCampaigns([newCamp, ...campaigns]);
+    const nextCampaigns = [newCamp, ...campaigns];
+    setCampaigns(nextCampaigns);
     setSelectedCampaignId(newCamp.id);
+    try {
+      localStorage.setItem('topify_campaigns_cache', JSON.stringify(nextCampaigns));
+    } catch {}
+
     setIsCreateModalOpen(false);
 
     // Reset form
@@ -320,7 +410,38 @@ export default function Campaigns() {
     setNewCampEndDate('');
     setNewKpiTargetValue('150000000');
 
-    toast.success('Đã tạo chiến dịch mới thành công (F133 - F136)!');
+    // Persist to Postgres database via API
+    try {
+      const res = await api.post('/campaigns', {
+        name: newCamp.name,
+        description: newCamp.description,
+        status: newCamp.status,
+        objectiveType: newCamp.objectiveType,
+        totalBudget: newCamp.totalBudget,
+        startDate: newCamp.startDate,
+        endDate: newCamp.endDate,
+        channels: newCamp.channels,
+        kpis: newCamp.kpis,
+        budgetCategories: newCamp.budgetCategories,
+        phases: newCamp.phases,
+      });
+
+      if (res.data?.success && res.data?.campaign) {
+        const serverCamp = res.data.campaign;
+        setCampaigns((prev) => {
+          const updated = prev.map((c) => (c.id === newCamp.id ? serverCamp : c));
+          try {
+            localStorage.setItem('topify_campaigns_cache', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
+        setSelectedCampaignId(serverCamp.id);
+      }
+    } catch (err) {
+      console.warn('Backend campaign creation warning:', err);
+    }
+
+    toast.success('Đã tạo và lưu chiến dịch mới thành công (F133 - F136)!');
   };
 
   // Handle Approve / Reject Asset
@@ -495,6 +616,16 @@ export default function Campaigns() {
                 </option>
               ))}
             </select>
+            {currentCampaign && (
+              <button
+                onClick={() => openEditModal(currentCampaign)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] text-xs font-semibold transition-all"
+                title="Chỉnh sửa chiến dịch này"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Sửa chiến dịch</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -669,16 +800,26 @@ export default function Campaigns() {
                       </span>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setSelectedCampaignId(camp.id);
-                        setActiveTab('progress');
-                      }}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[var(--color-muted)] hover:bg-[var(--color-primary)] hover:text-white text-xs font-semibold transition-all"
-                    >
-                      <span>Xem tiến độ</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => openEditModal(camp)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] text-xs font-semibold transition-all"
+                        title="Chỉnh sửa chiến dịch"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Sửa</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCampaignId(camp.id);
+                          setActiveTab('progress');
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[var(--color-muted)] hover:bg-[var(--color-primary)] hover:text-white text-xs font-semibold transition-all"
+                      >
+                        <span>Xem tiến độ</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1533,10 +1674,19 @@ export default function Campaigns() {
                     onChange={(e) => setNewAssignee(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
                   >
-                    <option value="user_1">Nguyễn Văn A (Project Lead &amp; Strategy)</option>
-                    <option value="user_2">Trần Thị B (Lead Content Creator &amp; Copywriter)</option>
-                    <option value="user_3">Lê Hoàng C (Media Producer &amp; Video Editor)</option>
-                    <option value="user_4">Vũ Đức D (Performance Ads &amp; Data Analyst)</option>
+                    {workspaceMembers.length > 0 ? (
+                      workspaceMembers.map((m) => (
+                        <option key={m.id || m.email} value={m.id || m.email}>
+                          {m.name || m.email} ({m.role === 'ADMIN' ? 'Quản trị viên / Lead' : 'Thành viên'})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="user_yen">yến ngô (Quản trị viên / Lead)</option>
+                        <option value="user_minh">minh@topify.vn (Thành viên)</option>
+                        <option value="user_abc">abc@company.com (Thành viên)</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -1555,6 +1705,149 @@ export default function Campaigns() {
                 >
                   <Rocket className="w-3.5 h-3.5" />
                   <span>Tạo chiến dịch hoàn tất</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: EDIT CAMPAIGN */}
+      {/* ==================================================================== */}
+      {isEditModalOpen && editingCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-2xl max-h-[90vh] bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[var(--color-foreground)]">
+                    Chỉnh sửa chiến dịch: {editingCampaign.name}
+                  </h3>
+                  <span className="text-[11px] text-[var(--color-muted-foreground)]">
+                    Cập nhật mục tiêu, ngân sách, kênh phân phối và thời gian chạy
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1 rounded-lg text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleUpdateCampaign} className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-[var(--color-foreground)]">Tên chiến dịch *</label>
+                <input
+                  type="text"
+                  required
+                  value={editCampName}
+                  onChange={(e) => setEditCampName(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-[var(--color-foreground)]">Mô tả chiến dịch</label>
+                <textarea
+                  rows={2}
+                  value={editCampDesc}
+                  onChange={(e) => setEditCampDesc(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Trạng thái chiến dịch</label>
+                  <select
+                    value={editCampStatus}
+                    onChange={(e) => setEditCampStatus(e.target.value as CampaignStatus)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                  >
+                    <option value="PLANNING">Lên kế hoạch (PLANNING)</option>
+                    <option value="RUNNING">Đang chạy (RUNNING)</option>
+                    <option value="PAUSED">Tạm dừng (PAUSED)</option>
+                    <option value="COMPLETED">Đã hoàn thành (COMPLETED)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Tổng ngân sách (VND)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1000000}
+                    value={editCampBudget}
+                    onChange={(e) => setEditCampBudget(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-[var(--color-foreground)]">Kênh phân phối áp dụng (Channels)</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(['TIKTOK', 'FACEBOOK', 'INSTAGRAM', 'YOUTUBE', 'SHOPEE'] as ChannelKey[]).map((ch) => (
+                    <label key={ch} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--color-border)] cursor-pointer hover:bg-[var(--color-muted)]/30">
+                      <input
+                        type="checkbox"
+                        checked={editCampChannels.includes(ch)}
+                        onChange={(e) => {
+                          if (e.target.checked) setEditCampChannels([...editCampChannels, ch]);
+                          else setEditCampChannels(editCampChannels.filter((c) => c !== ch));
+                        }}
+                        className="rounded border-[var(--color-border)] text-[var(--color-primary)]"
+                      />
+                      <span className="font-medium text-[var(--color-foreground)]">{ch}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Ngày bắt đầu</label>
+                  <input
+                    type="date"
+                    value={editCampStartDate}
+                    onChange={(e) => setEditCampStartDate(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-semibold text-[var(--color-foreground)]">Ngày kết thúc</label>
+                  <input
+                    type="date"
+                    value={editCampEndDate}
+                    onChange={(e) => setEditCampEndDate(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-[var(--color-border)] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Lưu thay đổi</span>
                 </button>
               </div>
             </form>

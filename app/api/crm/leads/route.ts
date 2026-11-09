@@ -369,9 +369,9 @@ export async function POST(req: NextRequest) {
       await recordAuditLog({
         userId: session.user.id,
         action: 'IMPORT',
-        resourceType: 'LEAD',
-        resourceId: `bulk_${importedItems.length}`,
-        details: { count: importedItems.length },
+        entityType: 'LEAD',
+        entityId: `bulk_${importedItems.length}`,
+        metadata: { count: importedItems.length },
       }).catch(() => null);
 
       return NextResponse.json({
@@ -471,9 +471,9 @@ export async function POST(req: NextRequest) {
       await recordAuditLog({
         userId: session.user.id,
         action: 'UPDATE',
-        resourceType: 'LEAD_CONVERT',
-        resourceId: targetLead.id,
-        details: { customerId, dealId },
+        entityType: 'LEAD_CONVERT',
+        entityId: targetLead.id,
+        metadata: { customerId, dealId },
       }).catch(() => null);
 
       return NextResponse.json({
@@ -541,9 +541,9 @@ export async function POST(req: NextRequest) {
     await recordAuditLog({
       userId: session.user.id,
       action: 'CREATE',
-      resourceType: 'LEAD',
-      resourceId: newLead.id,
-      details: { name: newLead.name, source: newLead.source },
+      entityType: 'LEAD',
+      entityId: newLead.id,
+      metadata: { name: newLead.name, source: newLead.source },
     }).catch(() => null);
 
     return NextResponse.json({

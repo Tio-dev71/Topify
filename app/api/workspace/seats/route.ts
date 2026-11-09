@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { auth } from '@/lib/auth';
 import { getWorkspaceUsageAndQuota } from '@/lib/workspace/quota';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function getAuthWorkspaceId(req: NextRequest) {
+  let workspaceId: string | undefined;
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      workspaceId = decoded.workspaceId;
+    } catch (e) {}
+  }
+  if (!workspaceId) {
+    const session = await auth();
+    workspaceId = (session?.user as any)?.workspaceId;
+  }
+  if (!workspaceId) {
+    const defaultWs = await prisma.workspace.findFirst();
+    workspaceId = defaultWs?.id || 'default-workspace';
+  }
+  return workspaceId;
+}
 
 export interface PendingInvite {
   id: string;
@@ -32,7 +57,8 @@ let pendingInvites: PendingInvite[] = [
 
 export async function GET(req: NextRequest) {
   try {
-    const quota = await getWorkspaceUsageAndQuota('default-workspace');
+    const workspaceId = await getAuthWorkspaceId(req);
+    const quota = await getWorkspaceUsageAndQuota(workspaceId);
     return NextResponse.json({
       success: true,
       maxSeats: quota.limits.maxSeats,
@@ -51,7 +77,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const action = body.action || 'invite';
 
-    const quota = await getWorkspaceUsageAndQuota('default-workspace');
+    const workspaceId = await getAuthWorkspaceId(req);
+    const quota = await getWorkspaceUsageAndQuota(workspaceId);
     const totalOccupied = quota.usage.seatsUsed + pendingInvites.filter((i) => i.status === 'PENDING').length;
 
     if (action === 'invite') {
@@ -72,13 +99,22 @@ export async function POST(req: NextRequest) {
 
       const invite: PendingInvite = {
         id: `inv_${Date.now()}`,
-        email,
-        role,
+        email: email.trim(),
+        role: role === 'ADMIN' ? 'ADMIN' : 'STAFF',
         status: 'PENDING',
         invitedAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
       };
       pendingInvites.unshift(invite);
+
+      // Persist to AllowedEmail
+      if (workspaceId && workspaceId !== 'default-workspace') {
+        await prisma.allowedEmail.upsert({
+          where: { email: email.trim().toLowerCase() },
+          update: { role: role === 'ADMIN' ? 'ADMIN' : 'STAFF', workspaceId },
+          create: { email: email.trim().toLowerCase(), role: role === 'ADMIN' ? 'ADMIN' : 'STAFF', workspaceId },
+        }).catch(() => null);
+      }
 
       return NextResponse.json({
         success: true,
@@ -88,8 +124,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'revoke') {
-      const { id } = body;
-      pendingInvites = pendingInvites.map((i) => (i.id === id ? { ...i, status: 'REVOKED' } : i));
+      const targetId = body.id || body.inviteId;
+      const targetEmail = body.email;
+      pendingInvites = pendingInvites.map((i) =>
+        i.id === targetId || (targetEmail && i.email === targetEmail)
+          ? { ...i, status: 'REVOKED' }
+          : i
+      );
+      if (targetEmail) {
+        await prisma.allowedEmail.deleteMany({
+          where: { email: targetEmail.trim().toLowerCase() },
+        }).catch(() => null);
+      }
       return NextResponse.json({ success: true, message: 'Đã thu hồi lời mời' });
     }
 

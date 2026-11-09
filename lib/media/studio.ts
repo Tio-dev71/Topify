@@ -142,8 +142,7 @@ export async function processMediaResize(params: {
   );
   if (!ffmpegPath) {
     try {
-      // @ts-expect-error - no types
-      const ffmpegInstaller = await import('@ffmpeg-installer/ffmpeg');
+      const ffmpegInstaller: any = await import('@ffmpeg-installer/ffmpeg' as any);
       ffmpegPath = ffmpegInstaller?.default?.path || ffmpegInstaller?.path;
     } catch {}
   }
@@ -247,8 +246,7 @@ export async function processVideoRepurposeCut(params: {
   );
   if (!ffmpegPath) {
     try {
-      // @ts-expect-error - no types
-      const ffmpegInstaller = await import('@ffmpeg-installer/ffmpeg');
+      const ffmpegInstaller: any = await import('@ffmpeg-installer/ffmpeg' as any);
       ffmpegPath = ffmpegInstaller?.default?.path || ffmpegInstaller?.path;
     } catch {}
   }

@@ -34,7 +34,8 @@ import {
   BookOpen,
   Settings,
   Loader2,
-  Smartphone
+  Smartphone,
+  Pencil
 } from 'lucide-react';
 import api from '../lib/axios';
 import { toast } from 'sonner';
@@ -189,6 +190,7 @@ export default function TopifyAI() {
 
   // Modal 2: Persona Manager Modal state (Admin only)
   const [isPersonaManagerModalOpen, setIsPersonaManagerModalOpen] = useState(false);
+  const [editingPersonaId, setEditingPersonaId] = useState<string | null>(null);
   const [newPersonaName, setNewPersonaName] = useState('');
   const [newPersonaEmoji, setNewPersonaEmoji] = useState('🛍️');
   const [newPersonaDescription, setNewPersonaDescription] = useState('');
@@ -513,7 +515,24 @@ export default function TopifyAI() {
   };
 
   const handleOpenPersonaManager = () => {
+    handleCancelEditPersona();
     setIsPersonaManagerModalOpen(true);
+  };
+
+  const handleStartEditPersona = (p: PersonaItem) => {
+    setEditingPersonaId(p.id);
+    setNewPersonaName(p.name);
+    setNewPersonaEmoji(p.emoji || '🤖');
+    setNewPersonaDescription(p.description || '');
+    setNewPersonaPrompt(p.systemPrompt || '');
+  };
+
+  const handleCancelEditPersona = () => {
+    setEditingPersonaId(null);
+    setNewPersonaName('');
+    setNewPersonaEmoji('🛍️');
+    setNewPersonaDescription('');
+    setNewPersonaPrompt('');
   };
 
   const handleCreateCustomPersona = async () => {
@@ -527,8 +546,10 @@ export default function TopifyAI() {
     }
     try {
       setLoading(true);
+      const isEditing = !!editingPersonaId;
       const res = await api.post('/ai/studio/chat', {
-        action: 'create_persona',
+        action: isEditing ? 'update_persona' : 'create_persona',
+        personaId: editingPersonaId || undefined,
         name: newPersonaName.trim(),
         emoji: newPersonaEmoji || '🤖',
         description: newPersonaDescription.trim(),
@@ -540,15 +561,13 @@ export default function TopifyAI() {
         const customOnly = res.data.personas.filter((p: any) => p.isCustom);
         localStorage.setItem('topify_custom_personas', JSON.stringify(customOnly));
       }
-      toast.success(`Đã thêm vai trò trợ lý "${newPersonaName}" thành công!`);
-      setNewPersonaName('');
-      setNewPersonaDescription('');
-      setNewPersonaPrompt('');
+      toast.success(isEditing ? `Đã cập nhật vai trò "${newPersonaName}" thành công!` : `Đã thêm vai trò trợ lý "${newPersonaName}" thành công!`);
+      handleCancelEditPersona();
       if (res.data?.persona) {
         setSelectedPersona(res.data.persona.id);
       }
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Lỗi khi tạo vai trò trợ lý mới');
+      toast.error(e.response?.data?.error || 'Lỗi khi lưu vai trò trợ lý');
     } finally {
       setLoading(false);
     }
@@ -876,6 +895,18 @@ export default function TopifyAI() {
         </button>
 
         <button
+          onClick={() => setActiveTab('voice')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+            activeTab === 'voice'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Volume2 className="w-4 h-4" />
+          Lồng Tiếng AI (F160)
+        </button>
+
+        <button
           onClick={() => setActiveTab('repurpose_models')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
             activeTab === 'repurpose_models'
@@ -884,7 +915,7 @@ export default function TopifyAI() {
           }`}
         >
           <Repeat className="w-4 h-4" />
-          Tái Chế Đa Kênh (F161)
+          Tái Chế & Model AI (F161/F162)
         </button>
       </div>
 
@@ -1608,6 +1639,182 @@ export default function TopifyAI() {
 
 
       {/* ========================================================================= */}
+      {/* TAB 3: VOICE TTS STUDIO (F160) */}
+      {/* ========================================================================= */}
+      {activeTab === 'voice' && (
+        <div className="space-y-6">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-5">
+            <div>
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <Volume2 className="w-5 h-5 text-indigo-600" />
+                Lồng Tiếng & Audio TTS Studio (F160)
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Chuyển văn bản kịch bản thành giọng đọc tự nhiên đa vùng miền (Bắc / Nam / Anh-Mỹ) với 4 ngữ điệu chuyên biệt
+              </p>
+            </div>
+
+            {/* Quick Templates */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400 font-medium">Mẫu nhanh:</span>
+              {[
+                'Chào bạn, hôm nay mình sẽ chia sẻ 3 bí quyết tăng doanh số gấp đôi!',
+                'Đừng bỏ lỡ chương trình khuyến mãi duy nhất trong tháng này nhé!',
+                'Topify là nền tảng tự động hóa giúp bạn giải phóng 80% thời gian đăng bài.'
+              ].map((tpl, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setVoiceText(tpl)}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 truncate max-w-xs transition-colors"
+                >
+                  {tpl}
+                </button>
+              ))}
+            </div>
+
+            {/* Script Text Input */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Văn bản cần lồng tiếng (Voiceover Text):
+              </label>
+              <textarea
+                rows={4}
+                value={voiceText}
+                onChange={(e) => setVoiceText(e.target.value)}
+                placeholder="Nhập nội dung kịch bản hoặc lời bình video..."
+                className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed"
+              />
+            </div>
+
+            {/* Voice Controls: Voice ID, Tone, Speed */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Chọn Giọng Đọc:</label>
+                <select
+                  value={selectedVoiceId}
+                  onChange={(e) => setSelectedVoiceId(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                >
+                  <option value="vi-VN-HoaiMy">🎙️ Hoài My (Nữ miền Bắc - Ngọt ngào, truyền cảm)</option>
+                  <option value="vi-VN-NamMinh">🎙️ Nam Minh (Nam miền Bắc - Chững chạc, tin cậy)</option>
+                  <option value="vi-VN-HuongGiang">🎙️ Hương Giang (Nữ miền Nam - Năng động, vui tươi)</option>
+                  <option value="vi-VN-QuocBao">🎙️ Quốc Bảo (Nam miền Nam - Trầm ấm, cuốn hút)</option>
+                  <option value="en-US-Jenny">🌐 Jenny (English Female - Professional & Natural)</option>
+                  <option value="en-US-Guy">🌐 Guy (English Male - Dynamic & Confident)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Ngữ Điệu (Tone):</label>
+                <select
+                  value={voiceTone}
+                  onChange={(e) => setVoiceTone(e.target.value as any)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                >
+                  <option value="ENTHUSIASTIC">🔥 Hào hứng & Cuốn hút (TikTok / Reels)</option>
+                  <option value="PROFESSIONAL">💼 Chuyên nghiệp & Điềm đạm (Thương hiệu / B2B)</option>
+                  <option value="EMOTIONAL">❤️ Cảm xúc & Đồng cảm (Kể chuyện / Tâm sự)</option>
+                  <option value="NEWS">📰 Thời sự & Tin tức (Bản tin / Tin nóng)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Tốc Độ Đọc: <span className="text-indigo-600 font-bold">{voiceSpeed}x</span>
+                </label>
+                <div className="flex items-center gap-2 pt-1.5">
+                  <span className="text-[10px] text-gray-400">0.75x</span>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.5"
+                    step="0.05"
+                    value={voiceSpeed}
+                    onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))}
+                    className="flex-1 accent-indigo-600 cursor-pointer"
+                  />
+                  <span className="text-[10px] text-gray-400">1.5x</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleGenerateVoice}
+                disabled={loading || !voiceText.trim()}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+                <span>Tạo Bản Lồng Tiếng AI (F160)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Audio History & Player */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
+            <h4 className="text-sm font-bold text-gray-900 flex items-center justify-between">
+              <span>Danh Sách Bản Thu Âm AI Đã Tạo ({voiceList.length})</span>
+              <button
+                onClick={fetchVoices}
+                className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                title="Làm mới"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </h4>
+
+            {voiceList.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-xs">
+                Chưa có bản thu âm nào. Hãy nhập văn bản và bấm "Tạo Bản Lồng Tiếng AI" ở trên.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {voiceList.map((v, i) => (
+                  <div key={v.id || i} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-900">{v.voiceName || v.voiceId}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
+                          {v.tone}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono">{v.durationSeconds}s</span>
+                      </div>
+                      <p className="text-xs text-gray-600 line-clamp-2 italic">"{v.text}"</p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      {v.audioUrl && (
+                        <audio controls src={v.audioUrl} className="h-9 w-56 accent-indigo-600" />
+                      )}
+                      {v.audioUrl && (
+                        <a
+                          href={v.audioUrl}
+                          download={`voiceover_${v.id || i}.mp3`}
+                          className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 transition-colors"
+                          title="Tải tệp MP3"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => navigate('/create', { state: { prefilledTitle: `Bản thu âm: ${v.text.slice(0, 30)}...`, prefilledCaption: v.text } })}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-200 transition-colors"
+                        title="Đưa kịch bản này sang màn hình Tạo bài viết"
+                      >
+                        Đăng bài
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* TAB 5: REPURPOSING (F161) */}
       {/* ========================================================================= */}
       {activeTab === 'repurpose_models' && (
@@ -1893,12 +2100,32 @@ export default function TopifyAI() {
 
             {/* Scrollable Content */}
             <div className="p-6 space-y-6 overflow-y-auto">
-              {/* Form thêm vai trò mới */}
+              {/* Form thêm / sửa vai trò */}
               <div className="bg-blue-50/40 border border-blue-200/60 rounded-2xl p-4 space-y-4">
-                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-                  <Plus className="w-3.5 h-3.5 text-blue-600" />
-                  Thêm Vai Trò Trợ Lý Mới Vào Hệ Thống
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                    {editingPersonaId ? (
+                      <>
+                        <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                        Chỉnh Sửa Vai Trò Trợ Lý
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5 text-blue-600" />
+                        Thêm Vai Trò Trợ Lý Mới Vào Hệ Thống
+                      </>
+                    )}
+                  </h4>
+                  {editingPersonaId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditPersona}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline font-medium"
+                    >
+                      Hủy chỉnh sửa
+                    </button>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="md:col-span-1">
@@ -1998,15 +2225,24 @@ export default function TopifyAI() {
                   />
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  {editingPersonaId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEditPersona}
+                      className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-all"
+                    >
+                      Hủy
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleCreateCustomPersona}
                     disabled={loading || !newPersonaName.trim() || !newPersonaPrompt.trim()}
                     className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Lưu & Nạp Vào Hệ Thống Cho User Dùng Nhanh</span>
+                    {editingPersonaId ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                    <span>{editingPersonaId ? 'Cập Nhật Vai Trò' : 'Lưu & Nạp Vào Hệ Thống Cho User Dùng Nhanh'}</span>
                   </button>
                 </div>
               </div>
@@ -2045,14 +2281,24 @@ export default function TopifyAI() {
                       </div>
 
                       {p.isCustom && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteCustomPersona(p.id, e)}
-                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 shrink-0 transition-colors"
-                          title="Xóa vai trò này"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditPersona(p)}
+                            className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800 transition-colors"
+                            title="Chỉnh sửa vai trò này"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCustomPersona(p.id, e)}
+                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                            title="Xóa vai trò này"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}

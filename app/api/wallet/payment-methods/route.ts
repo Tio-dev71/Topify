@@ -52,22 +52,30 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/wallet/payment-methods - Set as default
+// PATCH /api/wallet/payment-methods - Update payment method details or set as default
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id } = body;
+    const { id, type, accountName, accountNumber, bankName, isDefault } = body;
 
     const target = memoryPaymentMethods.find(pm => pm.id === id);
     if (!target) {
       return NextResponse.json({ error: 'Phương thức thanh toán không tồn tại' }, { status: 404 });
     }
 
-    memoryPaymentMethods.forEach(pm => pm.isDefault = (pm.id === id));
+    if (type) target.type = type;
+    if (accountName) target.accountName = accountName.toUpperCase();
+    if (accountNumber) target.accountNumber = String(accountNumber).trim();
+    if (bankName !== undefined) target.bankName = bankName;
+
+    if (isDefault) {
+      memoryPaymentMethods.forEach(pm => pm.isDefault = (pm.id === id));
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Đã đặt làm phương thức nhận tiền mặc định',
+      message: 'Đã cập nhật phương thức nhận tiền thành công',
+      paymentMethod: target,
       paymentMethods: memoryPaymentMethods,
     });
   } catch (error: any) {

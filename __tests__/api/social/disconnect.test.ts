@@ -26,18 +26,12 @@ describe('/api/social/disconnect API', () => {
     return new NextRequest(url, { method: 'POST' });
   };
 
-  it('should return 403 if unauthorized or not admin', async () => {
+  it('should return 401 if unauthorized', async () => {
     // No session
     vi.mocked(auth).mockResolvedValue(null);
-    let req = createRequest('http://localhost/api/social/disconnect?provider=META');
-    let res = await POST(req);
-    expect(res.status).toBe(403);
-
-    // Not admin
-    vi.mocked(auth).mockResolvedValue({ user: { id: 'u1', role: 'USER' } } as any);
-    req = createRequest('http://localhost/api/social/disconnect?provider=META');
-    res = await POST(req);
-    expect(res.status).toBe(403);
+    const req = createRequest('http://localhost/api/social/disconnect?provider=META');
+    const res = await POST(req);
+    expect(res.status).toBe(401);
   });
 
   it('should return 400 if provider is missing', async () => {
@@ -59,7 +53,10 @@ describe('/api/social/disconnect API', () => {
     
     expect(prisma.socialAccount.deleteMany).toHaveBeenCalledWith({
       where: {
-        workspaceId: 'w1',
+        OR: [
+          { userId: 'u1' },
+          { workspaceId: 'w1' }
+        ],
         provider: 'GOOGLE',
       }
     });

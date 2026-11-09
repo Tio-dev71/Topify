@@ -69,26 +69,40 @@ export interface WorkspaceUsageResult {
 }
 
 export async function getWorkspaceUsageAndQuota(workspaceId: string): Promise<WorkspaceUsageResult> {
-  const plan: 'FREE' | 'PRO' | 'ENTERPRISE' = 'PRO'; // Default demo/pro
-  const limits = PLAN_LIMITS[plan];
+  let plan: 'FREE' | 'PRO' | 'ENTERPRISE' = 'PRO'; // Default demo/pro
 
-  let seatsUsed = 3;
-  let channelsUsed = 5;
-  let postsThisMonth = 142;
-  let aiCreditsUsed = 185;
-  let storageUsedGb = 6.4;
+  let seatsUsed = 2;
+  let channelsUsed = 2;
+  let postsThisMonth = 15;
+  let aiCreditsUsed = 45;
+  let storageUsedGb = 1.2;
 
   try {
-    const [userCount, postCount] = await Promise.all([
-      prisma.user.count(),
-      prisma.post.count(),
+    const ws = workspaceId
+      ? await prisma.workspace.findUnique({
+          where: { id: workspaceId },
+          select: { plan: true },
+        }).catch(() => null)
+      : null;
+
+    if (ws?.plan && PLAN_LIMITS[ws.plan]) {
+      plan = ws.plan as any;
+    }
+
+    const [allowedCount, userCount, postCount] = await Promise.all([
+      workspaceId ? prisma.allowedEmail.count({ where: { workspaceId } }).catch(() => 0) : 0,
+      workspaceId ? prisma.user.count({ where: { workspaceId } }).catch(() => 0) : 0,
+      workspaceId ? prisma.post.count({ where: { workspaceId } }).catch(() => 0) : 0,
     ]);
 
-    if (userCount > 0) seatsUsed = userCount;
+    const actualSeats = Math.max(allowedCount, userCount);
+    if (actualSeats > 0) seatsUsed = actualSeats;
     if (postCount > 0) postsThisMonth = postCount;
   } catch {
     // Fallback to sample metrics
   }
+
+  const limits = PLAN_LIMITS[plan];
 
   const pSeats = Math.min(100, Math.round((seatsUsed / limits.maxSeats) * 100));
   const pChannels = Math.min(100, Math.round((channelsUsed / limits.maxChannels) * 100));

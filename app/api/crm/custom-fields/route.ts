@@ -2,6 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { recordAuditLog } from '@/lib/audit-log';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function getAuthContext(req: NextRequest) {
+  let userId: string | undefined;
+  let workspaceId: string | undefined;
+
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.sub || decoded?.id) {
+        userId = decoded.sub || decoded.id;
+        workspaceId = decoded.workspaceId;
+      }
+    } catch (e) {}
+  }
+
+  if (!userId) {
+    const session = await auth();
+    userId = session?.user?.id;
+    workspaceId = (session?.user as any)?.workspaceId;
+  }
+
+  if (userId && !workspaceId) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { workspaceId: true },
+    });
+    workspaceId = user?.workspaceId || undefined;
+  }
+
+  return { userId, workspaceId };
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -72,23 +108,23 @@ const DEFAULT_CRM_FIELDS: CustomFieldDefinition[] = [
 // GET /api/crm/custom-fields - List field definitions and customer usage stats (F099)
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { userId, workspaceId } = await getAuthContext(req);
+    if (!userId || !workspaceId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const workspaceId = (session.user as any).workspaceId;
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { settings: true },
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: `crm_custom_fields_${workspaceId}` },
     });
 
     let customFields: CustomFieldDefinition[] = DEFAULT_CRM_FIELDS;
-    if (workspace?.settings && typeof workspace.settings === 'object') {
-      const storedFields = (workspace.settings as any)?.crmCustomFields;
-      if (Array.isArray(storedFields) && storedFields.length > 0) {
-        customFields = storedFields;
-      }
+    if (setting?.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          customFields = parsed;
+        }
+      } catch (e) {}
     }
 
     // Count how many customers have custom data populated
@@ -112,14 +148,13 @@ export async function GET(req: NextRequest) {
 // POST /api/crm/custom-fields - Add or update a custom field definition (F099)
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { userId, workspaceId } = await getAuthContext(req);
+    if (!userId || !workspaceId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
     const { key, name, type = 'TEXT', options = [], required = false, description = '' } = body;
-    const workspaceId = (session.user as any).workspaceId;
 
     if (!key || !name) {
       return NextResponse.json({ error: 'Mã trường (key) và Tên trường (name) là bắt buộc' }, { status: 400 });
@@ -127,15 +162,19 @@ export async function POST(req: NextRequest) {
 
     const cleanKey = key.trim().replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { settings: true },
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: `crm_custom_fields_${workspaceId}` },
     });
 
-    const currentSettings: any = (workspace?.settings && typeof workspace.settings === 'object') ? workspace.settings : {};
-    let fields: CustomFieldDefinition[] = Array.isArray(currentSettings.crmCustomFields)
-      ? [...currentSettings.crmCustomFields]
-      : [...DEFAULT_CRM_FIELDS];
+    let fields: CustomFieldDefinition[] = [...DEFAULT_CRM_FIELDS];
+    if (setting?.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          fields = parsed;
+        }
+      } catch (e) {}
+    }
 
     const existingIdx = fields.findIndex(f => f.key === cleanKey);
     const newField: CustomFieldDefinition = {
@@ -154,21 +193,17 @@ export async function POST(req: NextRequest) {
       fields.push(newField);
     }
 
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        settings: {
-          ...currentSettings,
-          crmCustomFields: fields,
-        },
-      },
+    await prisma.systemSetting.upsert({
+      where: { key: `crm_custom_fields_${workspaceId}` },
+      update: { value: JSON.stringify(fields) },
+      create: { key: `crm_custom_fields_${workspaceId}`, value: JSON.stringify(fields) },
     });
 
     await recordAuditLog({
       action: 'CUSTOM_FIELD.SAVE',
       entityType: 'Workspace',
       entityId: workspaceId,
-      userId: session.user.id,
+      userId,
       workspaceId,
       req,
       metadata: {
@@ -186,39 +221,38 @@ export async function POST(req: NextRequest) {
 // DELETE /api/crm/custom-fields?key=... - Remove a custom field definition (F099)
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { userId, workspaceId } = await getAuthContext(req);
+    if (!userId || !workspaceId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
     const key = searchParams.get('key');
-    const workspaceId = (session.user as any).workspaceId;
 
     if (!key) {
       return NextResponse.json({ error: 'Key is required' }, { status: 400 });
     }
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { settings: true },
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: `crm_custom_fields_${workspaceId}` },
     });
 
-    const currentSettings: any = (workspace?.settings && typeof workspace.settings === 'object') ? workspace.settings : {};
-    let fields: CustomFieldDefinition[] = Array.isArray(currentSettings.crmCustomFields)
-      ? [...currentSettings.crmCustomFields]
-      : [...DEFAULT_CRM_FIELDS];
+    let fields: CustomFieldDefinition[] = [...DEFAULT_CRM_FIELDS];
+    if (setting?.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          fields = parsed;
+        }
+      } catch (e) {}
+    }
 
     fields = fields.filter(f => f.key !== key);
 
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        settings: {
-          ...currentSettings,
-          crmCustomFields: fields,
-        },
-      },
+    await prisma.systemSetting.upsert({
+      where: { key: `crm_custom_fields_${workspaceId}` },
+      update: { value: JSON.stringify(fields) },
+      create: { key: `crm_custom_fields_${workspaceId}`, value: JSON.stringify(fields) },
     });
 
     return NextResponse.json({ success: true, message: `Đã xóa trường tùy biến: ${key}`, fields });

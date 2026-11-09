@@ -25,7 +25,9 @@ import {
   Send,
   Zap,
   Sliders,
-  ShieldAlert
+  ShieldAlert,
+  Pencil,
+  X
 } from 'lucide-react';
 import api from '../lib/axios';
 import { toast } from 'sonner';
@@ -53,6 +55,13 @@ export default function SecurityIntegrations() {
   const [newKeyIp, setNewKeyIp] = useState('');
   const [createdSecretKey, setCreatedSecretKey] = useState<string | null>(null);
 
+  // Edit API Key state
+  const [editingApiKey, setEditingApiKey] = useState<any | null>(null);
+  const [editKeyName, setEditKeyName] = useState('');
+  const [editKeyScope, setEditKeyScope] = useState<'READ_ONLY' | 'READ_WRITE' | 'FULL_ADMIN'>('READ_WRITE');
+  const [editKeyIp, setEditKeyIp] = useState('');
+  const [editKeyRateLimit, setEditKeyRateLimit] = useState(120);
+
   // ==========================================
   // TAB 3: WEBHOOKS (F166)
   // ==========================================
@@ -62,6 +71,13 @@ export default function SecurityIntegrations() {
   const [newWebhookName, setNewWebhookName] = useState('');
   const [newWebhookUrl, setNewWebhookUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>(['post.published']);
+
+  // Edit Webhook state
+  const [editingWebhook, setEditingWebhook] = useState<any | null>(null);
+  const [editWebhookName, setEditWebhookName] = useState('');
+  const [editWebhookUrl, setEditWebhookUrl] = useState('');
+  const [editWebhookEvents, setEditWebhookEvents] = useState<string[]>([]);
+  const [editWebhookStatus, setEditWebhookStatus] = useState<'ACTIVE' | 'DISABLED'>('ACTIVE');
 
   // ==========================================
   // TAB 4: CLOUD STORAGE (F167)
@@ -267,6 +283,89 @@ export default function SecurityIntegrations() {
       }
     } catch (e) {
       toast.error('Lỗi khi gửi test ping');
+    }
+  };
+
+  const handleOpenEditApiKey = (k: any) => {
+    setEditingApiKey(k);
+    setEditKeyName(k.name);
+    setEditKeyScope(k.roleScope || 'READ_WRITE');
+    setEditKeyIp(k.ipWhitelist || '');
+    setEditKeyRateLimit(k.rateLimitPerMin || 120);
+  };
+
+  const handleUpdateApiKey = async () => {
+    if (!editingApiKey) return;
+    if (!editKeyName.trim()) {
+      toast.error('Vui lòng nhập tên API Key');
+      return;
+    }
+    try {
+      const res = await api.post('/security/api-keys', {
+        action: 'update',
+        keyId: editingApiKey.id,
+        name: editKeyName.trim(),
+        roleScope: editKeyScope,
+        ipWhitelist: editKeyIp.trim(),
+        rateLimitPerMin: Number(editKeyRateLimit) || 120,
+      });
+      if (res.data?.apiKeys) {
+        setApiKeys(res.data.apiKeys);
+      }
+      toast.success('Đã cập nhật cấu hình API Key thành công!');
+      setEditingApiKey(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi cập nhật API Key');
+    }
+  };
+
+  const handleOpenEditWebhook = (wh: any) => {
+    setEditingWebhook(wh);
+    setEditWebhookName(wh.name);
+    setEditWebhookUrl(wh.endpointUrl);
+    setEditWebhookEvents([...wh.subscribedEvents]);
+    setEditWebhookStatus(wh.status || 'ACTIVE');
+  };
+
+  const handleUpdateWebhook = async () => {
+    if (!editingWebhook) return;
+    if (!editWebhookName.trim() || !editWebhookUrl.trim()) {
+      toast.error('Vui lòng nhập tên và URL webhook');
+      return;
+    }
+    if (editWebhookEvents.length === 0) {
+      toast.error('Vui lòng chọn ít nhất 1 sự kiện');
+      return;
+    }
+    try {
+      const res = await api.post('/security/webhooks', {
+        action: 'update',
+        webhookId: editingWebhook.id,
+        name: editWebhookName.trim(),
+        endpointUrl: editWebhookUrl.trim(),
+        subscribedEvents: editWebhookEvents,
+        status: editWebhookStatus,
+      });
+      if (res.data?.webhooks) {
+        setWebhooks(res.data.webhooks);
+      }
+      toast.success('Đã cập nhật Webhook thành công!');
+      setEditingWebhook(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi cập nhật Webhook');
+    }
+  };
+
+  const handleDeleteWebhook = async (webhookId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa Webhook này không?')) return;
+    try {
+      const res = await api.delete(`/security/webhooks?id=${webhookId}`);
+      if (res.data?.webhooks) {
+        setWebhooks(res.data.webhooks);
+      }
+      toast.success('Đã xóa Webhook thành công!');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Không thể xóa Webhook');
     }
   };
 
@@ -817,14 +916,24 @@ export default function SecurityIntegrations() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        {k.status === 'ACTIVE' && (
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => handleRevokeApiKey(k.id)}
-                            className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors font-medium"
+                            onClick={() => handleOpenEditApiKey(k)}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors font-medium flex items-center gap-1"
+                            title="Chỉnh sửa cấu hình API Key"
                           >
-                            Thu hồi
+                            <Pencil className="w-3.5 h-3.5" />
+                            Sửa
                           </button>
-                        )}
+                          {k.status === 'ACTIVE' && (
+                            <button
+                              onClick={() => handleRevokeApiKey(k.id)}
+                              className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors font-medium"
+                            >
+                              Thu hồi
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -898,6 +1007,89 @@ export default function SecurityIntegrations() {
               </div>
             </div>
           )}
+
+          {/* EDIT KEY MODAL */}
+          {editingApiKey && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white border border-gray-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                    <Pencil className="w-5 h-5 text-indigo-600" />
+                    Chỉnh Sửa API Key
+                  </h3>
+                  <button
+                    onClick={() => setEditingApiKey(null)}
+                    className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Tên API Key:</label>
+                    <input
+                      type="text"
+                      value={editKeyName}
+                      onChange={(e) => setEditKeyName(e.target.value)}
+                      placeholder="VD: Mobile App Backend"
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Phạm Vi Quyền (Scope):</label>
+                    <select
+                      value={editKeyScope}
+                      onChange={(e) => setEditKeyScope(e.target.value as any)}
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    >
+                      <option value="READ_ONLY">READ_ONLY (Chỉ đọc nội dung & báo cáo)</option>
+                      <option value="READ_WRITE">READ_WRITE (Được tạo bài viết & đồng bộ CRM)</option>
+                      <option value="FULL_ADMIN">FULL_ADMIN (Toàn quyền hệ thống)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">IP Whitelist (Tùy chọn):</label>
+                    <input
+                      type="text"
+                      value={editKeyIp}
+                      onChange={(e) => setEditKeyIp(e.target.value)}
+                      placeholder="VD: 14.161.20.10, 192.168.1.1 hoặc *"
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Rate Limit (yêu cầu/phút):</label>
+                    <input
+                      type="number"
+                      value={editKeyRateLimit}
+                      onChange={(e) => setEditKeyRateLimit(Number(e.target.value))}
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={() => setEditingApiKey(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-xs font-medium hover:bg-gray-200"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleUpdateApiKey}
+                    disabled={loading || !editKeyName.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium disabled:opacity-50 shadow-sm"
+                  >
+                    Lưu Thay Đổi
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -961,15 +1153,31 @@ export default function SecurityIntegrations() {
                   ))}
                 </div>
 
-                <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+                <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs flex-wrap gap-2">
                   <span className="text-gray-500">Thành công: <strong className="text-emerald-600">{wh.successCount}</strong> | Lỗi: <strong className="text-red-500">{wh.failureCount}</strong></span>
-                  <button
-                    onClick={() => handleTestWebhookPing(wh.id)}
-                    className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium flex items-center gap-1.5 transition-colors border border-teal-200"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Gửi Thử Nghiệm (Test Ping)
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleOpenEditWebhook(wh)}
+                      className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium flex items-center gap-1 transition-colors border border-indigo-200"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() => handleDeleteWebhook(wh.id)}
+                      className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-medium flex items-center gap-1 transition-colors border border-red-200"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Xóa
+                    </button>
+                    <button
+                      onClick={() => handleTestWebhookPing(wh.id)}
+                      className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium flex items-center gap-1.5 transition-colors border border-teal-200"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Test Ping
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1079,6 +1287,105 @@ export default function SecurityIntegrations() {
                     className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium disabled:opacity-50 shadow-sm"
                   >
                     Đăng Ký
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* EDIT WEBHOOK MODAL */}
+          {editingWebhook && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white border border-gray-200 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                    <Pencil className="w-5 h-5 text-indigo-600" />
+                    Chỉnh Sửa Webhook
+                  </h3>
+                  <button
+                    onClick={() => setEditingWebhook(null)}
+                    className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Tên Điểm Nhận:</label>
+                    <input
+                      type="text"
+                      value={editWebhookName}
+                      onChange={(e) => setEditWebhookName(e.target.value)}
+                      placeholder="VD: CRM Zapier Hook"
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">URL Endpoint:</label>
+                    <input
+                      type="url"
+                      value={editWebhookUrl}
+                      onChange={(e) => setEditWebhookUrl(e.target.value)}
+                      placeholder="https://your-crm.com/api/webhook"
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Trạng Thái:</label>
+                    <select
+                      value={editWebhookStatus}
+                      onChange={(e) => setEditWebhookStatus(e.target.value as any)}
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    >
+                      <option value="ACTIVE">ACTIVE (Đang kích hoạt)</option>
+                      <option value="DISABLED">DISABLED (Tạm dừng gửi)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Sự Kiện Đăng Ký Lắng Nghe:</label>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto text-xs">
+                      {[
+                        'post.published',
+                        'post.failed',
+                        'order.created',
+                        'lead.captured',
+                        'task.completed',
+                        'wallet.withdrawn',
+                      ].map((ev) => (
+                        <label key={ev} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editWebhookEvents.includes(ev)}
+                            onChange={(e) => {
+                              if (e.target.checked) setEditWebhookEvents([...editWebhookEvents, ev]);
+                              else setEditWebhookEvents(editWebhookEvents.filter((x) => x !== ev));
+                            }}
+                            className="accent-indigo-600"
+                          />
+                          <span>{ev}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setEditingWebhook(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-xs font-medium hover:bg-gray-200"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleUpdateWebhook}
+                    disabled={loading || !editWebhookName.trim() || !editWebhookUrl.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium disabled:opacity-50 shadow-sm"
+                  >
+                    Lưu Thay Đổi
                   </button>
                 </div>
               </div>

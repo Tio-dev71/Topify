@@ -4,7 +4,7 @@ import prisma from '@/lib/db';
 import { getKeywordInsights, getRealTimeNews } from '@/lib/rapidapi/client';
 import { recordAuditLog } from '@/lib/audit-log';
 import { cleanCoreTitle, normalizeUrl } from '@/lib/keywords/utils';
-import { getFallbackMentionsForKeyword } from '@/lib/keywords/fallbacks';
+import { getFallbackMentionsForKeyword, getBenchmarkKeywordVolumeAndTrend } from '@/lib/keywords/fallbacks';
 
 export async function GET(req: NextRequest) {
   try {
@@ -85,6 +85,12 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       console.warn('[KEYWORDS_POST] Failed to get initial insights:', e);
+    }
+
+    if (volume === 0) {
+      const benchmark = getBenchmarkKeywordVolumeAndTrend(cleanKeyword);
+      volume = benchmark.volume;
+      if (trend === 'FLAT') trend = benchmark.trend;
     }
 
     const newKeyword = await prisma.keywordTracker.create({

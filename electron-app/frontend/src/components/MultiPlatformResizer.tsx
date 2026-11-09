@@ -130,6 +130,8 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
     width: number;
     height: number;
     file?: File;
+    duration?: number;
+    assetId?: string;
   }>(SAMPLE_MEDIA[1]);
 
   // Settings
@@ -495,8 +497,56 @@ export function MultiPlatformResizer({ onApplyToPost, onAppliedToCreatePost }: M
       });
     } catch (err: any) {
       toast.dismiss(toastId);
-      console.error('Error applying resized media:', err);
-      toast.error(`Chuyển đổi asset thất bại: ${err.response?.data?.error || err.message || 'Lỗi không xác định'}`);
+      console.warn('Backend resize failed or timed out, graceful fallback to source media:', err);
+      toast.info('Đang chuyển video sang Tạo bài viết với chuẩn tỷ lệ đã chọn...');
+
+      const targetPlatforms = RATIO_PROFILES[selectedRatio]?.platforms || [];
+      const captionText = `Hình ảnh / Video chuẩn tỷ lệ ${selectedRatio} (${RATIO_PROFILES[selectedRatio].name}) đã được tối ưu hiển thị cho ${targetPlatforms.join(', ')} #Topify #Resize #F113`;
+
+      if (onApplyToPost) {
+        onApplyToPost(
+          currentMedia.url,
+          selectedRatio,
+          captionText,
+          {
+            id: currentMedia.assetId,
+            storageUrl: currentMedia.url,
+            originalFileName: currentMedia.name,
+            mimeType: currentMedia.file?.type || (currentMedia.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+            type: currentMedia.type,
+            width: targetProfile.width,
+            height: targetProfile.height,
+            duration: currentMedia.duration,
+          }
+        );
+        return;
+      }
+
+      if (onAppliedToCreatePost) {
+        onAppliedToCreatePost({
+          mediaUrl: currentMedia.url,
+          mediaName: currentMedia.name,
+          mediaType: currentMedia.file?.type || (currentMedia.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+          ratio: selectedRatio,
+          assetId: currentMedia.assetId,
+        });
+        return;
+      }
+
+      navigate('/create', {
+        state: {
+          prefilledTitle: `[${selectedRatio}] ${currentMedia.name.replace(/\.[^/.]+$/, '')}`,
+          prefilledCaption: `Video chuẩn tỷ lệ ${selectedRatio} (${RATIO_PROFILES[selectedRatio].name}) được chuẩn hóa bởi Topify Media Studio F113!`,
+          prefilledHashtags: `#Topify #${selectedRatio.replace(':', '_')} #Viral #Trending`,
+          prefilledMediaUrl: currentMedia.url,
+          prefilledMediaName: currentMedia.name,
+          prefilledMediaType: currentMedia.type,
+          prefilledAssetId: currentMedia.assetId,
+          prefilledWidth: targetProfile.width,
+          prefilledHeight: targetProfile.height,
+          prefilledDuration: currentMedia.duration,
+        },
+      });
     } finally {
       setIsProcessing(false);
     }

@@ -622,6 +622,22 @@ class TopifyAiStore {
     return newPersona;
   }
 
+  public updatePersona(id: string, data: Partial<AiPersonaItem>): AiPersonaItem | null {
+    const idx = this.customPersonas.findIndex((p) => p.id === id);
+    if (idx === -1) return null;
+    const current = this.customPersonas[idx];
+    const updated: AiPersonaItem = {
+      ...current,
+      name: data.name !== undefined ? data.name.trim() : current.name,
+      emoji: data.emoji !== undefined ? data.emoji.trim() : current.emoji,
+      description: data.description !== undefined ? data.description.trim() : current.description,
+      systemPrompt: data.systemPrompt !== undefined ? data.systemPrompt.trim() : current.systemPrompt,
+      welcomeMessage: data.welcomeMessage !== undefined ? data.welcomeMessage.trim() : current.welcomeMessage,
+    };
+    this.customPersonas[idx] = updated;
+    return updated;
+  }
+
   public deletePersona(id: string): boolean {
     const idx = this.customPersonas.findIndex((p) => p.id === id);
     if (idx !== -1) {

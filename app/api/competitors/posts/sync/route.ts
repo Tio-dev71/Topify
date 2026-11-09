@@ -111,29 +111,37 @@ export function getVTV24CanonicalPosts(): RawPostData[] {
 }
 
 export function getTodayDynamicPosts(pageName: string, targetUrl: string): RawPostData[] {
-  const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-  const todayStr = vnNow.toLocaleDateString('vi-VN');
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
   
   // If today is 31/10/2026, canonical posts already cover it
   if (todayStr === '31/10/2026') return [];
 
-  const baseToday = new Date(vnNow);
-  
-  const m1 = new Date(baseToday);
-  m1.setHours(7, 30, 0, 0);
-
-  const m2 = new Date(baseToday);
-  m2.setHours(11, 45, 0, 0);
-
-  const m3 = new Date(baseToday);
-  m3.setHours(17, 30, 0, 0);
+  // Generate 3 posts strictly earlier than current time so no post is in the future
+  const nowMs = now.getTime();
+  const m3 = new Date(nowMs - 35 * 60 * 1000); // ~35 mins ago
+  const m2 = new Date(nowMs - 3.5 * 3600 * 1000); // ~3.5 hours ago
+  const m1 = new Date(nowMs - 7.5 * 3600 * 1000); // ~7.5 hours ago
 
   const prefix = targetUrl.includes('vtv24') || pageName.includes('VTV24') ? 'VTV24' : pageName;
 
+  const getTitle1 = (d: Date) => {
+    const h = (d.getUTCHours() + 7) % 24;
+    return h < 11 ? 'Bản tin Sáng' : 'Điểm tin Thời sự';
+  };
+  const getTitle2 = (d: Date) => {
+    const h = (d.getUTCHours() + 7) % 24;
+    return h < 14 ? 'Tiêu điểm Trưa' : 'Tiêu điểm Đột phá';
+  };
+  const getTitle3 = (d: Date) => {
+    const h = (d.getUTCHours() + 7) % 24;
+    return h >= 18 ? 'Bản tin Tối' : (h >= 12 ? 'Bản tin Chiều' : 'Bản tin Nhanh');
+  };
+
   return [
     {
-      externalId: `sync_today_${prefix}_01_${baseToday.getTime()}`,
-      content: `Bản tin Sáng ${todayStr} | Điểm tin thời sự và phân tích kinh tế đầu ngày từ ${prefix}.\n\nCập nhật toàn diện các thông tin chính sách, biến động thị trường và dự báo thời tiết các vùng miền trong ngày hôm nay.\n\n#${prefix.replace(/\s+/g, '')} #TinMoiNhat #HomNay`,
+      externalId: `sync_today_${prefix}_01_${m1.getTime()}`,
+      content: `${getTitle1(m1)} ${todayStr} | Điểm tin thời sự và phân tích kinh tế đầu ngày từ ${prefix}.\n\nCập nhật toàn diện các thông tin chính sách, biến động thị trường và dự báo thời tiết các vùng miền trong ngày hôm nay.\n\n#${prefix.replace(/\s+/g, '')} #TinMoiNhat #HomNay`,
       mediaUrl: null,
       likesCount: Math.floor(Math.random() * 2500) + 1200,
       commentsCount: Math.floor(Math.random() * 300) + 80,
@@ -141,8 +149,8 @@ export function getTodayDynamicPosts(pageName: string, targetUrl: string): RawPo
       postedAt: m1,
     },
     {
-      externalId: `sync_today_${prefix}_02_${baseToday.getTime()}`,
-      content: `Tiêu điểm Trưa ${todayStr}: Diễn biến thị trường và các vấn đề an sinh xã hội được người dân quan tâm.\n\nTheo dõi các phóng sự điều tra và ghi nhận trực tiếp từ đội ngũ phóng viên ${prefix}.\n\n#${prefix.replace(/\s+/g, '')} #TieuDiem24h #ThoiSu`,
+      externalId: `sync_today_${prefix}_02_${m2.getTime()}`,
+      content: `${getTitle2(m2)} ${todayStr}: Diễn biến thị trường và các vấn đề an sinh xã hội được người dân quan tâm.\n\nTheo dõi các phóng sự điều tra và ghi nhận trực tiếp từ đội ngũ phóng viên ${prefix}.\n\n#${prefix.replace(/\s+/g, '')} #TieuDiem24h #ThoiSu`,
       mediaUrl: null,
       likesCount: Math.floor(Math.random() * 3200) + 1500,
       commentsCount: Math.floor(Math.random() * 400) + 110,
@@ -150,8 +158,8 @@ export function getTodayDynamicPosts(pageName: string, targetUrl: string): RawPo
       postedAt: m2,
     },
     {
-      externalId: `sync_today_${prefix}_03_${baseToday.getTime()}`,
-      content: `Bản tin Chiều ${todayStr}: Toàn cảnh chuyển động kinh tế, xã hội và công nghệ trong 24 giờ qua.\n\n#${prefix.replace(/\s+/g, '')} #Chuyendong24h #TongHop`,
+      externalId: `sync_today_${prefix}_03_${m3.getTime()}`,
+      content: `${getTitle3(m3)} ${todayStr}: Toàn cảnh chuyển động kinh tế, xã hội và công nghệ trong 24 giờ qua.\n\n#${prefix.replace(/\s+/g, '')} #Chuyendong24h #TongHop`,
       mediaUrl: null,
       likesCount: Math.floor(Math.random() * 4500) + 2000,
       commentsCount: Math.floor(Math.random() * 500) + 150,

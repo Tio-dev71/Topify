@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Image as ImageIcon, Video, FileAudio, FileText, Search, Upload, Plus, Trash2, Edit2, Tag, Loader2, Eye, X, Copy, Check, ExternalLink, Download } from 'lucide-react';
+import { Image as ImageIcon, Video, FileAudio, FileText, Search, Upload, Plus, Trash2, Edit2, Tag, Loader2, Eye, X, Copy, Check, ExternalLink, Download, Play } from 'lucide-react';
 import Image from 'next/image';
 
 type MediaAsset = {
@@ -242,8 +242,24 @@ export default function MediaLibraryPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={asset.storageUrl} alt={asset.fileName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : asset.mediaType === 'VIDEO' ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Video className="w-10 h-10 text-[var(--color-muted-foreground)]" />
+                  <div className="w-full h-full relative flex items-center justify-center bg-gray-950 overflow-hidden">
+                    <video
+                      src={asset.storageUrl.includes('?') ? `${asset.storageUrl}&t=0.5` : `${asset.storageUrl}#t=0.5`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      preload="metadata"
+                      muted
+                      playsInline
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-xs flex items-center justify-center text-white border border-white/20 shadow-md group-hover:scale-110 group-hover:bg-[#5B3DF5] transition duration-200">
+                        <Play className="w-4 h-4 fill-white translate-x-0.5 text-white" />
+                      </div>
+                    </div>
+                    <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1 shadow-xs">
+                      <Video className="w-3 h-3 text-[#5B3DF5]" />
+                      <span>VIDEO</span>
+                    </div>
                   </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">

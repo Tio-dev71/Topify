@@ -25,7 +25,10 @@ import {
   Copy, 
   Download,
   Tag,
-  Loader2
+  Loader2,
+  Play,
+  Pencil,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getMediaUrl } from '../lib/axios';
@@ -36,11 +39,163 @@ export type MediaAssetItem = {
   storageUrl: string;
   mimeType: string;
   size: number;
+  width?: number | null;
+  height?: number | null;
+  duration?: number | null;
   mediaType: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
   tags: string | null;
   createdAt: string;
   createdBy?: { name: string | null; email: string };
 };
+
+/**
+ * Dedicated Video Card Preview with live metadata and canvas thumbnail extraction
+ */
+function VideoCardPreview({
+  asset,
+  customThumbnail,
+  onOpenPreview,
+}: {
+  asset: MediaAssetItem;
+  customThumbnail?: string;
+  onOpenPreview: () => void;
+}) {
+  const [extractedThumb, setExtractedThumb] = useState<string | null>(customThumbnail || null);
+  const [duration, setDuration] = useState<number | null>(asset.duration || null);
+  const [hasError, setHasError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const rawUrl = getMediaUrl(asset.storageUrl);
+  // Using #t=0.5 directs HTML5 video to decode frame at 0.5s instead of pure black at 0.0s
+  const videoSrc = rawUrl.includes('?') ? `${rawUrl}&t=0.5` : `${rawUrl}#t=0.5`;
+
+  useEffect(() => {
+    if (customThumbnail) {
+      setExtractedThumb(customThumbnail);
+      return;
+    }
+
+    let isCancelled = false;
+    const v = document.createElement('video');
+    v.crossOrigin = 'anonymous';
+    v.preload = 'metadata';
+    v.muted = true;
+    v.playsInline = true;
+    v.src = videoSrc;
+
+    const timer = setTimeout(() => {
+      // Fallback timer if canvas capture doesn't fire
+    }, 4000);
+
+    v.onloadedmetadata = () => {
+      if (isCancelled) return;
+      if (v.duration && !duration) {
+        setDuration(Math.round(v.duration));
+      }
+      v.currentTime = Math.min(1.0, (v.duration || 1) / 2);
+    };
+
+    v.onseeked = () => {
+      if (isCancelled) return;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.min(v.videoWidth || 480, 480);
+        const aspect = (v.videoHeight || 270) / (v.videoWidth || 480);
+        canvas.height = Math.max(Math.round(canvas.width * aspect), 160);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+          const dataUri = canvas.toDataURL('image/jpeg', 0.85);
+          if (!isCancelled) setExtractedThumb(dataUri);
+        }
+      } catch {
+        // Cross-origin may prevent canvas read; video element displays the frame directly
+      }
+    };
+
+    v.onerror = () => {
+      if (isCancelled) return;
+      setHasError(true);
+    };
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+      v.src = '';
+    };
+  }, [asset.storageUrl, customThumbnail]);
+
+  const formatShortTime = (sec?: number | null) => {
+    if (!sec) return '';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div
+      onClick={onOpenPreview}
+      className="w-full h-full relative flex items-center justify-center bg-gray-950 overflow-hidden cursor-pointer group select-none"
+    >
+      {extractedThumb ? (
+        <img
+          src={extractedThumb}
+          alt={asset.fileName}
+          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+        />
+      ) : !hasError ? (
+        <video
+          ref={videoRef}
+          src={videoSrc}
+          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+          preload="metadata"
+          muted
+          playsInline
+          onLoadedMetadata={(e) => {
+            const el = e.currentTarget;
+            if (el.duration && !duration) setDuration(Math.round(el.duration));
+          }}
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-indigo-950 text-gray-300 p-2 text-center">
+          <Video className="w-8 h-8 text-indigo-400 mb-1" />
+          <span className="text-[10px] font-semibold text-gray-300 uppercase tracking-wider">
+            {asset.fileName.split('.').pop() || 'VIDEO'}
+          </span>
+        </div>
+      )}
+
+      {/* Subtle vignette gradient */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+
+      {/* Play Icon Badge in Center */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-xs flex items-center justify-center text-white border border-white/20 shadow-md group-hover:scale-110 group-hover:bg-indigo-600 transition duration-200">
+          <Play className="w-4 h-4 fill-white translate-x-0.5 text-white" />
+        </div>
+      </div>
+
+      {/* Top Left VIDEO Badge */}
+      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[10px] font-bold text-white flex items-center gap-1 shadow-xs pointer-events-none">
+        <Video className="w-3 h-3 text-indigo-400" />
+        <span>VIDEO</span>
+      </div>
+
+      {/* Bottom Right Duration Badge */}
+      {duration && (
+        <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-xs text-[10px] font-bold text-white shadow-xs pointer-events-none">
+          {formatShortTime(duration)}
+        </div>
+      )}
+
+      {/* Hover Eye Overlay */}
+      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white pointer-events-none">
+        <Eye className="w-6 h-6 drop-shadow-md" />
+      </div>
+    </div>
+  );
+}
 
 export default function MediaLibrary() {
   const [assets, setAssets] = useState<MediaAssetItem[]>([]);
@@ -52,6 +207,10 @@ export default function MediaLibrary() {
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [retryUrls, setRetryUrls] = useState<Record<string, string>>({});
   const [heicThumbnails, setHeicThumbnails] = useState<Record<string, string>>({});
+  const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
+  const [editingAsset, setEditingAsset] = useState<MediaAssetItem | null>(null);
+  const [editFileName, setEditFileName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
   const [modalImgError, setModalImgError] = useState(false);
   const [isDecodingHeicModal, setIsDecodingHeicModal] = useState(false);
   const [heicModalUrl, setHeicModalUrl] = useState<string | null>(null);
@@ -60,6 +219,59 @@ export default function MediaLibrary() {
   const isHeicAsset = (name?: string, mime?: string) => {
     const ext = (name?.split('.').pop() || '').toLowerCase();
     return ext === 'heic' || ext === 'heif' || (mime ? mime.toLowerCase().includes('heic') || mime.toLowerCase().includes('heif') : false);
+  };
+
+  const extractVideoMeta = async (file: File): Promise<{ duration?: number; width?: number; height?: number; thumbnailDataUrl?: string }> => {
+    return new Promise((resolve) => {
+      try {
+        const v = document.createElement('video');
+        v.preload = 'metadata';
+        v.muted = true;
+        v.playsInline = true;
+        const objectUrl = URL.createObjectURL(file);
+        v.src = objectUrl;
+
+        const timeout = setTimeout(() => {
+          URL.revokeObjectURL(objectUrl);
+          resolve({});
+        }, 5000);
+
+        v.onloadedmetadata = () => {
+          v.currentTime = Math.min(1.0, (v.duration || 1) / 2);
+        };
+
+        v.onseeked = () => {
+          clearTimeout(timeout);
+          let thumbnailDataUrl: string | undefined;
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.min(v.videoWidth || 480, 480);
+            const aspect = (v.videoHeight || 270) / (v.videoWidth || 480);
+            canvas.height = Math.max(Math.round(canvas.width * aspect), 160);
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+              thumbnailDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            }
+          } catch {}
+          URL.revokeObjectURL(objectUrl);
+          resolve({
+            duration: Math.round(v.duration || 0),
+            width: v.videoWidth,
+            height: v.videoHeight,
+            thumbnailDataUrl,
+          });
+        };
+
+        v.onerror = () => {
+          clearTimeout(timeout);
+          URL.revokeObjectURL(objectUrl);
+          resolve({});
+        };
+      } catch {
+        resolve({});
+      }
+    });
   };
 
   const fetchAssets = async () => {
@@ -145,6 +357,7 @@ export default function MediaLibrary() {
 
     let fileToUpload = file;
     const isHeic = isHeicAsset(file.name, file.type);
+    const isVid = file.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|avi|flv|wmv|m4v|3gp)$/i.test(file.name);
 
     setIsUploading(true);
     let conversionToastId: string | number | undefined;
@@ -168,14 +381,25 @@ export default function MediaLibrary() {
       }
     }
 
+    let videoMeta: { duration?: number; width?: number; height?: number; thumbnailDataUrl?: string } = {};
+    if (isVid) {
+      videoMeta = await extractVideoMeta(fileToUpload);
+    }
+
     const formData = new FormData();
     formData.append('file', fileToUpload);
+    if (videoMeta.duration) formData.append('duration', String(videoMeta.duration));
+    if (videoMeta.width) formData.append('width', String(videoMeta.width));
+    if (videoMeta.height) formData.append('height', String(videoMeta.height));
 
     try {
       const res = await api.post('/media', formData);
 
       if (res.data) {
         toast.success(`Đã tải lên "${fileToUpload.name}" thành công!`);
+        if (res.data.id && videoMeta.thumbnailDataUrl) {
+          setVideoThumbnails(prev => ({ ...prev, [res.data.id]: videoMeta.thumbnailDataUrl! }));
+        }
         setAssets(prev => [res.data, ...prev.filter(a => a.id !== res.data.id)]);
         fetchAssets();
       }
@@ -187,6 +411,25 @@ export default function MediaLibrary() {
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveRename = async () => {
+    if (!editingAsset || !editFileName.trim()) return;
+    setIsRenaming(true);
+    try {
+      const res = await api.patch(`/media/${editingAsset.id}`, {
+        fileName: editFileName.trim(),
+      });
+      if (res.data) {
+        setAssets(prev => prev.map(a => a.id === editingAsset.id ? { ...a, fileName: res.data.fileName || editFileName.trim() } : a));
+        toast.success('Đã đổi tên tệp thành công!');
+        setEditingAsset(null);
+      }
+    } catch (err: any) {
+      toast.error('Lỗi khi đổi tên tệp: ' + (err?.response?.data?.error || err.message));
+    } finally {
+      setIsRenaming(false);
     }
   };
 
@@ -340,14 +583,16 @@ export default function MediaLibrary() {
                       )}
                     </div>
                   ) : isVid ? (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white group-hover:bg-gray-800 transition">
-                      <Video className="w-8 h-8 text-indigo-400" />
-                    </div>
+                    <VideoCardPreview
+                      asset={asset}
+                      customThumbnail={videoThumbnails[asset.id]}
+                      onOpenPreview={() => setViewingAsset(asset)}
+                    />
                   ) : (
                     <FileAudio className="w-8 h-8 text-indigo-500" />
                   )}
 
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 text-white">
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 text-white pointer-events-none">
                     <Eye className="w-5 h-5" />
                   </div>
                 </div>
@@ -365,25 +610,90 @@ export default function MediaLibrary() {
                   <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                     <button
                       onClick={() => handleCopyUrl(asset.storageUrl)}
-                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
+                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 cursor-pointer"
                       title="Sao chép link"
                     >
                       <Copy className="w-3 h-3" />
                       <span>Link</span>
                     </button>
 
-                    <button
-                      onClick={() => handleDelete(asset.id, asset.fileName)}
-                      className="text-gray-400 hover:text-rose-600 p-1 rounded"
-                      title="Xóa tệp"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingAsset(asset);
+                          setEditFileName(asset.fileName);
+                        }}
+                        className="text-gray-400 hover:text-indigo-600 p-1 rounded hover:bg-gray-100 transition cursor-pointer"
+                        title="Đổi tên tệp"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(asset.id, asset.fileName);
+                        }}
+                        className="text-gray-400 hover:text-rose-600 p-1 rounded hover:bg-gray-100 transition cursor-pointer"
+                        title="Xóa tệp"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Rename Modal */}
+      {editingAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-gray-900">Đổi tên tệp Media</h3>
+              <button
+                onClick={() => setEditingAsset(null)}
+                className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Tên hiển thị mới</label>
+              <input
+                type="text"
+                value={editFileName}
+                onChange={(e) => setEditFileName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); }}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-indigo-500 font-medium text-gray-900"
+                placeholder="Nhập tên tệp..."
+                autoFocus
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Đổi tên tệp giúp bạn dễ tìm kiếm và tổ chức tài nguyên trong Workspace.</p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setEditingAsset(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleSaveRename}
+                disabled={isRenaming || !editFileName.trim()}
+                className="btn-primary px-4 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isRenaming && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Lưu thay đổi</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

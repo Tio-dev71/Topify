@@ -270,7 +270,47 @@ export async function POST(req: NextRequest) {
         where: { id: effectiveVideoAssetId },
       });
 
-      if (!videoAsset || videoAsset.workspaceId !== (session.user as any).workspaceId) {
+      if (!videoAsset) {
+        // Fallback: check MediaAsset table (F114 & Media Studio assets)
+        const mediaAsset = await prisma.mediaAsset.findUnique({
+          where: { id: effectiveVideoAssetId },
+        });
+
+        if (mediaAsset) {
+          // Check if a videoAsset already exists with this storageUrl
+          let mappedVideoAsset = await prisma.videoAsset.findFirst({
+            where: { storageUrl: mediaAsset.storageUrl },
+          });
+
+          if (!mappedVideoAsset) {
+            mappedVideoAsset = await prisma.videoAsset.create({
+              data: {
+                originalFileName: mediaAsset.fileName,
+                titleFromFileName: mediaAsset.fileName.replace(/\.[^/.]+$/, ''),
+                storageUrl: mediaAsset.storageUrl,
+                source: mediaAsset.source,
+                mimeType: mediaAsset.mimeType,
+                size: mediaAsset.size,
+                duration: mediaAsset.duration,
+                createdById: session.user.id,
+                workspaceId: (session.user as any).workspaceId || mediaAsset.workspaceId,
+              },
+            });
+          }
+          videoAsset = mappedVideoAsset;
+          effectiveVideoAssetId = videoAsset.id;
+        }
+      }
+
+      const userWsId = (session.user as any).workspaceId;
+      const isOwner = videoAsset && (
+        !userWsId || 
+        videoAsset.workspaceId === userWsId || 
+        videoAsset.createdById === session.user.id ||
+        !videoAsset.workspaceId
+      );
+
+      if (!videoAsset || !isOwner) {
         return NextResponse.json({ error: 'Video asset not found in your workspace' }, { status: 404 });
       }
     }

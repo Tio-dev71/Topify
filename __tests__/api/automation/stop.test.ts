@@ -14,6 +14,7 @@ vi.mock('@/lib/db', () => {
     },
     facebookAccount: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
   };
   return { prisma: mockPrisma, default: mockPrisma };

@@ -162,6 +162,11 @@ export default function Posts() {
             ? res.data.posts
             : [];
         setPosts(postList);
+        setSelectedPost((current) => {
+          if (!current) return null;
+          const fresh = postList.find((p: PostItem) => p.id === current.id);
+          return fresh ? fresh : current;
+        });
       }
     } catch (e) {
       console.error('Failed to fetch posts:', e);
@@ -526,6 +531,12 @@ export default function Posts() {
                                 {formatFileSize(post.videoAsset.size)}
                               </span>
                             ) : null}
+                            {post.firstComment && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60" title={`Bình luận đầu: ${post.firstComment}`}>
+                                <MessageSquare className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Cmt: {post.firstComment.slice(0, 22)}{post.firstComment.length > 22 ? '...' : ''}</span>
+                              </span>
+                            )}
                             {post.isEvergreen && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
                                 <Repeat className="w-2.5 h-2.5 text-emerald-600" />

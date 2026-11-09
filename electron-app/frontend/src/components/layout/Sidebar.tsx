@@ -113,7 +113,6 @@ const navSections: NavSection[] = [
       { key: 'Nhúng Form Thu Lead (F102)', href: '/crm/embed-form', icon: Code2 },
       { key: 'Quản lý công việc (Tasks)', href: '/tasks', icon: CheckSquare },
       { key: 'Chiến dịch (Campaigns)', href: '/campaigns', icon: Rocket },
-      { key: 'Thành viên & Nhóm (F116/F117)', href: '/team', icon: Users },
     ],
   },
   {

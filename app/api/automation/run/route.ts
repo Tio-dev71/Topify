@@ -68,14 +68,24 @@ export async function POST(req: NextRequest) {
 async function processBackgroundAutomation(accountIds: string[], config: TaskConfig, taskId?: string) {
   let hasError = false;
   await Promise.all(accountIds.map(async (accountId) => {
-    const account = await prisma.facebookAccount.findFirst({
-      where: {
-        OR: [
-          { id: accountId },
-          { profileId: accountId }
-        ]
+    let account: any = null;
+    if (prisma.facebookAccount?.findUnique) {
+      try {
+        account = await prisma.facebookAccount.findUnique({ where: { id: accountId } });
+      } catch {
+        account = null;
       }
-    });
+    }
+    if (!account && prisma.facebookAccount?.findFirst) {
+      account = await prisma.facebookAccount.findFirst({
+        where: {
+          OR: [
+            { id: accountId },
+            { profileId: accountId }
+          ]
+        }
+      });
+    }
     if (!account) return;
 
     console.log(`[Automation Runner] Starting task ${config.type} for account ${account.name}`);

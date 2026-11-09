@@ -76,14 +76,10 @@ export async function enqueuePublish(postId: string) {
 
   if (!queuedToWorker) {
     const { publishPostDirectly } = await import('./publisher-service');
-    try {
-      await Promise.race([
-        publishPostDirectly(postId),
-        new Promise((resolve) => setTimeout(resolve, 8000)),
-      ]);
-    } catch (directErr) {
+    // Launch background direct publishing safely without an arbitrary 8s race condition timeout
+    publishPostDirectly(postId).catch((directErr) => {
       console.error(`[Queue] Lỗi khi xuất bản trực tiếp cho bài ${postId}:`, directErr);
-    }
+    });
   }
 }
 

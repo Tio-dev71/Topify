@@ -87,4 +87,25 @@ describe('Meta OAuth Callback', () => {
     expect(res.status).toBe(307);
     expect(res.headers.get('Location')).toContain('success=meta');
   });
+
+  it('exchanges code for desktop client with meta_token in state', async () => {
+    // Generate valid jwt token
+    const jwt = await import('jsonwebtoken');
+    const token = jwt.sign({ sub: 'desktop-user-1', workspaceId: 'ws-1' }, 'ToolAutoTop123456789!@#LongSecretString123');
+
+    // Mock 4 fetch calls
+    (global.fetch as any)
+      .mockImplementationOnce(() => Promise.resolve({ json: () => Promise.resolve({ access_token: 'short_token' }) }))
+      .mockImplementationOnce(() => Promise.resolve({ json: () => Promise.resolve({ access_token: 'long_token' }) }))
+      .mockImplementationOnce(() => Promise.resolve({ json: () => Promise.resolve({ data: [{ id: 'page-1', name: 'Desktop Page', access_token: 'page_token' }] }) }))
+      .mockImplementationOnce(() => Promise.resolve({ json: () => Promise.resolve({ instagram_business_account: { id: 'ig-1' } }) }));
+
+    const req = new NextRequest(`http://localhost:3000/api/social/meta/callback?code=auth_code&state=any-csrf::meta_${token}`);
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Kết nối Meta thành công');
+    expect(html).toContain('Desktop Page');
+  });
 });

@@ -23,11 +23,18 @@ export class YouTubeShortsPublisher implements Publisher {
     _platform: PostPlatform
   ): Promise<PublishResult> {
     try {
+      // If video was already uploaded previously, do not upload duplicate video!
+      if (_platform?.externalPostId) {
+        console.log(`[YouTubeShortsPublisher] Video đã được tải lên trước đó (ID: ${_platform.externalPostId}). Bỏ qua upload để tránh duplicate.`);
+        return { success: true, externalPostId: _platform.externalPostId };
+      }
+
       const token = await getValidAccessToken(socialAccount);
       const storage = getStorage();
 
       // Detect if video is standard landscape (16:9) or exceeding shorts duration (> 180s)
-      const isHorizontalVideo = Boolean(videoAsset.width && videoAsset.height && videoAsset.width > videoAsset.height);
+      const vidAny = videoAsset as any;
+      const isHorizontalVideo = Boolean(vidAny.width && vidAny.height && vidAny.width > vidAny.height);
       const isOverDuration = Boolean(videoAsset.duration && videoAsset.duration > 180);
       const isStandardVideo = isHorizontalVideo || isOverDuration;
 
@@ -52,7 +59,7 @@ export class YouTubeShortsPublisher implements Publisher {
         console.warn(`[YouTubeShortsPublisher] Video duration is ${videoAsset.duration}s (> 180s). YouTube will automatically process this as a Standard Long-form Video.`);
       }
       if (isHorizontalVideo) {
-        console.log(`[YouTubeShortsPublisher] Video is Landscape/16:9 (${videoAsset.width}x${videoAsset.height}). Uploading as standard landscape YouTube Video.`);
+        console.log(`[YouTubeShortsPublisher] Video is Landscape/16:9 (${vidAny.width}x${vidAny.height}). Uploading as standard landscape YouTube Video.`);
       }
 
       // Auto-detect channel if not yet stored
@@ -163,6 +170,14 @@ export class YouTubeShortsPublisher implements Publisher {
 
       const uploadData = await uploadRes.json();
       if (uploadData.id) {
+        // Immediately persist externalPostId to prevent duplicate uploads during comments or timeouts
+        if (_platform?.id) {
+          await prisma.postPlatform.update({
+            where: { id: _platform.id },
+            data: { externalPostId: uploadData.id },
+          }).catch((err: any) => console.warn('[YouTube] Warning persisting initial externalPostId:', err?.message));
+        }
+
         // Step 3: Post the first comment if provided (retry with backoff as YouTube takes a moment to index new videos for comments)
         if (post.firstComment && post.firstComment.trim()) {
           console.log(`[YouTube] Preparing to post first comment on video ${uploadData.id}: "${post.firstComment.trim()}"`);
@@ -196,12 +211,33 @@ export class YouTubeShortsPublisher implements Publisher {
                 const commentData = await commentRes.json();
                 console.log(`✅ YouTube first comment posted successfully on attempt ${attempt} (commentId: ${commentData?.id})`);
                 commentPosted = true;
+                if (post.id) {
+                  await prisma.publishLog.create({
+                    data: {
+                      postId: post.id,
+                      platform: 'YOUTUBE_SHORTS',
+                      level: 'INFO',
+                      message: `Đã đăng bình luận đầu tiên lên YouTube thành công: "${post.firstComment.trim().slice(0, 50)}"`,
+                      metadata: { commentId: commentData?.id },
+                    },
+                  }).catch(() => {});
+                }
                 break;
               } else {
                 const commentErr = await commentRes.text();
                 console.warn(`[YouTube] Comment attempt ${attempt} notice (${commentRes.status}):`, commentErr);
                 if (commentErr.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
                   console.warn('[YouTube] Token lacks youtube.force-ssl scope. User needs to reconnect YouTube account to grant comment permission.');
+                  if (post.id) {
+                    await prisma.publishLog.create({
+                      data: {
+                        postId: post.id,
+                        platform: 'YOUTUBE_SHORTS',
+                        level: 'INFO',
+                        message: '[Cảnh báo] Tài khoản YouTube cần được kết nối lại trong Cài đặt để cấp quyền bình luận (youtube.force-ssl).',
+                      },
+                    }).catch(() => {});
+                  }
                   break;
                 }
               }
@@ -209,8 +245,16 @@ export class YouTubeShortsPublisher implements Publisher {
               console.error(`Attempt ${attempt} to post YouTube first comment failed:`, commentError);
             }
           }
-          if (!commentPosted) {
+          if (!commentPosted && post.id) {
             console.warn(`[YouTube] Could not post first comment on video ${uploadData.id}`);
+            await prisma.publishLog.create({
+              data: {
+                postId: post.id,
+                platform: 'YOUTUBE_SHORTS',
+                level: 'INFO',
+                message: `[Lưu ý] Chưa đăng được bình luận đầu tiên lên YouTube: Video đang được YouTube xử lý. Bạn có thể bấm "Gửi bình luận" trong màn hình Chi tiết bài viết.`,
+              },
+            }).catch(() => {});
           }
         }
         return { success: true, externalPostId: uploadData.id };

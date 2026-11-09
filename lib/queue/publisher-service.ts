@@ -15,6 +15,10 @@ const providerMap: Record<string, string> = {
   ZALO_ARTICLE: 'ZALO',
 };
 
+// Single-flight in-memory deduplication set to avoid concurrent duplicate publishing
+const activePublishingPostIds = new Set<string>();
+let isCheckingDuePosts = false;
+
 /**
  * Execute publishing for a specific post directly without relying on BullMQ/Redis.
  */
@@ -23,24 +27,37 @@ export async function publishPostDirectly(postId: string): Promise<{
   status: 'PUBLISHED' | 'PARTIAL_FAILED' | 'FAILED';
   error?: string;
 }> {
-  console.log(`🚀 [PublisherService] Bắt đầu xử lý đăng bài trực tiếp: ${postId}`);
+  if (activePublishingPostIds.has(postId)) {
+    console.log(`⚠️ [PublisherService] Bài viết ${postId} đang trong tiến trình xuất bản khác. Bỏ qua gọi lặp.`);
+    return { success: true, status: 'PUBLISHED' };
+  }
+  activePublishingPostIds.add(postId);
 
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: {
-      videoAsset: true,
-      platforms: true,
-      createdBy: {
-        include: {
-          socialAccounts: true,
+  try {
+    console.log(`🚀 [PublisherService] Bắt đầu xử lý đăng bài trực tiếp: ${postId}`);
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: {
+        videoAsset: true,
+        platforms: true,
+        createdBy: {
+          include: {
+            socialAccounts: true,
+          },
         },
       },
-    },
-  });
+    });
 
   if (!post) {
     console.error(`❌ [PublisherService] Không tìm thấy bài viết: ${postId}`);
     return { success: false, status: 'FAILED', error: `Post not found: ${postId}` };
+  }
+
+  // If already published and all platforms completed, return immediately (Idempotency)
+  if (post.status === 'PUBLISHED' && post.platforms.every(p => p.status === 'PUBLISHED' || p.externalPostId)) {
+    console.log(`ℹ️ [PublisherService] Bài viết ${postId} đã hoàn tất xuất bản trước đó.`);
+    return { success: true, status: 'PUBLISHED' };
   }
 
   // Update post status to PUBLISHING
@@ -53,16 +70,28 @@ export async function publishPostDirectly(postId: string): Promise<{
   let anySuccess = false;
 
   for (const postPlatform of post.platforms) {
-    // If already published in a previous attempt, skip re-publishing
-    if (postPlatform.status === 'PUBLISHED') {
+    // If already published or has externalPostId in a previous attempt, skip re-publishing
+    if (postPlatform.status === 'PUBLISHED' || postPlatform.externalPostId) {
       anySuccess = true;
       continue;
     }
 
-    await prisma.postPlatform.update({
-      where: { id: postPlatform.id },
-      data: { status: 'PUBLISHING', errorMessage: null },
+    // Atomic claim lock: only ONE worker/call can claim this platform for publishing
+    const claimResult = await prisma.postPlatform.updateMany({
+      where: {
+        id: postPlatform.id,
+        status: { in: ['PENDING', 'FAILED'] },
+      },
+      data: {
+        status: 'PUBLISHING',
+        errorMessage: null,
+      },
     });
+
+    if (claimResult && claimResult.count === 0) {
+      console.log(`⚠️ [PublisherService] Bỏ qua nền tảng ${postPlatform.platform} (${postPlatform.id}) do đã có tiến trình khác đang xử lý.`);
+      continue;
+    }
 
     await prisma.publishLog.create({
       data: {
@@ -367,6 +396,9 @@ export async function publishPostDirectly(postId: string): Promise<{
 
   console.log(`✅ [PublisherService] Hoàn tất bài viết ${postId} với trạng thái: ${finalStatus}`);
   return { success: allSuccess, status: finalStatus };
+} finally {
+  activePublishingPostIds.delete(postId);
+}
 }
 
 /**
@@ -377,6 +409,12 @@ export async function checkAndPublishDuePosts(): Promise<{
   processedCount: number;
   results: Array<{ id: string; title: string; status: string }>;
 }> {
+  if (isCheckingDuePosts) {
+    console.log('⏰ [SCHEDULE-CRON] Tiến trình kiểm tra bài đến hạn đang chạy. Bỏ qua trigger song song.');
+    return { processedCount: 0, results: [] };
+  }
+  isCheckingDuePosts = true;
+
   try {
     const now = new Date();
     // 1. Find scheduled posts that have reached scheduled time
@@ -393,7 +431,7 @@ export async function checkAndPublishDuePosts(): Promise<{
           {
             status: 'PUBLISHING',
             updatedAt: {
-              lte: new Date(Date.now() - 60 * 1000), // stuck for > 1 min
+              lte: new Date(Date.now() - 5 * 60 * 1000), // rescue only if truly stuck for > 5 minutes
             },
             platforms: {
               some: {
@@ -579,5 +617,7 @@ export async function checkAndPublishDuePosts(): Promise<{
   } catch (err: any) {
     console.error('❌ [SCHEDULE-CRON] Lỗi kiểm tra bài viết đến hạn:', err.message);
     return { processedCount: 0, results: [] };
+  } finally {
+    isCheckingDuePosts = false;
   }
 }

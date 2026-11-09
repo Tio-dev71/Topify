@@ -29,7 +29,8 @@ describe('Meta OAuth Route', () => {
     
     expect(res.status).toBe(307);
     const location = res.headers.get('Location');
-    expect(location).toContain('https://www.facebook.com/v19.0/dialog/oauth');
+    expect(location).toContain('https://www.facebook.com/');
+    expect(location).toContain('/dialog/oauth');
     expect(location).toContain('client_id=test-meta-id');
     expect(location).toContain('state=');
   });
