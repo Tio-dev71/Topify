@@ -19,7 +19,8 @@ import {
   Sparkles,
   ArrowRight,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -159,6 +160,22 @@ export default function Deals() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit deal modal states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+  const [editForm, setEditForm] = useState({
+    id: '',
+    title: '',
+    value: 5000000,
+    stageId: '',
+    probability: 80,
+    status: 'OPEN' as 'OPEN' | 'WON' | 'LOST',
+    expectedClose: '',
+    ownerId: '',
+    customerId: '',
+  });
+  const [submittingEdit, setSubmittingEdit] = useState(false);
 
   // Deal form states
   const [dealForm, setDealForm] = useState({
@@ -324,6 +341,58 @@ export default function Deals() {
     }
   };
 
+  const handleOpenEditModal = (deal: Deal) => {
+    setEditingDeal(deal);
+    setEditForm({
+      id: deal.id,
+      title: deal.title || '',
+      value: deal.value || 0,
+      stageId: deal.stageId || currentPipeline.stages[0]?.id || '',
+      probability: deal.probability ?? 75,
+      status: (deal.status as any) || 'OPEN',
+      expectedClose: deal.expectedClose ? deal.expectedClose.slice(0, 10) : '',
+      ownerId: (deal as any).ownerId || (deal as any).owner?.id || '',
+      customerId: (deal as any).customerId || (deal as any).customer?.id || '',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEditDeal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.title.trim()) {
+      toast.error('Vui lòng nhập tên cơ hội bán hàng');
+      return;
+    }
+
+    setSubmittingEdit(true);
+    try {
+      const res = await api.patch('/crm/deals', {
+        id: editForm.id,
+        title: editForm.title.trim(),
+        value: Number(editForm.value) || 0,
+        stageId: editForm.stageId,
+        probability: Number(editForm.probability),
+        status: editForm.status,
+        expectedClose: editForm.expectedClose || null,
+        ownerId: editForm.ownerId || null,
+        customerId: editForm.customerId || null,
+      });
+
+      if (res.data?.id || res.data?.deal?.id) {
+        toast.success('Cập nhật cơ hội bán hàng thành công!');
+        fetchDealsAndCustomers();
+        setIsEditModalOpen(false);
+        setEditingDeal(null);
+      } else {
+        toast.error('Không thể cập nhật cơ hội bán hàng');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi cập nhật cơ hội bán hàng');
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+
   const handleMoveStage = async (dealId: string, stageId: string) => {
     try {
       await api.patch('/crm/deals', { id: dealId, stageId });
@@ -439,18 +508,36 @@ export default function Deals() {
                         key={deal.id}
                         className="bg-white p-3.5 rounded-xl border border-gray-200/80 shadow-2xs hover:shadow-xs hover:border-indigo-200 transition space-y-2.5 text-xs group"
                       >
-                        {/* Title & Delete */}
+                        {/* Title & Actions */}
                         <div className="flex items-start justify-between gap-1.5">
-                          <h4 className="font-bold text-gray-900 line-clamp-2 leading-snug break-words" title={deal.title}>
+                          <h4
+                            onClick={() => handleOpenEditModal(deal)}
+                            className="font-bold text-gray-900 line-clamp-2 leading-snug break-words hover:text-indigo-600 cursor-pointer"
+                            title={deal.title}
+                          >
                             {deal.title}
                           </h4>
-                          <button
-                            onClick={() => handleDelete(deal.id, deal.title)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-rose-600 p-0.5 rounded transition shrink-0"
-                            title="Xóa cơ hội"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditModal(deal);
+                              }}
+                              className="text-gray-400 hover:text-indigo-600 p-0.5 rounded transition cursor-pointer"
+                              title="Chỉnh sửa cơ hội"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(deal.id, deal.title)}
+                              className="text-gray-300 hover:text-rose-600 p-0.5 rounded transition cursor-pointer"
+                              title="Xóa cơ hội"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Deal Value - Prominent & Never Wrapped */}
@@ -924,6 +1011,189 @@ export default function Deals() {
                     <>
                       <Plus className="w-4 h-4" />
                       <span>Tạo Deal</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Deal Modal */}
+      {isEditModalOpen && editingDeal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xl max-w-lg w-full overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+                  F096
+                </span>
+                <h3 className="text-base font-bold text-gray-900">
+                  Chỉnh sửa Cơ hội bán hàng (Deal)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingDeal(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditDeal} className="p-5 space-y-4 overflow-y-auto grow text-xs">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Tên cơ hội / Dự án <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Giá trị hợp đồng (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    step="500000"
+                    value={editForm.value}
+                    onChange={(e) => setEditForm({ ...editForm, value: Number(e.target.value) })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Giai đoạn (Stage)
+                  </label>
+                  <select
+                    value={editForm.stageId}
+                    onChange={(e) => setEditForm({ ...editForm, stageId: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 font-medium"
+                  >
+                    {currentPipeline.stages.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Trạng thái kết quả
+                  </label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 font-medium"
+                  >
+                    <option value="OPEN">⏳ Đang mở (Đàm phán)</option>
+                    <option value="WON">🏆 Thành công (Won)</option>
+                    <option value="LOST">❌ Thất bại (Lost)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Xác suất chốt thành công (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={editForm.probability}
+                    onChange={(e) => setEditForm({ ...editForm, probability: Number(e.target.value) })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono text-gray-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Ngày dự kiến chốt
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.expectedClose}
+                    onChange={(e) => setEditForm({ ...editForm, expectedClose: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Người phụ trách
+                  </label>
+                  <select
+                    value={editForm.ownerId}
+                    onChange={(e) => setEditForm({ ...editForm, ownerId: e.target.value })}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900"
+                  >
+                    <option value="">Chưa phân công</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name || m.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Khách hàng liên kết
+                </label>
+                <select
+                  value={editForm.customerId}
+                  onChange={(e) => setEditForm({ ...editForm, customerId: e.target.value })}
+                  className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900"
+                >
+                  <option value="">Không gắn khách hàng</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.phone ? `(${c.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingDeal(null);
+                  }}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-gray-600 font-semibold hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEdit}
+                  className="btn-primary px-5 py-2 rounded-xl font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {submittingEdit ? (
+                    <span>Đang lưu...</span>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Lưu thay đổi</span>
                     </>
                   )}
                 </button>
