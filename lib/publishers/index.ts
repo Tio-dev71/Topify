@@ -20,14 +20,18 @@ export function getPublisher(platform: Platform): Publisher {
 
   switch (platform) {
     case 'FACEBOOK_REELS':
+    case 'FACEBOOK_POST':
       return new FacebookReelsPublisher();
     case 'INSTAGRAM_REELS':
+    case 'INSTAGRAM_CAROUSEL':
+    case 'INSTAGRAM_STORY':
       return new InstagramReelsPublisher();
     case 'YOUTUBE_SHORTS':
       return new YouTubeShortsPublisher();
     case 'TIKTOK_VIDEO':
       return new TikTokPublisher();
     case 'ZALO_POST':
+    case 'ZALO_ARTICLE':
       return new ZaloPublisher();
     default:
       throw new Error(`Unknown platform: ${platform}`);

@@ -99,9 +99,7 @@ export async function GET(req: NextRequest) {
     const credentials = await getCredentials(userId);
     const clientId = credentials.META_APP_ID!;
     const clientSecret = credentials.META_APP_SECRET!;
-    const redirectUri = (process.env.META_REDIRECT_URI && process.env.META_REDIRECT_URI.includes(url.host))
-      ? process.env.META_REDIRECT_URI.trim()
-      : `${baseUrl}/api/social/meta/callback`;
+    const redirectUri = process.env.META_REDIRECT_URI?.trim() || `${baseUrl}/api/social/meta/callback`;
 
     const apiVersion = process.env.META_GRAPH_API_VERSION || 'v26.0';
 

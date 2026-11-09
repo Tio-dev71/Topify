@@ -11,16 +11,19 @@ const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'To
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const token = url.searchParams.get('token');
+    const rawToken = url.searchParams.get('token');
+    const tokenParam = (rawToken && rawToken !== 'null' && rawToken !== 'undefined') ? rawToken : null;
     
     let userId: string | undefined;
     let role: string | undefined;
+    let workspaceId: string | undefined;
     
-    if (token) {
+    if (tokenParam) {
       try {
-        const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
+        const decoded = jwtPackage.verify(tokenParam, JWT_SECRET) as any;
         userId = decoded.sub || decoded.id;
         role = decoded.role;
+        workspaceId = decoded.workspaceId;
       } catch (e) {
         console.error('Invalid token in query', e);
       }
@@ -30,6 +33,7 @@ export async function GET(req: NextRequest) {
       const session = await auth();
       userId = session?.user?.id;
       role = session?.user?.role;
+      workspaceId = (session?.user as any)?.workspaceId;
     }
 
     if (!userId) {
@@ -48,9 +52,7 @@ export async function GET(req: NextRequest) {
 
     const credentials = await getCredentials(userId);
     const clientId = credentials.META_APP_ID;
-    const redirectUri = (process.env.META_REDIRECT_URI && process.env.META_REDIRECT_URI.includes(req.nextUrl.host))
-      ? process.env.META_REDIRECT_URI.trim()
-      : `${req.nextUrl.origin}/api/social/meta/callback`;
+    const redirectUri = process.env.META_REDIRECT_URI?.trim() || `${req.nextUrl.origin}/api/social/meta/callback`;
 
     if (!clientId) {
       return new NextResponse(
@@ -84,7 +86,13 @@ export async function GET(req: NextRequest) {
       'instagram_content_publish',
     ].join(',');
 
-    const originalStateParam = token ? `meta_${token}` : 'meta';
+    const stateToken = tokenParam || (userId ? jwtPackage.sign(
+      { sub: userId, id: userId, role: role || 'ADMIN', workspaceId },
+      JWT_SECRET,
+      { expiresIn: '30m' }
+    ) : null);
+
+    const originalStateParam = stateToken ? `meta_${stateToken}` : 'meta';
     
     const csrfState = crypto.randomBytes(16).toString('hex');
     const stateParam = `${csrfState}::${originalStateParam}`;
