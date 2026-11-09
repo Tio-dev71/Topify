@@ -16,6 +16,105 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
 
+// GET /api/posts/[id]/comment — Fetch live comments from social platforms (YouTube, Facebook, etc.)
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
+    }
+
+    const { id } = await params;
+
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: {
+        platforms: true,
+      },
+    });
+
+    if (!post) {
+      return NextResponse.json({ error: 'Không tìm thấy bài viết' }, { status: 404, headers: corsHeaders });
+    }
+
+    const firstComment = (post.firstComment || '').trim();
+    const liveComments: Array<{
+      id: string;
+      platform: string;
+      author: string;
+      authorAvatar?: string;
+      text: string;
+      likeCount: number;
+      publishedAt: string;
+      isFirstComment: boolean;
+    }> = [];
+
+    for (const pl of post.platforms) {
+      if (pl.platform === 'YOUTUBE_SHORTS' && pl.externalPostId) {
+        try {
+          const socialAccount = await prisma.socialAccount.findFirst({
+            where: {
+              provider: 'YOUTUBE',
+              status: 'CONNECTED',
+              ...(post.workspaceId ? { workspaceId: post.workspaceId } : { userId: post.createdById }),
+            },
+          });
+
+          if (socialAccount) {
+            const token = await getValidAccessToken(socialAccount);
+            const res = await fetch(
+              `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${encodeURIComponent(pl.externalPostId)}&maxResults=50`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            );
+
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data.items)) {
+                for (const item of data.items) {
+                  const snippet = item.snippet?.topLevelComment?.snippet;
+                  if (snippet) {
+                    const text = snippet.textOriginal || snippet.textDisplay || '';
+                    liveComments.push({
+                      id: item.id,
+                      platform: 'YOUTUBE_SHORTS',
+                      author: snippet.authorDisplayName || 'Người dùng YouTube',
+                      authorAvatar: snippet.authorProfileImageUrl,
+                      text,
+                      likeCount: snippet.likeCount || 0,
+                      publishedAt: snippet.publishedAt,
+                      isFirstComment: firstComment ? text.trim().toLowerCase() === firstComment.toLowerCase() : false,
+                    });
+                  }
+                }
+              }
+            } else {
+              console.warn(`[CommentsAPI] YouTube comment fetch notice (${res.status}):`, await res.text());
+            }
+          }
+        } catch (ytErr: any) {
+          console.warn('[CommentsAPI] Error fetching live YouTube comments:', ytErr.message);
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      firstComment: post.firstComment || null,
+      comments: liveComments,
+      totalCount: liveComments.length,
+      hasFirstCommentPosted: firstComment ? liveComments.some(c => c.isFirstComment) : false,
+    }, { headers: corsHeaders });
+  } catch (error: any) {
+    console.error('Fetch live comments error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders });
+  }
+}
+
 // POST /api/posts/[id]/comment — Send/retry the first comment on published platforms
 export async function POST(
   req: NextRequest,

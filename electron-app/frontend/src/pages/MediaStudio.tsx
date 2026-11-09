@@ -419,6 +419,7 @@ export default function MediaStudio() {
           prefilledTitle: clip.title,
           prefilledCaption: clip.suggestedCaption,
           prefilledHashtags: clip.suggestedTags.join(' '),
+          prefilledFirstComment: `Link sp và thông tin thêm tại bio! Đăng ký kênh để xem thêm video mới nhất 🔥`,
         },
       });
     } catch (err: any) {

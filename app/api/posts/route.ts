@@ -42,6 +42,10 @@ const createPostSchema = z.object({
     caption: z.string().optional(),
     tag: z.string().optional(),
   })).optional(),
+  storageUrl: z.string().nullable().optional(),
+  mediaUrl: z.string().nullable().optional(),
+  originalFileName: z.string().nullable().optional(),
+  duration: z.number().nullable().optional(),
 });
 
 // GET /api/posts - List posts
@@ -180,7 +184,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isRandomWindow, randomWindowStart, randomWindowEnd, isEvergreen, recycleIntervalDays, postType, isCarousel, carouselSlides } = parsed.data;
+    const { title, caption, firstComment, hashtags, videoAssetId, platforms, publishMode, scheduledAt, isRandomWindow, randomWindowStart, randomWindowEnd, isEvergreen, recycleIntervalDays, postType, isCarousel, carouselSlides, storageUrl, mediaUrl, originalFileName, duration } = parsed.data;
 
     let finalScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
 
@@ -266,21 +270,51 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      videoAsset = await prisma.videoAsset.findUnique({
-        where: { id: effectiveVideoAssetId },
-      });
-
-      if (!videoAsset) {
-        // Fallback: check MediaAsset table (F114 & Media Studio assets)
-        const mediaAsset = await prisma.mediaAsset.findUnique({
+      if (effectiveVideoAssetId && !effectiveVideoAssetId.startsWith('asset_') && !effectiveVideoAssetId.startsWith('draft_')) {
+        videoAsset = await prisma.videoAsset.findUnique({
           where: { id: effectiveVideoAssetId },
         });
+      }
+
+      const candidateUrl = storageUrl || mediaUrl;
+
+      // Fallback 1: lookup by storageUrl if not found
+      if (!videoAsset && candidateUrl && typeof prisma.videoAsset.findFirst === 'function') {
+        videoAsset = await prisma.videoAsset.findFirst({
+          where: { storageUrl: candidateUrl },
+        });
+        if (videoAsset) {
+          effectiveVideoAssetId = videoAsset.id;
+        }
+      }
+
+      // Fallback 2: check MediaAsset table (F114 & Media Studio assets)
+      if (!videoAsset && typeof (prisma as any).mediaAsset?.findUnique === 'function') {
+        let mediaAsset = null;
+        if (effectiveVideoAssetId && !effectiveVideoAssetId.startsWith('asset_') && !effectiveVideoAssetId.startsWith('draft_')) {
+          mediaAsset = await (prisma as any).mediaAsset.findUnique({
+            where: { id: effectiveVideoAssetId },
+          });
+        }
+        if (!mediaAsset && candidateUrl && typeof (prisma as any).mediaAsset?.findFirst === 'function') {
+          mediaAsset = await (prisma as any).mediaAsset.findFirst({
+            where: { storageUrl: candidateUrl },
+          });
+        }
+        if (!mediaAsset && originalFileName && typeof (prisma as any).mediaAsset?.findFirst === 'function') {
+          mediaAsset = await (prisma as any).mediaAsset.findFirst({
+            where: { fileName: originalFileName },
+          });
+        }
 
         if (mediaAsset) {
           // Check if a videoAsset already exists with this storageUrl
-          let mappedVideoAsset = await prisma.videoAsset.findFirst({
-            where: { storageUrl: mediaAsset.storageUrl },
-          });
+          let mappedVideoAsset = null;
+          if (typeof prisma.videoAsset.findFirst === 'function') {
+            mappedVideoAsset = await prisma.videoAsset.findFirst({
+              where: { storageUrl: mediaAsset.storageUrl },
+            });
+          }
 
           if (!mappedVideoAsset) {
             mappedVideoAsset = await prisma.videoAsset.create({
@@ -289,11 +323,11 @@ export async function POST(req: NextRequest) {
                 titleFromFileName: mediaAsset.fileName.replace(/\.[^/.]+$/, ''),
                 storageUrl: mediaAsset.storageUrl,
                 source: mediaAsset.source,
-                mimeType: mediaAsset.mimeType,
-                size: mediaAsset.size,
-                duration: mediaAsset.duration,
+                mimeType: mediaAsset.mimeType || 'video/mp4',
+                size: mediaAsset.size || 1024 * 1024,
+                duration: mediaAsset.duration || duration || null,
                 createdById: session.user.id,
-                workspaceId: (session.user as any).workspaceId || mediaAsset.workspaceId,
+                workspaceId: (session.user as any).workspaceId || mediaAsset.workspaceId || 'default-workspace',
               },
             });
           }
@@ -302,8 +336,29 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Fallback 3: auto-create VideoAsset if candidateUrl is provided
+      if (!videoAsset && candidateUrl) {
+        const vFileName = originalFileName || (title ? `${title}.mp4` : 'video_highlight.mp4');
+        videoAsset = await prisma.videoAsset.create({
+          data: {
+            originalFileName: vFileName,
+            titleFromFileName: vFileName.replace(/\.[^/.]+$/, ''),
+            storageUrl: candidateUrl,
+            source: 'LOCAL_UPLOAD',
+            mimeType: 'video/mp4',
+            size: 1024 * 1024,
+            duration: duration || null,
+            createdById: session.user.id,
+            workspaceId: (session.user as any).workspaceId || 'default-workspace',
+          },
+        });
+        effectiveVideoAssetId = videoAsset.id;
+      }
+
       const userWsId = (session.user as any).workspaceId;
+      const isAdmin = session.user.role === 'ADMIN' || session.user.role === 'SUPER_ADMIN';
       const isOwner = videoAsset && (
+        isAdmin ||
         !userWsId || 
         videoAsset.workspaceId === userWsId || 
         videoAsset.createdById === session.user.id ||

@@ -117,6 +117,34 @@ export default function Posts() {
   const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSendingComment, setIsSendingComment] = useState(false);
+  const [modalComments, setModalComments] = useState<any[]>([]);
+  const [loadingModalComments, setLoadingModalComments] = useState(false);
+
+  const fetchModalComments = async (postId?: string) => {
+    const targetId = postId || selectedPost?.id;
+    if (!targetId) return;
+    try {
+      setLoadingModalComments(true);
+      const res = await api.get(`/posts/${targetId}/comment`);
+      if (res.data?.comments) {
+        setModalComments(res.data.comments);
+      } else {
+        setModalComments([]);
+      }
+    } catch {
+      setModalComments([]);
+    } finally {
+      setLoadingModalComments(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedPost && selectedPost.status === 'PUBLISHED') {
+      fetchModalComments(selectedPost.id);
+    } else {
+      setModalComments([]);
+    }
+  }, [selectedPost?.id]);
 
   const handleSendFirstComment = async () => {
     if (!selectedPost || !selectedPost.firstComment) return;
@@ -127,6 +155,7 @@ export default function Posts() {
       toast.dismiss(toastId);
       if (res.data?.success) {
         toast.success(res.data.message || 'Đã gửi bình luận đầu tiên thành công!');
+        fetchModalComments(selectedPost.id);
       } else {
         toast.error(res.data?.message || 'Không thể gửi bình luận');
       }
@@ -1083,6 +1112,46 @@ export default function Posts() {
                   <p className="text-xs font-medium text-gray-900 leading-relaxed">
                     {selectedPost.firstComment || <span className="text-gray-400 italic">Không có bình luận đầu</span>}
                   </p>
+
+                  {/* Live comments list in modal */}
+                  {selectedPost.status === 'PUBLISHED' && (
+                    <div className="mt-2.5 pt-2.5 border-t border-amber-200/50 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
+                        <span className="flex items-center gap-1">
+                          <MessageSquare className="w-3 h-3 text-amber-600" />
+                          Bình luận trực tiếp từ MXH ({modalComments.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => fetchModalComments()}
+                          disabled={loadingModalComments}
+                          className="text-[10px] text-amber-800 hover:text-amber-950 font-semibold cursor-pointer"
+                        >
+                          {loadingModalComments ? 'Đang tải...' : 'Làm mới'}
+                        </button>
+                      </div>
+
+                      {modalComments.length > 0 ? (
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                          {modalComments.map((cmt) => (
+                            <div key={cmt.id} className="bg-white/80 p-2 rounded-xl border border-amber-100 text-xs">
+                              <div className="flex items-center justify-between font-semibold text-gray-800 text-[11px] mb-0.5">
+                                <span className="truncate">{cmt.author}</span>
+                                {cmt.isFirstComment && (
+                                  <span className="bg-emerald-50 text-emerald-700 text-[9px] px-1.5 py-0.2 rounded font-bold">Bình luận đầu</span>
+                                )}
+                              </div>
+                              <p className="text-gray-700 leading-tight">{cmt.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-gray-400 italic">
+                          Chưa có bình luận mới hoặc video đang chờ đồng bộ từ kênh.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

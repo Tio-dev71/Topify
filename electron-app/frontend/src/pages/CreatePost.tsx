@@ -227,6 +227,7 @@ export default function CreatePost() {
   const computedRandomSchedule = getComputedRandomTimes();
   const windowStatus = getWindowStatus(randomDate, randomStartTime, randomEndTime, currentClock);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [connectedProviders, setConnectedProviders] = useState<Record<string, boolean>>({});
 
   // Evergreen state (F083)
@@ -702,7 +703,7 @@ export default function CreatePost() {
           setVideos((prev) => {
             const targetIdx = replacingDraftId
               ? prev.findIndex(v => v.id === replacingDraftId)
-              : prev.findIndex(v => v.isDraft || v.id.startsWith('draft_') || !v.storageUrl);
+              : prev.findIndex(v => v.isDraft || v.id.startsWith('draft_') || v.id.startsWith('asset_') || !v.storageUrl);
 
             if (targetIdx !== -1) {
               replacedCount++;
@@ -907,7 +908,7 @@ export default function CreatePost() {
   // Submit all
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || submittingRef.current) return;
 
     if (videos.length === 0) {
       toast.error('Vui lòng tải lên ít nhất 1 video.');
@@ -984,65 +985,72 @@ export default function CreatePost() {
       }
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     let successCount = 0;
 
-    for (const video of videos) {
-      try {
-        const payloadTitle = sanitizeUtf8(video.title) || sanitizeUtf8(video.titleFromFileName) || 'Untitled';
-        let payloadScheduledAt: string | null = null;
-        let randomStartIso: string | undefined = undefined;
-        let randomEndIso: string | undefined = undefined;
+    try {
+      for (const video of videos) {
+        try {
+          const payloadTitle = sanitizeUtf8(video.title) || sanitizeUtf8(video.titleFromFileName) || 'Untitled';
+          let payloadScheduledAt: string | null = null;
+          let randomStartIso: string | undefined = undefined;
+          let randomEndIso: string | undefined = undefined;
 
-        if (publishMode === 'schedule') {
-          payloadScheduledAt = new Date(scheduledAt).toISOString();
-        } else if (publishMode === 'random_window') {
-          const vidSched = computedRandomSchedule[video.id] || computedRandomSchedule['preview_single'];
-          if (!vidSched || vidSched.getTime() <= Date.now()) {
-            toast.error('Không thể xác định thời điểm đăng hợp lệ trong tương lai.');
-            setSubmitting(false);
-            return;
+          if (publishMode === 'schedule') {
+            payloadScheduledAt = new Date(scheduledAt).toISOString();
+          } else if (publishMode === 'random_window') {
+            const vidSched = computedRandomSchedule[video.id] || computedRandomSchedule['preview_single'];
+            if (!vidSched || vidSched.getTime() <= Date.now()) {
+              toast.error('Không thể xác định thời điểm đăng hợp lệ trong tương lai.');
+              return;
+            }
+            payloadScheduledAt = vidSched.toISOString();
+            const normDate = normalizeDateStringToYMD(randomDate);
+            const [startH, startM] = randomStartTime.split(':').map(Number);
+            const [endH, endM] = randomEndTime.split(':').map(Number);
+            const [yr, mo, da] = normDate.split('-').map(Number);
+            randomStartIso = new Date(yr, mo - 1, da, startH, startM, 0, 0).toISOString();
+            randomEndIso = new Date(yr, mo - 1, da, endH, endM, 0, 0).toISOString();
           }
-          payloadScheduledAt = vidSched.toISOString();
-          const normDate = normalizeDateStringToYMD(randomDate);
-          const [startH, startM] = randomStartTime.split(':').map(Number);
-          const [endH, endM] = randomEndTime.split(':').map(Number);
-          const [yr, mo, da] = normDate.split('-').map(Number);
-          randomStartIso = new Date(yr, mo - 1, da, startH, startM, 0, 0).toISOString();
-          randomEndIso = new Date(yr, mo - 1, da, endH, endM, 0, 0).toISOString();
-        }
 
-        const res = await api.post('/posts', {
-          title: payloadTitle,
-          caption: sanitizeUtf8Nullable(video.caption),
-          firstComment: sanitizeUtf8Nullable(video.firstComment),
-          hashtags: sanitizeUtf8Nullable(video.hashtags),
-          videoAssetId: video.id,
-          platforms,
-          publishMode,
-          scheduledAt: payloadScheduledAt,
-          isRandomWindow: publishMode === 'random_window',
-          randomWindowStart: randomStartIso,
-          randomWindowEnd: randomEndIso,
-          isEvergreen,
-          recycleIntervalDays: isEvergreen ? Number(recycleIntervalDays) : undefined,
-          postType: video.isCarousel ? 'CAROUSEL' : undefined,
-          isCarousel: video.isCarousel,
-          carouselSlides: video.carouselSlides,
-        });
+          const res = await api.post('/posts', {
+            title: payloadTitle,
+            caption: sanitizeUtf8Nullable(video.caption),
+            firstComment: sanitizeUtf8Nullable(video.firstComment),
+            hashtags: sanitizeUtf8Nullable(video.hashtags),
+            videoAssetId: video.id,
+            storageUrl: video.storageUrl || undefined,
+            mediaUrl: video.storageUrl || undefined,
+            originalFileName: video.originalFileName || undefined,
+            duration: video.duration !== undefined ? video.duration : undefined,
+            platforms,
+            publishMode,
+            scheduledAt: payloadScheduledAt,
+            isRandomWindow: publishMode === 'random_window',
+            randomWindowStart: randomStartIso,
+            randomWindowEnd: randomEndIso,
+            isEvergreen,
+            recycleIntervalDays: isEvergreen ? Number(recycleIntervalDays) : undefined,
+            postType: video.isCarousel ? 'CAROUSEL' : undefined,
+            isCarousel: video.isCarousel,
+            carouselSlides: video.carouselSlides,
+          });
 
-        if (res.status === 200 || res.status === 201) {
-          successCount++;
-          if (res.data?.warning) {
-            toast.warning(res.data.warning, { duration: 6000 });
+          if (res.status === 200 || res.status === 201) {
+            successCount++;
+            if (res.data?.warning) {
+              toast.warning(res.data.warning, { duration: 6000 });
+            }
           }
+        } catch (error: any) {
+          toast.error(`Lỗi tạo bài viết cho ${video.originalFileName}: ${error.response?.data?.error || 'Lỗi không xác định'}`);
         }
-      } catch (error: any) {
-        toast.error(`Lỗi tạo bài viết cho ${video.originalFileName}: ${error.response?.data?.error || 'Lỗi không xác định'}`);
       }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
 
     if (successCount > 0) {
       toast.success(

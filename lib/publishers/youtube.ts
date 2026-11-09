@@ -29,6 +29,14 @@ export class YouTubeShortsPublisher implements Publisher {
         return { success: true, externalPostId: _platform.externalPostId };
       }
 
+      if (_platform?.id) {
+        const freshPl = await prisma.postPlatform.findUnique({ where: { id: _platform.id } });
+        if (freshPl?.externalPostId) {
+          console.log(`[YouTubeShortsPublisher] Video đã có externalPostId trong CSDL (${freshPl.externalPostId}). Bỏ qua upload để tránh duplicate.`);
+          return { success: true, externalPostId: freshPl.externalPostId };
+        }
+      }
+
       const token = await getValidAccessToken(socialAccount);
       const storage = getStorage();
 

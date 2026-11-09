@@ -87,6 +87,24 @@ export default function PostDetail() {
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null);
   const [creatingSnapshot, setCreatingSnapshot] = useState(false);
   const [isSendingComment, setIsSendingComment] = useState(false);
+  const [liveComments, setLiveComments] = useState<any[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+
+  const fetchLiveComments = async (postId?: string) => {
+    const targetId = postId || id;
+    if (!targetId) return;
+    try {
+      setLoadingComments(true);
+      const res = await api.get(`/posts/${targetId}/comment`);
+      if (res.data?.comments) {
+        setLiveComments(res.data.comments);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingComments(false);
+    }
+  };
 
   const handleSendFirstComment = async () => {
     if (!post || !post.firstComment) return;
@@ -97,6 +115,7 @@ export default function PostDetail() {
       toast.dismiss(toastId);
       if (res.data?.success) {
         toast.success(res.data.message || 'Đã gửi bình luận đầu tiên thành công!');
+        fetchLiveComments(id);
       } else {
         toast.error(res.data?.message || 'Không thể gửi bình luận');
       }
@@ -170,6 +189,9 @@ export default function PostDetail() {
       if (res.data) {
         const p = res.data;
         setPost(p);
+        if (p.status === 'PUBLISHED') {
+          fetchLiveComments(p.id);
+        }
         setEditTitle(p.title || '');
         setEditCaption(p.caption || '');
         setEditHashtags(normalizeHashtags(p.hashtags));
@@ -724,8 +746,8 @@ export default function PostDetail() {
                   )}
                 </div>
 
-                {/* First Comment */}
-                <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 space-y-1.5">
+                {/* First Comment & Live Comments */}
+                <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
                       <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
@@ -747,6 +769,62 @@ export default function PostDetail() {
                   <p className="text-sm font-medium text-gray-900 leading-relaxed">
                     {post.firstComment || <span className="text-gray-400 italic">Không có bình luận đầu tiên</span>}
                   </p>
+
+                  {/* Live comments list */}
+                  {post.status === 'PUBLISHED' && (
+                    <div className="mt-3 pt-3 border-t border-amber-200/50 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                          <MessageSquare className="w-3.5 h-3.5 text-amber-600" />
+                          Bình luận trực tiếp từ MXH ({liveComments.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => fetchLiveComments()}
+                          disabled={loadingComments}
+                          className="text-[10px] font-semibold text-amber-800 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded-md transition cursor-pointer"
+                        >
+                          {loadingComments ? 'Đang tải...' : 'Làm mới'}
+                        </button>
+                      </div>
+
+                      {liveComments.length > 0 ? (
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {liveComments.map((cmt) => (
+                            <div key={cmt.id} className="bg-white/90 p-2.5 rounded-xl border border-amber-100/80 shadow-2xs text-xs space-y-1">
+                              <div className="flex items-center justify-between font-bold text-gray-900 text-[11px]">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  {cmt.authorAvatar ? (
+                                    <img src={cmt.authorAvatar} alt="" className="w-4 h-4 rounded-full" />
+                                  ) : (
+                                    <div className="w-4 h-4 rounded-full bg-amber-200 text-amber-800 text-[9px] flex items-center justify-center">
+                                      {cmt.author.slice(0, 1)}
+                                    </div>
+                                  )}
+                                  <span className="truncate">{cmt.author}</span>
+                                </div>
+                                {cmt.isFirstComment && (
+                                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] px-1.5 py-0.2 rounded font-bold shrink-0">
+                                    Bình luận đầu
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-gray-800 leading-relaxed pl-5">{cmt.text}</p>
+                              {cmt.publishedAt && (
+                                <p className="text-[10px] text-gray-400 pl-5">
+                                  {new Date(cmt.publishedAt).toLocaleString('vi-VN')}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-500 italic">
+                          Chưa có bình luận nào hoặc video đang chờ đồng bộ từ nền tảng.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (

@@ -60,11 +60,25 @@ export async function publishPostDirectly(postId: string): Promise<{
     return { success: true, status: 'PUBLISHED' };
   }
 
-  // Update post status to PUBLISHING
-  await prisma.post.update({
-    where: { id: postId },
-    data: { status: 'PUBLISHING' },
+  // Atomic claim lock at Post level: prevent parallel publishing calls across multiple processes/workers
+  const claimPost = await prisma.post.updateMany({
+    where: {
+      id: postId,
+      OR: [
+        { status: { in: ['SCHEDULED', 'DRAFT', 'FAILED'] } },
+        { status: 'PUBLISHING', updatedAt: { lte: new Date(Date.now() - 3 * 60 * 1000) } }, // rescue stuck after 3 mins
+      ],
+    },
+    data: {
+      status: 'PUBLISHING',
+      updatedAt: new Date(),
+    },
   });
+
+  if (claimPost && claimPost.count === 0 && !activePublishingPostIds.has(postId)) {
+    console.log(`ℹ️ [PublisherService] Bài viết ${postId} đang được xử lý hoặc đã hoàn tất bởi tiến trình khác. Bỏ qua trigger trùng.`);
+    return { success: true, status: 'PUBLISHED' };
+  }
 
   let allSuccess = true;
   let anySuccess = false;
@@ -350,7 +364,7 @@ export async function publishPostDirectly(postId: string): Promise<{
         const existingNext = await prisma.post.findFirst({
           where: {
             originalPostId: parentPost.id,
-            status: 'SCHEDULED',
+            status: { in: ['SCHEDULED', 'PUBLISHING'] },
           },
         });
 
