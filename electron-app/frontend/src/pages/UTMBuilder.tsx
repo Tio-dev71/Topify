@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link2, Copy, Plus, Trash2, History, ExternalLink, Zap, Eye, Check } from 'lucide-react';
+import { Link2, Copy, Plus, Trash2, History, ExternalLink, Zap, Eye, Check, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
 export type UTMHistoryItem = {
@@ -238,13 +238,32 @@ export default function UTMBuilder() {
                 <div key={item.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-100/70 transition space-y-2 text-xs">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-bold text-gray-900 line-clamp-1">{item.campaign || 'Chiến dịch'}</span>
-                    <button
-                      onClick={() => handleDeleteHistory(item.id)}
-                      className="text-gray-400 hover:text-rose-600 p-0.5 rounded transition"
-                      title="Xóa"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => {
+                          setFormData({
+                            url: item.url,
+                            campaign: item.campaign,
+                            source: item.source,
+                            medium: item.medium,
+                            term: item.term || '',
+                            content: item.content || '',
+                          });
+                          toast.info('Đã nạp liên kết UTM vào biểu mẫu để chỉnh sửa');
+                        }}
+                        className="text-gray-400 hover:text-indigo-600 p-0.5 rounded transition cursor-pointer"
+                        title="Chỉnh sửa liên kết này"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteHistory(item.id)}
+                        className="text-gray-400 hover:text-rose-600 p-0.5 rounded transition cursor-pointer"
+                        title="Xóa"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <p className="font-mono text-[10px] text-gray-500 line-clamp-2 break-all">
