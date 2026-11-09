@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     if (setting?.value) {
       try {
         const parsed = JSON.parse(setting.value);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           customFields = parsed;
         }
       } catch (e) {}
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
     const totalCustomersWithCustomData = await prisma.customer.count({
       where: {
         workspaceId,
-        customData: { not: undefined },
+        customData: { not: null as any },
       },
     });
 
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
     if (setting?.value) {
       try {
         const parsed = JSON.parse(setting.value);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           fields = parsed;
         }
       } catch (e) {}
@@ -241,7 +241,7 @@ export async function DELETE(req: NextRequest) {
     if (setting?.value) {
       try {
         const parsed = JSON.parse(setting.value);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           fields = parsed;
         }
       } catch (e) {}
