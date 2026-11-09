@@ -353,16 +353,27 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
             </button>
           )}
 
-          <button
-            onClick={() => {
-              handleTabChange('alerts');
-              setShowCreateRuleModal(true);
-            }}
-            className="btn-primary flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl shadow-xs whitespace-nowrap shrink-0"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>Thiết lập Cảnh báo mới (F112)</span>
-          </button>
+          {activeTab === 'alerts' ? (
+            <button
+              onClick={() => setShowCreateRuleModal(true)}
+              className="btn-primary flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl shadow-xs whitespace-nowrap shrink-0"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>Thiết lập Cảnh báo mới (F112)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                handleTabChange('alerts');
+                setShowCreateRuleModal(true);
+              }}
+              className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors shadow-xs whitespace-nowrap shrink-0"
+              title="Chuyển sang F112 để thiết lập quy tắc tự động gửi thông báo khi phát hiện nội dung vượt ngưỡng"
+            >
+              <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Cài đặt cảnh báo vượt ngưỡng</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -408,6 +419,39 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
       {/* TAB 1: TRENDING VELOCITY (F110) */}
       {activeTab === 'trending' && (
         <div className="space-y-6">
+          {/* F110 Feature Overview & Mechanism Banner */}
+          <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50/50 p-4 rounded-2xl border border-amber-200/80 shadow-2xs space-y-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Flame className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950">
+                    Cơ chế hoạt động F110: Đo lường Vận tốc bùng nổ (Viral Velocity Score)
+                  </h4>
+                  <p className="text-[11px] text-amber-900/90 mt-0.5">
+                    Hệ thống Social Listening liên tục quét các bài viết/video tăng trưởng nhanh nhất trên TikTok, Facebook, Instagram, YouTube để bạn nắm bắt xu hướng và 1-click tạo bài viết phái sinh.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-amber-200/60 text-[11px]">
+              <div className="bg-white/90 p-2.5 rounded-xl border border-amber-100/80">
+                <span className="font-bold text-amber-950 block">📊 Công thức Vận tốc (Velocity):</span>
+                <span className="text-gray-600 text-[10px]">Tốc độ tăng trưởng tương tác mới (Lượt xem + Thích + Chia sẻ) phát sinh theo mỗi giờ (views/giờ).</span>
+              </div>
+              <div className="bg-white/90 p-2.5 rounded-xl border border-amber-100/80">
+                <span className="font-bold text-amber-950 block">🔥 Phân tầng Ngưỡng Viral:</span>
+                <span className="text-gray-600 text-[10px]">≥ 90 điểm: Siêu Bùng Nổ (+15.000 – 50.000 views/h) • 75–89 điểm: Tăng Trưởng Nhanh (+2.500 – 10.000 views/h).</span>
+              </div>
+              <div className="bg-white/90 p-2.5 rounded-xl border border-amber-100/80">
+                <span className="font-bold text-amber-950 block">✨ 1-Click Remix AI:</span>
+                <span className="text-gray-600 text-[10px]">Bấm nút tại card để nạp chủ đề viral vào Content Studio, tự động biến tấu thành nội dung thương hiệu.</span>
+              </div>
+            </div>
+          </div>
+
           {/* KPI Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-1">
@@ -621,7 +665,41 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
 
       {/* TAB 2: ALERTS & RULES (F112) */}
       {activeTab === 'alerts' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="space-y-6">
+          {/* F112 Feature Overview & Mechanism Banner */}
+          <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50/50 p-4 rounded-2xl border border-indigo-200/80 shadow-2xs space-y-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-indigo-950">
+                    Cơ chế hoạt động F112: Hệ thống Cảnh báo Vượt ngưỡng Tự động (Alert Engine)
+                  </h4>
+                  <p className="text-[11px] text-indigo-900/90 mt-0.5">
+                    Khác với F110 (nơi duyệt và tìm kiếm xu hướng), F112 là công cụ chủ động bắn tín hiệu báo động khi thị trường xuất hiện nội dung vượt ngưỡng điểm Viral Velocity hoặc chứa các từ khóa quan trọng bạn đang quan tâm.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-indigo-200/60 text-[11px]">
+              <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100/80">
+                <span className="font-bold text-indigo-950 block">⚙️ Quy tắc Ngưỡng (Rule):</span>
+                <span className="text-gray-600 text-[10px]">Cài đặt ngưỡng điểm tối thiểu (ví dụ ≥ 80đ) và các từ khóa theo dõi (#KhủngHoảng, #Review, #Sale).</span>
+              </div>
+              <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100/80">
+                <span className="font-bold text-indigo-950 block">🔔 Kích hoạt Tự động (Trigger):</span>
+                <span className="text-gray-600 text-[10px]">Khi có bài viết thỏa mãn điều kiện quy tắc, sự kiện sẽ xuất hiện ở bảng bên trái và bắn thông báo In-App / Email.</span>
+              </div>
+              <div className="bg-white/90 p-2.5 rounded-xl border border-indigo-100/80">
+                <span className="font-bold text-indigo-950 block">🧪 Thử nghiệm (Test Alert):</span>
+                <span className="text-gray-600 text-[10px]">Dùng nút "Thử nghiệm Cảnh báo" ở góc trên để mô phỏng một sự kiện bùng nổ 96/100 kiểm chứng quy trình.</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Triggered Events List (Left Column) */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
@@ -831,6 +909,7 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* CREATE RULE MODAL */}
