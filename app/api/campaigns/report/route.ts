@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
           const objType = (dbCamp.objective as CampaignObjectiveType) || 'REVENUE';
 
           let financialSummary;
-          if (spent === 0 || dbCamp.status === 'PLANNING') {
+          if (spent === 0 || dbCamp.status === 'PLANNING' || dbCamp.status === 'DRAFT') {
             financialSummary = {
               campaignId: dbCamp.id,
               totalRevenue: 0,
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
             id: dbCamp.id,
             name: dbCamp.name,
             objectiveType: objType,
-            status: dbCamp.status,
+            status: dbCamp.status === 'ACTIVE' ? 'RUNNING' : dbCamp.status === 'DRAFT' ? 'PLANNING' : dbCamp.status,
             startDate: dbCamp.startDate ? dbCamp.startDate.toISOString() : new Date().toISOString(),
             endDate: dbCamp.endDate ? dbCamp.endDate.toISOString() : new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
             financialSummary,
@@ -68,7 +68,37 @@ export async function GET(req: NextRequest) {
     }
 
     if (!campaign) {
-      campaign = SAMPLE_CAMPAIGNS.find((c) => c.id === campaignId) || SAMPLE_CAMPAIGNS[0];
+      const matched = SAMPLE_CAMPAIGNS.find((c) => c.id === campaignId);
+      if (matched) {
+        campaign = matched;
+      } else if (campaignId) {
+        campaign = {
+          id: campaignId,
+          name: 'Chiến dịch mới',
+          objectiveType: 'REVENUE',
+          status: 'PLANNING',
+          startDate: new Date().toISOString(),
+          endDate: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
+          financialSummary: {
+            campaignId,
+            totalRevenue: 0,
+            totalPlannedBudget: 50000000,
+            totalActualSpend: 0,
+            paidAdsSpend: 0,
+            netProfit: 0,
+            roiPercentage: 0,
+            roas: 0,
+            totalLeads: 0,
+            costPerLead: 0,
+            totalOrders: 0,
+            costPerAcquisition: 0,
+            rating: 'ON_TARGET' as const,
+            summaryVerdict: 'Chiến dịch đang trong giai đoạn lên kế hoạch (Planning), chưa phát sinh chi phí thực tế.',
+          },
+        };
+      } else {
+        campaign = SAMPLE_CAMPAIGNS[0];
+      }
     }
 
     const report = campaign.financialSummary;

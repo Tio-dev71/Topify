@@ -86,9 +86,29 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 2. Fallback to sample campaigns if matched by ID or default
+    // 2. Fallback to sample campaigns if matched by ID or clean default for new campaigns
     if (!campaign) {
-      campaign = SAMPLE_CAMPAIGNS.find((c) => c.id === campaignId) || SAMPLE_CAMPAIGNS[0];
+      const matched = SAMPLE_CAMPAIGNS.find((c) => c.id === campaignId);
+      if (matched) {
+        campaign = matched;
+      } else if (campaignId) {
+        campaign = {
+          id: campaignId,
+          name: 'Chiến dịch mới',
+          status: 'PLANNING',
+          totalBudget: 50000000,
+          totalSpent: 0,
+          startDate: new Date().toISOString(),
+          endDate: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
+          kpis: [{ id: 'kpi_1', name: 'Mục tiêu chiến dịch', metricType: 'REVENUE', targetValue: 150000000, currentValue: 0, unit: 'đ', completionRate: 0 }],
+          budgetCategories: [],
+          phases: [],
+          tasksCount: 4,
+          completedTasksCount: 0,
+        };
+      } else {
+        campaign = SAMPLE_CAMPAIGNS[0];
+      }
     }
 
     // 1. Content Progress (F135 & F138)

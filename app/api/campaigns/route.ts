@@ -84,6 +84,23 @@ async function resolveUserAndWorkspace(req: NextRequest) {
   return { userId, workspaceId, userName, userAvatar };
 }
 
+function mapToPrismaStatus(status?: string): 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETED' {
+  if (!status) return 'DRAFT';
+  if (status === 'RUNNING' || status === 'ACTIVE') return 'ACTIVE';
+  if (status === 'PAUSED') return 'PAUSED';
+  if (status === 'COMPLETED') return 'COMPLETED';
+  return 'DRAFT'; // for PLANNING, DRAFT, etc.
+}
+
+function mapFromPrismaStatus(prismaStatus: string, metadataStatus?: string): CampaignStatus {
+  if (metadataStatus && ['PLANNING', 'RUNNING', 'DRAFT', 'PAUSED', 'COMPLETED'].includes(metadataStatus)) {
+    return metadataStatus as CampaignStatus;
+  }
+  if (prismaStatus === 'ACTIVE') return 'RUNNING';
+  if (prismaStatus === 'DRAFT') return 'PLANNING';
+  return (prismaStatus as CampaignStatus) || 'PLANNING';
+}
+
 function parseCampaignMetadata(dc: any, defaultOwnerName: string, defaultOwnerAvatar?: string): EnrichedCampaign {
   let descText = dc.description || '';
   let channels: ChannelKey[] = ['TIKTOK', 'FACEBOOK'];
@@ -95,11 +112,13 @@ function parseCampaignMetadata(dc: any, defaultOwnerName: string, defaultOwnerAv
   let tasksCount = 4;
   let completedTasksCount = 0;
   let assetsCount = 0;
+  let metadataStatus: string | undefined = undefined;
 
   try {
     if (typeof descText === 'string' && descText.startsWith('{') && descText.endsWith('}')) {
       const parsed = JSON.parse(descText);
       descText = parsed.description ?? '';
+      metadataStatus = parsed.status;
       channels = Array.isArray(parsed.channels) ? parsed.channels : channels;
       kpis = Array.isArray(parsed.kpis) ? parsed.kpis : [];
       budgetCategories = Array.isArray(parsed.budgetCategories) ? parsed.budgetCategories : [];
@@ -177,7 +196,7 @@ function parseCampaignMetadata(dc: any, defaultOwnerName: string, defaultOwnerAv
     id: dc.id,
     name: dc.name,
     description: descText,
-    status: (dc.status as CampaignStatus) || 'DRAFT',
+    status: mapFromPrismaStatus(dc.status, metadataStatus),
     objectiveType: objType,
     startDate: dc.startDate ? dc.startDate.toISOString() : new Date().toISOString(),
     endDate: dc.endDate ? dc.endDate.toISOString() : new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
@@ -324,6 +343,7 @@ export async function POST(req: NextRequest) {
       phases: Array.isArray(phases) && phases.length > 0 ? phases : [],
       ownerName: resolvedOwnerName,
       ownerAvatar: resolvedOwnerAvatar,
+      status: (status as CampaignStatus) || 'PLANNING',
       tasksCount: 4,
       completedTasksCount: 0,
       assetsCount: 0,
@@ -345,7 +365,7 @@ export async function POST(req: NextRequest) {
             endDate: endDate ? new Date(endDate) : new Date(Date.now() + 14 * 24 * 3600 * 1000),
             budget: budgetNum,
             spent: 0,
-            status: (status as any) || 'PLANNING',
+            status: mapToPrismaStatus(status),
             ownerId: userId || undefined,
             workspaceId,
           },
@@ -461,7 +481,7 @@ export async function PATCH(req: NextRequest) {
 
     try {
       const updateData: any = {};
-      if (status) updateData.status = status;
+      if (status) updateData.status = mapToPrismaStatus(status);
       if (name) updateData.name = name;
       if (totalBudget !== undefined) updateData.budget = Number(totalBudget);
       if (totalSpent !== undefined) updateData.spent = Number(totalSpent);
