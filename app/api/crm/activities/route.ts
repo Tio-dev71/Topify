@@ -67,12 +67,67 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Tiêu đề hoạt động là bắt buộc' }, { status: 400 });
     }
 
+    let effectiveCustomerId = customerId || null;
+
     // Validate customer belongs to workspace if customerId provided
     if (customerId) {
-      const cust = await prisma.customer.findFirst({
+      let cust = await prisma.customer.findFirst({
         where: { id: customerId, workspaceId },
       });
+
       if (!cust) {
+        const cleanPhone = body.customerPhone ? String(body.customerPhone).replace(/[\s\-\.\(\)]/g, '') : null;
+        const cleanEmail = body.customerEmail ? String(body.customerEmail).trim().toLowerCase() : null;
+
+        if (cleanPhone || cleanEmail) {
+          cust = await prisma.customer.findFirst({
+            where: {
+              workspaceId,
+              OR: [
+                ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+                ...(cleanEmail ? [{ email: cleanEmail }] : []),
+              ],
+            },
+          });
+        }
+
+        // Auto-provision if lead details were supplied
+        if (!cust && (body.customerName || cleanPhone)) {
+          try {
+            cust = await prisma.customer.create({
+              data: {
+                id: customerId.startsWith('lead_') ? customerId : undefined,
+                workspaceId,
+                name: body.customerName ? String(body.customerName).trim() : 'Khách tiềm năng',
+                phone: cleanPhone,
+                email: cleanEmail,
+                source: body.customerSource || 'LEAD_F092',
+                tags: 'Lead, F092, Chăm sóc',
+                customData: {
+                  isLead: true,
+                  leadStatus: 'CONTACTING',
+                  sourceDetail: 'Tạo hoạt động & Lịch hẹn (F098)',
+                },
+              },
+            });
+          } catch {
+            cust = await prisma.customer.create({
+              data: {
+                workspaceId,
+                name: body.customerName ? String(body.customerName).trim() : 'Khách tiềm năng',
+                phone: cleanPhone,
+                email: cleanEmail,
+                source: body.customerSource || 'LEAD_F092',
+                tags: 'Lead, F092, Chăm sóc',
+              },
+            }).catch(() => null);
+          }
+        }
+      }
+
+      if (cust) {
+        effectiveCustomerId = cust.id;
+      } else {
         return NextResponse.json({ error: 'Khách hàng không tồn tại trong workspace' }, { status: 404 });
       }
     }
@@ -85,7 +140,7 @@ export async function POST(req: NextRequest) {
         type: finalType as any,
         title: title.trim(),
         description: description?.trim() || null,
-        customerId: customerId || null,
+        customerId: effectiveCustomerId,
         dueDate: dueDate ? new Date(dueDate) : null,
         isDone: Boolean(isDone),
         createdById: session.user.id,

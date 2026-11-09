@@ -15,6 +15,7 @@ vi.mock('@/lib/db', () => {
     },
     customer: {
       findFirst: vi.fn(),
+      create: vi.fn(),
     },
   };
   return {
@@ -116,6 +117,45 @@ describe('CRM Activities API (F098) - /api/crm/activities', () => {
       expect(res.status).toBe(201);
       const data = await res.json();
       expect(data.activity.title).toBe('Hẹn gọi lại vào 14h chiều mai');
+    });
+
+    it('creates activity linked to a Lead (F092) and auto-provisions customer record', async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: 'u1', workspaceId: 'ws1' },
+      } as any);
+
+      // Customer not in DB yet
+      vi.mocked(prisma.customer.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.customer.create).mockResolvedValue({
+        id: 'lead_inbox_1',
+        name: 'Nguyễn Hoàng Nam',
+        phone: '0988112233',
+        workspaceId: 'ws1',
+      } as any);
+
+      vi.mocked(prisma.crmActivity.create).mockResolvedValue({
+        id: 'act_lead_1',
+        type: 'MESSAGE',
+        title: 'Tư vấn gói giải pháp cho Lead Messenger',
+        customerId: 'lead_inbox_1',
+        isDone: false,
+      } as any);
+
+      const req = new NextRequest('http://localhost/api/crm/activities', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'MESSAGE',
+          title: 'Tư vấn gói giải pháp cho Lead Messenger',
+          customerId: 'lead_inbox_1',
+          customerName: 'Nguyễn Hoàng Nam',
+          customerPhone: '0988112233',
+        }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.activity.customerId).toBe('lead_inbox_1');
     });
 
     it('returns 400 if title is empty', async () => {

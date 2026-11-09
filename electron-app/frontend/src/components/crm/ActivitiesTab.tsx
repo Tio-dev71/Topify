@@ -31,11 +31,22 @@ export interface ActivityItem {
   createdBy?: { id: string; name: string; email?: string } | null;
 }
 
-interface CustomerOption {
+export interface CustomerOption {
   id: string;
   name: string | null;
   phone: string | null;
   email: string | null;
+  source?: string | null;
+}
+
+export interface PersonOption {
+  id: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  source?: string | null;
+  sourceDetail?: string | null;
+  type: 'LEAD' | 'CUSTOMER';
 }
 
 export default function ActivitiesTab({ customers = [] }: { customers?: CustomerOption[] }) {
@@ -45,6 +56,11 @@ export default function ActivitiesTab({ customers = [] }: { customers?: Customer
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'DONE'>('ALL');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // People list from both F092 (Leads) and F093 (Customers)
+  const [leadOptions, setLeadOptions] = useState<PersonOption[]>([]);
+  const [customerOptions, setCustomerOptions] = useState<PersonOption[]>([]);
+  const [loadingPeople, setLoadingPeople] = useState(false);
 
   // New activity form
   const [formData, setFormData] = useState({
@@ -69,9 +85,75 @@ export default function ActivitiesTab({ customers = [] }: { customers?: Customer
     }
   };
 
+  const fetchPeopleOptions = async () => {
+    setLoadingPeople(true);
+    try {
+      const [leadsRes, custRes] = await Promise.allSettled([
+        api.get('/crm/leads'),
+        api.get('/crm/customers?limit=100&sortBy=name'),
+      ]);
+
+      if (leadsRes.status === 'fulfilled' && leadsRes.value.data?.leads) {
+        const mappedLeads: PersonOption[] = leadsRes.value.data.leads.map((l: any) => ({
+          id: l.id,
+          name: l.name || 'Khách tiềm năng',
+          phone: l.phone,
+          email: l.email,
+          source: l.source,
+          sourceDetail: l.sourceDetail,
+          type: 'LEAD',
+        }));
+        setLeadOptions(mappedLeads);
+      }
+
+      if (custRes.status === 'fulfilled' && custRes.value.data?.customers) {
+        const mappedCusts: PersonOption[] = custRes.value.data.customers.map((c: any) => ({
+          id: c.id,
+          name: c.name || 'Khách hàng',
+          phone: c.phone,
+          email: c.email,
+          source: c.source,
+          type: 'CUSTOMER',
+        }));
+        setCustomerOptions(mappedCusts);
+      } else if (customers && customers.length > 0) {
+        setCustomerOptions(
+          customers.map((c: any) => ({
+            id: c.id,
+            name: c.name || 'Khách hàng',
+            phone: c.phone,
+            email: c.email,
+            source: c.source,
+            type: 'CUSTOMER',
+          }))
+        );
+      }
+    } catch {
+      // fallback
+    } finally {
+      setLoadingPeople(false);
+    }
+  };
+
   useEffect(() => {
     fetchActivities();
+    fetchPeopleOptions();
   }, []);
+
+  useEffect(() => {
+    if (customers && customers.length > 0 && customerOptions.length === 0) {
+      setCustomerOptions(
+        customers.map((c: any) => ({
+          id: c.id,
+          name: c.name || 'Khách hàng',
+          phone: c.phone,
+          email: c.email,
+          source: c.source,
+          type: 'CUSTOMER',
+        }))
+      );
+    }
+  }, [customers]);
 
   const handleToggleDone = async (activity: ActivityItem) => {
     const newStatus = !activity.isDone;
@@ -104,6 +186,9 @@ export default function ActivitiesTab({ customers = [] }: { customers?: Customer
       return;
     }
 
+    const allPeople = [...leadOptions, ...customerOptions];
+    const selectedPerson = allPeople.find(p => p.id === formData.customerId);
+
     setSubmitting(true);
     try {
       const payload: any = {
@@ -112,6 +197,10 @@ export default function ActivitiesTab({ customers = [] }: { customers?: Customer
         description: formData.description.trim() || undefined,
         customerId: formData.customerId || undefined,
         dueDate: formData.dueDate || undefined,
+        customerName: selectedPerson?.name,
+        customerPhone: selectedPerson?.phone,
+        customerEmail: selectedPerson?.email,
+        customerSource: selectedPerson?.source,
       };
 
       const res = await api.post('/crm/activities', payload);
@@ -189,8 +278,11 @@ export default function ActivitiesTab({ customers = [] }: { customers?: Customer
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xs"
+            onClick={() => {
+              setShowCreateModal(true);
+              fetchPeopleOptions();
+            }}
+            className="btn-primary flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Tạo hoạt động mới</span>
@@ -422,18 +514,50 @@ export default function ActivitiesTab({ customers = [] }: { customers?: Customer
               </div>
 
               <div>
-                <label className="font-bold text-gray-700 block mb-1">Khách hàng liên quan</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-gray-700 block">Khách hàng liên quan</label>
+                  <span className="text-[11px] text-gray-400 font-medium">
+                    {leadOptions.length} Khách tiềm năng (F092) • {customerOptions.length} Hồ sơ khách (F093)
+                  </span>
+                </div>
                 <select
                   value={formData.customerId}
                   onChange={e => setFormData({ ...formData, customerId: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-blue-500 text-xs bg-white"
+                  className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-blue-500 text-xs bg-white font-medium"
                 >
                   <option value="">-- Không gắn khách hàng cụ thể --</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name || 'Khách không tên'} {c.phone ? `(${c.phone})` : ''}
-                    </option>
-                  ))}
+
+                  {/* 1. Nhóm Khách hàng tiềm năng (F092) */}
+                  {leadOptions.length > 0 && (
+                    <optgroup label={`📋 Khách hàng tiềm năng (Leads - F092) [${leadOptions.length}]`}>
+                      {leadOptions.map(l => (
+                        <option key={`lead_${l.id}`} value={l.id}>
+                          [Lead] {l.name} {l.phone ? `(${l.phone})` : ''} {l.sourceDetail ? `• ${l.sourceDetail}` : l.source ? `• Kênh ${l.source}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {/* 2. Nhóm Hồ sơ khách hàng (F093) */}
+                  {customerOptions.length > 0 ? (
+                    <optgroup label={`👥 Hồ sơ khách hàng (Customers - F093) [${customerOptions.length}]`}>
+                      {customerOptions.map(c => (
+                        <option key={`cust_${c.id}`} value={c.id}>
+                          [Khách hàng] {c.name || 'Khách chưa đặt tên'} {c.phone ? `(${c.phone})` : ''} {c.source ? `• Kênh ${c.source}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    customers.length > 0 && (
+                      <optgroup label={`👥 Hồ sơ khách hàng (Customers - F093) [${customers.length}]`}>
+                        {customers.map(c => (
+                          <option key={`cust_prop_${c.id}`} value={c.id}>
+                            [Khách hàng] {c.name || 'Khách chưa đặt tên'} {c.phone ? `(${c.phone})` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  )}
                 </select>
               </div>
 
