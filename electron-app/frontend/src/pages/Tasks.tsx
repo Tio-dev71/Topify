@@ -244,6 +244,34 @@ export default function Tasks() {
           if (mapped[0]?.id) {
             setNewAssigneeId(mapped[0].id);
           }
+
+          // Re-sync tasks' collaborators with real team members
+          setTasks((prev) => {
+            const synced = prev.map((t) => {
+              const ids = t.collaboratorIds || [];
+              const collabs = ids.map((id) => {
+                const found = mapped.find((m: any) => m.id === id || m.email?.toLowerCase() === id.toLowerCase());
+                if (found) {
+                  return {
+                    id: found.id,
+                    name: found.name,
+                    email: found.email,
+                    avatar: found.avatar,
+                  };
+                }
+                const existing = t.collaborators?.find((c) => c.id === id);
+                if (existing && existing.name && (existing.name !== 'Lê Hoàng C' || id === 'user_3')) {
+                  return existing;
+                }
+                return existing || { id, name: id.includes('@') ? id.split('@')[0] : 'Thành viên', email: `${id}@topify.vn` };
+              });
+              return { ...t, collaborators: collabs };
+            });
+            try {
+              localStorage.setItem('topify_tasks_cache', JSON.stringify(synced));
+            } catch {}
+            return synced;
+          });
         }
       } catch (err) {
         // keep TEAM_MEMBERS fallback
@@ -283,9 +311,32 @@ export default function Tasks() {
             merged = [...fetchedTasks, ...unsynced];
           }
         } catch {}
-        setTasks(merged);
+
+        // Re-enrich with current teamMembers
+        const enriched = merged.map((t) => {
+          const ids = t.collaboratorIds || [];
+          const collabs = ids.map((id) => {
+            const found = teamMembers.find((m) => m.id === id || m.email?.toLowerCase() === id.toLowerCase());
+            if (found) {
+              return {
+                id: found.id,
+                name: found.name,
+                email: found.email,
+                avatar: found.avatar,
+              };
+            }
+            const existing = t.collaborators?.find((c) => c.id === id);
+            if (existing && existing.name && (existing.name !== 'Lê Hoàng C' || id === 'user_3')) {
+              return existing;
+            }
+            return existing || { id, name: id.includes('@') ? id.split('@')[0] : 'Thành viên', email: `${id}@topify.vn` };
+          });
+          return { ...t, collaborators: collabs };
+        });
+
+        setTasks(enriched);
         try {
-          localStorage.setItem('topify_tasks_cache', JSON.stringify(merged));
+          localStorage.setItem('topify_tasks_cache', JSON.stringify(enriched));
         } catch {}
       }
     } catch (err) {
@@ -444,7 +495,10 @@ export default function Tasks() {
         status: updatedTask.status,
         dueDate: updatedTask.dueDate,
         assigneeId: updatedTask.assigneeId,
+        assigneeName: assignee?.name,
+        assigneeEmail: assignee?.email,
         collaboratorIds: updatedTask.collaboratorIds,
+        collaborators: updatedTask.collaborators,
         isRecurring: updatedTask.isRecurring,
         recurRule: updatedTask.recurRule,
       });
@@ -793,6 +847,7 @@ export default function Tasks() {
         assigneeName: localTask.assignee?.name,
         assigneeEmail: localTask.assignee?.email,
         collaboratorIds: localTask.collaboratorIds,
+        collaborators: localTask.collaborators,
         isRecurring: false,
         subtasks: localTask.subtasks,
         templateId: tpl.id,
@@ -995,6 +1050,7 @@ export default function Tasks() {
         assigneeName: assignee?.name,
         assigneeEmail: assignee?.email,
         collaboratorIds: localTask.collaboratorIds,
+        collaborators: localTask.collaborators,
         isRecurring: localTask.isRecurring,
         recurRule: localTask.recurRule,
         subtasks: localTask.subtasks,
@@ -1002,6 +1058,16 @@ export default function Tasks() {
 
       if (res.data?.success && res.data?.task) {
         const serverTask: EnrichedTask = res.data.task;
+        // Keep selected collaborator names if server returned fallback
+        if (serverTask.collaborators && serverTask.collaborators.length > 0) {
+          serverTask.collaborators = serverTask.collaborators.map((c) => {
+            const localC = localTask.collaborators.find((lc) => lc.id === c.id);
+            if (localC && localC.name && (localC.name !== 'Lê Hoàng C' || c.id === 'user_3')) {
+              return { ...c, name: localC.name, email: localC.email || c.email };
+            }
+            return c;
+          });
+        }
         setTasks((prev) => {
           const updated = prev.map((t) => (t.id === localTask.id ? serverTask : t));
           try {
@@ -1321,19 +1387,23 @@ export default function Tasks() {
                                     )}
                                   </div>
                                 )}
-                                {task.collaborators.map((c) => (
-                                  <div
-                                    key={c.id}
-                                    className="w-6 h-6 rounded-full border-2 border-[var(--color-card)] overflow-hidden bg-slate-600 text-white text-[9px] flex items-center justify-center font-bold"
-                                    title={`Phối hợp: ${c.name}`}
-                                  >
-                                    {c.avatar ? (
-                                      <img src={c.avatar} alt="collab" className="w-full h-full object-cover" />
-                                    ) : (
-                                      c.name[0]
-                                    )}
-                                  </div>
-                                ))}
+                                {task.collaborators.map((c) => {
+                                  const member = teamMembers.find((m) => m.id === c.id || m.email?.toLowerCase() === c.email?.toLowerCase());
+                                  const displayName = member?.name || (c.name === 'Lê Hoàng C' && c.id !== 'user_3' ? (member?.name || 'Thành viên') : c.name);
+                                  return (
+                                    <div
+                                      key={c.id}
+                                      className="w-6 h-6 rounded-full border-2 border-[var(--color-card)] overflow-hidden bg-slate-600 text-white text-[9px] flex items-center justify-center font-bold"
+                                      title={`Phối hợp: ${displayName}`}
+                                    >
+                                      {c.avatar ? (
+                                        <img src={c.avatar} alt="collab" className="w-full h-full object-cover" />
+                                      ) : (
+                                        displayName ? displayName[0].toUpperCase() : 'U'
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
 
                               {/* Stats: comments & attachments */}
@@ -1471,15 +1541,19 @@ export default function Tasks() {
                         <td className="py-3 px-3">
                           <div className="flex items-center -space-x-1">
                             {task.collaborators.length > 0 ? (
-                              task.collaborators.map((c) => (
-                                <div
-                                  key={c.id}
-                                  className="w-5 h-5 rounded-full bg-slate-600 text-white flex items-center justify-center font-bold text-[9px] border border-[var(--color-card)]"
-                                  title={c.name}
-                                >
-                                  {c.name[0]}
-                                </div>
-                              ))
+                              task.collaborators.map((c) => {
+                                const member = teamMembers.find((m) => m.id === c.id || m.email?.toLowerCase() === c.email?.toLowerCase());
+                                const displayName = member?.name || (c.name === 'Lê Hoàng C' && c.id !== 'user_3' ? (member?.name || 'Thành viên') : c.name);
+                                return (
+                                  <div
+                                    key={c.id}
+                                    className="w-5 h-5 rounded-full bg-slate-600 text-white flex items-center justify-center font-bold text-[9px] border border-[var(--color-card)]"
+                                    title={displayName}
+                                  >
+                                    {displayName ? displayName[0].toUpperCase() : 'U'}
+                                  </div>
+                                );
+                              })
                             ) : (
                               <span className="text-[11px] text-[var(--color-muted-foreground)]">Không có</span>
                             )}
@@ -1964,17 +2038,21 @@ export default function Tasks() {
                   </span>
                   <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                     {selectedTask.collaborators.length > 0 ? (
-                      selectedTask.collaborators.map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)]"
-                        >
-                          <div className="w-4 h-4 rounded-full bg-slate-600 text-white flex items-center justify-center font-bold text-[8px]">
-                            {c.name[0]}
+                      selectedTask.collaborators.map((c) => {
+                        const member = teamMembers.find((m) => m.id === c.id || m.email?.toLowerCase() === c.email?.toLowerCase());
+                        const displayName = member?.name || (c.name === 'Lê Hoàng C' && c.id !== 'user_3' ? (member?.name || (c.email ? c.email.split('@')[0] : 'Thành viên')) : c.name);
+                        return (
+                          <div
+                            key={c.id}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-card)] border border-[var(--color-border)]"
+                          >
+                            <div className="w-4 h-4 rounded-full bg-slate-600 text-white flex items-center justify-center font-bold text-[8px]">
+                              {displayName ? displayName[0].toUpperCase() : 'U'}
+                            </div>
+                            <span className="font-medium text-[var(--color-foreground)]">{displayName}</span>
                           </div>
-                          <span className="font-medium text-[var(--color-foreground)]">{c.name}</span>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <span className="text-[11px] text-[var(--color-muted-foreground)] italic mt-1 block">
                         Chưa có người phối hợp

@@ -89,7 +89,7 @@ describe('Work & Tasks API (F124-F131) - /api/tasks', () => {
       expect(data.error).toBe('Tiêu đề công việc không được để trống');
     });
 
-    it('creates a task and saves to DB and memory store', async () => {
+    it('creates a task and saves to DB and memory store with collaborator details', async () => {
       vi.mocked(auth).mockResolvedValue({
         user: { id: 'u1', workspaceId: 'ws1' },
       } as any);
@@ -110,7 +110,14 @@ describe('Work & Tasks API (F124-F131) - /api/tasks', () => {
           priority: 'HIGH',
           status: 'TODO',
           assigneeId: 'u1',
-          collaboratorIds: ['u2'],
+          collaboratorIds: ['cmujhec3g0002fvhugp76328h'],
+          collaborators: [
+            {
+              id: 'cmujhec3g0002fvhugp76328h',
+              name: 'Đồng nghiệp Minh',
+              email: 'minh@topify.vn',
+            },
+          ],
         }),
       });
 
@@ -122,6 +129,9 @@ describe('Work & Tasks API (F124-F131) - /api/tasks', () => {
       expect(data.task.title).toBe('Tạo công việc mới');
       expect(data.task.priority).toBe('HIGH');
       expect(data.task.status).toBe('TODO');
+      expect(data.task.collaborators[0].name).toBe('Đồng nghiệp Minh');
+      expect(data.task.collaborators[0].email).toBe('minh@topify.vn');
+      expect(data.task.collaborators[0].name).not.toBe('Lê Hoàng C');
     });
   });
 

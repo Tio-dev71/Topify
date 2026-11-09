@@ -39,6 +39,151 @@ export interface EnrichedTask {
   updatedAt: string;
 }
 
+export interface CollaboratorInfo {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+}
+
+const DEMO_MEMBERS_MAP: Record<string, CollaboratorInfo> = {
+  user_1: { id: 'user_1', name: 'Nguyễn Văn A', email: 'nguyenvana@topify.vn' },
+  user_2: { id: 'user_2', name: 'Trần Thị B', email: 'tranthib@topify.vn' },
+  user_3: { id: 'user_3', name: 'Lê Hoàng C', email: 'lehoangc@topify.vn' },
+};
+
+async function buildWorkspaceMemberMap(workspaceId?: string | null, currentUserId?: string | null): Promise<Map<string, CollaboratorInfo>> {
+  const map = new Map<string, CollaboratorInfo>();
+
+  for (const [id, m] of Object.entries(DEMO_MEMBERS_MAP)) {
+    map.set(id, m);
+    map.set(m.email.toLowerCase(), m);
+  }
+
+  try {
+    const userOrCond: any[] = [];
+    if (workspaceId) userOrCond.push({ workspaceId });
+    if (currentUserId) userOrCond.push({ id: currentUserId });
+
+    const [users, allowedEmails] = await Promise.all([
+      userOrCond.length > 0 && prisma.user?.findMany
+        ? prisma.user.findMany({
+            where: { OR: userOrCond },
+            select: { id: true, name: true, email: true, image: true },
+          })
+        : Promise.resolve([]),
+      workspaceId && (prisma as any).allowedEmail?.findMany
+        ? (prisma as any).allowedEmail.findMany({
+            where: { workspaceId },
+            select: { id: true, email: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    if (Array.isArray(users)) {
+      for (const u of users) {
+        const info: CollaboratorInfo = {
+          id: u.id,
+          name: u.name || (u.email ? u.email.split('@')[0] : 'Thành viên'),
+          email: u.email || `${u.id}@topify.vn`,
+          avatar: u.image || undefined,
+        };
+        map.set(u.id, info);
+        if (u.email) map.set(u.email.toLowerCase(), info);
+      }
+    }
+
+    if (Array.isArray(allowedEmails)) {
+      for (const a of allowedEmails) {
+        const info: CollaboratorInfo = {
+          id: a.id,
+          name: a.email ? a.email.split('@')[0] : 'Thành viên',
+          email: a.email || `${a.id}@topify.vn`,
+        };
+        map.set(a.id, info);
+        if (a.email && !map.has(a.email.toLowerCase())) {
+          map.set(a.email.toLowerCase(), info);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[TASKS] Failed to load workspace members for task collaborator resolution:', err);
+  }
+
+  return map;
+}
+
+function resolveCollaborators(
+  collabIds: string[],
+  providedCollaborators?: CollaboratorInfo[] | null,
+  memberMap?: Map<string, CollaboratorInfo>
+): CollaboratorInfo[] {
+  const ids = Array.isArray(collabIds) ? collabIds : [];
+  const providedMap = new Map<string, CollaboratorInfo>();
+  if (Array.isArray(providedCollaborators)) {
+    for (const c of providedCollaborators) {
+      if (c && c.id) {
+        providedMap.set(c.id, c);
+        if (c.email) providedMap.set(c.email.toLowerCase(), c);
+      }
+    }
+  }
+
+  return ids.map((id) => {
+    // 1. If explicit collaborator details were provided with an actual name
+    if (providedMap.has(id)) {
+      const p = providedMap.get(id)!;
+      if (p.name && (p.name !== 'Lê Hoàng C' || id === 'user_3')) {
+        return {
+          id,
+          name: p.name,
+          email: p.email || `${id}@topify.vn`,
+          avatar: p.avatar,
+        };
+      }
+    }
+
+    // 2. Check workspace member map (registered users & allowedEmails)
+    if (memberMap && memberMap.has(id)) {
+      return memberMap.get(id)!;
+    }
+    if (memberMap && memberMap.has(id.toLowerCase())) {
+      return memberMap.get(id.toLowerCase())!;
+    }
+
+    // 3. Fallback to provided collaborator if available
+    if (providedMap.has(id)) {
+      const p = providedMap.get(id)!;
+      return {
+        id,
+        name: p.name || (p.email ? p.email.split('@')[0] : 'Thành viên'),
+        email: p.email || `${id}@topify.vn`,
+        avatar: p.avatar,
+      };
+    }
+
+    // 4. Email string
+    if (id.includes('@')) {
+      return {
+        id,
+        name: id.split('@')[0],
+        email: id,
+      };
+    }
+
+    // 5. Demo IDs
+    if (id === 'user_1') return { id: 'user_1', name: 'Nguyễn Văn A', email: 'nguyenvana@topify.vn' };
+    if (id === 'user_2') return { id: 'user_2', name: 'Trần Thị B', email: 'tranthib@topify.vn' };
+    if (id === 'user_3') return { id: 'user_3', name: 'Lê Hoàng C', email: 'lehoangc@topify.vn' };
+
+    return {
+      id,
+      name: 'Thành viên',
+      email: `${id}@topify.vn`,
+    };
+  });
+}
+
 // In-memory task store (starts clean for testing)
 let memoryTasks: EnrichedTask[] = [];
 
@@ -72,20 +217,24 @@ export async function GET(req: NextRequest) {
       }
 
       if (workspaceId) {
-        const dbTasks = await prisma.task.findMany({
-          where: { workspaceId, parentId: null },
-          include: {
-            assignee: { select: { id: true, name: true, email: true, image: true } },
-            children: true,
-            _count: { select: { comments: true } },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
+        const [dbTasks, memberMap] = await Promise.all([
+          prisma.task.findMany({
+            where: { workspaceId, parentId: null },
+            include: {
+              assignee: { select: { id: true, name: true, email: true, image: true } },
+              children: true,
+              _count: { select: { comments: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+          }),
+          buildWorkspaceMemberMap(workspaceId, session?.user?.id),
+        ]);
 
         if (dbTasks) {
           const mappedDbTasks = dbTasks.map((t: any) => {
             // Parse collaboratorIds and subtasks from recurRule if encoded as JSON
             let collabIds: string[] = [];
+            let storedCollaborators: CollaboratorInfo[] = [];
             let recurRuleStr: string | null = t.recurRule;
             let subtasksList: any[] = [];
             try {
@@ -93,6 +242,9 @@ export async function GET(req: NextRequest) {
                 const parsed = JSON.parse(t.recurRule);
                 collabIds = parsed.collaboratorIds || [];
                 recurRuleStr = parsed.recurRule || null;
+                if (Array.isArray(parsed.collaborators)) {
+                  storedCollaborators = parsed.collaborators;
+                }
                 if (Array.isArray(parsed.subtasks)) {
                   subtasksList = parsed.subtasks;
                 }
@@ -109,6 +261,17 @@ export async function GET(req: NextRequest) {
               }));
             }
 
+            let resolvedAssignee = t.assignee;
+            if (!resolvedAssignee && t.assigneeId && memberMap.has(t.assigneeId)) {
+              const m = memberMap.get(t.assigneeId)!;
+              resolvedAssignee = {
+                id: m.id,
+                name: m.name,
+                email: m.email,
+                image: m.avatar || null,
+              };
+            }
+
             return {
               id: t.id,
               title: t.title,
@@ -117,13 +280,9 @@ export async function GET(req: NextRequest) {
               status: t.status === 'IN_REVIEW' ? 'REVIEW' : (t.status as TaskStatus) || 'TODO',
               dueDate: t.dueDate ? t.dueDate.toISOString() : null,
               assigneeId: t.assigneeId,
-              assignee: t.assignee,
+              assignee: resolvedAssignee,
               collaboratorIds: collabIds,
-              collaborators: collabIds.map((cId) => ({
-                id: cId,
-                name: cId === 'user_1' ? 'Nguyễn Văn A' : cId === 'user_2' ? 'Trần Thị B' : 'Lê Hoàng C',
-                email: `${cId}@topify.vn`,
-              })),
+              collaborators: resolveCollaborators(collabIds, storedCollaborators, memberMap),
               isRecurring: t.isRecurring,
               recurRule: recurRuleStr,
               subtasks: subtasksList,
@@ -197,6 +356,7 @@ export async function POST(req: NextRequest) {
       assigneeName,
       assigneeEmail,
       collaboratorIds = [],
+      collaborators = [],
       isRecurring = false,
       recurRule,
       subtasks = [],
@@ -207,6 +367,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Tiêu đề công việc không được để trống' }, { status: 400 });
     }
 
+    // Identify user & workspace
+    const session = await auth();
+    let workspaceId = (session?.user as any)?.workspaceId;
+    let userId = session?.user?.id;
+
+    if (!workspaceId && userId) {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { workspaceId: true },
+        });
+        workspaceId = dbUser?.workspaceId;
+      } catch {}
+    }
+
+    if (!workspaceId) {
+      try {
+        const firstWs = await prisma.workspace.findFirst({ select: { id: true } });
+        workspaceId = firstWs?.id;
+      } catch {}
+    }
+
+    if (!userId) {
+      try {
+        const firstUser = await prisma.user.findFirst({ select: { id: true } });
+        userId = firstUser?.id;
+      } catch {}
+    }
+
+    const memberMap = await buildWorkspaceMemberMap(workspaceId, userId);
+    const resolvedCollabIds = Array.isArray(collaboratorIds) && collaboratorIds.length > 0
+      ? collaboratorIds
+      : (Array.isArray(collaborators) ? collaborators.map((c: any) => c.id) : []);
+    const resolvedCollaborators = resolveCollaborators(resolvedCollabIds, collaborators, memberMap);
+
+    let resolvedAssignee: any = null;
+    if (assigneeId) {
+      const found = memberMap.get(assigneeId);
+      resolvedAssignee = {
+        id: assigneeId,
+        name: assigneeName || found?.name || (assigneeId.includes('@') ? assigneeId.split('@')[0] : 'Người phụ trách'),
+        email: assigneeEmail || found?.email || `${assigneeId}@topify.vn`,
+        image: found?.avatar || null,
+      };
+    }
+
     const newTask: EnrichedTask = {
       id: `task_${Date.now()}`,
       title: title.trim(),
@@ -215,19 +421,9 @@ export async function POST(req: NextRequest) {
       status: (status as TaskStatus) || 'TODO',
       dueDate: dueDate ? new Date(dueDate).toISOString() : null,
       assigneeId: assigneeId || null,
-      assignee: assigneeId
-        ? {
-            id: assigneeId,
-            name: assigneeName || 'Người phụ trách',
-            email: assigneeEmail || 'member@topify.vn',
-          }
-        : null,
-      collaboratorIds: Array.isArray(collaboratorIds) ? collaboratorIds : [],
-      collaborators: (Array.isArray(collaboratorIds) ? collaboratorIds : []).map((id: string) => ({
-        id,
-        name: id === 'user_1' ? 'Nguyễn Văn A' : id === 'user_2' ? 'Trần Thị B' : 'Lê Hoàng C',
-        email: `${id}@topify.vn`,
-      })),
+      assignee: resolvedAssignee,
+      collaboratorIds: resolvedCollabIds,
+      collaborators: resolvedCollaborators,
       isRecurring: Boolean(isRecurring),
       recurRule: recurRule || null,
       subtasks: Array.isArray(subtasks)
@@ -258,28 +454,6 @@ export async function POST(req: NextRequest) {
 
     // Try save to database if available
     try {
-      const session = await auth();
-      let workspaceId = (session?.user as any)?.workspaceId;
-      let userId = session?.user?.id;
-
-      if (!workspaceId && userId) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { workspaceId: true },
-        });
-        workspaceId = dbUser?.workspaceId;
-      }
-
-      if (!workspaceId) {
-        const firstWs = await prisma.workspace.findFirst({ select: { id: true } });
-        workspaceId = firstWs?.id;
-      }
-
-      if (!userId) {
-        const firstUser = await prisma.user.findFirst({ select: { id: true } });
-        userId = firstUser?.id;
-      }
-
       if (workspaceId && userId) {
         let validAssigneeId: string | null = null;
         if (newTask.assigneeId) {
@@ -293,6 +467,7 @@ export async function POST(req: NextRequest) {
         const encodedRule = JSON.stringify({
           recurRule: recurRule || null,
           collaboratorIds: newTask.collaboratorIds,
+          collaborators: newTask.collaborators,
           subtasks: newTask.subtasks,
         });
 
@@ -309,8 +484,14 @@ export async function POST(req: NextRequest) {
             createdById: userId,
             workspaceId,
           },
+          include: {
+            assignee: { select: { id: true, name: true, email: true, image: true } },
+          },
         });
         newTask.id = createdDb.id;
+        if (createdDb.assignee) {
+          newTask.assignee = createdDb.assignee;
+        }
 
         await recordAuditLog({
           action: 'TASK.CREATE',
@@ -347,11 +528,46 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, taskId, status, priority, title, description, dueDate, assigneeId, collaboratorIds, subtasks, isRecurring, recurRule } = body;
+    const {
+      id,
+      taskId,
+      status,
+      priority,
+      title,
+      description,
+      dueDate,
+      assigneeId,
+      assigneeName,
+      assigneeEmail,
+      collaboratorIds,
+      collaborators,
+      subtasks,
+      isRecurring,
+      recurRule,
+    } = body;
     const targetId = id || taskId;
 
     if (!targetId) {
       return NextResponse.json({ error: 'Mã công việc không hợp lệ' }, { status: 400 });
+    }
+
+    const session = await auth();
+    let workspaceId = (session?.user as any)?.workspaceId;
+    let userId = session?.user?.id;
+    if (!workspaceId && userId) {
+      try {
+        const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { workspaceId: true } });
+        workspaceId = dbUser?.workspaceId;
+      } catch {}
+    }
+    const memberMap = await buildWorkspaceMemberMap(workspaceId, userId);
+
+    let resolvedCollabs: CollaboratorInfo[] | undefined;
+    if (collaboratorIds !== undefined || collaborators !== undefined) {
+      const targetIds = collaboratorIds !== undefined
+        ? collaboratorIds
+        : (Array.isArray(collaborators) ? collaborators.map((c: any) => c.id) : []);
+      resolvedCollabs = resolveCollaborators(targetIds, collaborators, memberMap);
     }
 
     const index = memoryTasks.findIndex((t) => t.id === targetId);
@@ -363,21 +579,18 @@ export async function PATCH(req: NextRequest) {
       if (dueDate !== undefined) memoryTasks[index].dueDate = dueDate ? new Date(dueDate).toISOString() : null;
       if (assigneeId !== undefined) {
         memoryTasks[index].assigneeId = assigneeId;
+        const assignedMember = assigneeId ? memberMap.get(assigneeId) : null;
         memoryTasks[index].assignee = assigneeId
           ? {
               id: assigneeId,
-              name: assigneeId === 'user_1' ? 'Nguyễn Văn A' : assigneeId === 'user_2' ? 'Trần Thị B' : 'Lê Hoàng C',
-              email: `${assigneeId}@topify.vn`,
+              name: assigneeName || assignedMember?.name || (assigneeId.includes('@') ? assigneeId.split('@')[0] : 'Người phụ trách'),
+              email: assigneeEmail || assignedMember?.email || `${assigneeId}@topify.vn`,
             }
           : null;
       }
-      if (collaboratorIds !== undefined) {
-        memoryTasks[index].collaboratorIds = collaboratorIds;
-        memoryTasks[index].collaborators = collaboratorIds.map((cId: string) => ({
-          id: cId,
-          name: cId === 'user_1' ? 'Nguyễn Văn A' : cId === 'user_2' ? 'Trần Thị B' : 'Lê Hoàng C',
-          email: `${cId}@topify.vn`,
-        }));
+      if (resolvedCollabs !== undefined) {
+        memoryTasks[index].collaboratorIds = resolvedCollabs.map((c) => c.id);
+        memoryTasks[index].collaborators = resolvedCollabs;
       }
       if (subtasks !== undefined) {
         memoryTasks[index].subtasks = subtasks;
@@ -405,18 +618,72 @@ export async function PATCH(req: NextRequest) {
       }
       if (isRecurring !== undefined) updateData.isRecurring = isRecurring;
 
-      if (collaboratorIds !== undefined || subtasks !== undefined || recurRule !== undefined) {
+      if (resolvedCollabs !== undefined || subtasks !== undefined || recurRule !== undefined) {
+        let currentRule: any = {};
+        try {
+          const existingDb = await prisma.task.findUnique({ where: { id: targetId }, select: { recurRule: true } });
+          if (existingDb?.recurRule && existingDb.recurRule.startsWith('{')) {
+            currentRule = JSON.parse(existingDb.recurRule);
+          }
+        } catch {}
+
         updateData.recurRule = JSON.stringify({
-          recurRule: recurRule || null,
-          collaboratorIds: collaboratorIds || [],
-          subtasks: subtasks || [],
+          recurRule: recurRule !== undefined ? recurRule : (currentRule.recurRule || null),
+          collaboratorIds: resolvedCollabs ? resolvedCollabs.map((c) => c.id) : (currentRule.collaboratorIds || []),
+          collaborators: resolvedCollabs || currentRule.collaborators || [],
+          subtasks: subtasks !== undefined ? subtasks : (currentRule.subtasks || []),
         });
       }
 
-      await prisma.task.update({
+      const updatedDb = await prisma.task.update({
         where: { id: targetId },
         data: updateData,
+        include: {
+          assignee: { select: { id: true, name: true, email: true, image: true } },
+        },
       });
+
+      if (index === -1) {
+        let collabIds: string[] = [];
+        let storedCollaborators: CollaboratorInfo[] = [];
+        let recurRuleStr: string | null = updatedDb.recurRule;
+        let subtasksList: any[] = [];
+        try {
+          if (updatedDb.recurRule && updatedDb.recurRule.startsWith('{')) {
+            const parsed = JSON.parse(updatedDb.recurRule);
+            collabIds = parsed.collaboratorIds || [];
+            storedCollaborators = parsed.collaborators || [];
+            recurRuleStr = parsed.recurRule || null;
+            subtasksList = parsed.subtasks || [];
+          }
+        } catch {}
+
+        const returnedTask: EnrichedTask = {
+          id: updatedDb.id,
+          title: updatedDb.title,
+          description: updatedDb.description,
+          priority: updatedDb.priority as any,
+          status: updatedDb.status === 'IN_REVIEW' ? 'REVIEW' : (updatedDb.status as any),
+          dueDate: updatedDb.dueDate ? updatedDb.dueDate.toISOString() : null,
+          assigneeId: updatedDb.assigneeId,
+          assignee: updatedDb.assignee,
+          collaboratorIds: collabIds,
+          collaborators: resolveCollaborators(collabIds, storedCollaborators, memberMap),
+          isRecurring: updatedDb.isRecurring,
+          recurRule: recurRuleStr,
+          subtasks: subtasksList,
+          commentsCount: 0,
+          attachmentsCount: 0,
+          createdAt: updatedDb.createdAt.toISOString(),
+          updatedAt: updatedDb.updatedAt.toISOString(),
+        };
+
+        return NextResponse.json({
+          success: true,
+          task: returnedTask,
+          message: 'Cập nhật công việc thành công',
+        });
+      }
     } catch (e) {
       // ignore db error
     }
