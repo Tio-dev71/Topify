@@ -299,8 +299,8 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-12 p-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
               {activeTab === 'trending' ? 'Phân hệ M6 • F110' : 'Phân hệ M6 • F112'}
@@ -308,20 +308,20 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
             <span className="text-xs font-medium text-gray-400">Social Listening</span>
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2.5">
             {activeTab === 'trending' ? (
               <>
-                <Flame className="w-7 h-7 text-amber-500 fill-amber-500" />
-                Xu hướng & Nội dung Bùng nổ (Trending / Viral Content - F110)
+                <Flame className="w-6 h-6 sm:w-7 sm:h-7 text-amber-500 fill-amber-500 shrink-0" />
+                <span>Xu hướng & Nội dung Bùng nổ (Trending / Viral Content - F110)</span>
               </>
             ) : (
               <>
-                <Bell className="w-7 h-7 text-amber-500 fill-amber-500" />
-                Cảnh báo Từ khóa & Vượt ngưỡng (Keyword / Viral Alert - F112)
+                <Bell className="w-6 h-6 sm:w-7 sm:h-7 text-amber-500 fill-amber-500 shrink-0" />
+                <span>Cảnh báo Từ khóa & Vượt ngưỡng (Keyword / Viral Alert - F112)</span>
               </>
             )}
           </h1>
-          <p className="text-sm text-gray-500 mt-1 max-w-3xl">
+          <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-3xl">
             {activeTab === 'trending'
               ? 'Phát hiện nội dung tăng trưởng nhanh theo vận tốc tương tác (Velocity Score) trên đa nền tảng để tham khảo, lấy cảm hứng và 1-click Remix tạo bài viết mới.'
               : 'Thiết lập quy tắc cảnh báo khi keyword hoặc điểm viral score vượt ngưỡng (50–98 điểm); nhận thông báo tức thì qua Desktop App và Email.'}
@@ -329,26 +329,27 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start xl:self-center">
           <button
             onClick={() => {
               if (activeTab === 'trending') fetchTrending();
               else fetchAlerts();
             }}
-            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs"
+            className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs whitespace-nowrap shrink-0"
           >
-            <RefreshCw className="w-4 h-4" /> Làm mới
+            <RefreshCw className="w-4 h-4 shrink-0" />
+            <span>Làm mới</span>
           </button>
 
           {activeTab === 'alerts' && (
             <button
               onClick={handleTestTrigger}
               disabled={triggeringTest}
-              className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl transition-colors shadow-xs"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl transition-colors shadow-xs whitespace-nowrap shrink-0"
               title="Kích hoạt ngay một cảnh báo mẫu điểm 96/100 để kiểm chứng"
             >
-              <Zap className="w-4 h-4 text-amber-600" />
-              {triggeringTest ? 'Đang kích hoạt...' : 'Thử nghiệm Cảnh báo (Test Alert)'}
+              <Zap className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{triggeringTest ? 'Đang kích hoạt...' : 'Thử nghiệm Cảnh báo (Test Alert)'}</span>
             </button>
           )}
 
@@ -357,25 +358,26 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
               handleTabChange('alerts');
               setShowCreateRuleModal(true);
             }}
-            className="btn-primary flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl shadow-xs"
+            className="btn-primary flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl shadow-xs whitespace-nowrap shrink-0"
           >
-            <Plus className="w-4 h-4" /> Thiết lập Cảnh báo mới (F112)
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Thiết lập Cảnh báo mới (F112)</span>
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-3 border-b border-gray-200">
+      <div className="flex items-center gap-3 border-b border-gray-200 overflow-x-auto scrollbar-none">
         <button
           onClick={() => handleTabChange('trending')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${
             activeTab === 'trending'
               ? 'border-amber-500 text-amber-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          <TrendingUp className="w-4 h-4" />
-          Nội dung Bùng nổ (Trending / Viral Content - F110)
+          <TrendingUp className="w-4 h-4 shrink-0" />
+          <span>Nội dung Bùng nổ (Trending / Viral Content - F110)</span>
           <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-semibold border border-amber-100">
             {trendingList.length} video
           </span>
@@ -383,14 +385,14 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
 
         <button
           onClick={() => handleTabChange('alerts')}
-          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${
             activeTab === 'alerts'
               ? 'border-amber-500 text-amber-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          <Bell className="w-4 h-4" />
-          Cảnh báo Vượt ngưỡng & Quy tắc (Keyword / Viral Alert - F112)
+          <Bell className="w-4 h-4 shrink-0" />
+          <span>Cảnh báo Vượt ngưỡng & Quy tắc (Keyword / Viral Alert - F112)</span>
           {unreadAlertsCount > 0 ? (
             <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-rose-500 text-white font-bold animate-pulse">
               {unreadAlertsCount} mới
@@ -619,42 +621,42 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
 
       {/* TAB 2: ALERTS & RULES (F112) */}
       {activeTab === 'alerts' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Triggered Events List (2 Cols) */}
-          <div className="lg:col-span-2 space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Triggered Events List (Left Column) */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
+                <div className="min-w-0 pr-2">
                   <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-amber-500" />
-                    Cảnh Báo Vượt Ngưỡng Đã Kích Hoạt Theo Thời Gian Thực
+                    <Bell className="w-5 h-5 text-amber-500 shrink-0" />
+                    <span>Cảnh Báo Vượt Ngưỡng Đã Kích Hoạt Theo Thời Gian Thực</span>
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
                     Hệ thống tự động phát hiện và gửi tín hiệu báo động khi nội dung vượt ngưỡng Viral Velocity hoặc chứa từ khóa bùng nổ
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 self-end sm:self-auto text-xs">
+                <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto text-xs bg-gray-50/80 p-1 rounded-xl border border-gray-200/60">
                   <button
                     onClick={() => setAlertFilter('all')}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                      alertFilter === 'all' ? 'bg-amber-500 text-white shadow-xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap shrink-0 ${
+                      alertFilter === 'all' ? 'bg-amber-500 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-white'
                     }`}
                   >
                     Tất cả ({triggeredAlerts.length})
                   </button>
                   <button
                     onClick={() => setAlertFilter('unread')}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                      alertFilter === 'unread' ? 'bg-rose-500 text-white shadow-xs' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap shrink-0 ${
+                      alertFilter === 'unread' ? 'bg-rose-500 text-white shadow-xs' : 'text-rose-700 hover:bg-rose-100/60'
                     }`}
                   >
                     Chưa đọc ({unreadAlertsCount})
                   </button>
                   <button
                     onClick={() => setAlertFilter('read')}
-                    className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                      alertFilter === 'read' ? 'bg-gray-800 text-white shadow-xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap shrink-0 ${
+                      alertFilter === 'read' ? 'bg-gray-800 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-white'
                     }`}
                   >
                     Đã đọc ({triggeredAlerts.length - unreadAlertsCount})
@@ -748,22 +750,23 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
             </div>
           </div>
 
-          {/* Rules Configuration Panel (1 Col) */}
-          <div className="space-y-4">
+          {/* Rules Configuration Panel (Right Column) */}
+          <div className="lg:col-span-5 xl:col-span-4 space-y-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-amber-500" />
-                    Quy Tắc Ngưỡng Cảnh Báo
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-gray-100">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2 whitespace-nowrap">
+                    <Sliders className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Quy Tắc Ngưỡng Cảnh Báo</span>
                   </h3>
-                  <p className="text-[11px] text-gray-500 mt-0.5">Tự động kích hoạt khi vượt ngưỡng</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">Tự động kích hoạt khi vượt ngưỡng</p>
                 </div>
                 <button
                   onClick={() => setShowCreateRuleModal(true)}
-                  className="btn-primary text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs"
+                  className="btn-primary text-xs font-bold px-3 py-1.5 rounded-xl flex items-center justify-center gap-1 shadow-2xs whitespace-nowrap shrink-0 self-start sm:self-auto"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Thêm quy tắc
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span>Thêm quy tắc</span>
                 </button>
               </div>
 
