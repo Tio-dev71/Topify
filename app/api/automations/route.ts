@@ -270,7 +270,14 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    let id = searchParams.get('id');
+
+    if (!id) {
+      try {
+        const body = await req.json();
+        id = body?.id || null;
+      } catch {}
+    }
 
     if (!id) {
       return NextResponse.json({ error: 'Rule ID is required' }, { status: 400 });
