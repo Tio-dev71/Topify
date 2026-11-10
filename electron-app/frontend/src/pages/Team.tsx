@@ -16,6 +16,10 @@ import {
   ChevronRight,
   ExternalLink,
   Ban,
+  KeyRound,
+  Lock,
+  EyeOff,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -30,6 +34,10 @@ interface TeamMember {
     name: string | null;
     email: string;
   };
+  userId?: string;
+  licenseKey?: string;
+  hasPassword?: boolean;
+  defaultPassword?: string;
 }
 
 interface PendingInvite {
@@ -58,6 +66,8 @@ export default function Team() {
   const [showModal, setShowModal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<'STAFF' | 'ADMIN'>('STAFF');
+  const [initialPassword, setInitialPassword] = useState('Topify@123');
+  const [showInitialPassword, setShowInitialPassword] = useState(false);
   const [adding, setAdding] = useState(false);
 
   // View & Edit States
@@ -65,6 +75,13 @@ export default function Team() {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editRole, setEditRole] = useState('STAFF');
   const [updating, setUpdating] = useState(false);
+
+  // Credentials Management Modal States
+  const [managingCredentialsMember, setManagingCredentialsMember] = useState<TeamMember | null>(null);
+  const [credentialsPassword, setCredentialsPassword] = useState('Topify@123');
+  const [credentialsLicenseKey, setCredentialsLicenseKey] = useState('');
+  const [savingCredentials, setSavingCredentials] = useState(false);
+  const [showCredPassword, setShowCredPassword] = useState(false);
 
   useEffect(() => {
     loadAllData();
@@ -108,6 +125,81 @@ export default function Team() {
     }
   };
 
+  const handleOpenCredentials = async (member: TeamMember) => {
+    setManagingCredentialsMember(member);
+    setCredentialsPassword(member.defaultPassword || 'Topify@123');
+    setCredentialsLicenseKey(member.licenseKey || '');
+    setShowCredPassword(false);
+
+    try {
+      const res = await api.get(`/team/credentials?email=${encodeURIComponent(member.email)}`);
+      if (res.data?.credentials) {
+        if (res.data.credentials.licenseKey) {
+          setCredentialsLicenseKey(res.data.credentials.licenseKey);
+        }
+        if (res.data.credentials.defaultPassword) {
+          setCredentialsPassword(res.data.credentials.defaultPassword);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch credentials detail:', e);
+    }
+  };
+
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!managingCredentialsMember) return;
+    if (!credentialsPassword.trim()) {
+      toast.error('Vui lòng nhập mật khẩu');
+      return;
+    }
+
+    setSavingCredentials(true);
+    try {
+      const res = await api.post('/team/credentials', {
+        email: managingCredentialsMember.email,
+        password: credentialsPassword.trim(),
+      });
+      if (res.data?.success) {
+        toast.success(`Đã cập nhật mật khẩu cho ${managingCredentialsMember.email}!`);
+        if (res.data.credentials?.licenseKey) {
+          setCredentialsLicenseKey(res.data.credentials.licenseKey);
+        }
+        fetchTeam();
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Lỗi khi lưu mật khẩu');
+    } finally {
+      setSavingCredentials(false);
+    }
+  };
+
+  const handleCopyCredentialsInfo = (email: string, pass: string, role: string, licKey: string) => {
+    const formatted = [
+      `🔐 THÔNG TIN ĐĂNG NHẬP TOPIFY`,
+      `------------------------------------`,
+      `• Tài khoản / Email: ${email}`,
+      `• Mật khẩu: ${pass || 'Topify@123'}`,
+      `• Vai trò: ${role === 'ADMIN' ? 'Quản trị viên (Admin)' : 'Nhân viên (Staff)'}`,
+      licKey ? `• Mã kích hoạt / License: ${licKey}` : '',
+      `------------------------------------`,
+      `👉 Hướng dẫn: Mở ứng dụng Topify Desktop, chọn tab "Email & Mật khẩu", nhập thông tin trên để đăng nhập trực tiếp.`,
+    ].filter(Boolean).join('\n');
+
+    navigator.clipboard.writeText(formatted);
+    toast.success(`Đã sao chép thông tin đăng nhập của ${email} vào bộ nhớ tạm!`);
+  };
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#';
+    let pass = 'Top@';
+    for (let i = 0; i < 6; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCredentialsPassword(pass);
+    toast.info('Đã tạo mật khẩu ngẫu nhiên: ' + pass);
+  };
+
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail.trim()) {
@@ -116,17 +208,21 @@ export default function Team() {
     }
 
     setAdding(true);
+    const pwd = initialPassword.trim() || 'Topify@123';
     try {
-      // Use seat-controlled invite endpoint
+      // Use seat-controlled invite endpoint with initial password
       const res = await api.post('/workspace/seats', {
         action: 'invite',
         email: newEmail.trim(),
         role: newRole,
+        password: pwd,
       });
 
       if (res.data?.success) {
-        toast.success(`Đã gửi lời mời tham gia tới ${newEmail}`);
+        toast.success(`Đã thêm thành viên & cấp tài khoản cho ${newEmail}`);
+        handleCopyCredentialsInfo(newEmail.trim(), pwd, newRole, res.data.credentials?.licenseKey || '');
         setNewEmail('');
+        setInitialPassword('Topify@123');
         setShowModal(false);
         await Promise.all([fetchTeam(), fetchSeatsQuota()]);
       }
@@ -140,11 +236,13 @@ export default function Team() {
           },
         });
       } else {
-        // Fallback to legacy team route if seats API is unavailable
+        // Fallback to team route
         try {
-          await api.post('/team', { email: newEmail });
-          toast.success('Đã thêm nhân sự mới');
+          const res = await api.post('/team', { email: newEmail, role: newRole, password: pwd });
+          toast.success('Đã thêm nhân sự & tạo tài khoản thành công');
+          handleCopyCredentialsInfo(newEmail.trim(), pwd, newRole, res.data?.licenseKey || '');
           setNewEmail('');
+          setInitialPassword('Topify@123');
           setShowModal(false);
           fetchTeam();
         } catch (fallbackErr: any) {
@@ -382,6 +480,13 @@ export default function Team() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => handleOpenCredentials(member)}
+                          className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
+                          title="Cấp mật khẩu & thông tin đăng nhập"
+                        >
+                          <KeyRound className="w-4 h-4 text-amber-600" />
+                        </button>
+                        <button
                           onClick={() => setViewingMember(member)}
                           className="p-1.5 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
                           title="Xem chi tiết"
@@ -546,10 +651,47 @@ export default function Team() {
                   </select>
                 </div>
 
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-gray-700">Mật khẩu khởi tạo</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#';
+                        let pass = 'Top@';
+                        for (let i = 0; i < 6; i++) {
+                          pass += chars.charAt(Math.floor(Math.random() * chars.length));
+                        }
+                        setInitialPassword(pass);
+                      }}
+                      className="text-[11px] text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" /> Tạo ngẫu nhiên
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showInitialPassword ? 'text' : 'password'}
+                      value={initialPassword}
+                      onChange={(e) => setInitialPassword(e.target.value)}
+                      placeholder="Mặc định: Topify@123"
+                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInitialPassword(!showInitialPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    >
+                      {showInitialPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 text-xs text-purple-900 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                  <Shield className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
                   <span>
-                    Lời mời sẽ được tạo kèm mã định danh bảo mật. Người nhận có thể nhấn vào liên kết được cấp để tham gia.
+                    Tài khoản được tạo sẽ kích hoạt ngay lập tức. Nhân viên có thể mở app Topify Desktop và đăng nhập trực tiếp bằng Email & Mật khẩu vừa tạo.
                   </span>
                 </div>
               </div>
@@ -699,6 +841,155 @@ export default function Team() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREDENTIALS & LOGIN SETUP MODAL */}
+      {managingCredentialsMember && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-600">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">
+                    Cấp Quyền & Thông Tin Đăng Nhập
+                  </h3>
+                  <p className="text-xs text-gray-500">{managingCredentialsMember.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setManagingCredentialsMember(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Reset Password Form */}
+              <form onSubmit={handleSaveCredentials} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-800">
+                    Thiết lập / Đặt lại mật khẩu nhân viên
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateRandomPassword}
+                    className="text-[11px] text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> Tạo ngẫu nhiên
+                  </button>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showCredPassword ? 'text' : 'password'}
+                      value={credentialsPassword}
+                      onChange={(e) => setCredentialsPassword(e.target.value)}
+                      placeholder="Nhập mật khẩu mới (VD: Topify@123)"
+                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCredPassword(!showCredPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      {showCredPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={savingCredentials || !credentialsPassword.trim()}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
+                  >
+                    {savingCredentials && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                    {savingCredentials ? 'Đang lưu...' : 'Lưu Mật Khẩu'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Login Info Card */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-gray-50 to-purple-50/40 border border-purple-100/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-purple-600" />
+                    Thông tin tài khoản đăng nhập
+                  </span>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Đã kích hoạt
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                    <span className="text-gray-500">Tài khoản / Email:</span>
+                    <span className="font-semibold text-gray-900 font-mono">{managingCredentialsMember.email}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                    <span className="text-gray-500">Mật khẩu hiện tại:</span>
+                    <span className="font-semibold text-purple-700 font-mono bg-purple-50 px-2 py-0.5 rounded">
+                      {credentialsPassword}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                    <span className="text-gray-500">Vai trò (Role):</span>
+                    <span className="font-medium text-gray-900">
+                      {managingCredentialsMember.role === 'ADMIN' ? 'Quản trị viên (Admin)' : 'Nhân viên (Staff)'}
+                    </span>
+                  </div>
+
+                  {credentialsLicenseKey && (
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Mã kích hoạt cá nhân:</span>
+                      <span className="font-semibold text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded">
+                        {credentialsLicenseKey}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 text-[11px] text-gray-600 leading-relaxed bg-white/80 p-2.5 rounded-lg border border-gray-100">
+                    💡 <strong>Cách đăng nhập cho nhân viên:</strong> Mở app Topify Desktop $\rightarrow$ Chọn tab <strong>Email & Mật khẩu</strong> $\rightarrow$ Nhập Email và Mật khẩu ở trên để đăng nhập trực tiếp vào hệ thống.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-6 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-50/50">
+              <button
+                type="button"
+                onClick={() =>
+                  handleCopyCredentialsInfo(
+                    managingCredentialsMember.email,
+                    credentialsPassword,
+                    managingCredentialsMember.role,
+                    credentialsLicenseKey
+                  )
+                }
+                className="w-full sm:w-auto px-4 py-2.5 text-xs font-semibold rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Sao Chép Thông Tin Gửi Nhân Viên
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setManagingCredentialsMember(null)}
+                className="w-full sm:w-auto px-5 py-2.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

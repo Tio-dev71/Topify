@@ -3,6 +3,8 @@ import prisma from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { getWorkspaceUsageAndQuota } from '@/lib/workspace/quota';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
@@ -107,19 +109,47 @@ export async function POST(req: NextRequest) {
       };
       pendingInvites.unshift(invite);
 
-      // Persist to AllowedEmail
+      // Persist to AllowedEmail and User accounts
+      const initialPassword = body.password?.trim() || 'Topify@123';
+      const hashedPassword = await bcrypt.hash(initialPassword, 10);
+      const staffKey = `TOP-STAF-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const normalizedEmail = email.trim().toLowerCase();
+
       if (workspaceId && workspaceId !== 'default-workspace') {
         await prisma.allowedEmail.upsert({
-          where: { email: email.trim().toLowerCase() },
+          where: { email: normalizedEmail },
           update: { role: role === 'ADMIN' ? 'ADMIN' : 'STAFF', workspaceId },
-          create: { email: email.trim().toLowerCase(), role: role === 'ADMIN' ? 'ADMIN' : 'STAFF', workspaceId },
+          create: { email: normalizedEmail, role: role === 'ADMIN' ? 'ADMIN' : 'STAFF', workspaceId },
+        }).catch(() => null);
+
+        await prisma.user.upsert({
+          where: { email: normalizedEmail },
+          update: {
+            role: role === 'ADMIN' ? 'ADMIN' : 'STAFF',
+            workspaceId,
+            password: hashedPassword,
+          },
+          create: {
+            email: normalizedEmail,
+            name: normalizedEmail.split('@')[0],
+            role: role === 'ADMIN' ? 'ADMIN' : 'STAFF',
+            workspaceId,
+            password: hashedPassword,
+            licenseKey: staffKey,
+          },
         }).catch(() => null);
       }
 
       return NextResponse.json({
         success: true,
-        message: `Đã gửi lời mời tới ${email}`,
+        message: `Đã gửi lời mời và kích hoạt tài khoản cho ${email}`,
         invite,
+        credentials: {
+          email: normalizedEmail,
+          password: initialPassword,
+          role: role === 'ADMIN' ? 'ADMIN' : 'STAFF',
+          licenseKey: staffKey,
+        },
       });
     }
 

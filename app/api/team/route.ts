@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
 // Basic email validation regex
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -15,7 +18,7 @@ export async function GET() {
     const workspaceId = (session.user as any).workspaceId;
 
     const members = await prisma.allowedEmail.findMany({
-      where: { workspaceId },
+      where: workspaceId ? { workspaceId } : undefined,
       include: {
         invitedBy: {
           select: { name: true, email: true },
@@ -24,7 +27,55 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ members });
+    // Ensure all allowed members have active User accounts with login credentials
+    const enrichedMembers = await Promise.all(
+      members.map(async (m) => {
+        let user = await prisma.user.findUnique({
+          where: { email: m.email },
+          select: { id: true, licenseKey: true, password: true, name: true },
+        });
+
+        // Auto-provision if User does not exist yet (e.g. minh@topify.vn, abc@company.com)
+        if (!user) {
+          try {
+            const defaultPassword = 'Topify@123';
+            const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+            const staffLicenseKey = `TOP-STAF-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+
+            user = await prisma.user.create({
+              data: {
+                email: m.email,
+                name: m.email.split('@')[0],
+                role: m.role,
+                workspaceId: m.workspaceId,
+                password: hashedPassword,
+                licenseKey: staffLicenseKey,
+              },
+              select: { id: true, licenseKey: true, password: true, name: true },
+            });
+          } catch {
+            user = await prisma.user.findUnique({
+              where: { email: m.email },
+              select: { id: true, licenseKey: true, password: true, name: true },
+            });
+          }
+        }
+
+        return {
+          id: m.id,
+          email: m.email,
+          role: m.role,
+          createdAt: m.createdAt,
+          invitedBy: m.invitedBy,
+          userId: user?.id,
+          licenseKey: user?.licenseKey,
+          hasPassword: !!user?.password,
+          defaultPassword: 'Topify@123',
+        };
+      })
+    );
+
+    return NextResponse.json({ members: enrichedMembers });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -39,7 +90,9 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const email = body.email?.trim();
+    const email = body.email?.trim().toLowerCase();
+    const role = body.role === 'ADMIN' ? 'ADMIN' : 'STAFF';
+    const initialPassword = body.password?.trim() || 'Topify@123';
 
     if (!email || typeof email !== 'string' || !emailRegex.test(email)) {
       return NextResponse.json(
@@ -48,25 +101,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if already exists
-    const existing = await prisma.allowedEmail.findUnique({
-      where: { email: email.toLowerCase() },
-    });
+    const workspaceId = (session.user as any).workspaceId;
 
-    if (existing) {
-      return NextResponse.json(
-        { error: 'This email is already on the team' },
-        { status: 400 }
-      );
-    }
-
-    const member = await prisma.allowedEmail.create({
-      data: {
-        email: email.toLowerCase(),
-        role: 'STAFF',
-        invitedById: session.user.id,
-        workspaceId: (session.user as any).workspaceId,
-      },
+    // Check if already exists in AllowedEmail
+    let member = await prisma.allowedEmail.findUnique({
+      where: { email },
       include: {
         invitedBy: {
           select: { name: true, email: true },
@@ -74,7 +113,69 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(member, { status: 201 });
+    if (member) {
+      // Update role & workspace
+      member = await prisma.allowedEmail.update({
+        where: { id: member.id },
+        data: { role, workspaceId },
+        include: {
+          invitedBy: {
+            select: { name: true, email: true },
+          },
+        },
+      });
+    } else {
+      member = await prisma.allowedEmail.create({
+        data: {
+          email,
+          role,
+          invitedById: session.user.id,
+          workspaceId,
+        },
+        include: {
+          invitedBy: {
+            select: { name: true, email: true },
+          },
+        },
+      });
+    }
+
+    // Ensure User account is created/updated with password and licenseKey
+    const hashedPassword = await bcrypt.hash(initialPassword, 10);
+    const staffLicenseKey = `TOP-STAF-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {
+        role,
+        workspaceId,
+        password: hashedPassword,
+      },
+      create: {
+        email,
+        name: email.split('@')[0],
+        role,
+        workspaceId,
+        password: hashedPassword,
+        licenseKey: staffLicenseKey,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        licenseKey: true,
+      },
+    });
+
+    return NextResponse.json({
+      ...member,
+      userId: user.id,
+      licenseKey: user.licenseKey,
+      tempPassword: initialPassword,
+      hasPassword: true,
+      success: true,
+      message: `Đã thêm thành viên ${email} thành công!`,
+    }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
