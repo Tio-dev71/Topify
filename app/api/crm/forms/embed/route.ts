@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       try {
         const session = await auth();
         if ((session?.user as any)?.workspaceId) {
-          targetWorkspaceId = (session.user as any).workspaceId;
+          targetWorkspaceId = (session?.user as any).workspaceId;
         }
       } catch {
         // Not authenticated or external webhook, proceed to fallbacks

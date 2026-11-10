@@ -35,11 +35,18 @@ import {
   Settings,
   Loader2,
   Smartphone,
-  Pencil
+  Pencil,
+  BarChart3,
+  Coins,
+  Target
 } from 'lucide-react';
 import api from '../lib/axios';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { CampaignPlannerTab } from '../components/ai/CampaignPlannerTab';
+import { AnalyticsCopilotTab } from '../components/ai/AnalyticsCopilotTab';
+import { SafetyModerationTab } from '../components/ai/SafetyModerationTab';
+import { CreditCostMeteringTab } from '../components/ai/CreditCostMeteringTab';
 
 export interface AdminAiStudioSettings {
   scriptSystemPrompt: string;
@@ -156,7 +163,9 @@ const DEFAULT_PERSONAS: PersonaItem[] = [
 export default function TopifyAI() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'chat' | 'content' | 'voice' | 'repurpose_models'>('chat');
+  const [activeTab, setActiveTab] = useState<
+    'chat' | 'content' | 'campaign_planner' | 'analytics_copilot' | 'safety_moderation' | 'credit_metering' | 'voice' | 'repurpose_models'
+  >('chat');
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -271,6 +280,15 @@ export default function TopifyAI() {
     if (searchParams.get('manage_personas') === 'true' && isAdmin) {
       setActiveTab('chat');
       setIsPersonaManagerModalOpen(true);
+    }
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      if (tabParam === 'campaign_planner' || tabParam === 'f159') setActiveTab('campaign_planner');
+      else if (tabParam === 'analytics_copilot' || tabParam === 'f160') setActiveTab('analytics_copilot');
+      else if (tabParam === 'safety_moderation' || tabParam === 'f161') setActiveTab('safety_moderation');
+      else if (tabParam === 'credit_metering' || tabParam === 'f162') setActiveTab('credit_metering');
+      else if (tabParam === 'content' || tabParam === 'f157') setActiveTab('content');
+      else if (tabParam === 'chat' || tabParam === 'f156' || tabParam === 'f158') setActiveTab('chat');
     }
   }, [searchParams, isAdmin]);
 
@@ -872,50 +890,98 @@ export default function TopifyAI() {
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-3 mb-6">
         <button
           onClick={() => setActiveTab('chat')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
             activeTab === 'chat'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           }`}
         >
           <Bot className="w-4 h-4" />
-          Trợ Lý AI (F156)
+          Trợ Lý & Tri Thức (F156/F158)
         </button>
 
         <button
           onClick={() => setActiveTab('content')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
             activeTab === 'content'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           }`}
         >
           <Flame className="w-4 h-4" />
-          Sáng Tạo Nội Dung (F157)
+          Sáng Tạo & Viết Bài (F157)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('campaign_planner')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            activeTab === 'campaign_planner'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-300" />
+          Kế Hoạch Chiến Dịch (F159)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('analytics_copilot')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            activeTab === 'analytics_copilot'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          Trợ Lý Phân Tích (F160)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('safety_moderation')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            activeTab === 'safety_moderation'
+              ? 'bg-rose-600 text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          Kiểm Duyệt & An Toàn (F161)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('credit_metering')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            activeTab === 'credit_metering'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Coins className="w-4 h-4" />
+          Hạn Mức & Chi Phí (F162)
         </button>
 
         <button
           onClick={() => setActiveTab('voice')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
             activeTab === 'voice'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-gray-800 text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
           }`}
         >
-          <Volume2 className="w-4 h-4" />
-          Lồng Tiếng AI (F160)
+          <Volume2 className="w-3.5 h-3.5" />
+          Lồng Tiếng AI
         </button>
 
         <button
           onClick={() => setActiveTab('repurpose_models')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
             activeTab === 'repurpose_models'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              ? 'bg-gray-800 text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
           }`}
         >
-          <Repeat className="w-4 h-4" />
-          Tái Chế & Model AI (F161/F162)
+          <Repeat className="w-3.5 h-3.5" />
+          Tái Chế Bài Viết
         </button>
       </div>
 
@@ -1910,6 +1976,26 @@ export default function TopifyAI() {
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: AI CAMPAIGN PLANNER (F159) */}
+      {/* ========================================================================= */}
+      {activeTab === 'campaign_planner' && <CampaignPlannerTab />}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: AI ANALYTICS COPILOT (F160) */}
+      {/* ========================================================================= */}
+      {activeTab === 'analytics_copilot' && <AnalyticsCopilotTab />}
+
+      {/* ========================================================================= */}
+      {/* TAB 5: AI SAFETY & MODERATION (F161) */}
+      {/* ========================================================================= */}
+      {activeTab === 'safety_moderation' && <SafetyModerationTab />}
+
+      {/* ========================================================================= */}
+      {/* TAB 6: AI CREDIT & COST METERING (F162) */}
+      {/* ========================================================================= */}
+      {activeTab === 'credit_metering' && <CreditCostMeteringTab />}
 
       {/* ========================================================================= */}
       {/* MODAL 1: TẠO PHIÊN TRÒ CHUYỆN MỚI (CÓ TÊN VÀ PROMPT NẠP) */}
