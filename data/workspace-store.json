@@ -1,0 +1,168 @@
+{
+  "workspace": {
+    "id": "default-workspace",
+    "name": "Topify Primary HQ",
+    "organizationName": "Topify Global Corp",
+    "plan": "PRO",
+    "subscriptionStatus": "TRIAL",
+    "planExpiresAt": "2026-11-24T03:35:41.345Z",
+    "isTrial": true,
+    "trialEndsAt": "2026-11-24T03:35:41.345Z",
+    "gracePeriodEndsAt": null,
+    "autoRenew": true,
+    "deletionStatus": "ACTIVE",
+    "deletionRequestedAt": null,
+    "permanentlyDeletesAt": null
+  },
+  "usage": {
+    "seatsUsed": 13,
+    "channelsUsed": 3,
+    "postsThisMonth": 36,
+    "aiCreditsUsed": 95,
+    "storageUsedGb": 3.5
+  },
+  "teams": [
+    {
+      "id": "team_01",
+      "name": "Đội ngũ Marketing & Content",
+      "description": "Phụ trách sản xuất nội dung, Reels, viral alerts và lịch đăng bài",
+      "leadEmail": "marketing.lead@example.com",
+      "memberCount": 3,
+      "createdAt": "2026-10-11T03:34:58.391Z"
+    },
+    {
+      "id": "team_02",
+      "name": "Đội ngũ Bán hàng & Chăm sóc CRM",
+      "description": "Phụ trách leads, deals, pipelines và CSKH đa kênh",
+      "leadEmail": "minh@topify.vn",
+      "memberCount": 2,
+      "createdAt": "2026-10-16T03:34:58.391Z"
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj_01",
+      "name": "Chiến dịch Q4 Tăng Trưởng Doanh Số",
+      "teamId": "team_01",
+      "teamName": "Đội ngũ Marketing & Content",
+      "clientName": "Nội bộ Topify",
+      "budget": 50000000,
+      "status": "IN_PROGRESS",
+      "progress": 68,
+      "deadline": "31/12/2026",
+      "createdAt": "2026-10-21T03:34:58.391Z"
+    },
+    {
+      "id": "proj_02",
+      "name": "Chăm sóc & Re-marketing Khách Hàng VIP",
+      "teamId": "team_02",
+      "teamName": "Đội ngũ Bán hàng & Chăm sóc CRM",
+      "clientName": "Agency Client Alpha",
+      "budget": 25000000,
+      "status": "IN_PROGRESS",
+      "progress": 85,
+      "deadline": "20/12/2026",
+      "createdAt": "2026-10-26T03:34:58.391Z"
+    }
+  ],
+  "invites": [
+    {
+      "id": "inv_1794281738478",
+      "email": "minh.tester@topify.vn",
+      "role": "STAFF",
+      "status": "PENDING",
+      "invitedAt": "2026-11-10T03:35:38.478Z",
+      "expiresAt": "2026-11-17T03:35:38.478Z",
+      "tempPassword": "TopifySecurePassword123!",
+      "licenseKey": "TOP-STAF-5FBCCF"
+    },
+    {
+      "id": "inv_1",
+      "email": "marketing.lead@example.com",
+      "role": "STAFF",
+      "status": "REVOKED",
+      "invitedAt": "2026-11-08T03:34:58.391Z",
+      "expiresAt": "2026-11-15T03:34:58.391Z",
+      "tempPassword": "Topify@123",
+      "licenseKey": "TOP-STAF-9B4F1A"
+    },
+    {
+      "id": "inv_2",
+      "email": "content.creator@example.com",
+      "role": "STAFF",
+      "status": "ACCEPTED",
+      "invitedAt": "2026-10-31T03:34:58.391Z",
+      "expiresAt": "2026-11-07T03:34:58.391Z",
+      "tempPassword": "Topify@123",
+      "licenseKey": "TOP-STAF-2C8D9E"
+    }
+  ],
+  "invoices": [
+    {
+      "id": "inv_rec_1794281735273",
+      "invoiceNumber": "INV-2026-7276",
+      "planName": "Gói Doanh Nghiệp (Enterprise) - 1 Tháng",
+      "amount": 1990000,
+      "period": "10/11/2026 - 10/12/2026",
+      "status": "PAID",
+      "paidAt": "2026-11-10T03:35:35.273Z",
+      "paymentMethod": "SePay VietQR Techcombank",
+      "downloadUrl": "#invoice-download-1794281735273"
+    },
+    {
+      "id": "inv_rec_1794281732304",
+      "invoiceNumber": "INV-2026-9864",
+      "planName": "Gói Chuyên Nghiệp (Pro) - 1 Tháng",
+      "amount": 499000,
+      "period": "10/11/2026 - 10/12/2026",
+      "status": "PAID",
+      "paidAt": "2026-11-10T03:35:32.317Z",
+      "paymentMethod": "SePay Chuyển khoản QR",
+      "downloadUrl": "#invoice-download-1794281732317"
+    },
+    {
+      "id": "inv_rec_1794281701898",
+      "invoiceNumber": "INV-2026-5116",
+      "planName": "Gói Doanh Nghiệp (Enterprise) - 1 Tháng",
+      "amount": 1990000,
+      "period": "10/11/2026 - 10/12/2026",
+      "status": "PAID",
+      "paidAt": "2026-11-10T03:35:01.898Z",
+      "paymentMethod": "SePay VietQR Techcombank",
+      "downloadUrl": "#invoice-download-1794281701898"
+    },
+    {
+      "id": "inv_rec_1794281698412",
+      "invoiceNumber": "INV-2026-9393",
+      "planName": "Gói Chuyên Nghiệp (Pro) - 1 Tháng",
+      "amount": 499000,
+      "period": "10/11/2026 - 10/12/2026",
+      "status": "PAID",
+      "paidAt": "2026-11-10T03:34:58.442Z",
+      "paymentMethod": "SePay Chuyển khoản QR",
+      "downloadUrl": "#invoice-download-1794281698442"
+    },
+    {
+      "id": "inv_rec_1",
+      "invoiceNumber": "INV-2026-0048",
+      "planName": "Gói Chuyên Nghiệp (Pro Plan) - 1 Tháng",
+      "amount": 499000,
+      "period": "01/10/2026 - 01/11/2026",
+      "status": "PAID",
+      "paidAt": "2026-10-27T03:34:58.391Z",
+      "paymentMethod": "SePay Chuyển khoản QR Techcombank",
+      "downloadUrl": "#invoice-INV-2026-0048"
+    },
+    {
+      "id": "inv_rec_2",
+      "invoiceNumber": "INV-2026-0012",
+      "planName": "Gói Chuyên Nghiệp (Pro Plan) - 1 Tháng",
+      "amount": 499000,
+      "period": "01/09/2026 - 01/10/2026",
+      "status": "PAID",
+      "paidAt": "2026-09-27T03:34:58.391Z",
+      "paymentMethod": "Thẻ Visa kết thúc **4242",
+      "downloadUrl": "#invoice-INV-2026-0012"
+    }
+  ]
+}

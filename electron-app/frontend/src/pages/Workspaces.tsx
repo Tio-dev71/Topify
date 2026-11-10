@@ -48,6 +48,28 @@ export default function Workspaces() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [updating, setUpdating] = useState(false);
 
+  // Active workspace id from localStorage
+  const currentWorkspaceId = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('topify_user') || '{}')?.workspaceId || 'default-workspace';
+    } catch {
+      return 'default-workspace';
+    }
+  })();
+
+  const handleSwitchWorkspace = (ws: Workspace) => {
+    try {
+      const stored = localStorage.getItem('topify_user');
+      const u = stored ? JSON.parse(stored) : {};
+      u.workspaceId = ws.id;
+      localStorage.setItem('topify_user', JSON.stringify(u));
+      toast.success(`Đã chuyển sang không gian làm việc: ${ws.name}`);
+      setTimeout(() => window.location.reload(), 400);
+    } catch {
+      toast.error('Lỗi khi chuyển không gian làm việc');
+    }
+  };
+
   useEffect(() => {
     fetchWorkspaces();
   }, []);
@@ -252,6 +274,20 @@ export default function Workspaces() {
                         <Building2 className="w-4 h-4" /> {ws._count?.socialAccounts || 0} Tài khoản
                       </div>
                     </div>
+
+                    {ws.id === currentWorkspaceId ? (
+                      <span className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 rounded-lg border border-purple-200 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Đang dùng
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSwitchWorkspace(ws)}
+                        className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-purple-600 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        title="Chuyển sang workspace này"
+                      >
+                        Chuyển đến
+                      </button>
+                    )}
 
                     <button
                       onClick={() => setViewingWs(ws)}

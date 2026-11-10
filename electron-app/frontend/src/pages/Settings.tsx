@@ -115,6 +115,36 @@ export default function Settings() {
   const [permanentlyDeletesAt, setPermanentlyDeletesAt] = useState<string | null>(null);
   const [requestingDeletion, setRequestingDeletion] = useState(false);
 
+  const handleDownloadInvoice = (inv: InvoiceItem) => {
+    const content = [
+      `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM`,
+      `Độc lập - Tự do - Hạnh phúc`,
+      `--------------------------------------`,
+      `HÓA ĐƠN DỊCH VỤ PHẦN MỀM TOPIFY`,
+      `Mã hóa đơn: ${inv.invoiceNumber}`,
+      `Ngày thanh toán: ${new Date(inv.paidAt).toLocaleDateString('vi-VN')}`,
+      `Dịch vụ: ${inv.planName}`,
+      `Chu kỳ sử dụng: ${inv.period}`,
+      `Số tiền: ${inv.amount.toLocaleString('vi-VN')} VND`,
+      `Phương thức thanh toán: ${inv.paymentMethod}`,
+      `Trạng thái: ĐÃ THANH TOÁN THÀNH CÔNG`,
+      `Đơn vị cung cấp: Công ty Cổ phần Công nghệ Topify`,
+      `--------------------------------------`,
+      `Cảm ơn quý khách đã tin tưởng đồng hành cùng Topify!`,
+    ].join('\n');
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `HoaDon_${inv.invoiceNumber}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Đã tải xuống hóa đơn điện tử ${inv.invoiceNumber}!`);
+  };
+
   // Helper định dạng ngày an toàn
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -1195,12 +1225,10 @@ export default function Settings() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button
-                            onClick={() => {
-                              toast.success(`Đang tải hóa đơn điện tử ${inv.invoiceNumber}...`);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
+                            onClick={() => handleDownloadInvoice(inv)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors cursor-pointer"
                           >
-                            <Download className="w-3.5 h-3.5" /> PDF
+                            <Download className="w-3.5 h-3.5" /> PDF / Tải
                           </button>
                         </td>
                       </tr>

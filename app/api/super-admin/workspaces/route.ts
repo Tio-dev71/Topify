@@ -1,15 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import jwt from 'jsonwebtoken';
 
-export async function GET() {
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function getAuthenticatedUser(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id || session.user.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Super Admin access required' }, { status: 403 });
+    if (session?.user?.id) {
+      return session.user;
+    }
+  } catch {}
+
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.role) {
+        return {
+          id: decoded.sub || decoded.id,
+          role: decoded.role,
+          email: decoded.email,
+          workspaceId: decoded.workspaceId,
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const user = await getAuthenticatedUser(req);
+    // Allow SUPER_ADMIN and ADMIN
+    if (!user?.id || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Yêu cầu quyền Quản trị viên (Admin)' }, { status: 403 });
     }
 
-    const workspaces = await prisma.workspace.findMany({
+    let workspaces = await prisma.workspace.findMany({
       include: {
         _count: {
           select: { users: true, posts: true, socialAccounts: true },
@@ -22,6 +52,30 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
+    if (workspaces.length === 0) {
+      // Seed default workspace if empty
+      const defaultWs = await prisma.workspace.upsert({
+        where: { id: 'default-workspace' },
+        update: {},
+        create: {
+          id: 'default-workspace',
+          name: 'Topify Official Workspace',
+          plan: 'PRO',
+          isActive: true,
+        },
+        include: {
+          _count: {
+            select: { users: true, posts: true, socialAccounts: true },
+          },
+          allowedEmails: {
+            where: { role: 'ADMIN' },
+            select: { email: true },
+          },
+        },
+      });
+      workspaces = [defaultWs];
+    }
+
     return NextResponse.json({ workspaces });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -30,9 +84,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id || session.user.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Super Admin access required' }, { status: 403 });
+    const user = await getAuthenticatedUser(req);
+    if (!user?.id || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Yêu cầu quyền Quản trị viên (Admin)' }, { status: 403 });
     }
 
     const body = await req.json();
@@ -42,9 +96,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name and Admin Email are required' }, { status: 400 });
     }
 
+    const emailNorm = adminEmail.trim().toLowerCase();
+
     // Check if email already used
     const existing = await prisma.allowedEmail.findUnique({
-      where: { email: adminEmail.toLowerCase() },
+      where: { email: emailNorm },
     });
 
     if (existing) {
@@ -54,14 +110,14 @@ export async function POST(req: NextRequest) {
     // Create Workspace and AllowedEmail in transaction
     const workspace = await prisma.$transaction(async (tx) => {
       const ws = await tx.workspace.create({
-        data: { name },
+        data: { name: name.trim(), plan: 'PRO', isActive: true },
       });
 
       await tx.allowedEmail.create({
         data: {
-          email: adminEmail.toLowerCase(),
+          email: emailNorm,
           role: 'ADMIN',
-          invitedById: session.user.id!,
+          invitedById: user.id!,
           workspaceId: ws.id,
         },
       });
@@ -77,9 +133,9 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id || session.user.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'Super Admin access required' }, { status: 403 });
+    const user = await getAuthenticatedUser(req);
+    if (!user?.id || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Yêu cầu quyền Quản trị viên (Admin)' }, { status: 403 });
     }
 
     const url = new URL(req.url);
@@ -103,12 +159,11 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-// PATCH /api/super-admin/workspaces - Update workspace plan, active status, name
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Super Admin access required' }, { status: 403 });
+    const user = await getAuthenticatedUser(req);
+    if (!user?.id || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Yêu cầu quyền Quản trị viên (Admin)' }, { status: 403 });
     }
 
     const body = await req.json();
@@ -119,7 +174,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const data: any = {};
-    if (name) data.name = name;
+    if (name) data.name = name.trim();
     if (plan) data.plan = plan;
     if (isActive !== undefined) data.isActive = Boolean(isActive);
 

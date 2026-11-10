@@ -155,6 +155,7 @@ export function Sidebar() {
   }
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isWorkspaceAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || !user;
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
@@ -278,8 +279,8 @@ export function Sidebar() {
             </div>
           ))}
 
-          {/* Super Admin section */}
-          {isSuperAdmin && (
+          {/* Super Admin & Workspace Management section */}
+          {isWorkspaceAdmin && (
             <div className="pt-4 border-t border-gray-100">
               {!collapsed && (
                 <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">

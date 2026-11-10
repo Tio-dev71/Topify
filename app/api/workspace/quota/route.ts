@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWorkspaceUsageAndQuota, PLAN_LIMITS } from '@/lib/workspace/quota';
+import { workspaceStore } from '@/lib/workspace/workspace-engine';
+import { PLAN_LIMITS } from '@/lib/workspace/quota';
 
 export async function GET(req: NextRequest) {
   try {
-    const quota = await getWorkspaceUsageAndQuota('default-workspace');
+    const quota = await workspaceStore.getUsageAndQuota();
     return NextResponse.json({
       success: true,
       data: quota,

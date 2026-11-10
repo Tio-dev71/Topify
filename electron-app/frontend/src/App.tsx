@@ -117,6 +117,7 @@ function App() {
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/super-admin" element={<Workspaces />} />
+          <Route path="/workspaces" element={<Workspaces />} />
 
           {/* Catch-all: redirect unknown paths to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
