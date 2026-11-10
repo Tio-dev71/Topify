@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import jwt from 'jsonwebtoken';
 import { 
+  walletStore,
   memoryEarningTasks, 
   memoryWallet, 
   memoryTransactions, 
@@ -63,10 +64,9 @@ export async function GET(req?: NextRequest) {
       // Fallback silently if DB/auth is unavailable
     }
 
-    const now = Date.now();
-    const enrichedTasks = memoryEarningTasks.map(t => ({
+    const tasksFromStore = walletStore.getEarningTasks();
+    const enrichedTasks = tasksFromStore.map(t => ({
       ...t,
-      isExpired: new Date(t.expiresAt).getTime() < now,
       isClaimed: t.isClaimed || claimedTaskIds.has(t.id),
     }));
 
@@ -83,13 +83,30 @@ export async function GET(req?: NextRequest) {
   }
 }
 
-// POST /api/wallet/tasks - Claim reward for a completed earning task
+// POST /api/wallet/tasks - Claim reward for a completed earning task or update progress
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { taskId } = body;
+    const { taskId, action, progress } = body;
 
-    const task = memoryEarningTasks.find(t => t.id === taskId);
+    if (!taskId) {
+      return NextResponse.json({ error: 'taskId là bắt buộc' }, { status: 400 });
+    }
+
+    if (action === 'progress') {
+      const updated = walletStore.updateTaskProgress(taskId, Number(progress) || 1, true);
+      if (!updated) {
+        return NextResponse.json({ error: 'Nhiệm vụ không tồn tại' }, { status: 404 });
+      }
+      return NextResponse.json({
+        success: true,
+        message: 'Đã cập nhật tiến độ nhiệm vụ',
+        task: updated,
+      });
+    }
+
+    const tasks = walletStore.getEarningTasks();
+    const task = tasks.find(t => t.id === taskId);
     if (!task) {
       return NextResponse.json({ error: 'Nhiệm vụ không tồn tại' }, { status: 404 });
     }
@@ -104,6 +121,12 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({
         error: `Chưa hoàn thành nhiệm vụ (${task.progress}/${task.maxProgress} ${task.unit})`,
+      }, { status: 400 });
+    }
+
+    if (task.isClaimed) {
+      return NextResponse.json({
+        error: 'Nhiệm vụ này đã được nhận thưởng trước đó',
       }, { status: 400 });
     }
 
@@ -127,22 +150,21 @@ export async function POST(req: NextRequest) {
           dbWallet = await prisma.wallet.create({
             data: {
               userId,
-              balance: memoryWallet.availableBalance,
-              pending: memoryWallet.pendingBalance,
-              withdrawn: memoryWallet.totalWithdrawn,
+              balance: walletStore.getWallet().availableBalance,
+              pending: walletStore.getWallet().pendingBalance,
+              withdrawn: walletStore.getWallet().totalWithdrawn,
             },
             include: { transactions: true },
           });
         }
 
         if (dbWallet.transactions && dbWallet.transactions.length > 0) {
-          task.isClaimed = true;
           return NextResponse.json({
             error: 'Nhiệm vụ này đã được nhận thưởng trước đó',
           }, { status: 400 });
         }
 
-        // Atomically increment wallet balance and create transaction
+        // Atomically increment wallet balance and create transaction in DB
         const [updatedWallet, createdTx] = await prisma.$transaction([
           prisma.wallet.update({
             where: { id: dbWallet.id },
@@ -161,22 +183,8 @@ export async function POST(req: NextRequest) {
           }),
         ]);
 
-        // Sync in-memory store
-        task.isClaimed = true;
-        memoryWallet.availableBalance = updatedWallet.balance;
-        memoryWallet.updatedAt = new Date().toISOString();
-
-        const rewardTx: WalletTransactionItem = {
-          id: createdTx.id,
-          walletId: updatedWallet.id,
-          type: 'EARNING',
-          amount: task.rewardAmount,
-          description: `Thưởng hoàn thành nhiệm vụ: ${task.title}`,
-          referenceId: task.id,
-          status: 'COMPLETED',
-          createdAt: createdTx.createdAt.toISOString(),
-        };
-        memoryTransactions.unshift(rewardTx);
+        // Sync with walletStore file persistence
+        const storeClaim = walletStore.claimEarningTask(task.id);
 
         return NextResponse.json({
           success: true,
@@ -191,46 +199,33 @@ export async function POST(req: NextRequest) {
             currency: 'VND',
             updatedAt: new Date().toISOString(),
           },
-          transaction: rewardTx,
-          task,
+          transaction: {
+            id: createdTx.id,
+            walletId: updatedWallet.id,
+            type: 'EARNING',
+            amount: task.rewardAmount,
+            description: `Thưởng hoàn thành nhiệm vụ: ${task.title}`,
+            referenceId: task.id,
+            status: 'COMPLETED',
+            createdAt: createdTx.createdAt.toISOString(),
+          },
+          task: storeClaim.task,
         });
       } catch (dbErr) {
-        // Fallback to in-memory store below if DB transaction fails
+        // Fallback to walletStore below
       }
     }
 
-    if (task.isClaimed) {
-      return NextResponse.json({
-        error: 'Nhiệm vụ này đã được nhận thưởng trước đó',
-      }, { status: 400 });
-    }
-
-    // Process reward claim in memory
-    task.isClaimed = true;
-    memoryWallet.availableBalance += task.rewardAmount;
-    memoryWallet.updatedAt = new Date().toISOString();
-
-    // Create transaction log
-    const rewardTx: WalletTransactionItem = {
-      id: `tx_${Date.now()}`,
-      walletId: memoryWallet.id,
-      type: 'EARNING',
-      amount: task.rewardAmount,
-      description: `Thưởng hoàn thành nhiệm vụ: ${task.title}`,
-      referenceId: task.id,
-      status: 'COMPLETED',
-      createdAt: new Date().toISOString(),
-    };
-
-    memoryTransactions.unshift(rewardTx);
+    // Process reward claim in walletStore (persists to file)
+    const result = walletStore.claimEarningTask(task.id);
 
     return NextResponse.json({
       success: true,
       message: `Chúc mừng bạn đã nhận thưởng +${task.rewardAmount.toLocaleString('vi-VN')} VND vào ví!`,
-      rewardAmount: task.rewardAmount,
-      wallet: memoryWallet,
-      transaction: rewardTx,
-      task,
+      rewardAmount: result.rewardAmount,
+      wallet: result.wallet,
+      transaction: result.transaction,
+      task: result.task,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { memoryWallet, memoryWithdrawals, memoryTransactions } from '@/lib/wallet/wallet-engine';
+import { walletStore, memoryWallet, memoryWithdrawals, memoryTransactions } from '@/lib/wallet/wallet-engine';
 import { WithdrawalStatus } from '@prisma/client';
 
 // PATCH /api/wallet/withdrawals/[id] - Approve / Process / Complete / Reject a withdrawal request
@@ -82,6 +82,11 @@ export async function PATCH(
         return wd;
       });
 
+      // Synchronize walletStore (disk persistence)
+      try {
+        walletStore.updateWithdrawalStatus(id, status as any, note);
+      } catch (e) {}
+
       return NextResponse.json({
         success: true,
         message: `Đã cập nhật trạng thái lệnh rút tiền thành ${status}`,
@@ -89,40 +94,22 @@ export async function PATCH(
       });
     }
 
-    // 2. Fallback memory store update
-    const memWd = memoryWithdrawals.find(w => w.id === id);
-    if (!memWd) {
-      return NextResponse.json({ error: 'Không tìm thấy yêu cầu rút tiền' }, { status: 404 });
+    // 2. Fallback / File store update
+    try {
+      const storeRes = walletStore.updateWithdrawalStatus(id, status as any, note);
+      if (storeRes) {
+        return NextResponse.json({
+          success: true,
+          message: `Đã cập nhật trạng thái lệnh rút tiền thành ${status}`,
+          withdrawal: storeRes.withdrawal,
+          wallet: storeRes.wallet,
+        });
+      }
+    } catch (storeErr: any) {
+      return NextResponse.json({ error: storeErr.message }, { status: 400 });
     }
 
-    memWd.status = status;
-    memWd.processedAt = ['COMPLETED', 'REJECTED'].includes(status) ? now.toISOString() : undefined;
-    if (note) memWd.note = note;
-
-    if (status === 'COMPLETED') {
-      memoryWallet.pendingBalance -= memWd.amount;
-      memoryWallet.totalWithdrawn += memWd.amount;
-    } else if (status === 'REJECTED') {
-      memoryWallet.availableBalance += memWd.amount;
-      memoryWallet.pendingBalance -= memWd.amount;
-      memoryTransactions.unshift({
-        id: `tx_${Date.now()}`,
-        walletId: memoryWallet.id,
-        type: 'REFUND',
-        amount: memWd.amount,
-        description: `Hoàn tiền lệnh rút tiền bị từ chối: ${note || ''}`,
-        referenceId: memWd.id,
-        status: 'COMPLETED',
-        createdAt: now.toISOString(),
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Đã cập nhật trạng thái lệnh rút tiền thành ${status}`,
-      withdrawal: memWd,
-      wallet: memoryWallet,
-    });
+    return NextResponse.json({ error: 'Không tìm thấy yêu cầu rút tiền' }, { status: 404 });
   } catch (error: any) {
     console.error('[WALLET_WITHDRAWAL_UPDATE_ERROR]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

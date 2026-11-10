@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import jwt from 'jsonwebtoken';
 import { 
+  walletStore,
   memoryWallet, 
   memoryTransactions, 
   memoryWithdrawals, 
@@ -40,6 +41,11 @@ export async function GET(req: NextRequest) {
   try {
     const userId = await authenticateUser(req);
 
+    const storeWallet = walletStore.getWallet();
+    const storeTransactions = walletStore.getTransactions();
+    const storeWithdrawals = walletStore.getWithdrawals();
+    const storePaymentMethods = walletStore.getPaymentMethods();
+
     let walletData: any = null;
     let transactions: any[] = [];
     let withdrawals: any[] = [];
@@ -58,23 +64,9 @@ export async function GET(req: NextRequest) {
           dbWallet = await prisma.wallet.create({
             data: { 
               userId,
-              balance: memoryWallet.availableBalance,
-              pending: memoryWallet.pendingBalance,
-              withdrawn: memoryWallet.totalWithdrawn,
-            },
-            include: {
-              transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
-              withdrawals: { orderBy: { createdAt: 'desc' }, take: 10 },
-            },
-          });
-        } else if (dbWallet.balance === 0 && (!dbWallet.transactions || dbWallet.transactions.length === 0) && (!dbWallet.withdrawals || dbWallet.withdrawals.length === 0)) {
-          // Initialize balance if wallet was empty
-          dbWallet = await prisma.wallet.update({
-            where: { id: dbWallet.id },
-            data: {
-              balance: memoryWallet.availableBalance,
-              pending: memoryWallet.pendingBalance,
-              withdrawn: memoryWallet.totalWithdrawn,
+              balance: storeWallet.availableBalance,
+              pending: storeWallet.pendingBalance,
+              withdrawn: storeWallet.totalWithdrawn,
             },
             include: {
               transactions: { orderBy: { createdAt: 'desc' }, take: 20 },
@@ -104,32 +96,32 @@ export async function GET(req: NextRequest) {
           createdAt: tx.createdAt instanceof Date ? tx.createdAt.toISOString() : tx.createdAt,
         }));
 
-        transactions = dbTxs.length > 0 ? dbTxs : memoryTransactions;
-        withdrawals = dbWallet.withdrawals && dbWallet.withdrawals.length > 0 ? dbWallet.withdrawals : memoryWithdrawals;
+        transactions = dbTxs.length > 0 ? dbTxs : storeTransactions;
+        withdrawals = dbWallet.withdrawals && dbWallet.withdrawals.length > 0 ? dbWallet.withdrawals : storeWithdrawals;
       } catch (dbErr) {
-        // Fallback to memory store
+        // Fallback to walletStore
       }
     }
 
     if (!walletData) {
-      walletData = memoryWallet;
-      transactions = memoryTransactions;
-      withdrawals = memoryWithdrawals;
+      walletData = storeWallet;
+      transactions = storeTransactions;
+      withdrawals = storeWithdrawals;
     }
 
     return NextResponse.json({
       wallet: walletData,
       transactions,
       withdrawals,
-      paymentMethods: memoryPaymentMethods,
+      paymentMethods: storePaymentMethods,
       success: true,
     });
   } catch (error: any) {
     return NextResponse.json({
-      wallet: memoryWallet,
-      transactions: memoryTransactions,
-      withdrawals: memoryWithdrawals,
-      paymentMethods: memoryPaymentMethods,
+      wallet: walletStore.getWallet(),
+      transactions: walletStore.getTransactions(),
+      withdrawals: walletStore.getWithdrawals(),
+      paymentMethods: walletStore.getPaymentMethods(),
       success: true,
       fallback: true,
     });
@@ -151,9 +143,10 @@ export async function POST(req: NextRequest) {
 
     const userId = await authenticateUser(req);
 
-    const pm = memoryPaymentMethods.find(p => p.id === paymentMethodId) || memoryPaymentMethods[0];
+    const pms = walletStore.getPaymentMethods();
+    const pm = pms.find(p => p.id === paymentMethodId) || pms[0];
     const pmDesc = pm ? `${pm.bankName || pm.type} - ${pm.accountNumber}` : 'Ngân hàng mặc định';
-    const accInfo = pm ? `${pm.accountName}` : 'Người dùng Topify';
+    const accInfo = pm ? `${pm.accountName}` : 'YẾN NGÔ';
     const fee = 0;
     const netAmount = withdrawAmount - fee;
 
@@ -167,7 +160,7 @@ export async function POST(req: NextRequest) {
         dbWallet = await prisma.wallet.create({
           data: {
             userId,
-            balance: memoryWallet.availableBalance,
+            balance: walletStore.getWallet().availableBalance,
             pending: 0,
             withdrawn: 0,
           },
@@ -215,15 +208,21 @@ export async function POST(req: NextRequest) {
         return { updatedWallet, createdWithdrawal };
       });
 
-      // Sync memory store
-      memoryWallet.availableBalance = result.updatedWallet.balance;
-      memoryWallet.pendingBalance = result.updatedWallet.pending;
-      memoryWallet.updatedAt = new Date().toISOString();
+      // Sync walletStore & file persistence
+      const storeRes = walletStore.createWithdrawal({
+        amount: withdrawAmount,
+        paymentMethod: pmDesc,
+        accountInfo: accInfo,
+        note: note || 'Yêu cầu rút tiền qua cổng tự động VietQR/Momo',
+      });
 
       return NextResponse.json({
         success: true,
         message: `Đã tạo lệnh rút ${withdrawAmount.toLocaleString('vi-VN')} VND thành công! Tiền sẽ về tài khoản trong 15-30 phút.`,
-        withdrawal: result.createdWithdrawal,
+        withdrawal: {
+          ...result.createdWithdrawal,
+          createdAt: result.createdWithdrawal.createdAt instanceof Date ? result.createdWithdrawal.createdAt.toISOString() : result.createdWithdrawal.createdAt,
+        },
         wallet: {
           id: result.updatedWallet.id,
           userId: result.updatedWallet.userId,
@@ -235,49 +234,26 @@ export async function POST(req: NextRequest) {
       }, { status: 201 });
     }
 
-    // Fallback in-memory flow
-    if (withdrawAmount > memoryWallet.availableBalance) {
+    // File / Store flow
+    const currentWallet = walletStore.getWallet();
+    if (withdrawAmount > currentWallet.availableBalance) {
       return NextResponse.json({
-        error: `Số dư khả dụng không đủ (${memoryWallet.availableBalance.toLocaleString('vi-VN')} VND)`,
+        error: `Số dư khả dụng không đủ (${currentWallet.availableBalance.toLocaleString('vi-VN')} VND)`,
       }, { status: 400 });
     }
 
-    const newWithdrawal: WithdrawalRequest = {
-      id: `wd_req_${Date.now()}`,
-      walletId: memoryWallet.id,
+    const created = walletStore.createWithdrawal({
       amount: withdrawAmount,
-      fee,
-      netAmount,
       paymentMethod: pmDesc,
       accountInfo: accInfo,
-      status: 'PENDING',
       note: note || 'Yêu cầu rút tiền qua cổng tự động VietQR/Momo',
-      createdAt: new Date().toISOString(),
-    };
-
-    memoryWallet.availableBalance -= withdrawAmount;
-    memoryWallet.pendingBalance += withdrawAmount;
-    memoryWallet.updatedAt = new Date().toISOString();
-
-    const newTx: WalletTransactionItem = {
-      id: `tx_${Date.now()}`,
-      walletId: memoryWallet.id,
-      type: 'WITHDRAWAL',
-      amount: -withdrawAmount,
-      description: `Yêu cầu rút tiền về ${pmDesc}`,
-      referenceId: newWithdrawal.id,
-      status: 'PENDING',
-      createdAt: new Date().toISOString(),
-    };
-
-    memoryWithdrawals.unshift(newWithdrawal);
-    memoryTransactions.unshift(newTx);
+    });
 
     return NextResponse.json({
       success: true,
       message: `Đã tạo lệnh rút ${withdrawAmount.toLocaleString('vi-VN')} VND thành công! Tiền sẽ về tài khoản trong 15-30 phút.`,
-      withdrawal: newWithdrawal,
-      wallet: memoryWallet,
+      withdrawal: created.withdrawal,
+      wallet: created.wallet,
     }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

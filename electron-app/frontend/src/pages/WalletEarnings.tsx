@@ -60,16 +60,20 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
 
   const [showAddMethodModal, setShowAddMethodModal] = useState(false);
   const [newMethodType, setNewMethodType] = useState('VIETQR');
-  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountName, setNewAccountName] = useState('YẾN NGÔ');
   const [newAccountNumber, setNewAccountNumber] = useState('');
-  const [newBankName, setNewBankName] = useState('Vietcombank');
+  const [newBankName, setNewBankName] = useState('MB Bank');
 
   // Edit Payment Method Modal
   const [editingMethod, setEditingMethod] = useState<any | null>(null);
   const [editMethodType, setEditMethodType] = useState('VIETQR');
   const [editAccountName, setEditAccountName] = useState('');
   const [editAccountNumber, setEditAccountNumber] = useState('');
-  const [editBankName, setEditBankName] = useState('Vietcombank');
+  const [editBankName, setEditBankName] = useState('MB Bank');
+
+  // Transactions Filter & Search (F147)
+  const [txFilterType, setTxFilterType] = useState<string>('ALL');
+  const [txSearchQuery, setTxSearchQuery] = useState<string>('');
 
   // Earning Tasks State (F150)
   const [earningTasks, setEarningTasks] = useState<any[]>([]);
@@ -118,13 +122,29 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
     }
   };
 
+  const getLocalWithdrawals = (): any[] => {
+    try {
+      return JSON.parse(localStorage.getItem('topify_local_withdrawals') || '[]');
+    } catch {
+      return [];
+    }
+  };
+
+  const getLocalPaymentMethods = (): any[] => {
+    try {
+      return JSON.parse(localStorage.getItem('topify_payment_methods') || '[]');
+    } catch {
+      return [];
+    }
+  };
+
   const fetchWalletData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
       const res = await api.get('/wallet');
       if (res.data) {
         const localOffset = getLocalBalanceOffset();
-        const baseWallet = res.data.wallet || { availableBalance: 2500000, pendingBalance: 0, totalWithdrawn: 0 };
+        const baseWallet = res.data.wallet || { availableBalance: 4850000, pendingBalance: 0, totalWithdrawn: 0 };
         setWallet({
           ...baseWallet,
           availableBalance: Math.max(0, (baseWallet.availableBalance || 0) + localOffset),
@@ -135,10 +155,19 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
         const mergedTxs = [...localTxs, ...serverTxs.filter((st: any) => !localTxs.some((lt: any) => lt.id === st.id))];
         setTransactions(mergedTxs);
 
-        setWithdrawals(res.data.withdrawals || []);
-        setPaymentMethods(res.data.paymentMethods || []);
-        if (res.data.paymentMethods?.length > 0) {
-          const defaultPm = res.data.paymentMethods.find((p: any) => p.isDefault) || res.data.paymentMethods[0];
+        const localWds = getLocalWithdrawals();
+        const serverWds = res.data.withdrawals || [];
+        const mergedWds = [...localWds, ...serverWds.filter((sw: any) => !localWds.some((lw: any) => lw.id === sw.id))];
+        setWithdrawals(mergedWds);
+
+        const localPms = getLocalPaymentMethods();
+        const serverPms = res.data.paymentMethods || [];
+        const mergedPms = localPms.length > 0
+          ? [...localPms, ...serverPms.filter((sp: any) => !localPms.some((lp: any) => lp.id === sp.id))]
+          : serverPms;
+        setPaymentMethods(mergedPms);
+        if (mergedPms?.length > 0) {
+          const defaultPm = mergedPms.find((p: any) => p.isDefault) || mergedPms[0];
           setSelectedMethodId(defaultPm.id);
         }
       }
@@ -231,12 +260,15 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
           fee: 0,
           netAmount: amount,
           paymentMethod: pmDesc,
-          accountInfo: pm?.accountName || 'Người dùng Topify',
+          accountInfo: pm?.accountName || 'YẾN NGÔ',
           status: 'PENDING',
           note: withdrawNote || 'Yêu cầu rút tiền tự động',
           createdAt: new Date().toISOString(),
         };
-        setWithdrawals((prev: any[]) => [newWd, ...prev]);
+
+        const localWds = [newWd, ...getLocalWithdrawals().filter((w: any) => w.id !== newWd.id)];
+        localStorage.setItem('topify_local_withdrawals', JSON.stringify(localWds));
+        setWithdrawals((prev: any[]) => [newWd, ...prev.filter((w: any) => w.id !== newWd.id)]);
 
         const wdTx = {
           id: `tx_${Date.now()}`,
@@ -265,6 +297,57 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
     }
   };
 
+  // Handle Review / Approval of Withdrawal (F148)
+  const handleUpdateWithdrawalStatus = async (withdrawalId: string, status: 'COMPLETED' | 'REJECTED') => {
+    try {
+      const res = await api.patch(`/wallet/withdrawals/${withdrawalId}`, {
+        status,
+        note: status === 'COMPLETED' ? 'Đã duyệt và giải ngân thành công' : 'Đã từ chối và hoàn số dư ví',
+      });
+      if (res.data?.success) {
+        toast.success(status === 'COMPLETED' ? 'Đã duyệt lệnh rút tiền thành công!' : 'Đã từ chối và hoàn tiền vào ví!');
+        
+        const updatedWds = withdrawals.map((w: any) => w.id === withdrawalId ? { ...w, status, processedAt: new Date().toISOString() } : w);
+        setWithdrawals(updatedWds);
+        localStorage.setItem('topify_local_withdrawals', JSON.stringify(updatedWds));
+
+        const targetWd = withdrawals.find((w: any) => w.id === withdrawalId);
+        if (targetWd) {
+          if (status === 'REJECTED') {
+            const currentOffset = getLocalBalanceOffset() + targetWd.amount;
+            localStorage.setItem('topify_wallet_balance_offset', String(currentOffset));
+            setWallet((prev: any) => ({
+              ...prev,
+              availableBalance: (prev?.availableBalance || 0) + targetWd.amount,
+              pendingBalance: Math.max(0, (prev?.pendingBalance || 0) - targetWd.amount),
+            }));
+
+            const refundTx = {
+              id: `tx_${Date.now()}`,
+              type: 'REFUND',
+              amount: targetWd.amount,
+              description: `Hoàn tiền lệnh rút tiền bị từ chối (${targetWd.id})`,
+              status: 'COMPLETED',
+              createdAt: new Date().toISOString(),
+            };
+            const localTxs = [refundTx, ...getLocalTransactions()].slice(0, 50);
+            localStorage.setItem('topify_local_transactions', JSON.stringify(localTxs));
+            setTransactions((prev: any[]) => [refundTx, ...prev]);
+          } else if (status === 'COMPLETED') {
+            setWallet((prev: any) => ({
+              ...prev,
+              pendingBalance: Math.max(0, (prev?.pendingBalance || 0) - targetWd.amount),
+              totalWithdrawn: (prev?.totalWithdrawn || 0) + targetWd.amount,
+            }));
+          }
+        }
+        fetchWalletData(true);
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Lỗi khi cập nhật trạng thái lệnh rút');
+    }
+  };
+
   // Handle Add Payment Method (F149)
   const handleAddPaymentMethod = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,8 +359,8 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
     try {
       const res = await api.post('/wallet/payment-methods', {
         type: newMethodType,
-        accountName: newAccountName,
-        accountNumber: newAccountNumber,
+        accountName: newAccountName.trim().toUpperCase(),
+        accountNumber: newAccountNumber.trim(),
         bankName: newMethodType === 'VIETQR' ? newBankName : undefined,
         isDefault: paymentMethods.length === 0,
       });
@@ -285,22 +368,27 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
       if (res.data?.success) {
         toast.success('Đã lưu phương thức nhận tiền thành công');
         setShowAddMethodModal(false);
-        setNewAccountName('');
         setNewAccountNumber('');
-        fetchWalletData();
+        const addedMethod = res.data.paymentMethod;
+        if (addedMethod) {
+          const currentPms = [addedMethod, ...paymentMethods.filter((p: any) => p.id !== addedMethod.id)];
+          setPaymentMethods(currentPms);
+          localStorage.setItem('topify_payment_methods', JSON.stringify(currentPms));
+        }
+        fetchWalletData(true);
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Lỗi khi thêm phương thức');
     }
   };
 
-  // Handle Delete Payment Method (F149)
+  // Handle Delete & Edit Payment Method (F149)
   const openEditMethodModal = (pm: any) => {
     setEditingMethod(pm);
     setEditMethodType(pm.type || 'VIETQR');
-    setEditAccountName(pm.accountName || '');
+    setEditAccountName(pm.accountName || 'YẾN NGÔ');
     setEditAccountNumber(pm.accountNumber || '');
-    setEditBankName(pm.bankName || 'Vietcombank');
+    setEditBankName(pm.bankName || 'MB Bank');
   };
 
   const handleUpdatePaymentMethod = async (e: React.FormEvent) => {
@@ -317,7 +405,13 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
       if (res.data?.success) {
         toast.success('Đã cập nhật phương thức nhận tiền thành công');
         setEditingMethod(null);
-        fetchWalletData();
+        const updated = res.data.paymentMethod;
+        if (updated) {
+          const currentPms = paymentMethods.map((p: any) => p.id === updated.id ? updated : p);
+          setPaymentMethods(currentPms);
+          localStorage.setItem('topify_payment_methods', JSON.stringify(currentPms));
+        }
+        fetchWalletData(true);
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Lỗi khi cập nhật phương thức nhận tiền');
@@ -332,10 +426,33 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
       const res = await api.delete(`/wallet/payment-methods?id=${id}`);
       if (res.data?.success) {
         toast.success(res.data.message || 'Đã xóa phương thức nhận tiền thành công');
-        fetchWalletData();
+        const remaining = paymentMethods.filter((p: any) => p.id !== id);
+        setPaymentMethods(remaining);
+        localStorage.setItem('topify_payment_methods', JSON.stringify(remaining));
+        fetchWalletData(true);
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Lỗi khi xóa phương thức nhận tiền');
+    }
+  };
+
+  // Handle Task Progress Advance (F150)
+  const handleAdvanceTaskProgress = async (task: any) => {
+    try {
+      const newProgress = Math.min(task.maxProgress, task.progress + 1);
+      const isCompleted = newProgress >= task.maxProgress;
+      const res = await api.post('/wallet/tasks', {
+        taskId: task.id,
+        action: 'progress',
+        progress: newProgress,
+      });
+      if (res.data?.success) {
+        toast.success(`Đã cập nhật tiến độ: ${newProgress}/${task.maxProgress} ${task.unit}`);
+        setEarningTasks((prev: any[]) => prev.map((t: any) => t.id === task.id ? { ...t, progress: newProgress, isCompleted } : t));
+        fetchTasks();
+      }
+    } catch (e) {
+      toast.error('Lỗi khi cập nhật tiến độ');
     }
   };
 
@@ -575,12 +692,13 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                     <th className="py-3 px-4">Chủ tài khoản</th>
                     <th className="py-3 px-4">Trạng thái</th>
                     <th className="py-3 px-4">Ghi chú đối soát</th>
+                    <th className="py-3 px-4 text-right">Kiểm duyệt & Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {withdrawals.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-gray-400">Chưa có lệnh rút tiền nào</td>
+                      <td colSpan={7} className="py-10 text-center text-gray-400">Chưa có lệnh rút tiền nào</td>
                     </tr>
                   ) : (
                     withdrawals.map((wd: any) => (
@@ -594,20 +712,48 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                         <td className="py-3.5 px-4 font-medium text-gray-800">
                           {wd.paymentMethod}
                         </td>
-                        <td className="py-3.5 px-4 text-gray-600">
+                        <td className="py-3.5 px-4 text-gray-600 font-semibold">
                           {wd.accountInfo}
                         </td>
                         <td className="py-3.5 px-4">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
                             wd.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                             wd.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                            wd.status === 'PROCESSING' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
                             'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {wd.status === 'COMPLETED' ? 'Hoàn thành' : wd.status === 'PENDING' ? 'Đang duyệt' : wd.status}
+                            {wd.status === 'COMPLETED' ? '✓ Đã giải ngân' :
+                             wd.status === 'PENDING' ? '⏳ Chờ duyệt' :
+                             wd.status === 'PROCESSING' ? '🔄 Đang chuyển tiền' :
+                             '✕ Đã từ chối'}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-gray-500 max-w-xs truncate">
                           {wd.note || '—'}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          {wd.status === 'PENDING' ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleUpdateWithdrawalStatus(wd.id, 'COMPLETED')}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-sm transition-all whitespace-nowrap"
+                                title="Phê duyệt lệnh rút và giải ngân tiền"
+                              >
+                                Duyệt lệnh
+                              </button>
+                              <button
+                                onClick={() => handleUpdateWithdrawalStatus(wd.id, 'REJECTED')}
+                                className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[11px] transition-all whitespace-nowrap"
+                                title="Từ chối lệnh rút và hoàn số dư ví"
+                              >
+                                Từ chối
+                              </button>
+                            </div>
+                          ) : wd.status === 'COMPLETED' ? (
+                            <span className="text-[11px] font-medium text-emerald-600">✓ Hoàn tất</span>
+                          ) : (
+                            <span className="text-[11px] font-medium text-rose-600">✕ Đã hoàn tiền</span>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -632,6 +778,42 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
             </span>
           </div>
 
+          {/* Filters & Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-gray-50/70 p-3 rounded-2xl border border-gray-100">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              {[
+                { id: 'ALL', label: 'Tất cả' },
+                { id: 'COMMISSION', label: 'Hoa hồng' },
+                { id: 'EARNING', label: 'Nhiệm vụ' },
+                { id: 'WITHDRAWAL', label: 'Rút tiền' },
+                { id: 'REFUND', label: 'Hoàn tiền' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setTxFilterType(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
+                    txFilterType === tab.id
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200/60'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative min-w-[200px]">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Tìm giao dịch, nội dung..."
+                value={txSearchQuery}
+                onChange={e => setTxSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white border border-gray-200 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+
           <div className="overflow-x-auto text-xs">
             <table className="w-full text-left">
               <thead className="bg-gray-50 text-gray-500 border-b border-gray-100">
@@ -645,38 +827,47 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {transactions.map((tx: any) => (
-                  <tr key={tx.id} className="hover:bg-gray-50/50">
-                    <td className="py-3.5 px-4 text-gray-500">
-                      {new Date(tx.createdAt).toLocaleString('vi-VN')}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono font-medium text-gray-500">
-                      #{tx.id}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className={`px-2 py-0.5 rounded-md font-semibold text-[11px] ${
-                        tx.type === 'COMMISSION' ? 'bg-purple-50 text-purple-700' :
-                        tx.type === 'EARNING' ? 'bg-blue-50 text-blue-700' :
-                        'bg-amber-50 text-amber-700'
-                      }`}>
-                        {tx.type}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-gray-800 font-medium">
-                      {tx.description}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold">
-                      <span className={tx.amount > 0 ? 'text-emerald-600' : 'text-gray-900'}>
-                        {tx.amount > 0 ? `+${tx.amount.toLocaleString()}` : tx.amount.toLocaleString()} VND
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        Thành công
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {transactions
+                  .filter((tx: any) => {
+                    const matchesType = txFilterType === 'ALL' || (tx.type || '').toUpperCase() === txFilterType;
+                    const matchesQuery = !txSearchQuery ||
+                      (tx.description || '').toLowerCase().includes(txSearchQuery.toLowerCase()) ||
+                      (tx.id || '').toLowerCase().includes(txSearchQuery.toLowerCase());
+                    return matchesType && matchesQuery;
+                  })
+                  .map((tx: any) => (
+                    <tr key={tx.id} className="hover:bg-gray-50/50">
+                      <td className="py-3.5 px-4 text-gray-500">
+                        {new Date(tx.createdAt).toLocaleString('vi-VN')}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono font-medium text-gray-500">
+                        #{tx.id}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2 py-0.5 rounded-md font-semibold text-[11px] ${
+                          tx.type === 'COMMISSION' ? 'bg-purple-50 text-purple-700' :
+                          tx.type === 'EARNING' ? 'bg-blue-50 text-blue-700' :
+                          tx.type === 'REFUND' ? 'bg-emerald-50 text-emerald-700' :
+                          'bg-amber-50 text-amber-700'
+                        }`}>
+                          {tx.type}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-gray-800 font-medium">
+                        {tx.description}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold">
+                        <span className={tx.amount > 0 ? 'text-emerald-600' : 'text-gray-900'}>
+                          {tx.amount > 0 ? `+${tx.amount.toLocaleString()}` : tx.amount.toLocaleString()} VND
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Thành công
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -892,9 +1083,18 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                         <AlertCircle className="w-3.5 h-3.5 text-rose-500" /> Đã hết hạn
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl whitespace-nowrap shrink-0">
-                        <Clock className="w-3.5 h-3.5 text-amber-500" /> Đang thực hiện
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl whitespace-nowrap shrink-0">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Đang thực hiện
+                        </span>
+                        <button
+                          onClick={() => handleAdvanceTaskProgress(task)}
+                          className="px-2.5 py-1 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors whitespace-nowrap shrink-0"
+                          title="Tăng tiến độ để kiểm tra hoàn thành và nhận thưởng"
+                        >
+                          + Tiến độ
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1236,12 +1436,14 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                     onChange={e => setNewBankName(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 font-medium"
                   >
+                    <option value="MB Bank">MB Bank (Quân Đội)</option>
                     <option value="Vietcombank">Vietcombank</option>
                     <option value="Techcombank">Techcombank</option>
-                    <option value="MB Bank">MB Bank (Quân Đội)</option>
                     <option value="VietinBank">VietinBank</option>
                     <option value="BIDV">BIDV</option>
                     <option value="ACB">ACB</option>
+                    <option value="VPBank">VPBank</option>
+                    <option value="TPBank">TPBank</option>
                   </select>
                 </div>
               )}
@@ -1268,7 +1470,7 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                 <input
                   type="text"
                   required
-                  placeholder="VD: NGUYEN VAN A"
+                  placeholder="VD: YẾN NGÔ"
                   value={newAccountName}
                   onChange={e => setNewAccountName(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 uppercase"
@@ -1332,12 +1534,14 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                     onChange={e => setEditBankName(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 font-medium"
                   >
+                    <option value="MB Bank">MB Bank (Quân Đội)</option>
                     <option value="Vietcombank">Vietcombank</option>
                     <option value="Techcombank">Techcombank</option>
-                    <option value="MB Bank">MB Bank (Quân Đội)</option>
                     <option value="VietinBank">VietinBank</option>
                     <option value="BIDV">BIDV</option>
                     <option value="ACB">ACB</option>
+                    <option value="VPBank">VPBank</option>
+                    <option value="TPBank">TPBank</option>
                   </select>
                 </div>
               )}
@@ -1364,7 +1568,7 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                 <input
                   type="text"
                   required
-                  placeholder="VD: NGUYEN VAN A"
+                  placeholder="VD: YẾN NGÔ"
                   value={editAccountName}
                   onChange={e => setEditAccountName(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 uppercase"

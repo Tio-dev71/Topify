@@ -1,0 +1,301 @@
+{
+  "wallet": {
+    "id": "wal_topify_user_01",
+    "userId": "usr_topify_demo",
+    "availableBalance": 4950000,
+    "pendingBalance": 1450000,
+    "totalWithdrawn": 12550000,
+    "currency": "VND",
+    "updatedAt": "2026-11-10T02:31:33.440Z"
+  },
+  "transactions": [
+    {
+      "id": "tx_1794277893440",
+      "walletId": "wal_topify_user_01",
+      "type": "EARNING",
+      "amount": 100000,
+      "description": "Thưởng hoàn thành nhiệm vụ: Khởi tạo chiến dịch tiếp thị đầu tiên",
+      "referenceId": "task_004",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-10T02:31:33.440Z"
+    },
+    {
+      "id": "tx_1794277893434",
+      "walletId": "wal_topify_user_01",
+      "type": "REFUND",
+      "amount": 120000,
+      "description": "Hoàn tiền lệnh rút bị từ chối (wd_req_1794277892975): Thông tin tài khoản sai, hoàn tiền",
+      "referenceId": "wd_req_1794277892975",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-10T02:31:33.434Z"
+    },
+    {
+      "id": "tx_1794277892975",
+      "walletId": "wal_topify_user_01",
+      "type": "WITHDRAWAL",
+      "amount": -120000,
+      "description": "Yêu cầu rút tiền về Vietcombank - 1234567890",
+      "referenceId": "wd_req_1794277892975",
+      "status": "PENDING",
+      "createdAt": "2026-11-10T02:31:32.975Z"
+    },
+    {
+      "id": "tx_1794277889219",
+      "walletId": "wal_topify_user_01",
+      "type": "WITHDRAWAL",
+      "amount": -150000,
+      "description": "Yêu cầu rút tiền về MB Bank - 0987654321",
+      "referenceId": "wd_req_1794277889219",
+      "status": "PENDING",
+      "createdAt": "2026-11-10T02:31:29.219Z"
+    },
+    {
+      "id": "tx_1794277889218",
+      "walletId": "wal_topify_user_01",
+      "type": "WITHDRAWAL",
+      "amount": -200000,
+      "description": "Yêu cầu rút tiền về MB Bank (Ngân hàng Quân Đội) - 0987654321",
+      "referenceId": "wd_req_1794277889218",
+      "status": "PENDING",
+      "createdAt": "2026-11-10T02:31:29.218Z"
+    },
+    {
+      "walletId": "wal_topify_user_01",
+      "type": "COMMISSION",
+      "amount": 250000,
+      "description": "Hoa hồng thử nghiệm kiểm thử tự động M12",
+      "status": "COMPLETED",
+      "id": "tx_1794277889204",
+      "createdAt": "2026-11-10T02:31:29.204Z"
+    },
+    {
+      "id": "tx_1794277850270",
+      "walletId": "wal_topify_user_01",
+      "type": "EARNING",
+      "amount": 200000,
+      "description": "Thưởng hoàn thành nhiệm vụ: Giới thiệu 3 chủ shop dùng thử Topify",
+      "referenceId": "task_003",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-10T02:30:50.270Z"
+    },
+    {
+      "id": "tx_1794277850235",
+      "walletId": "wal_topify_user_01",
+      "type": "EARNING",
+      "amount": 150000,
+      "description": "Thưởng hoàn thành nhiệm vụ: Đạt mốc 10.000 lượt xem video ngắn",
+      "referenceId": "task_002",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-10T02:30:50.235Z"
+    },
+    {
+      "id": "tx_001",
+      "walletId": "wal_topify_user_01",
+      "type": "COMMISSION",
+      "amount": 598000,
+      "description": "Hoa hồng 20% gói Topify Pro - Khách hàng cty_thanglong@gmail.com",
+      "referenceId": "ref_comm_101",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-08T02:30:50.083Z"
+    },
+    {
+      "id": "tx_002",
+      "walletId": "wal_topify_user_01",
+      "type": "EARNING",
+      "amount": 150000,
+      "description": "Thưởng hoàn thành nhiệm vụ: Đạt 10.000 lượt xem Reels trong tuần",
+      "referenceId": "task_earn_reels_02",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-07T02:30:50.083Z"
+    },
+    {
+      "id": "tx_003",
+      "walletId": "wal_topify_user_01",
+      "type": "WITHDRAWAL",
+      "amount": -2500000,
+      "description": "Rút tiền về Ngân hàng MB Bank (STK: 0987654321)",
+      "referenceId": "wd_req_089",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-04T02:30:50.083Z"
+    },
+    {
+      "id": "tx_004",
+      "walletId": "wal_topify_user_01",
+      "type": "COMMISSION",
+      "amount": 299000,
+      "description": "Hoa hồng 15% gói Topify Starter - Khách hàng shop_mebe@yahoo.com",
+      "referenceId": "ref_comm_098",
+      "status": "COMPLETED",
+      "createdAt": "2026-11-02T02:30:50.083Z"
+    },
+    {
+      "id": "tx_005",
+      "walletId": "wal_topify_user_01",
+      "type": "EARNING",
+      "amount": 50000,
+      "description": "Thưởng kết nối thành công 3 kênh MXH (Facebook, TikTok, Shopee)",
+      "referenceId": "task_earn_channels_01",
+      "status": "COMPLETED",
+      "createdAt": "2026-10-29T02:30:50.083Z"
+    }
+  ],
+  "withdrawals": [
+    {
+      "id": "wd_req_1794277892975",
+      "walletId": "wal_topify_user_01",
+      "amount": 120000,
+      "fee": 0,
+      "netAmount": 120000,
+      "paymentMethod": "Vietcombank - 1234567890",
+      "accountInfo": "YẾN NGÔ",
+      "status": "REJECTED",
+      "note": "Thông tin tài khoản sai, hoàn tiền",
+      "createdAt": "2026-11-10T02:31:32.975Z",
+      "processedAt": "2026-11-10T02:31:33.434Z"
+    },
+    {
+      "id": "wd_req_1794277889219",
+      "walletId": "wal_topify_user_01",
+      "amount": 150000,
+      "fee": 0,
+      "netAmount": 150000,
+      "paymentMethod": "MB Bank - 0987654321",
+      "accountInfo": "YẾN NGÔ",
+      "status": "COMPLETED",
+      "note": "Kế toán duyệt và đã giải ngân",
+      "createdAt": "2026-11-10T02:31:29.219Z",
+      "processedAt": "2026-11-10T02:31:32.974Z"
+    },
+    {
+      "id": "wd_req_1794277889218",
+      "walletId": "wal_topify_user_01",
+      "amount": 200000,
+      "fee": 0,
+      "netAmount": 200000,
+      "paymentMethod": "MB Bank (Ngân hàng Quân Đội) - 0987654321",
+      "accountInfo": "YẾN NGÔ",
+      "status": "PENDING",
+      "note": "Rút tiền kiểm thử F148",
+      "createdAt": "2026-11-10T02:31:29.218Z"
+    },
+    {
+      "id": "wd_req_089",
+      "walletId": "wal_topify_user_01",
+      "amount": 2500000,
+      "fee": 0,
+      "netAmount": 2500000,
+      "paymentMethod": "MB Bank - 0987654321",
+      "accountInfo": "YẾN NGÔ - Chi nhánh Hà Nội",
+      "status": "COMPLETED",
+      "note": "Đã hoàn tất chuyển khoản VietQR tự động mã giao dịch #VNP29881",
+      "createdAt": "2026-11-04T02:30:50.083Z",
+      "processedAt": "2026-11-04T02:35:50.083Z"
+    },
+    {
+      "id": "wd_req_090",
+      "walletId": "wal_topify_user_01",
+      "amount": 1500000,
+      "fee": 0,
+      "netAmount": 1500000,
+      "paymentMethod": "Momo - 0987654321",
+      "accountInfo": "YẾN NGÔ",
+      "status": "PENDING",
+      "note": "Đang chờ đối soát phiên thanh toán đợt ngày 15 hàng tháng",
+      "createdAt": "2026-11-09T22:30:50.083Z"
+    }
+  ],
+  "paymentMethods": [
+    {
+      "id": "pm_001",
+      "type": "VIETQR",
+      "accountName": "YẾN NGÔ",
+      "accountNumber": "0987654321",
+      "bankName": "MB Bank (Ngân hàng Quân Đội)",
+      "isDefault": true,
+      "createdAt": "2026-10-11T02:30:50.083Z"
+    },
+    {
+      "id": "pm_002",
+      "type": "MOMO",
+      "accountName": "YẾN NGÔ",
+      "accountNumber": "0987654321",
+      "isDefault": false,
+      "createdAt": "2026-10-21T02:30:50.083Z"
+    },
+    {
+      "id": "pm_003",
+      "type": "PAYPAL",
+      "accountName": "Yen Ngo",
+      "accountNumber": "nhim300997@gmail.com",
+      "isDefault": false,
+      "createdAt": "2026-10-31T02:30:50.083Z"
+    }
+  ],
+  "earningTasks": [
+    {
+      "id": "task_001",
+      "title": "Xuất bản 10 bài đăng social trong tuần",
+      "description": "Lên lịch và xuất bản thành công 10 video hoặc hình ảnh qua Topify Calendar.",
+      "rewardAmount": 50000,
+      "category": "CONTENT",
+      "progress": 10,
+      "maxProgress": 10,
+      "unit": "bài đăng",
+      "isClaimed": false,
+      "isCompleted": true,
+      "expiresAt": "2026-10-19T00:00:00.000Z"
+    },
+    {
+      "id": "task_002",
+      "title": "Đạt mốc 10.000 lượt xem video ngắn",
+      "description": "Tổng views trên các clip TikTok Reels hoặc Shorts được đăng qua Topify cán mốc 10.000 lượt xem.",
+      "rewardAmount": 150000,
+      "category": "GROWTH",
+      "progress": 10000,
+      "maxProgress": 10000,
+      "unit": "lượt xem",
+      "isClaimed": false,
+      "isCompleted": true,
+      "expiresAt": "2027-12-31T23:59:59.000Z"
+    },
+    {
+      "id": "task_003",
+      "title": "Giới thiệu 3 chủ shop dùng thử Topify",
+      "description": "Mời thành công 3 bạn bè hoặc đối tác đăng ký Workspace mới qua Referral link.",
+      "rewardAmount": 200000,
+      "category": "COMMUNITY",
+      "progress": 3,
+      "maxProgress": 3,
+      "unit": "shop",
+      "isClaimed": true,
+      "isCompleted": true,
+      "expiresAt": "2027-12-31T23:59:59.000Z"
+    },
+    {
+      "id": "task_004",
+      "title": "Khởi tạo chiến dịch tiếp thị đầu tiên",
+      "description": "Thiết lập mục tiêu KPI và phân bổ ngân sách cho chiến dịch mới trong mục Chiến dịch.",
+      "rewardAmount": 100000,
+      "category": "SETUP",
+      "progress": 1,
+      "maxProgress": 1,
+      "unit": "chiến dịch",
+      "isClaimed": true,
+      "isCompleted": true,
+      "expiresAt": "2027-12-31T23:59:59.000Z"
+    },
+    {
+      "id": "task_005",
+      "title": "Kết nối trọn bộ 3 nền tảng TikTok + Facebook + Shopee",
+      "description": "Liên kết ít nhất 1 tài khoản cho mỗi mạng xã hội cốt lõi trong mục Quản lý kênh.",
+      "rewardAmount": 30000,
+      "category": "SETUP",
+      "progress": 3,
+      "maxProgress": 3,
+      "unit": "kênh",
+      "isClaimed": false,
+      "isCompleted": true,
+      "expiresAt": "2027-12-31T23:59:59.000Z"
+    }
+  ]
+}

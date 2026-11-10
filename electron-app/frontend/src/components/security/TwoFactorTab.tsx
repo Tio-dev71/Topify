@@ -392,3 +392,4 @@ export default function TwoFactorTab() {
     </div>
   );
 }
+

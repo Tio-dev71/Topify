@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { memoryPaymentMethods, SavedPaymentMethod, PaymentMethodType } from '@/lib/wallet/wallet-engine';
+import { walletStore, SavedPaymentMethod, PaymentMethodType } from '@/lib/wallet/wallet-engine';
 
 // GET /api/wallet/payment-methods - List saved payment methods (F149)
 export async function GET() {
   try {
+    const paymentMethods = walletStore.getPaymentMethods();
     return NextResponse.json({
-      paymentMethods: memoryPaymentMethods,
-      total: memoryPaymentMethods.length,
+      paymentMethods,
+      total: paymentMethods.length,
       success: true,
     });
   } catch (error: any) {
@@ -26,26 +27,19 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    if (isDefault) {
-      memoryPaymentMethods.forEach(pm => pm.isDefault = false);
-    }
-
-    const newMethod: SavedPaymentMethod = {
-      id: `pm_${Date.now()}`,
+    const newMethod = walletStore.addPaymentMethod({
       type: type as PaymentMethodType,
-      accountName: accountName.toUpperCase(),
+      accountName: accountName.toUpperCase().trim(),
       accountNumber: String(accountNumber).trim(),
       bankName: bankName || (type === 'VIETQR' ? 'Ngân hàng Việt Nam' : undefined),
-      isDefault: isDefault || memoryPaymentMethods.length === 0,
-      createdAt: new Date().toISOString(),
-    };
-
-    memoryPaymentMethods.push(newMethod);
+      isDefault: Boolean(isDefault),
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Đã thêm phương thức nhận tiền thành công',
       paymentMethod: newMethod,
+      paymentMethods: walletStore.getPaymentMethods(),
     }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -58,25 +52,28 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { id, type, accountName, accountNumber, bankName, isDefault } = body;
 
-    const target = memoryPaymentMethods.find(pm => pm.id === id);
-    if (!target) {
-      return NextResponse.json({ error: 'Phương thức thanh toán không tồn tại' }, { status: 404 });
+    if (!id) {
+      return NextResponse.json({ error: 'ID phương thức là bắt buộc' }, { status: 400 });
     }
 
-    if (type) target.type = type;
-    if (accountName) target.accountName = accountName.toUpperCase();
-    if (accountNumber) target.accountNumber = String(accountNumber).trim();
-    if (bankName !== undefined) target.bankName = bankName;
+    const updated = walletStore.updatePaymentMethod({
+      id,
+      type,
+      accountName,
+      accountNumber,
+      bankName,
+      isDefault,
+    });
 
-    if (isDefault) {
-      memoryPaymentMethods.forEach(pm => pm.isDefault = (pm.id === id));
+    if (!updated) {
+      return NextResponse.json({ error: 'Phương thức thanh toán không tồn tại' }, { status: 404 });
     }
 
     return NextResponse.json({
       success: true,
       message: 'Đã cập nhật phương thức nhận tiền thành công',
-      paymentMethod: target,
-      paymentMethods: memoryPaymentMethods,
+      paymentMethod: updated,
+      paymentMethods: walletStore.getPaymentMethods(),
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -100,15 +97,15 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'ID phương thức là bắt buộc' }, { status: 400 });
     }
 
-    const index = memoryPaymentMethods.findIndex(pm => pm.id === id);
-    if (index !== -1) {
-      memoryPaymentMethods.splice(index, 1);
+    const success = walletStore.deletePaymentMethod(id);
+    if (!success) {
+      return NextResponse.json({ error: 'Không tìm thấy phương thức để xóa' }, { status: 404 });
     }
 
     return NextResponse.json({
       success: true,
       message: 'Đã xóa phương thức nhận tiền thành công',
-      paymentMethods: memoryPaymentMethods,
+      paymentMethods: walletStore.getPaymentMethods(),
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

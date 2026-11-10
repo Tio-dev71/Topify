@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 // Topify Wallet, Earnings & Referral Growth Engine (M12 & M13: F146 - F155)
 // Core types, anti-fraud algorithms, commission rules, sample data & fallback store
 
@@ -184,7 +187,7 @@ export function checkReferralFraud(data: {
 }
 
 // ============================================
-// In-Memory Sample Data Store (M12 & M13)
+// Initial Clean Data Store (M12 & M13)
 // ============================================
 
 export const memoryWallet: WalletData = {
@@ -206,7 +209,7 @@ export const memoryTransactions: WalletTransactionItem[] = [
     description: 'Hoa hồng 20% gói Topify Pro - Khách hàng cty_thanglong@gmail.com',
     referenceId: 'ref_comm_101',
     status: 'COMPLETED',
-    createdAt: '2026-10-14T10:15:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
   },
   {
     id: 'tx_002',
@@ -216,17 +219,17 @@ export const memoryTransactions: WalletTransactionItem[] = [
     description: 'Thưởng hoàn thành nhiệm vụ: Đạt 10.000 lượt xem Reels trong tuần',
     referenceId: 'task_earn_reels_02',
     status: 'COMPLETED',
-    createdAt: '2026-10-13T16:40:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
   },
   {
     id: 'tx_003',
     walletId: 'wal_topify_user_01',
     type: 'WITHDRAWAL',
     amount: -2500000,
-    description: 'Rút tiền về Ngân hàng Vietcombank (STK: 0071000889988)',
+    description: 'Rút tiền về Ngân hàng MB Bank (STK: 0987654321)',
     referenceId: 'wd_req_089',
     status: 'COMPLETED',
-    createdAt: '2026-10-10T09:20:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 6).toISOString(),
   },
   {
     id: 'tx_004',
@@ -236,7 +239,7 @@ export const memoryTransactions: WalletTransactionItem[] = [
     description: 'Hoa hồng 15% gói Topify Starter - Khách hàng shop_mebe@yahoo.com',
     referenceId: 'ref_comm_098',
     status: 'COMPLETED',
-    createdAt: '2026-10-08T14:10:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 8).toISOString(),
   },
   {
     id: 'tx_005',
@@ -246,7 +249,7 @@ export const memoryTransactions: WalletTransactionItem[] = [
     description: 'Thưởng kết nối thành công 3 kênh MXH (Facebook, TikTok, Shopee)',
     referenceId: 'task_earn_channels_01',
     status: 'COMPLETED',
-    createdAt: '2026-10-05T11:00:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 12).toISOString(),
   },
 ];
 
@@ -257,12 +260,12 @@ export const memoryWithdrawals: WithdrawalRequest[] = [
     amount: 2500000,
     fee: 0,
     netAmount: 2500000,
-    paymentMethod: 'Vietcombank - 0071000889988',
-    accountInfo: 'NGUYEN VAN TOAN - Chi nhánh Hồ Chí Minh',
+    paymentMethod: 'MB Bank - 0987654321',
+    accountInfo: 'YẾN NGÔ - Chi nhánh Hà Nội',
     status: 'COMPLETED',
     note: 'Đã hoàn tất chuyển khoản VietQR tự động mã giao dịch #VNP29881',
-    createdAt: '2026-10-10T09:20:00.000Z',
-    processedAt: '2026-10-10T09:25:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 6).toISOString(),
+    processedAt: new Date(Date.now() - 86400000 * 6 + 300000).toISOString(),
   },
   {
     id: 'wd_req_090',
@@ -271,10 +274,10 @@ export const memoryWithdrawals: WithdrawalRequest[] = [
     fee: 0,
     netAmount: 1500000,
     paymentMethod: 'Momo - 0987654321',
-    accountInfo: 'NGUYEN VAN TOAN',
+    accountInfo: 'YẾN NGÔ',
     status: 'PENDING',
-    note: 'Đang chờ kế toán duyệt phiên thanh toán đợt ngày 15 hàng tháng',
-    createdAt: '2026-10-14T08:30:00.000Z',
+    note: 'Đang chờ đối soát phiên thanh toán đợt ngày 15 hàng tháng',
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
   },
 ];
 
@@ -282,27 +285,27 @@ export const memoryPaymentMethods: SavedPaymentMethod[] = [
   {
     id: 'pm_001',
     type: 'VIETQR',
-    accountName: 'NGUYEN VAN TOAN',
-    accountNumber: '0071000889988',
-    bankName: 'Vietcombank (Ngân hàng Ngoại thương VN)',
+    accountName: 'YẾN NGÔ',
+    accountNumber: '0987654321',
+    bankName: 'MB Bank (Ngân hàng Quân Đội)',
     isDefault: true,
-    createdAt: '2026-09-15T08:00:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 30).toISOString(),
   },
   {
     id: 'pm_002',
     type: 'MOMO',
-    accountName: 'NGUYEN VAN TOAN',
+    accountName: 'YẾN NGÔ',
     accountNumber: '0987654321',
     isDefault: false,
-    createdAt: '2026-09-20T14:30:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 20).toISOString(),
   },
   {
     id: 'pm_003',
     type: 'PAYPAL',
-    accountName: 'Nguyen Van Toan',
-    accountNumber: 'vantoan.growth@topify.vn',
+    accountName: 'Yen Ngo',
+    accountNumber: 'nhim300997@gmail.com',
     isDefault: false,
-    createdAt: '2026-10-01T10:00:00.000Z',
+    createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
   },
 ];
 
@@ -373,6 +376,366 @@ export const memoryEarningTasks: EarningTaskItem[] = [
     expiresAt: '2027-12-31T23:59:59.000Z',
   },
 ];
+
+// ============================================
+// Wallet Persistent Store (File + Memory)
+// ============================================
+
+export class WalletStoreManager {
+  private filePath = path.join(process.cwd(), 'data', 'wallet-store.json');
+  private wallet: WalletData = { ...memoryWallet };
+  private transactions: WalletTransactionItem[] = [...memoryTransactions];
+  private withdrawals: WithdrawalRequest[] = [...memoryWithdrawals];
+  private paymentMethods: SavedPaymentMethod[] = [...memoryPaymentMethods];
+  private earningTasks: EarningTaskItem[] = [...memoryEarningTasks];
+
+  constructor() {
+    this.loadFromDisk();
+  }
+
+  private loadFromDisk() {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        const raw = fs.readFileSync(this.filePath, 'utf-8');
+        const data = JSON.parse(raw);
+        if (data.wallet) this.wallet = { ...this.wallet, ...data.wallet };
+        if (Array.isArray(data.transactions) && data.transactions.length > 0) {
+          this.transactions = data.transactions;
+        }
+        if (Array.isArray(data.withdrawals) && data.withdrawals.length > 0) {
+          this.withdrawals = data.withdrawals;
+        }
+        if (Array.isArray(data.paymentMethods) && data.paymentMethods.length > 0) {
+          this.paymentMethods = data.paymentMethods;
+        }
+        if (Array.isArray(data.earningTasks) && data.earningTasks.length > 0) {
+          this.earningTasks = data.earningTasks;
+        }
+      } else {
+        this.saveToDisk();
+      }
+    } catch (e) {
+      console.warn('[WalletStoreManager] loadFromDisk fallback to defaults');
+    }
+    this.syncLegacyVariables();
+  }
+
+  private saveToDisk() {
+    try {
+      const dir = path.dirname(this.filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const data = {
+        wallet: this.wallet,
+        transactions: this.transactions,
+        withdrawals: this.withdrawals,
+        paymentMethods: this.paymentMethods,
+        earningTasks: this.earningTasks,
+      };
+      fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('[WalletStoreManager] saveToDisk error', e);
+    }
+    this.syncLegacyVariables();
+  }
+
+  private syncLegacyVariables() {
+    Object.assign(memoryWallet, this.wallet);
+    memoryTransactions.length = 0;
+    memoryTransactions.push(...this.transactions);
+    memoryWithdrawals.length = 0;
+    memoryWithdrawals.push(...this.withdrawals);
+    memoryPaymentMethods.length = 0;
+    memoryPaymentMethods.push(...this.paymentMethods);
+    memoryEarningTasks.length = 0;
+    memoryEarningTasks.push(...this.earningTasks);
+  }
+
+  // F146: Wallet Balance
+  public getWallet(userId?: string): WalletData {
+    if (userId) this.wallet.userId = userId;
+    return { ...this.wallet };
+  }
+
+  public updateBalance(params: { availableDelta?: number; pendingDelta?: number; withdrawnDelta?: number }): WalletData {
+    if (params.availableDelta !== undefined) {
+      this.wallet.availableBalance = Math.max(0, this.wallet.availableBalance + params.availableDelta);
+    }
+    if (params.pendingDelta !== undefined) {
+      this.wallet.pendingBalance = Math.max(0, this.wallet.pendingBalance + params.pendingDelta);
+    }
+    if (params.withdrawnDelta !== undefined) {
+      this.wallet.totalWithdrawn = Math.max(0, this.wallet.totalWithdrawn + params.withdrawnDelta);
+    }
+    this.wallet.updatedAt = new Date().toISOString();
+    this.saveToDisk();
+    return { ...this.wallet };
+  }
+
+  // F147: Transactions
+  public getTransactions(): WalletTransactionItem[] {
+    return [...this.transactions];
+  }
+
+  public addTransaction(tx: Omit<WalletTransactionItem, 'id' | 'createdAt'>): WalletTransactionItem {
+    const newTx: WalletTransactionItem = {
+      ...tx,
+      id: `tx_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    this.transactions.unshift(newTx);
+    this.saveToDisk();
+    return newTx;
+  }
+
+  // F148: Withdrawals
+  public getWithdrawals(): WithdrawalRequest[] {
+    return [...this.withdrawals];
+  }
+
+  public createWithdrawal(params: {
+    amount: number;
+    paymentMethod: string;
+    accountInfo: string;
+    note?: string;
+  }): { withdrawal: WithdrawalRequest; wallet: WalletData; transaction: WalletTransactionItem } {
+    if (params.amount > this.wallet.availableBalance) {
+      throw new Error(`Số dư khả dụng không đủ (${this.wallet.availableBalance.toLocaleString('vi-VN')} VND)`);
+    }
+
+    const newWd: WithdrawalRequest = {
+      id: `wd_req_${Date.now()}`,
+      walletId: this.wallet.id,
+      amount: params.amount,
+      fee: 0,
+      netAmount: params.amount,
+      paymentMethod: params.paymentMethod,
+      accountInfo: params.accountInfo,
+      status: 'PENDING',
+      note: params.note || 'Yêu cầu rút tiền qua cổng tự động VietQR/Momo',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.wallet.availableBalance -= params.amount;
+    this.wallet.pendingBalance += params.amount;
+    this.wallet.updatedAt = new Date().toISOString();
+
+    const newTx: WalletTransactionItem = {
+      id: `tx_${Date.now()}`,
+      walletId: this.wallet.id,
+      type: 'WITHDRAWAL',
+      amount: -params.amount,
+      description: `Yêu cầu rút tiền về ${params.paymentMethod}`,
+      referenceId: newWd.id,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.withdrawals.unshift(newWd);
+    this.transactions.unshift(newTx);
+    this.saveToDisk();
+
+    return { withdrawal: newWd, wallet: { ...this.wallet }, transaction: newTx };
+  }
+
+  public updateWithdrawalStatus(
+    id: string,
+    status: WithdrawalStatus,
+    note?: string
+  ): { withdrawal: WithdrawalRequest; wallet: WalletData; refundTx?: WalletTransactionItem } | null {
+    const wd = this.withdrawals.find((w) => w.id === id);
+    if (!wd) return null;
+
+    if (['COMPLETED', 'REJECTED'].includes(wd.status)) {
+      throw new Error(`Yêu cầu rút tiền này đã ở trạng thái ${wd.status}`);
+    }
+
+    wd.status = status;
+    wd.processedAt = ['COMPLETED', 'REJECTED'].includes(status) ? new Date().toISOString() : undefined;
+    if (note) wd.note = note;
+
+    let refundTx: WalletTransactionItem | undefined = undefined;
+
+    if (status === 'COMPLETED') {
+      this.wallet.pendingBalance = Math.max(0, this.wallet.pendingBalance - wd.amount);
+      this.wallet.totalWithdrawn += wd.amount;
+    } else if (status === 'REJECTED') {
+      this.wallet.pendingBalance = Math.max(0, this.wallet.pendingBalance - wd.amount);
+      this.wallet.availableBalance += wd.amount;
+
+      refundTx = {
+        id: `tx_${Date.now()}`,
+        walletId: this.wallet.id,
+        type: 'REFUND',
+        amount: wd.amount,
+        description: `Hoàn tiền lệnh rút bị từ chối (${wd.id}): ${note || 'Từ chối bởi quản trị viên'}`,
+        referenceId: wd.id,
+        status: 'COMPLETED',
+        createdAt: new Date().toISOString(),
+      };
+      this.transactions.unshift(refundTx);
+    }
+
+    this.wallet.updatedAt = new Date().toISOString();
+    this.saveToDisk();
+
+    return { withdrawal: wd, wallet: { ...this.wallet }, refundTx };
+  }
+
+  // F149: Payment Methods
+  public getPaymentMethods(): SavedPaymentMethod[] {
+    return [...this.paymentMethods];
+  }
+
+  public addPaymentMethod(params: {
+    type: PaymentMethodType;
+    accountName: string;
+    accountNumber: string;
+    bankName?: string;
+    isDefault?: boolean;
+  }): SavedPaymentMethod {
+    if (params.isDefault || this.paymentMethods.length === 0) {
+      this.paymentMethods.forEach((pm) => (pm.isDefault = false));
+    }
+
+    const newMethod: SavedPaymentMethod = {
+      id: `pm_${Date.now()}`,
+      type: params.type,
+      accountName: params.accountName.toUpperCase().trim(),
+      accountNumber: String(params.accountNumber).trim(),
+      bankName: params.bankName || (params.type === 'VIETQR' ? 'Ngân hàng Việt Nam' : undefined),
+      isDefault: params.isDefault || this.paymentMethods.length === 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.paymentMethods.push(newMethod);
+    this.saveToDisk();
+    return newMethod;
+  }
+
+  public updatePaymentMethod(params: {
+    id: string;
+    type?: PaymentMethodType;
+    accountName?: string;
+    accountNumber?: string;
+    bankName?: string;
+    isDefault?: boolean;
+  }): SavedPaymentMethod | null {
+    const target = this.paymentMethods.find((pm) => pm.id === params.id);
+    if (!target) return null;
+
+    if (params.type) target.type = params.type;
+    if (params.accountName) target.accountName = params.accountName.toUpperCase().trim();
+    if (params.accountNumber) target.accountNumber = String(params.accountNumber).trim();
+    if (params.bankName !== undefined) target.bankName = params.bankName;
+
+    if (params.isDefault) {
+      this.paymentMethods.forEach((pm) => (pm.isDefault = pm.id === params.id));
+    }
+
+    this.saveToDisk();
+    return target;
+  }
+
+  public deletePaymentMethod(id: string): boolean {
+    const index = this.paymentMethods.findIndex((pm) => pm.id === id);
+    if (index === -1) return false;
+
+    const wasDefault = this.paymentMethods[index].isDefault;
+    this.paymentMethods.splice(index, 1);
+
+    if (wasDefault && this.paymentMethods.length > 0) {
+      this.paymentMethods[0].isDefault = true;
+    }
+
+    this.saveToDisk();
+    return true;
+  }
+
+  public setDefaultPaymentMethod(id: string): boolean {
+    const target = this.paymentMethods.find((pm) => pm.id === id);
+    if (!target) return false;
+
+    this.paymentMethods.forEach((pm) => (pm.isDefault = pm.id === id));
+    this.saveToDisk();
+    return true;
+  }
+
+  // F150: Earning Tasks
+  public getEarningTasks(): EarningTaskItem[] {
+    const now = Date.now();
+    return this.earningTasks.map((t) => ({
+      ...t,
+      isExpired: new Date(t.expiresAt).getTime() < now,
+    }));
+  }
+
+  public claimEarningTask(taskId: string): {
+    success: boolean;
+    rewardAmount: number;
+    task: EarningTaskItem;
+    wallet: WalletData;
+    transaction: WalletTransactionItem;
+  } {
+    const task = this.earningTasks.find((t) => t.id === taskId);
+    if (!task) throw new Error('Nhiệm vụ không tồn tại');
+
+    if (task.isClaimed) throw new Error('Nhiệm vụ này đã được nhận thưởng trước đó');
+
+    const isExpired = new Date(task.expiresAt).getTime() < Date.now();
+    if (!task.isCompleted) {
+      if (isExpired) throw new Error('Nhiệm vụ đã hết hạn');
+      throw new Error(`Chưa hoàn thành nhiệm vụ (${task.progress}/${task.maxProgress} ${task.unit})`);
+    }
+
+    task.isClaimed = true;
+    this.wallet.availableBalance += task.rewardAmount;
+    this.wallet.updatedAt = new Date().toISOString();
+
+    const rewardTx: WalletTransactionItem = {
+      id: `tx_${Date.now()}`,
+      walletId: this.wallet.id,
+      type: 'EARNING',
+      amount: task.rewardAmount,
+      description: `Thưởng hoàn thành nhiệm vụ: ${task.title}`,
+      referenceId: task.id,
+      status: 'COMPLETED',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.transactions.unshift(rewardTx);
+    this.saveToDisk();
+
+    return {
+      success: true,
+      rewardAmount: task.rewardAmount,
+      task,
+      wallet: { ...this.wallet },
+      transaction: rewardTx,
+    };
+  }
+
+  public updateTaskProgress(taskId: string, incrementOrSet: number, isSet = false): EarningTaskItem | null {
+    const task = this.earningTasks.find((t) => t.id === taskId);
+    if (!task) return null;
+
+    if (isSet) {
+      task.progress = Math.min(task.maxProgress, Math.max(0, incrementOrSet));
+    } else {
+      task.progress = Math.min(task.maxProgress, task.progress + incrementOrSet);
+    }
+
+    if (task.progress >= task.maxProgress) {
+      task.isCompleted = true;
+    }
+
+    this.saveToDisk();
+    return task;
+  }
+}
+
+export const walletStore = new WalletStoreManager();
 
 export const memoryReferralProfile: ReferralProfile = {
   code: 'TOP-VIET99',
