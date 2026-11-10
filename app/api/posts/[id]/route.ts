@@ -5,6 +5,7 @@ import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
 import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
+import { securityEngineStore } from '@/lib/security/security-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,14 @@ export async function GET(
     const session = await getAuthContext();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
+    }
+
+    // RBAC: Check posts.delete permission
+    if (session.user.role && !securityEngineStore.hasPermission(session.user.role, 'posts.delete')) {
+      return NextResponse.json(
+        { error: 'Tài khoản không có quyền xoá bài viết theo Ma Trận Phân Quyền (RBAC)' },
+        { status: 403, headers: corsHeaders }
+      );
     }
 
     const { id } = await params;
@@ -109,6 +118,14 @@ export async function PATCH(
     const session = await getAuthContext();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
+    }
+
+    // RBAC: Check posts.delete permission
+    if (session.user.role && !securityEngineStore.hasPermission(session.user.role, 'posts.delete')) {
+      return NextResponse.json(
+        { error: 'Tài khoản không có quyền xoá bài viết theo Ma Trận Phân Quyền (RBAC)' },
+        { status: 403, headers: corsHeaders }
+      );
     }
 
     const { id } = await params;
@@ -222,6 +239,14 @@ export async function DELETE(
     const session = await getAuthContext();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
+    }
+
+    // RBAC: Check posts.delete permission
+    if (session.user.role && !securityEngineStore.hasPermission(session.user.role, 'posts.delete')) {
+      return NextResponse.json(
+        { error: 'Tài khoản không có quyền xoá bài viết theo Ma Trận Phân Quyền (RBAC)' },
+        { status: 403, headers: corsHeaders }
+      );
     }
 
     const { id } = await params;

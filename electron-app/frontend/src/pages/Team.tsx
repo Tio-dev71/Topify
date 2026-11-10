@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import { useNavigate } from 'react-router-dom';
+import { useRbac } from '../lib/rbac';
 
 interface TeamMember {
   id: string;
@@ -98,6 +99,7 @@ interface OrgProject {
 
 export default function Team() {
   const navigate = useNavigate();
+  const { isAdmin, isOwner, isStaff, roleDisplayName } = useRbac();
   const [activeTab, setActiveTab] = useState<'members' | 'rbac' | 'org'>('members');
 
   // Members & Seats State
@@ -219,6 +221,10 @@ export default function Team() {
   };
 
   const handleToggleRbac = async (permissionKey: string, role: 'admin' | 'editor' | 'viewer', currentValue: boolean) => {
+    if (!isAdmin) {
+      toast.error('Chỉ Quản trị viên (Admin) mới có quyền chỉnh sửa ma trận phân quyền RBAC.');
+      return;
+    }
     const nextValue = !currentValue;
     setSavingRbacKey(`${permissionKey}-${role}`);
 
@@ -584,13 +590,29 @@ export default function Team() {
     );
   }
 
-  const seatsUsed = quotaInfo?.seatsUsed ?? members.length;
+  const pendingInvitesCount = (quotaInfo?.invites || []).filter(
+    (i: any) => i.status === 'PENDING' || i.status === 'Đang chờ chấp nhận'
+  ).length;
+  // Dynamic accurate seat calculation based on members + pending invitations in this workspace
+  const seatsUsed = members.length + pendingInvitesCount;
   const maxSeats = quotaInfo?.maxSeats ?? 5;
   const seatsAvailable = Math.max(0, maxSeats - seatsUsed);
   const seatPercentage = Math.min(100, Math.round((seatsUsed / maxSeats) * 100));
 
   return (
     <div className="space-y-6 animate-fade-in max-w-6xl mx-auto pb-12">
+      {/* Role banner if Staff */}
+      {!isAdmin && (
+        <div className="p-3.5 bg-indigo-50/90 border border-indigo-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-indigo-900 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+            <span>
+              Bạn đang đăng nhập với vai trò <strong>{roleDisplayName}</strong>. Bạn có quyền xem danh sách nhân sự, phân nhóm và cấu hình RBAC. Các tác vụ thêm/xóa thành viên và phân quyền chỉ dành cho Quản trị viên (Admin).
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -605,11 +627,19 @@ export default function Team() {
 
         {activeTab === 'members' && (
           <button
-            onClick={() => setShowModal(true)}
-            disabled={seatsAvailable <= 0}
+            onClick={() => {
+              if (!isAdmin) {
+                toast.error('Chỉ Quản trị viên (Admin) mới có quyền mời thành viên mới.');
+                return;
+              }
+              setShowModal(true);
+            }}
+            disabled={!isAdmin || seatsAvailable <= 0}
             className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors shadow-sm font-medium disabled:opacity-50 cursor-pointer"
+            title={!isAdmin ? 'Chỉ Quản trị viên mới có quyền mời thành viên' : seatsAvailable <= 0 ? 'Đã hết ghế ngồi' : 'Mời thành viên mới'}
           >
-            <UserPlus className="w-4 h-4" /> Mời thành viên mới
+            <UserPlus className="w-4 h-4" />
+            Mời thành viên mới
           </button>
         )}
         {activeTab === 'org' && (
@@ -824,16 +854,17 @@ export default function Team() {
                         </td>
                         <td className="px-6 py-4">
                           <select
+                            disabled={!isAdmin}
                             value={member.role}
                             onChange={(e) => handleRoleChange(member.id, e.target.value)}
-                            className={`text-xs font-semibold px-2.5 py-1 rounded-full outline-none cursor-pointer ${
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-full outline-none ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'} ${
                               member.role === 'ADMIN'
                                 ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
                                 : 'bg-gray-100 text-gray-600'
                             }`}
                           >
                             <option value="ADMIN">Quản trị viên (Admin)</option>
-                            <option value="STAFF">Nhân viên (Staff)</option>
+                            <option value="STAFF">Nhân viên (Staff / Viewer)</option>
                           </select>
                         </td>
                         <td className="px-6 py-4 text-xs text-gray-500">
@@ -861,20 +892,24 @@ export default function Team() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleOpenEdit(member)}
-                              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
-                              title="Chỉnh sửa quyền"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleRemoveMember(member.id, member.email)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                              title="Xóa khỏi nhóm"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {isAdmin && (
+                              <>
+                                <button
+                                  onClick={() => handleOpenEdit(member)}
+                                  className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
+                                  title="Chỉnh sửa quyền"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveMember(member.id, member.email)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                  title="Xóa khỏi nhóm"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -955,13 +990,15 @@ export default function Team() {
                                 >
                                   <Copy className="w-3 h-3" /> Link
                                 </button>
-                                <button
-                                  onClick={() => handleRevokeInvite(invite.id)}
-                                  className="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                                  title="Thu hồi lời mời"
-                                >
-                                  <Ban className="w-3 h-3" /> Thu hồi
-                                </button>
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => handleRevokeInvite(invite.id)}
+                                    className="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                                    title="Thu hồi lời mời"
+                                  >
+                                    <Ban className="w-3 h-3" /> Thu hồi
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
@@ -998,6 +1035,15 @@ export default function Team() {
               </button>
             </div>
 
+            {!isAdmin && (
+              <div className="p-3.5 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>
+                  <strong>Chế độ chỉ xem:</strong> Bạn đang đăng nhập với vai trò <strong>Nhân viên (Staff / Viewer)</strong>. Bạn chỉ có thể theo dõi ma trận phân quyền, chỉ Quản trị viên (Admin) mới có quyền bật/tắt quyền hạn.
+                </span>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-gray-900 border-collapse">
                 <thead className="bg-gray-50 text-gray-600 text-xs">
@@ -1013,8 +1059,8 @@ export default function Team() {
                     <th className="px-5 py-3 font-semibold text-center border-b border-gray-200 w-32 bg-blue-50/50">
                       Biên Tập (Editor)
                     </th>
-                    <th className="px-5 py-3 font-semibold text-center border-b border-gray-200 w-32 bg-gray-50">
-                      Nhân Viên (Viewer)
+                    <th className="px-5 py-3 font-semibold text-center border-b border-gray-200 w-36 bg-gray-50">
+                      Nhân Viên (Staff / Viewer)
                     </th>
                   </tr>
                 </thead>
@@ -1049,24 +1095,27 @@ export default function Team() {
                           <input
                             type="checkbox"
                             checked={item.admin}
+                            disabled={!isAdmin}
                             onChange={() => handleToggleRbac(item.permissionKey, 'admin', item.admin)}
-                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                            className={`w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                           />
                         </td>
                         <td className="px-5 py-3 text-center bg-blue-50/20">
                           <input
                             type="checkbox"
                             checked={item.editor}
+                            disabled={!isAdmin}
                             onChange={() => handleToggleRbac(item.permissionKey, 'editor', item.editor)}
-                            className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                            className={`w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                           />
                         </td>
                         <td className="px-5 py-3 text-center">
                           <input
                             type="checkbox"
                             checked={item.viewer}
+                            disabled={!isAdmin}
                             onChange={() => handleToggleRbac(item.permissionKey, 'viewer', item.viewer)}
-                            className="w-4 h-4 text-gray-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                            className={`w-4 h-4 text-gray-600 rounded border-gray-300 focus:ring-purple-500 ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                           />
                         </td>
                       </tr>
@@ -1284,7 +1333,7 @@ export default function Team() {
                     onChange={(e) => setNewRole(e.target.value as any)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
                   >
-                    <option value="STAFF">Nhân viên (Staff) - Đăng bài, trả lời tin nhắn, CRM</option>
+                    <option value="STAFF">Nhân viên (Staff / Viewer) - Đăng bài, trả lời tin nhắn, CRM theo RBAC</option>
                     <option value="ADMIN">Quản trị viên (Admin) - Toàn quyền cấu hình</option>
                   </select>
                 </div>
@@ -1495,7 +1544,7 @@ export default function Team() {
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
                   >
                     <option value="ADMIN">Quản trị viên (Admin) - Toàn quyền cấu hình & quản lý</option>
-                    <option value="STAFF">Nhân viên (Staff) - Quyền tạo bài, tương tác & xem dữ liệu</option>
+                    <option value="STAFF">Nhân viên (Staff / Viewer) - Quyền theo Ma Trận RBAC</option>
                   </select>
                 </div>
               </div>

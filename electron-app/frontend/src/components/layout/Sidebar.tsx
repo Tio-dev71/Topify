@@ -155,7 +155,7 @@ export function Sidebar() {
   }
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const isWorkspaceAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || !user;
+  const isWorkspaceAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
@@ -332,7 +332,11 @@ export function Sidebar() {
                   {user?.name || 'Admin'}
                 </p>
                 <p className="text-[11px] text-gray-500 truncate">
-                  {user?.role === 'SUPER_ADMIN' ? 'Super Admin' : user?.role === 'ADMIN' ? 'Admin' : 'Staff'}
+                  {user?.role === 'SUPER_ADMIN'
+                    ? 'Super Admin (Owner)'
+                    : user?.role === 'ADMIN'
+                    ? 'Quản trị viên (Admin)'
+                    : 'Nhân viên (Staff / Viewer)'}
                 </p>
               </div>
             )}

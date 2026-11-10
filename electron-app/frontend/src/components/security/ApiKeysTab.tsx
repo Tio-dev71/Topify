@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import api from '../../lib/axios';
 import { toast } from 'sonner';
+import { useRbac } from '../../lib/rbac';
 
 interface ApiKeyItem {
   id: string;
@@ -33,6 +34,7 @@ interface ApiKeyItem {
 }
 
 export default function ApiKeysTab() {
+  const { can, roleDisplayName } = useRbac();
   const [loading, setLoading] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([
     {
@@ -213,6 +215,15 @@ export default function ApiKeysTab() {
 
   return (
     <div className="space-y-6">
+      {!can('developer.manage') && (
+        <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-center gap-2.5 text-xs text-amber-900 dark:text-amber-200 shadow-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          <span>
+            Bạn đang đăng nhập với vai trò <strong>{roleDisplayName}</strong>. Theo Ma Trận Phân Quyền (RBAC), bạn chỉ có quyền xem danh sách API Key, không có quyền tạo mới hoặc thu hồi khoá tích hợp.
+          </span>
+        </div>
+      )}
+
       {/* Top Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -236,13 +247,23 @@ export default function ApiKeysTab() {
           </button>
           <button
             onClick={() => {
+              if (!can('developer.manage')) {
+                toast.error('Tài khoản của bạn không có quyền tạo API Key theo Ma Trận RBAC.');
+                return;
+              }
               setKeyName('');
               setRoleScope('READ_WRITE');
               setIpWhitelist('');
               setCreatedSecret(null);
               setShowCreateModal(true);
             }}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm hover:shadow-purple-500/20"
+            disabled={!can('developer.manage')}
+            className={`px-4 py-2 font-semibold text-xs rounded-xl transition flex items-center gap-1.5 shadow-sm ${
+              can('developer.manage')
+                ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer hover:shadow-purple-500/20'
+                : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed opacity-60'
+            }`}
+            title={!can('developer.manage') ? 'Chỉ Quản trị viên (Admin) mới có quyền tạo API Key' : 'Tạo API Key Mới'}
           >
             <Plus className="w-4 h-4" />
             Tạo API Key Mới

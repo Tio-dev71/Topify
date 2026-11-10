@@ -32,6 +32,7 @@ import {
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import api, { getMediaUrl } from '../lib/axios';
+import { useRbac } from '../lib/rbac';
 import { ImportPostsModal } from '../components/content-studio/ImportPostsModal';
 import { 
   STATUS_CONFIG, 
@@ -107,6 +108,7 @@ const getStatusIcon = (status: string) => {
 };
 
 export default function Posts() {
+  const { can, roleDisplayName } = useRbac();
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<StatusFilter>('ALL');
@@ -226,6 +228,10 @@ export default function Posts() {
   }, [posts, filter]);
 
   async function deletePost(id: string) {
+    if (!can('posts.delete')) {
+      toast.error('Tài khoản của bạn không có quyền xoá bài viết theo Ma Trận Phân Quyền (RBAC).');
+      return;
+    }
     if (!window.confirm('Bạn có chắc chắn muốn xoá bài viết này không?')) return;
     try {
       const res = await api.delete(`/posts/${id}`);

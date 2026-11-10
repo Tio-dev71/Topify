@@ -36,6 +36,7 @@ export interface PendingInvite {
   expiresAt: string;
   tempPassword?: string;
   licenseKey?: string;
+  workspaceId?: string;
 }
 
 export interface InvoiceItem {
@@ -242,28 +243,22 @@ class WorkspaceEngineStore {
   // F061 & F118: QUOTA & USAGE METERING
   // ==========================================
   public async getUsageAndQuota(workspaceId?: string) {
+    const wsId = workspaceId || this.data.workspace.id;
     const plan = this.data.workspace.plan;
     const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.PRO;
 
-    // Count real database values if available
-    let realSeats = this.data.usage.seatsUsed;
-    let realPosts = this.data.usage.postsThisMonth;
+    // Count real database values for this specific workspace
+    let realSeats = 0;
+    let realPosts = 0;
 
     try {
       const [allowedCount, userCount, postCount] = await Promise.all([
-        prisma.allowedEmail.count().catch(() => 0),
-        prisma.user.count().catch(() => 0),
-        prisma.post.count().catch(() => 0),
+        prisma.allowedEmail.count({ where: { workspaceId: wsId } }).catch(() => 0),
+        prisma.user.count({ where: { workspaceId: wsId } }).catch(() => 0),
+        prisma.post.count({ where: { workspaceId: wsId } }).catch(() => 0),
       ]);
-      const activeSeats = Math.max(allowedCount, userCount);
-      if (activeSeats > 0) {
-        realSeats = activeSeats;
-        this.data.usage.seatsUsed = realSeats;
-      }
-      if (postCount > 0) {
-        realPosts = postCount;
-        this.data.usage.postsThisMonth = realPosts;
-      }
+      realSeats = Math.max(allowedCount, userCount);
+      realPosts = postCount;
     } catch {}
 
     const seatsUsed = realSeats;
@@ -424,9 +419,13 @@ class WorkspaceEngineStore {
   // ==========================================
   // F117 & F064 & BUG-145: SEATS & INVITATIONS
   // ==========================================
-  public async getSeatsInfo() {
-    const quota = await this.getUsageAndQuota();
-    const pendingCount = this.data.invites.filter((i) => i.status === 'PENDING').length;
+  public async getSeatsInfo(workspaceId?: string) {
+    const wsId = workspaceId || this.data.workspace.id;
+    const quota = await this.getUsageAndQuota(wsId);
+    const pendingInvites = this.data.invites.filter(
+      (i) => i.status === 'PENDING' && (!i.workspaceId || i.workspaceId === wsId)
+    );
+    const pendingCount = pendingInvites.length;
     const occupiedSeats = quota.usage.seatsUsed + pendingCount;
 
     return {
@@ -434,7 +433,7 @@ class WorkspaceEngineStore {
       maxSeats: quota.limits.maxSeats,
       seatsUsed: occupiedSeats,
       seatsAvailable: Math.max(0, quota.limits.maxSeats - occupiedSeats),
-      invites: this.data.invites,
+      invites: this.data.invites.filter((i) => !i.workspaceId || i.workspaceId === wsId),
     };
   }
 
@@ -446,9 +445,12 @@ class WorkspaceEngineStore {
   }) {
     const { email, role = 'STAFF', password = 'Topify@123', workspaceId } = params;
     const normalizedEmail = email.trim().toLowerCase();
+    const wsId = workspaceId || this.data.workspace.id;
 
-    const quota = await this.getUsageAndQuota();
-    const pendingCount = this.data.invites.filter((i) => i.status === 'PENDING').length;
+    const quota = await this.getUsageAndQuota(wsId);
+    const pendingCount = this.data.invites.filter(
+      (i) => i.status === 'PENDING' && (!i.workspaceId || i.workspaceId === wsId)
+    ).length;
     const occupiedSeats = quota.usage.seatsUsed + pendingCount;
 
     if (occupiedSeats >= quota.limits.maxSeats) {
@@ -473,6 +475,7 @@ class WorkspaceEngineStore {
       expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
       tempPassword: password,
       licenseKey: staffLicenseKey,
+      workspaceId: wsId,
     };
     this.data.invites.unshift(newInvite);
     this.saveToDisk();

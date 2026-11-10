@@ -18,10 +18,13 @@ import { SocialInteractTab } from '../components/automation/SocialInteractTab';
 import { FacebookPostAutomationTab } from '../components/automation/FacebookPostAutomationTab';
 import { RuleBuilderModal } from '../components/automation/RuleBuilderModal';
 import { TemplatesModal } from '../components/automation/TemplatesModal';
+import { useRbac } from '../lib/rbac';
+import { toast } from 'sonner';
 
 type AutomationTabKey = 'workflows' | 'templates' | 'logs' | 'fb_posts' | 'social';
 
 export default function Automation() {
+  const { can, roleDisplayName } = useRbac();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromQuery = searchParams.get('tab') as AutomationTabKey | null;
   const [activeTab, setActiveTab] = useState<AutomationTabKey>('workflows');
@@ -42,11 +45,19 @@ export default function Automation() {
   };
 
   const handleOpenCreateModal = () => {
+    if (!can('automation.manage')) {
+      toast.error('Tài khoản của bạn không có quyền tạo kịch bản tự động theo cấu hình RBAC.');
+      return;
+    }
     setEditingRule(null);
     setShowRuleModal(true);
   };
 
   const handleEditRule = (rule: AutomationRule) => {
+    if (!can('automation.manage')) {
+      toast.error('Tài khoản của bạn không có quyền chỉnh sửa kịch bản theo cấu hình RBAC.');
+      return;
+    }
     setEditingRule(rule);
     setShowRuleModal(true);
   };
@@ -57,6 +68,16 @@ export default function Automation() {
 
   return (
     <div className="space-y-6 animate-fade-in p-2 sm:p-4 max-w-7xl mx-auto">
+      {/* RBAC Warning Banner */}
+      {!can('automation.manage') && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2.5 text-xs text-amber-900 shadow-sm">
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          <span>
+            Bạn đang đăng nhập với vai trò <strong>{roleDisplayName}</strong>. Theo Ma Trận Phân Quyền (RBAC), bạn chỉ có quyền xem kịch bản và lịch sử chạy, không có quyền tạo hoặc chỉnh sửa quy trình tự động.
+          </span>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm">
         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -90,7 +111,13 @@ export default function Automation() {
 
           <button
             onClick={handleOpenCreateModal}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-2xl bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-md shadow-purple-200 whitespace-nowrap shrink-0"
+            disabled={!can('automation.manage')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-2xl text-white transition-all whitespace-nowrap shrink-0 ${
+              can('automation.manage')
+                ? 'bg-purple-600 hover:bg-purple-700 shadow-md shadow-purple-200 cursor-pointer'
+                : 'bg-gray-400 opacity-60 cursor-not-allowed shadow-none'
+            }`}
+            title={!can('automation.manage') ? 'Không có quyền tạo kịch bản theo RBAC' : 'Tạo Kịch Bản Mới (F140)'}
           >
             <Plus className="w-4 h-4 shrink-0" />
             <span>Tạo Kịch Bản Mới (F140)</span>

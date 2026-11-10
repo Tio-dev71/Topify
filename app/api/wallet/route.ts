@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import jwt from 'jsonwebtoken';
+import { securityEngineStore } from '@/lib/security/security-engine';
 import { 
   walletStore,
   memoryWallet, 
@@ -14,11 +15,11 @@ import {
 
 const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
-async function authenticateUser(req: NextRequest): Promise<string | undefined> {
+async function authenticateUser(req: NextRequest): Promise<{ userId?: string; role?: string }> {
   // 1. Try NextAuth session (Web)
   try {
     const session = await auth().catch(() => null);
-    if (session?.user?.id) return session.user.id;
+    if (session?.user?.id) return { userId: session.user.id, role: session.user.role };
   } catch {}
 
   // 2. Try Bearer JWT token (Desktop / Electron)
@@ -28,18 +29,32 @@ async function authenticateUser(req: NextRequest): Promise<string | undefined> {
       const token = authHeader.substring(7);
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       if (decoded?.sub || decoded?.id) {
-        return decoded.sub || decoded.id;
+        return { userId: decoded.sub || decoded.id, role: decoded.role };
       }
     }
   } catch {}
 
-  return undefined;
+  return {};
 }
 
 // GET /api/wallet - Get full wallet information, transactions, and withdrawals
 export async function GET(req: NextRequest) {
   try {
-    const userId = await authenticateUser(req);
+    const { userId, role } = await authenticateUser(req);
+
+    // RBAC: Check wallet.view permission
+    if (role && !securityEngineStore.hasPermission(role, 'wallet.view')) {
+      return NextResponse.json(
+        { 
+          error: 'Tài khoản không có quyền xem số dư ví theo Ma Trận Phân Quyền (RBAC)',
+          hasPermission: false,
+          wallet: { availableBalance: 0, pendingBalance: 0, totalWithdrawn: 0 },
+          transactions: [],
+          withdrawals: []
+        }, 
+        { status: 403 }
+      );
+    }
 
     const storeWallet = walletStore.getWallet();
     const storeTransactions = walletStore.getTransactions();
@@ -141,7 +156,14 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const userId = await authenticateUser(req);
+    const { userId, role } = await authenticateUser(req);
+
+    // RBAC: Check wallet.withdraw permission (Owner only by default)
+    if (role && !securityEngineStore.hasPermission(role, 'wallet.withdraw')) {
+      return NextResponse.json({
+        error: 'Tài khoản không có quyền lập lệnh rút tiền theo Ma Trận Phân Quyền (RBAC). Chỉ Chủ sở hữu (Owner) mới được phép thực hiện.',
+      }, { status: 403 });
+    }
 
     const pms = walletStore.getPaymentMethods();
     const pm = pms.find(p => p.id === paymentMethodId) || pms[0];

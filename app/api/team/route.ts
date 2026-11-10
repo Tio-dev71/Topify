@@ -7,12 +7,12 @@ import crypto from 'crypto';
 // Basic email validation regex
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// GET /api/team — List team members (Admin only)
+// GET /api/team — List team members (All team members can view)
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user?.id || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Yêu cầu đăng nhập' }, { status: 401 });
     }
 
     const workspaceId = (session.user as any).workspaceId;

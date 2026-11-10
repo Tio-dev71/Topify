@@ -273,6 +273,24 @@ class SecurityEngineStore {
       editor: false,
       viewer: false,
     },
+    {
+      module: 'Quản Trị Workspace & Tổ Chức (M8)',
+      featureName: 'Quản lý thành viên, ghế ngồi & phân quyền RBAC',
+      permissionKey: 'workspace.manage',
+      owner: true,
+      admin: true,
+      editor: false,
+      viewer: false,
+    },
+    {
+      module: 'Chiến Dịch & Nhiệm Vụ (M10, M09)',
+      featureName: 'Tạo, sửa & quản trị chiến dịch',
+      permissionKey: 'campaigns.manage',
+      owner: true,
+      admin: true,
+      editor: true,
+      viewer: false,
+    },
   ];
 
   // F165: API Keys
@@ -841,11 +859,30 @@ class SecurityEngineStore {
     return this.rbacPermissions;
   }
 
-  public updateRbacPermission(permissionKey: string, role: 'owner' | 'admin' | 'editor' | 'viewer', value: boolean): boolean {
+  public hasPermission(role: string, permissionKey: string): boolean {
+    const r = (role || '').toUpperCase();
+    if (r === 'SUPER_ADMIN' || r === 'OWNER') return true;
+
+    // Map role to matrix column key: 'admin' | 'editor' | 'viewer'
+    let colKey: 'admin' | 'editor' | 'viewer' = 'viewer';
+    if (r === 'ADMIN') colKey = 'admin';
+    else if (r === 'EDITOR') colKey = 'editor';
+    else colKey = 'viewer'; // STAFF, VIEWER
+
+    const item = this.rbacPermissions.find((p) => p.permissionKey === permissionKey);
+    if (!item) {
+      // Default security policy: sensitive actions false for staff/viewer
+      return colKey === 'admin';
+    }
+    return Boolean(item[colKey]);
+  }
+
+  public updateRbacPermission(permissionKey: string, role: 'owner' | 'admin' | 'editor' | 'viewer' | 'staff', value: boolean): boolean {
     const item = this.rbacPermissions.find((p) => p.permissionKey === permissionKey);
     if (item) {
       if (role === 'owner') return false; // Owner always has all rights
-      item[role] = value;
+      const targetRole: 'admin' | 'editor' | 'viewer' = role === 'staff' ? 'viewer' : (role as any);
+      item[targetRole] = value;
       this.recordAuditLog('admin@topify.app', 'OWNER', `RBAC_UPDATED_${permissionKey.toUpperCase()}`, 'PERMISSION', 'SUCCESS');
       return true;
     }

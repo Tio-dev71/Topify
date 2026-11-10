@@ -5,9 +5,9 @@
     "organizationName": "Topify Global Corp",
     "plan": "PRO",
     "subscriptionStatus": "TRIAL",
-    "planExpiresAt": "2026-11-24T03:35:41.345Z",
+    "planExpiresAt": "2026-11-24T18:15:53.641Z",
     "isTrial": true,
-    "trialEndsAt": "2026-11-24T03:35:41.345Z",
+    "trialEndsAt": "2026-11-24T18:15:53.641Z",
     "gracePeriodEndsAt": null,
     "autoRenew": true,
     "deletionStatus": "ACTIVE",
@@ -67,14 +67,15 @@
   ],
   "invites": [
     {
-      "id": "inv_1794281738478",
+      "id": "inv_1794334552069",
       "email": "minh.tester@topify.vn",
       "role": "STAFF",
       "status": "PENDING",
-      "invitedAt": "2026-11-10T03:35:38.478Z",
-      "expiresAt": "2026-11-17T03:35:38.478Z",
+      "invitedAt": "2026-11-10T18:15:52.069Z",
+      "expiresAt": "2026-11-17T18:15:52.069Z",
       "tempPassword": "TopifySecurePassword123!",
-      "licenseKey": "TOP-STAF-5FBCCF"
+      "licenseKey": "TOP-STAF-82E0D9",
+      "workspaceId": "default-workspace"
     },
     {
       "id": "inv_1",
@@ -98,6 +99,28 @@
     }
   ],
   "invoices": [
+    {
+      "id": "inv_rec_1794334550778",
+      "invoiceNumber": "INV-2026-3837",
+      "planName": "Gói Doanh Nghiệp (Enterprise) - 1 Tháng",
+      "amount": 1990000,
+      "period": "11/11/2026 - 11/12/2026",
+      "status": "PAID",
+      "paidAt": "2026-11-10T18:15:50.778Z",
+      "paymentMethod": "SePay VietQR Techcombank",
+      "downloadUrl": "#invoice-download-1794334550778"
+    },
+    {
+      "id": "inv_rec_1794334549773",
+      "invoiceNumber": "INV-2026-7097",
+      "planName": "Gói Chuyên Nghiệp (Pro) - 1 Tháng",
+      "amount": 499000,
+      "period": "11/11/2026 - 11/12/2026",
+      "status": "PAID",
+      "paidAt": "2026-11-10T18:15:49.788Z",
+      "paymentMethod": "SePay Chuyển khoản QR",
+      "downloadUrl": "#invoice-download-1794334549788"
+    },
     {
       "id": "inv_rec_1794281735273",
       "invoiceNumber": "INV-2026-7276",

@@ -30,6 +30,7 @@ export const auth = async (...args: any[]) => {
   // so Next.js can throw its internal bailout errors during static rendering.
   const headersList = await headers();
   const authHeader = headersList.get('authorization');
+  const customWorkspaceId = headersList.get('x-workspace-id');
   
   // 1. Check for Bearer token from Desktop App API calls
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -37,7 +38,7 @@ export const auth = async (...args: any[]) => {
       const token = authHeader.split(' ')[1];
       const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
       let userId = decoded.sub || decoded.id;
-      let workspaceId = decoded.workspaceId;
+      let workspaceId = decoded.workspaceId || customWorkspaceId;
 
       if (userId) {
         // Verify user exists in database to prevent foreign key errors
@@ -56,7 +57,11 @@ export const auth = async (...args: any[]) => {
 
         if (dbUser) {
           userId = dbUser.id;
-          workspaceId = dbUser.workspaceId || workspaceId;
+          if (customWorkspaceId && (dbUser.role === 'SUPER_ADMIN' || dbUser.role === 'ADMIN')) {
+            workspaceId = customWorkspaceId;
+          } else {
+            workspaceId = customWorkspaceId || decoded.workspaceId || dbUser.workspaceId;
+          }
           if (!workspaceId) {
             workspaceId = await ensureUserWorkspace(userId, dbUser.name || decoded.name);
           }
@@ -82,7 +87,7 @@ export const auth = async (...args: any[]) => {
           role: decoded.role,
           name: decoded.name,
           email: decoded.email,
-          workspaceId,
+          workspaceId: customWorkspaceId || workspaceId,
         }
       };
     } catch (e) {

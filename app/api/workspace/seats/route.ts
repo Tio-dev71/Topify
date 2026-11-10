@@ -5,28 +5,43 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
-async function getAuthWorkspaceId(req: NextRequest) {
-  let workspaceId: string | undefined;
+async function getAuthUserAndWorkspace(req: NextRequest) {
+  let user: { id?: string; role?: string; email?: string; workspaceId?: string } | null = null;
   const authHeader = req.headers.get('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7).trim();
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
-      workspaceId = decoded.workspaceId;
+      user = {
+        id: decoded.sub || decoded.id,
+        role: decoded.role,
+        email: decoded.email,
+        workspaceId: decoded.workspaceId,
+      };
     } catch (e) {}
   }
-  if (!workspaceId) {
+  if (!user) {
     try {
       const session = await auth();
-      workspaceId = (session?.user as any)?.workspaceId;
+      if (session?.user) {
+        user = {
+          id: session.user.id,
+          role: session.user.role,
+          email: session.user.email || undefined,
+          workspaceId: (session.user as any).workspaceId,
+        };
+      }
     } catch {}
   }
-  return workspaceId || 'default-workspace';
+  const customWsHeader = req.headers.get('x-workspace-id');
+  const workspaceId = customWsHeader || user?.workspaceId || 'default-workspace';
+  return { user, workspaceId };
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const seatsInfo = await workspaceStore.getSeatsInfo();
+    const { workspaceId } = await getAuthUserAndWorkspace(req);
+    const seatsInfo = await workspaceStore.getSeatsInfo(workspaceId);
     return NextResponse.json(seatsInfo);
   } catch (error: any) {
     console.error('[API_SEATS_GET]', error);
@@ -36,9 +51,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const { user, workspaceId } = await getAuthUserAndWorkspace(req);
+    const roleUpper = (user?.role || '').toUpperCase();
+    if (user && roleUpper !== 'ADMIN' && roleUpper !== 'SUPER_ADMIN' && roleUpper !== 'OWNER') {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền thực hiện thao tác này. Yêu cầu quyền Quản trị viên (Admin).' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const action = body.action || 'invite';
-    const workspaceId = await getAuthWorkspaceId(req);
 
     if (action === 'invite') {
       const { email, role = 'STAFF', password = 'Topify@123' } = body;

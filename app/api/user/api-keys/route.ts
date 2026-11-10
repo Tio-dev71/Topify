@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { encryptApiKey, makeKeyHint } from '@/lib/crypto';
+import { securityEngineStore } from '@/lib/security/security-engine';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
@@ -42,6 +43,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    if (user.role && !securityEngineStore.hasPermission(user.role, 'developer.manage')) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền tạo API Key theo Ma Trận Phân Quyền (RBAC)' },
+        { status: 403 }
+      );
+    }
+
     const apiKeys = await prisma.userApiKey.findMany({
       where: user.workspaceId ? { workspaceId: user.workspaceId } : { userId: user.id },
       select: {
@@ -64,6 +72,13 @@ export async function POST(req: NextRequest) {
     const user = await authenticate(req);
     if (!user || !user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (user.role && !securityEngineStore.hasPermission(user.role, 'developer.manage')) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền tạo API Key theo Ma Trận Phân Quyền (RBAC)' },
+        { status: 403 }
+      );
     }
 
     const { keyName, keyValue } = await req.json();
@@ -149,6 +164,13 @@ export async function DELETE(req: NextRequest) {
     const user = await authenticate(req);
     if (!user || !user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (user.role && !securityEngineStore.hasPermission(user.role, 'developer.manage')) {
+      return NextResponse.json(
+        { error: 'Bạn không có quyền tạo API Key theo Ma Trận Phân Quyền (RBAC)' },
+        { status: 403 }
+      );
     }
 
     const { searchParams } = new URL(req.url);

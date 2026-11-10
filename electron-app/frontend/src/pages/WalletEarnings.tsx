@@ -32,12 +32,14 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import api from '../lib/axios';
 import { toast } from 'sonner';
+import { useRbac } from '../lib/rbac';
 
 interface WalletEarningsProps {
   defaultTab?: 'balance' | 'transactions' | 'payment_methods' | 'tasks' | 'referral';
 }
 
 export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {}) {
+  const { can, isOwner, isAdmin, isStaff, roleDisplayName } = useRbac();
   const [searchParams] = useSearchParams();
   const queryTab = searchParams.get('tab') as any;
   const [activeTab, setActiveTab] = useState<'balance' | 'transactions' | 'payment_methods' | 'tasks' | 'referral'>(
@@ -330,6 +332,10 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
   // Handle Withdraw (F148)
   const handleCreateWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!can('wallet.withdraw')) {
+      toast.error('Tài khoản của bạn không có quyền lập lệnh rút tiền theo Ma Trận RBAC (Chỉ Chủ sở hữu - Owner).');
+      return;
+    }
     const amount = Number(withdrawAmount);
     if (!amount || amount < 100000) {
       toast.error('Số tiền rút tối thiểu là 100.000 VND');
@@ -874,8 +880,20 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
 
         <div className="flex items-center gap-2.5 self-start xl:self-center shrink-0 w-full sm:w-auto justify-end">
           <button
-            onClick={() => setShowWithdrawModal(true)}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200 transition-all whitespace-nowrap shrink-0"
+            onClick={() => {
+              if (!can('wallet.withdraw')) {
+                toast.error('Tài khoản của bạn không có quyền lập lệnh rút tiền theo Ma Trận RBAC (Chỉ Chủ sở hữu - Owner).');
+                return;
+              }
+              setShowWithdrawModal(true);
+            }}
+            disabled={!can('wallet.withdraw')}
+            className={`flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold rounded-2xl text-white shadow-md transition-all whitespace-nowrap shrink-0 ${
+              can('wallet.withdraw')
+                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 cursor-pointer'
+                : 'bg-gray-400 opacity-60 cursor-not-allowed shadow-none'
+            }`}
+            title={!can('wallet.withdraw') ? 'Chỉ Chủ sở hữu (Owner) mới có quyền lập lệnh rút tiền theo RBAC' : 'Rút Tiền Ngay'}
           >
             <ArrowDownToLine className="w-4 h-4 shrink-0" />
             Rút Tiền Ngay
@@ -926,14 +944,32 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                   <DollarSign className="w-4 h-4 shrink-0" />
                 </div>
                 <div className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-2 truncate">
-                  {(wallet?.availableBalance || 0).toLocaleString()} <span className="text-base font-normal">VND</span>
+                  {can('wallet.view') ? (
+                    <>
+                      {(wallet?.availableBalance || 0).toLocaleString()} <span className="text-base font-normal">VND</span>
+                    </>
+                  ) : (
+                    <span className="text-lg opacity-80">***.*** VND (Đã ẩn)</span>
+                  )}
                 </div>
               </div>
               <div className="mt-5 pt-3.5 border-t border-white/20 flex items-center justify-between gap-2 text-xs">
                 <span className="opacity-80 text-xs truncate min-w-0">Sẵn sàng rút về ngân hàng</span>
                 <button
-                  onClick={() => setShowWithdrawModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-white text-emerald-700 font-bold hover:bg-emerald-50 transition-colors whitespace-nowrap shrink-0 text-xs shadow-sm"
+                  onClick={() => {
+                    if (!can('wallet.withdraw')) {
+                      toast.error('Tài khoản của bạn không có quyền lập lệnh rút tiền theo Ma Trận RBAC (Chỉ Chủ sở hữu - Owner).');
+                      return;
+                    }
+                    setShowWithdrawModal(true);
+                  }}
+                  disabled={!can('wallet.withdraw')}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition-colors whitespace-nowrap shrink-0 text-xs shadow-sm ${
+                    can('wallet.withdraw')
+                      ? 'bg-white text-emerald-700 hover:bg-emerald-50 cursor-pointer'
+                      : 'bg-white/40 text-emerald-950/60 cursor-not-allowed'
+                  }`}
+                  title={!can('wallet.withdraw') ? 'Chỉ Chủ sở hữu (Owner) mới có quyền lập lệnh rút tiền theo RBAC' : 'Rút ngay'}
                 >
                   Rút ngay
                 </button>
@@ -981,8 +1017,20 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                 <p className="text-xs text-gray-500">Theo dõi tiến độ duyệt và trạng thái chuyển khoản ngân hàng</p>
               </div>
               <button
-                onClick={() => setShowWithdrawModal(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                onClick={() => {
+                  if (!can('wallet.withdraw')) {
+                    toast.error('Tài khoản của bạn không có quyền lập lệnh rút tiền theo Ma Trận RBAC (Chỉ Chủ sở hữu - Owner).');
+                    return;
+                  }
+                  setShowWithdrawModal(true);
+                }}
+                disabled={!can('wallet.withdraw')}
+                className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                  can('wallet.withdraw')
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer'
+                    : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60'
+                }`}
+                title={!can('wallet.withdraw') ? 'Chỉ Chủ sở hữu (Owner) mới có quyền lập lệnh rút tiền theo RBAC' : 'Tạo lệnh rút'}
               >
                 <Plus className="w-3.5 h-3.5 shrink-0" />
                 Tạo lệnh rút

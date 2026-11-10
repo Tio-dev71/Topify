@@ -48,6 +48,8 @@ export default function Workspaces() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [updating, setUpdating] = useState(false);
 
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+
   // Active workspace id from localStorage
   const currentWorkspaceId = (() => {
     try {
@@ -57,16 +59,36 @@ export default function Workspaces() {
     }
   })();
 
-  const handleSwitchWorkspace = (ws: Workspace) => {
+  const handleSwitchWorkspace = async (ws: Workspace) => {
     try {
-      const stored = localStorage.getItem('topify_user');
-      const u = stored ? JSON.parse(stored) : {};
-      u.workspaceId = ws.id;
-      localStorage.setItem('topify_user', JSON.stringify(u));
-      toast.success(`Đã chuyển sang không gian làm việc: ${ws.name}`);
-      setTimeout(() => window.location.reload(), 400);
-    } catch {
-      toast.error('Lỗi khi chuyển không gian làm việc');
+      setSwitchingId(ws.id);
+      const res = await api.post('/workspace/switch', { workspaceId: ws.id });
+      if (res.data?.success) {
+        if (res.data.token) {
+          localStorage.setItem('topify_token', res.data.token);
+        }
+        if (res.data.user) {
+          localStorage.setItem('topify_user', JSON.stringify(res.data.user));
+        }
+        toast.success(`Đã chuyển sang không gian làm việc: ${ws.name}`);
+        setTimeout(() => window.location.reload(), 400);
+        return;
+      }
+      throw new Error(res.data?.error || 'Lỗi khi chuyển không gian làm việc');
+    } catch (err: any) {
+      // Fallback local update if network error
+      try {
+        const stored = localStorage.getItem('topify_user');
+        const u = stored ? JSON.parse(stored) : {};
+        u.workspaceId = ws.id;
+        localStorage.setItem('topify_user', JSON.stringify(u));
+        toast.success(`Đã chuyển sang không gian làm việc: ${ws.name}`);
+        setTimeout(() => window.location.reload(), 400);
+      } catch {
+        toast.error(err.response?.data?.error || 'Lỗi khi chuyển không gian làm việc');
+      }
+    } finally {
+      setSwitchingId(null);
     }
   };
 
@@ -282,9 +304,13 @@ export default function Workspaces() {
                     ) : (
                       <button
                         onClick={() => handleSwitchWorkspace(ws)}
-                        className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-purple-600 hover:text-white rounded-lg transition-colors cursor-pointer"
+                        disabled={switchingId === ws.id}
+                        className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-purple-600 hover:text-white rounded-lg transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
                         title="Chuyển sang workspace này"
                       >
+                        {switchingId === ws.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : null}
                         Chuyển đến
                       </button>
                     )}
