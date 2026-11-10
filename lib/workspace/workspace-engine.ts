@@ -636,7 +636,7 @@ class WorkspaceEngineStore {
       workspaceName: this.data.workspace.name,
       organizationName: this.data.workspace.organizationName,
       exportedAt: new Date().toISOString(),
-      version: 'v1.3.85',
+      version: 'v1.3.86',
       entities: {
         posts: { count: postsCount, format: 'JSON/CSV' },
         customersAndLeads: { count: customersCount, format: 'JSON/CSV' },
@@ -701,3 +701,4 @@ class WorkspaceEngineStore {
 
 export const workspaceStore = new WorkspaceEngineStore();
 export default workspaceStore;
+
