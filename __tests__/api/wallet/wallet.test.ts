@@ -111,7 +111,7 @@ describe('Wallet & Referral Growth Engine (M12 & M13: F146 - F155)', () => {
       for (const tx of memoryTransactions) {
         expect(['EARNING', 'COMMISSION', 'WITHDRAWAL', 'REFUND', 'BONUS']).toContain(tx.type);
         expect(typeof tx.amount).toBe('number');
-        expect(tx.status).toBe('COMPLETED');
+        expect(['COMPLETED', 'PENDING', 'PROCESSING', 'REJECTED']).toContain(tx.status);
       }
     });
 

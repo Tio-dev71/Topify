@@ -377,8 +377,177 @@ export const memoryEarningTasks: EarningTaskItem[] = [
   },
 ];
 
+export const memoryReferralProfile: ReferralProfile = {
+  code: 'TOP-YEN99',
+  referralLink: 'https://topify.app/ref/TOP-YEN99',
+  qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://topify.app/ref/TOP-YEN99',
+  totalClicks: 1420,
+  totalRegistrations: 168,
+  totalTrialUsers: 95,
+  totalPaidSubscribers: 28,
+  conversionRate: 16.67, // (28 / 168) * 100
+  totalCommissionEarned: 18450000,
+  pendingCommission: 1250000,
+};
+
+export const memoryReferredUsers: ReferredUserItem[] = [
+  {
+    id: 'ref_u_01',
+    name: 'Công ty CP May Mặc Thăng Long',
+    emailMasked: 'cty_t***@gmail.com',
+    registeredAt: '2026-10-14T08:30:00.000Z',
+    plan: 'PRO',
+    status: 'ACTIVE_PAID',
+    commissionEarned: 598000,
+  },
+  {
+    id: 'ref_u_02',
+    name: 'Shop Mẹ & Bé Nhật Bản',
+    emailMasked: 'shop_***@yahoo.com',
+    registeredAt: '2026-10-08T12:00:00.000Z',
+    plan: 'STARTER',
+    status: 'ACTIVE_PAID',
+    commissionEarned: 299000,
+  },
+  {
+    id: 'ref_u_03',
+    name: 'Nội Thất Gỗ Xanh Decor',
+    emailMasked: 'goxanh_***@gmail.com',
+    registeredAt: '2026-10-11T15:20:00.000Z',
+    plan: 'FREE',
+    status: 'TRIAL',
+    commissionEarned: 0,
+  },
+  {
+    id: 'ref_u_04',
+    name: 'Học Viện Thẩm Mỹ Seoul',
+    emailMasked: 'seoul_***@gmail.com',
+    registeredAt: '2026-10-02T10:15:00.000Z',
+    plan: 'ENTERPRISE',
+    status: 'ACTIVE_PAID',
+    commissionEarned: 2500000,
+  },
+];
+
+export const memoryCommissionRules: CommissionRuleItem[] = [
+  {
+    id: 'rule_starter',
+    planName: 'Gói Starter (299.000 VND/tháng)',
+    firstMonthRate: 15,
+    recurringRate: 5,
+    cookieDays: 30,
+    payoutSchedule: 'Ngày 15 hàng tháng',
+    description: 'Nhận 15% doanh thu tháng đầu tiên và 5% mỗi tháng khách hàng gia hạn dịch vụ.',
+  },
+  {
+    id: 'rule_pro',
+    planName: 'Gói Pro Creator (599.000 VND/tháng)',
+    firstMonthRate: 20,
+    recurringRate: 10,
+    cookieDays: 60,
+    payoutSchedule: 'Ngày 15 hàng tháng',
+    description: 'Nhận 20% doanh thu tháng đầu tiên và 10% doanh thu định kỳ trọn đời.',
+  },
+  {
+    id: 'rule_enterprise',
+    planName: 'Gói Doanh Nghiệp (Enterprise)',
+    firstMonthRate: 25,
+    recurringRate: 10,
+    cookieDays: 90,
+    payoutSchedule: 'Đối soát 24h sau khi ký hợp đồng',
+    description: 'Hoa hồng 25% giá trị hợp đồng thanh toán lần đầu cho hợp đồng năm.',
+  },
+];
+
+export const memoryCommissionHistory: CommissionTransactionItem[] = [
+  {
+    id: 'comm_tx_001',
+    orderId: 'ORD_2026_1088',
+    referredUserName: 'Công ty CP May Mặc Thăng Long',
+    planName: 'Gói Pro Creator (1 Năm)',
+    orderAmount: 5990000,
+    commissionRate: 20,
+    commissionAmount: 1198000,
+    status: 'PENDING',
+    createdAt: '2026-10-14T09:00:00.000Z',
+    payoutDate: '2026-10-15',
+  },
+  {
+    id: 'comm_tx_002',
+    orderId: 'ORD_2026_1042',
+    referredUserName: 'Shop Mẹ & Bé Nhật Bản',
+    planName: 'Gói Starter (Hàng tháng)',
+    orderAmount: 299000,
+    commissionRate: 15,
+    commissionAmount: 44850,
+    status: 'APPROVED',
+    createdAt: '2026-10-08T12:00:00.000Z',
+    payoutDate: '2026-10-15',
+  },
+  {
+    id: 'comm_tx_003',
+    orderId: 'ORD_2026_0991',
+    referredUserName: 'Học Viện Thẩm Mỹ Seoul',
+    planName: 'Gói Enterprise',
+    orderAmount: 24000000,
+    commissionRate: 25,
+    commissionAmount: 6000000,
+    status: 'PAID',
+    createdAt: '2026-10-02T10:15:00.000Z',
+    payoutDate: '2026-10-03',
+  },
+];
+
+export const memoryFraudAlerts: FraudInspectionResult[] = [
+  {
+    id: 'frd_001',
+    referralCode: 'TOP-YEN99',
+    suspectedUserId: 'usr_fake_882',
+    suspectedUserName: 'yen.clone1@gmail.com',
+    ipAddress: '118.69.182.10',
+    deviceFingerprint: 'fp_macbook_m1_chrome_129',
+    reasons: [
+      'Trùng địa chỉ IP với người giới thiệu (Self-referral detection)',
+      'Trùng dấu vân tay phần cứng / trình duyệt (Device fingerprint match)',
+    ],
+    riskScore: 95,
+    riskLevel: 'HIGH_RISK',
+    actionTaken: 'COMMISSION_HELD',
+    detectedAt: '2026-10-13T14:10:00.000Z',
+  },
+  {
+    id: 'frd_002',
+    referralCode: 'TOP-YEN99',
+    suspectedUserId: 'usr_rapid_991',
+    suspectedUserName: 'marketing.lead.bulk@tempmail.com',
+    ipAddress: '42.119.220.4',
+    deviceFingerprint: 'fp_win_headless_bot_44',
+    reasons: [
+      'Phát hiện tần suất đăng ký bất thường (7 tài khoản/giờ từ cùng subnet IP)',
+      'Sử dụng dịch vụ email tạm thời (TempMail Disposable)',
+    ],
+    riskScore: 75,
+    riskLevel: 'HIGH_RISK',
+    actionTaken: 'SUSPENDED',
+    detectedAt: '2026-10-12T03:22:00.000Z',
+  },
+  {
+    id: 'frd_003',
+    referralCode: 'TOP-YEN99',
+    suspectedUserId: 'usr_clean_102',
+    suspectedUserName: 'phuong.nguyen@vietbrand.vn',
+    ipAddress: '14.161.40.88',
+    deviceFingerprint: 'fp_iphone15_safari_18',
+    reasons: ['Tài khoản chưa phát sinh bài đăng sau 24h'],
+    riskScore: 15,
+    riskLevel: 'SAFE',
+    actionTaken: 'DISMISSED',
+    detectedAt: '2026-10-14T07:15:00.000Z',
+  },
+];
+
 // ============================================
-// Wallet Persistent Store (File + Memory)
+// Wallet & Referral Persistent Store (File + Memory)
 // ============================================
 
 export class WalletStoreManager {
@@ -388,6 +557,11 @@ export class WalletStoreManager {
   private withdrawals: WithdrawalRequest[] = [...memoryWithdrawals];
   private paymentMethods: SavedPaymentMethod[] = [...memoryPaymentMethods];
   private earningTasks: EarningTaskItem[] = [...memoryEarningTasks];
+  private referralProfile: ReferralProfile = { ...memoryReferralProfile };
+  private referredUsers: ReferredUserItem[] = [...memoryReferredUsers];
+  private commissionRules: CommissionRuleItem[] = [...memoryCommissionRules];
+  private commissionHistory: CommissionTransactionItem[] = [...memoryCommissionHistory];
+  private fraudAlerts: FraudInspectionResult[] = [...memoryFraudAlerts];
 
   constructor() {
     this.loadFromDisk();
@@ -411,6 +585,21 @@ export class WalletStoreManager {
         if (Array.isArray(data.earningTasks) && data.earningTasks.length > 0) {
           this.earningTasks = data.earningTasks;
         }
+        if (data.referralProfile) {
+          this.referralProfile = { ...this.referralProfile, ...data.referralProfile };
+        }
+        if (Array.isArray(data.referredUsers) && data.referredUsers.length > 0) {
+          this.referredUsers = data.referredUsers;
+        }
+        if (Array.isArray(data.commissionRules) && data.commissionRules.length > 0) {
+          this.commissionRules = data.commissionRules;
+        }
+        if (Array.isArray(data.commissionHistory) && data.commissionHistory.length > 0) {
+          this.commissionHistory = data.commissionHistory;
+        }
+        if (Array.isArray(data.fraudAlerts) && data.fraudAlerts.length > 0) {
+          this.fraudAlerts = data.fraudAlerts;
+        }
       } else {
         this.saveToDisk();
       }
@@ -432,6 +621,11 @@ export class WalletStoreManager {
         withdrawals: this.withdrawals,
         paymentMethods: this.paymentMethods,
         earningTasks: this.earningTasks,
+        referralProfile: this.referralProfile,
+        referredUsers: this.referredUsers,
+        commissionRules: this.commissionRules,
+        commissionHistory: this.commissionHistory,
+        fraudAlerts: this.fraudAlerts,
       };
       fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
     } catch (e) {
@@ -450,6 +644,16 @@ export class WalletStoreManager {
     memoryPaymentMethods.push(...this.paymentMethods);
     memoryEarningTasks.length = 0;
     memoryEarningTasks.push(...this.earningTasks);
+
+    Object.assign(memoryReferralProfile, this.referralProfile);
+    memoryReferredUsers.length = 0;
+    memoryReferredUsers.push(...this.referredUsers);
+    memoryCommissionRules.length = 0;
+    memoryCommissionRules.push(...this.commissionRules);
+    memoryCommissionHistory.length = 0;
+    memoryCommissionHistory.push(...this.commissionHistory);
+    memoryFraudAlerts.length = 0;
+    memoryFraudAlerts.push(...this.fraudAlerts);
   }
 
   // F146: Wallet Balance
@@ -733,175 +937,288 @@ export class WalletStoreManager {
     this.saveToDisk();
     return task;
   }
+
+  // ============================================
+  // F151: Referral Link & Code
+  // ============================================
+  public getReferralProfile(): ReferralProfile {
+    return { ...this.referralProfile };
+  }
+
+  public updateReferralCode(newCode: string): ReferralProfile {
+    const cleanCode = newCode.toUpperCase().trim().replace(/[^A-Z0-9_-]/g, '');
+    if (!cleanCode || cleanCode.length < 3) {
+      throw new Error('Mã giới thiệu phải có ít nhất 3 ký tự (chữ hoa, số, gạch ngang)');
+    }
+    this.referralProfile.code = cleanCode;
+    this.referralProfile.referralLink = `https://topify.app/ref/${cleanCode}`;
+    this.referralProfile.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(this.referralProfile.referralLink)}`;
+    this.saveToDisk();
+    return { ...this.referralProfile };
+  }
+
+  // ============================================
+  // F152: Referral Tracking
+  // ============================================
+  public getReferredUsers(): ReferredUserItem[] {
+    return [...this.referredUsers];
+  }
+
+  public trackReferralEvent(
+    event: 'CLICK' | 'REGISTER' | 'SUBSCRIBE' | 'CONVERSION',
+    data?: { name?: string; emailMasked?: string; plan?: 'FREE' | 'STARTER' | 'PRO' | 'ENTERPRISE'; commissionEarned?: number }
+  ): { profile: ReferralProfile; user?: ReferredUserItem } {
+    let createdUser: ReferredUserItem | undefined;
+
+    if (event === 'CLICK') {
+      this.referralProfile.totalClicks += 1;
+    } else if (event === 'REGISTER') {
+      this.referralProfile.totalRegistrations += 1;
+      this.referralProfile.totalTrialUsers += 1;
+      if (data?.name || data?.emailMasked) {
+        createdUser = {
+          id: `ref_u_${Date.now()}`,
+          name: data.name || 'Người dùng mới qua link',
+          emailMasked: data.emailMasked || 'user_***@gmail.com',
+          registeredAt: new Date().toISOString(),
+          plan: data.plan || 'FREE',
+          status: 'TRIAL',
+          commissionEarned: data.commissionEarned || 0,
+        };
+        this.referredUsers.unshift(createdUser);
+      }
+    } else if (event === 'SUBSCRIBE' || event === 'CONVERSION') {
+      this.referralProfile.totalPaidSubscribers += 1;
+      if (data?.name || data?.emailMasked) {
+        createdUser = {
+          id: `ref_u_${Date.now()}`,
+          name: data.name || 'Khách hàng đăng ký gói trả phí',
+          emailMasked: data.emailMasked || 'customer_***@gmail.com',
+          registeredAt: new Date().toISOString(),
+          plan: data.plan || 'PRO',
+          status: 'ACTIVE_PAID',
+          commissionEarned: data.commissionEarned || 598000,
+        };
+        this.referredUsers.unshift(createdUser);
+      }
+    }
+
+    if (this.referralProfile.totalRegistrations > 0) {
+      this.referralProfile.conversionRate = Number(
+        ((this.referralProfile.totalPaidSubscribers / this.referralProfile.totalRegistrations) * 100).toFixed(2)
+      );
+    }
+
+    this.saveToDisk();
+    return { profile: { ...this.referralProfile }, user: createdUser };
+  }
+
+  public simulateReferredUser(params: {
+    name: string;
+    emailMasked: string;
+    plan: 'FREE' | 'STARTER' | 'PRO' | 'ENTERPRISE';
+    status: 'TRIAL' | 'ACTIVE_PAID' | 'EXPIRED' | 'CANCELLED';
+    commissionEarned: number;
+  }): ReferredUserItem {
+    const newUser: ReferredUserItem = {
+      id: `ref_u_${Date.now()}`,
+      name: params.name.trim(),
+      emailMasked: params.emailMasked.trim(),
+      registeredAt: new Date().toISOString(),
+      plan: params.plan,
+      status: params.status,
+      commissionEarned: params.commissionEarned,
+    };
+    this.referredUsers.unshift(newUser);
+    this.referralProfile.totalRegistrations += 1;
+    if (params.status === 'ACTIVE_PAID') {
+      this.referralProfile.totalPaidSubscribers += 1;
+      this.referralProfile.totalCommissionEarned += params.commissionEarned;
+    } else if (params.status === 'TRIAL') {
+      this.referralProfile.totalTrialUsers += 1;
+    }
+
+    this.referralProfile.conversionRate = Number(
+      ((this.referralProfile.totalPaidSubscribers / Math.max(1, this.referralProfile.totalRegistrations)) * 100).toFixed(2)
+    );
+
+    this.saveToDisk();
+    return newUser;
+  }
+
+  // ============================================
+  // F153: Commission Rule
+  // ============================================
+  public getCommissionRules(): CommissionRuleItem[] {
+    return [...this.commissionRules];
+  }
+
+  public addCommissionRule(rule: Omit<CommissionRuleItem, 'id'>): CommissionRuleItem {
+    const newRule: CommissionRuleItem = {
+      id: `rule_${Date.now()}`,
+      planName: rule.planName.trim(),
+      firstMonthRate: Number(rule.firstMonthRate),
+      recurringRate: Number(rule.recurringRate),
+      cookieDays: Number(rule.cookieDays),
+      payoutSchedule: rule.payoutSchedule.trim(),
+      description: rule.description.trim(),
+    };
+    this.commissionRules.push(newRule);
+    this.saveToDisk();
+    return newRule;
+  }
+
+  public updateCommissionRule(params: Partial<CommissionRuleItem> & { id: string }): CommissionRuleItem | null {
+    const target = this.commissionRules.find((r) => r.id === params.id);
+    if (!target) return null;
+
+    if (params.planName !== undefined) target.planName = params.planName.trim();
+    if (params.firstMonthRate !== undefined) target.firstMonthRate = Number(params.firstMonthRate);
+    if (params.recurringRate !== undefined) target.recurringRate = Number(params.recurringRate);
+    if (params.cookieDays !== undefined) target.cookieDays = Number(params.cookieDays);
+    if (params.payoutSchedule !== undefined) target.payoutSchedule = params.payoutSchedule.trim();
+    if (params.description !== undefined) target.description = params.description.trim();
+
+    this.saveToDisk();
+    return target;
+  }
+
+  public deleteCommissionRule(id: string): boolean {
+    const index = this.commissionRules.findIndex((r) => r.id === id);
+    if (index === -1) return false;
+    this.commissionRules.splice(index, 1);
+    this.saveToDisk();
+    return true;
+  }
+
+  // ============================================
+  // F154: Commission History
+  // ============================================
+  public getCommissionHistory(status?: CommissionStatus): CommissionTransactionItem[] {
+    if (status) {
+      return this.commissionHistory.filter((c) => c.status === status);
+    }
+    return [...this.commissionHistory];
+  }
+
+  public addCommissionTransaction(
+    tx: Omit<CommissionTransactionItem, 'id' | 'createdAt'>
+  ): CommissionTransactionItem {
+    const newTx: CommissionTransactionItem = {
+      ...tx,
+      id: `comm_tx_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    this.commissionHistory.unshift(newTx);
+    if (newTx.status === 'PENDING') {
+      this.referralProfile.pendingCommission += newTx.commissionAmount;
+    } else if (newTx.status === 'PAID') {
+      this.referralProfile.totalCommissionEarned += newTx.commissionAmount;
+    }
+    this.saveToDisk();
+    return newTx;
+  }
+
+  public updateCommissionStatus(
+    id: string,
+    status: CommissionStatus
+  ): { item: CommissionTransactionItem; wallet?: WalletData; walletTx?: WalletTransactionItem } | null {
+    const target = this.commissionHistory.find((c) => c.id === id);
+    if (!target) return null;
+
+    const oldStatus = target.status;
+    target.status = status;
+
+    let walletTx: WalletTransactionItem | undefined;
+
+    if (status === 'PAID' && oldStatus !== 'PAID') {
+      target.payoutDate = new Date().toISOString().split('T')[0];
+      // Credit wallet available balance
+      this.wallet.availableBalance += target.commissionAmount;
+      this.wallet.updatedAt = new Date().toISOString();
+
+      // Update referral profile metrics
+      if (oldStatus === 'PENDING') {
+        this.referralProfile.pendingCommission = Math.max(0, this.referralProfile.pendingCommission - target.commissionAmount);
+      }
+      this.referralProfile.totalCommissionEarned += target.commissionAmount;
+
+      // Add transaction into ledger F147
+      walletTx = {
+        id: `tx_${Date.now()}`,
+        walletId: this.wallet.id,
+        type: 'COMMISSION',
+        amount: target.commissionAmount,
+        description: `Quyết toán hoa hồng: ${target.planName} (${target.orderId}) - ${target.referredUserName}`,
+        referenceId: target.id,
+        status: 'COMPLETED',
+        createdAt: new Date().toISOString(),
+      };
+      this.transactions.unshift(walletTx);
+    } else if (status === 'APPROVED' && oldStatus === 'PENDING') {
+      // Pending remains or moves to approved pool
+    }
+
+    this.saveToDisk();
+    return { item: target, wallet: { ...this.wallet }, walletTx };
+  }
+
+  // ============================================
+  // F155: Anti-fraud Referral
+  // ============================================
+  public getFraudAlerts(): FraudInspectionResult[] {
+    return [...this.fraudAlerts];
+  }
+
+  public runFraudScan(params?: {
+    suspectedUserId?: string;
+    suspectedUserName?: string;
+    referrerIp?: string;
+    referredIp?: string;
+    referrerFingerprint?: string;
+    referredFingerprint?: string;
+    registrationsInLastHour?: number;
+    hasActivity?: boolean;
+  }): FraudInspectionResult {
+    const analysis = checkReferralFraud({
+      referrerIp: params?.referrerIp || '118.69.182.10',
+      referredIp: params?.referredIp || '118.69.182.10',
+      referrerFingerprint: params?.referrerFingerprint || 'fp_mac_chrome_129',
+      referredFingerprint: params?.referredFingerprint || 'fp_mac_chrome_129',
+      registrationsInLastHour: params?.registrationsInLastHour ?? 8,
+      hasActivity: params?.hasActivity ?? false,
+    });
+
+    const newAlert: FraudInspectionResult = {
+      id: `frd_${Date.now()}`,
+      referralCode: this.referralProfile.code,
+      suspectedUserId: params?.suspectedUserId || `usr_suspect_${Math.floor(Math.random() * 1000)}`,
+      suspectedUserName: params?.suspectedUserName || 'clone.account@mailhub.org',
+      ipAddress: params?.referredIp || '118.69.182.10',
+      deviceFingerprint: params?.referredFingerprint || 'fp_device_scan_match',
+      reasons: analysis.reasons.length > 0 ? analysis.reasons : ['Hành vi đăng ký trùng lặp fingerprint'],
+      riskScore: analysis.riskScore,
+      riskLevel: analysis.riskLevel,
+      actionTaken: analysis.riskLevel === 'HIGH_RISK' ? 'COMMISSION_HELD' : 'DISMISSED',
+      detectedAt: new Date().toISOString(),
+    };
+
+    this.fraudAlerts.unshift(newAlert);
+    this.saveToDisk();
+    return newAlert;
+  }
+
+  public updateFraudAlertAction(
+    alertId: string,
+    actionTaken: FraudActionTaken
+  ): FraudInspectionResult | null {
+    const alert = this.fraudAlerts.find((a) => a.id === alertId);
+    if (!alert) return null;
+
+    alert.actionTaken = actionTaken;
+    this.saveToDisk();
+    return alert;
+  }
 }
 
 export const walletStore = new WalletStoreManager();
-
-export const memoryReferralProfile: ReferralProfile = {
-  code: 'TOP-VIET99',
-  referralLink: 'https://topify.app/ref/TOP-VIET99',
-  qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://topify.app/ref/TOP-VIET99',
-  totalClicks: 1420,
-  totalRegistrations: 168,
-  totalTrialUsers: 95,
-  totalPaidSubscribers: 28,
-  conversionRate: 16.67, // (28 / 168) * 100
-  totalCommissionEarned: 18450000,
-  pendingCommission: 1250000,
-};
-
-export const memoryReferredUsers: ReferredUserItem[] = [
-  {
-    id: 'ref_u_01',
-    name: 'Công ty CP May Mặc Thăng Long',
-    emailMasked: 'cty_t***@gmail.com',
-    registeredAt: '2026-10-14T08:30:00.000Z',
-    plan: 'PRO',
-    status: 'ACTIVE_PAID',
-    commissionEarned: 598000,
-  },
-  {
-    id: 'ref_u_02',
-    name: 'Shop Mẹ & Bé Nhật Bản',
-    emailMasked: 'shop_***@yahoo.com',
-    registeredAt: '2026-10-08T12:00:00.000Z',
-    plan: 'STARTER',
-    status: 'ACTIVE_PAID',
-    commissionEarned: 299000,
-  },
-  {
-    id: 'ref_u_03',
-    name: 'Nội Thất Gỗ Xanh Decor',
-    emailMasked: 'goxanh_***@gmail.com',
-    registeredAt: '2026-10-11T15:20:00.000Z',
-    plan: 'FREE',
-    status: 'TRIAL',
-    commissionEarned: 0,
-  },
-  {
-    id: 'ref_u_04',
-    name: 'Học Viện Thẩm Mỹ Seoul',
-    emailMasked: 'seoul_***@gmail.com',
-    registeredAt: '2026-10-02T10:15:00.000Z',
-    plan: 'ENTERPRISE',
-    status: 'ACTIVE_PAID',
-    commissionEarned: 2500000,
-  },
-];
-
-export const memoryCommissionRules: CommissionRuleItem[] = [
-  {
-    id: 'rule_starter',
-    planName: 'Gói Starter (299.000 VND/tháng)',
-    firstMonthRate: 15,
-    recurringRate: 5,
-    cookieDays: 30,
-    payoutSchedule: 'Ngày 15 hàng tháng',
-    description: 'Nhận 15% doanh thu tháng đầu tiên và 5% mỗi tháng khách hàng gia hạn dịch vụ.',
-  },
-  {
-    id: 'rule_pro',
-    planName: 'Gói Pro Creator (599.000 VND/tháng)',
-    firstMonthRate: 20,
-    recurringRate: 10,
-    cookieDays: 60,
-    payoutSchedule: 'Ngày 15 hàng tháng',
-    description: 'Nhận 20% doanh thu tháng đầu tiên và 10% doanh thu định kỳ trọn đời.',
-  },
-  {
-    id: 'rule_enterprise',
-    planName: 'Gói Doanh Nghiệp (Enterprise)',
-    firstMonthRate: 25,
-    recurringRate: 10,
-    cookieDays: 90,
-    payoutSchedule: 'Đối soát 24h sau khi ký hợp đồng',
-    description: 'Hoa hồng 25% giá trị hợp đồng thanh toán lần đầu cho hợp đồng năm.',
-  },
-];
-
-export const memoryCommissionHistory: CommissionTransactionItem[] = [
-  {
-    id: 'comm_tx_001',
-    orderId: 'ORD_2026_1088',
-    referredUserName: 'Công ty CP May Mặc Thăng Long',
-    planName: 'Gói Pro Creator (1 Năm)',
-    orderAmount: 5990000,
-    commissionRate: 20,
-    commissionAmount: 1198000,
-    status: 'PENDING',
-    createdAt: '2026-10-14T09:00:00.000Z',
-    payoutDate: '2026-10-15',
-  },
-  {
-    id: 'comm_tx_002',
-    orderId: 'ORD_2026_1042',
-    referredUserName: 'Shop Mẹ & Bé Nhật Bản',
-    planName: 'Gói Starter (Hàng tháng)',
-    orderAmount: 299000,
-    commissionRate: 15,
-    commissionAmount: 44850,
-    status: 'APPROVED',
-    createdAt: '2026-10-08T12:00:00.000Z',
-    payoutDate: '2026-10-15',
-  },
-  {
-    id: 'comm_tx_003',
-    orderId: 'ORD_2026_0991',
-    referredUserName: 'Học Viện Thẩm Mỹ Seoul',
-    planName: 'Gói Enterprise',
-    orderAmount: 24000000,
-    commissionRate: 25,
-    commissionAmount: 6000000,
-    status: 'PAID',
-    createdAt: '2026-10-02T10:15:00.000Z',
-    payoutDate: '2026-10-03',
-  },
-];
-
-export const memoryFraudAlerts: FraudInspectionResult[] = [
-  {
-    id: 'frd_001',
-    referralCode: 'TOP-VIET99',
-    suspectedUserId: 'usr_fake_882',
-    suspectedUserName: 'toan.clone1@gmail.com',
-    ipAddress: '118.69.182.10',
-    deviceFingerprint: 'fp_macbook_m1_chrome_129',
-    reasons: [
-      'Trùng địa chỉ IP với người giới thiệu (Self-referral detection)',
-      'Trùng dấu vân tay phần cứng / trình duyệt (Device fingerprint match)',
-    ],
-    riskScore: 95,
-    riskLevel: 'HIGH_RISK',
-    actionTaken: 'COMMISSION_HELD',
-    detectedAt: '2026-10-13T14:10:00.000Z',
-  },
-  {
-    id: 'frd_002',
-    referralCode: 'TOP-VIET99',
-    suspectedUserId: 'usr_rapid_991',
-    suspectedUserName: 'marketing.lead.bulk@tempmail.com',
-    ipAddress: '42.119.220.4',
-    deviceFingerprint: 'fp_win_headless_bot_44',
-    reasons: [
-      'Phát hiện tần suất đăng ký bất thường (7 tài khoản/giờ từ cùng subnet IP)',
-      'Sử dụng dịch vụ email tạm thời (TempMail Disposable)',
-    ],
-    riskScore: 75,
-    riskLevel: 'HIGH_RISK',
-    actionTaken: 'SUSPENDED',
-    detectedAt: '2026-10-12T03:22:00.000Z',
-  },
-  {
-    id: 'frd_003',
-    referralCode: 'TOP-VIET99',
-    suspectedUserId: 'usr_clean_102',
-    suspectedUserName: 'phuong.nguyen@vietbrand.vn',
-    ipAddress: '14.161.40.88',
-    deviceFingerprint: 'fp_iphone15_safari_18',
-    reasons: ['Tài khoản chưa phát sinh bài đăng sau 24h'],
-    riskScore: 15,
-    riskLevel: 'SAFE',
-    actionTaken: 'DISMISSED',
-    detectedAt: '2026-10-14T07:15:00.000Z',
-  },
-];

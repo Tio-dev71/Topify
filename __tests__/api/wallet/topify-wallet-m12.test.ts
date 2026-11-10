@@ -255,9 +255,9 @@ describe('M12 – Wallet & Earnings Comprehensive Tests (F146 – F150)', () => 
 
     it('should advance task progress via action progress', async () => {
       const req = createJsonRequest('http://localhost:3000/api/wallet/tasks', 'POST', {
-        taskId: 'task_001',
+        taskId: 'task_003',
         action: 'progress',
-        progress: 10,
+        progress: 3,
       });
 
       const res = await postTask(req);
@@ -265,7 +265,7 @@ describe('M12 – Wallet & Earnings Comprehensive Tests (F146 – F150)', () => 
 
       expect(res.status).toBe(200);
       expect(json.success).toBe(true);
-      expect(json.task.progress).toBe(10);
+      expect(json.task.progress).toBe(3);
       expect(json.task.isCompleted).toBe(true);
     });
 
@@ -292,3 +292,4 @@ describe('M12 – Wallet & Earnings Comprehensive Tests (F146 – F150)', () => 
     });
   });
 });
+

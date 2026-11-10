@@ -2,92 +2,13 @@
   "wallet": {
     "id": "wal_topify_user_01",
     "userId": "usr_topify_demo",
-    "availableBalance": 4950000,
-    "pendingBalance": 1450000,
-    "totalWithdrawn": 12550000,
+    "availableBalance": 4850000,
+    "pendingBalance": 1250000,
+    "totalWithdrawn": 12400000,
     "currency": "VND",
-    "updatedAt": "2026-11-10T02:31:33.440Z"
+    "updatedAt": "2026-11-10T03:01:27.585Z"
   },
   "transactions": [
-    {
-      "id": "tx_1794277893440",
-      "walletId": "wal_topify_user_01",
-      "type": "EARNING",
-      "amount": 100000,
-      "description": "Thưởng hoàn thành nhiệm vụ: Khởi tạo chiến dịch tiếp thị đầu tiên",
-      "referenceId": "task_004",
-      "status": "COMPLETED",
-      "createdAt": "2026-11-10T02:31:33.440Z"
-    },
-    {
-      "id": "tx_1794277893434",
-      "walletId": "wal_topify_user_01",
-      "type": "REFUND",
-      "amount": 120000,
-      "description": "Hoàn tiền lệnh rút bị từ chối (wd_req_1794277892975): Thông tin tài khoản sai, hoàn tiền",
-      "referenceId": "wd_req_1794277892975",
-      "status": "COMPLETED",
-      "createdAt": "2026-11-10T02:31:33.434Z"
-    },
-    {
-      "id": "tx_1794277892975",
-      "walletId": "wal_topify_user_01",
-      "type": "WITHDRAWAL",
-      "amount": -120000,
-      "description": "Yêu cầu rút tiền về Vietcombank - 1234567890",
-      "referenceId": "wd_req_1794277892975",
-      "status": "PENDING",
-      "createdAt": "2026-11-10T02:31:32.975Z"
-    },
-    {
-      "id": "tx_1794277889219",
-      "walletId": "wal_topify_user_01",
-      "type": "WITHDRAWAL",
-      "amount": -150000,
-      "description": "Yêu cầu rút tiền về MB Bank - 0987654321",
-      "referenceId": "wd_req_1794277889219",
-      "status": "PENDING",
-      "createdAt": "2026-11-10T02:31:29.219Z"
-    },
-    {
-      "id": "tx_1794277889218",
-      "walletId": "wal_topify_user_01",
-      "type": "WITHDRAWAL",
-      "amount": -200000,
-      "description": "Yêu cầu rút tiền về MB Bank (Ngân hàng Quân Đội) - 0987654321",
-      "referenceId": "wd_req_1794277889218",
-      "status": "PENDING",
-      "createdAt": "2026-11-10T02:31:29.218Z"
-    },
-    {
-      "walletId": "wal_topify_user_01",
-      "type": "COMMISSION",
-      "amount": 250000,
-      "description": "Hoa hồng thử nghiệm kiểm thử tự động M12",
-      "status": "COMPLETED",
-      "id": "tx_1794277889204",
-      "createdAt": "2026-11-10T02:31:29.204Z"
-    },
-    {
-      "id": "tx_1794277850270",
-      "walletId": "wal_topify_user_01",
-      "type": "EARNING",
-      "amount": 200000,
-      "description": "Thưởng hoàn thành nhiệm vụ: Giới thiệu 3 chủ shop dùng thử Topify",
-      "referenceId": "task_003",
-      "status": "COMPLETED",
-      "createdAt": "2026-11-10T02:30:50.270Z"
-    },
-    {
-      "id": "tx_1794277850235",
-      "walletId": "wal_topify_user_01",
-      "type": "EARNING",
-      "amount": 150000,
-      "description": "Thưởng hoàn thành nhiệm vụ: Đạt mốc 10.000 lượt xem video ngắn",
-      "referenceId": "task_002",
-      "status": "COMPLETED",
-      "createdAt": "2026-11-10T02:30:50.235Z"
-    },
     {
       "id": "tx_001",
       "walletId": "wal_topify_user_01",
@@ -96,7 +17,7 @@
       "description": "Hoa hồng 20% gói Topify Pro - Khách hàng cty_thanglong@gmail.com",
       "referenceId": "ref_comm_101",
       "status": "COMPLETED",
-      "createdAt": "2026-11-08T02:30:50.083Z"
+      "createdAt": "2026-11-08T03:01:27.585Z"
     },
     {
       "id": "tx_002",
@@ -106,7 +27,7 @@
       "description": "Thưởng hoàn thành nhiệm vụ: Đạt 10.000 lượt xem Reels trong tuần",
       "referenceId": "task_earn_reels_02",
       "status": "COMPLETED",
-      "createdAt": "2026-11-07T02:30:50.083Z"
+      "createdAt": "2026-11-07T03:01:27.585Z"
     },
     {
       "id": "tx_003",
@@ -116,7 +37,7 @@
       "description": "Rút tiền về Ngân hàng MB Bank (STK: 0987654321)",
       "referenceId": "wd_req_089",
       "status": "COMPLETED",
-      "createdAt": "2026-11-04T02:30:50.083Z"
+      "createdAt": "2026-11-04T03:01:27.585Z"
     },
     {
       "id": "tx_004",
@@ -126,7 +47,7 @@
       "description": "Hoa hồng 15% gói Topify Starter - Khách hàng shop_mebe@yahoo.com",
       "referenceId": "ref_comm_098",
       "status": "COMPLETED",
-      "createdAt": "2026-11-02T02:30:50.083Z"
+      "createdAt": "2026-11-02T03:01:27.585Z"
     },
     {
       "id": "tx_005",
@@ -136,48 +57,10 @@
       "description": "Thưởng kết nối thành công 3 kênh MXH (Facebook, TikTok, Shopee)",
       "referenceId": "task_earn_channels_01",
       "status": "COMPLETED",
-      "createdAt": "2026-10-29T02:30:50.083Z"
+      "createdAt": "2026-10-29T03:01:27.585Z"
     }
   ],
   "withdrawals": [
-    {
-      "id": "wd_req_1794277892975",
-      "walletId": "wal_topify_user_01",
-      "amount": 120000,
-      "fee": 0,
-      "netAmount": 120000,
-      "paymentMethod": "Vietcombank - 1234567890",
-      "accountInfo": "YẾN NGÔ",
-      "status": "REJECTED",
-      "note": "Thông tin tài khoản sai, hoàn tiền",
-      "createdAt": "2026-11-10T02:31:32.975Z",
-      "processedAt": "2026-11-10T02:31:33.434Z"
-    },
-    {
-      "id": "wd_req_1794277889219",
-      "walletId": "wal_topify_user_01",
-      "amount": 150000,
-      "fee": 0,
-      "netAmount": 150000,
-      "paymentMethod": "MB Bank - 0987654321",
-      "accountInfo": "YẾN NGÔ",
-      "status": "COMPLETED",
-      "note": "Kế toán duyệt và đã giải ngân",
-      "createdAt": "2026-11-10T02:31:29.219Z",
-      "processedAt": "2026-11-10T02:31:32.974Z"
-    },
-    {
-      "id": "wd_req_1794277889218",
-      "walletId": "wal_topify_user_01",
-      "amount": 200000,
-      "fee": 0,
-      "netAmount": 200000,
-      "paymentMethod": "MB Bank (Ngân hàng Quân Đội) - 0987654321",
-      "accountInfo": "YẾN NGÔ",
-      "status": "PENDING",
-      "note": "Rút tiền kiểm thử F148",
-      "createdAt": "2026-11-10T02:31:29.218Z"
-    },
     {
       "id": "wd_req_089",
       "walletId": "wal_topify_user_01",
@@ -188,8 +71,8 @@
       "accountInfo": "YẾN NGÔ - Chi nhánh Hà Nội",
       "status": "COMPLETED",
       "note": "Đã hoàn tất chuyển khoản VietQR tự động mã giao dịch #VNP29881",
-      "createdAt": "2026-11-04T02:30:50.083Z",
-      "processedAt": "2026-11-04T02:35:50.083Z"
+      "createdAt": "2026-11-04T03:01:27.585Z",
+      "processedAt": "2026-11-04T03:06:27.585Z"
     },
     {
       "id": "wd_req_090",
@@ -201,7 +84,7 @@
       "accountInfo": "YẾN NGÔ",
       "status": "PENDING",
       "note": "Đang chờ đối soát phiên thanh toán đợt ngày 15 hàng tháng",
-      "createdAt": "2026-11-09T22:30:50.083Z"
+      "createdAt": "2026-11-09T23:01:27.585Z"
     }
   ],
   "paymentMethods": [
@@ -212,7 +95,7 @@
       "accountNumber": "0987654321",
       "bankName": "MB Bank (Ngân hàng Quân Đội)",
       "isDefault": true,
-      "createdAt": "2026-10-11T02:30:50.083Z"
+      "createdAt": "2026-10-11T03:01:27.585Z"
     },
     {
       "id": "pm_002",
@@ -220,7 +103,7 @@
       "accountName": "YẾN NGÔ",
       "accountNumber": "0987654321",
       "isDefault": false,
-      "createdAt": "2026-10-21T02:30:50.083Z"
+      "createdAt": "2026-10-21T03:01:27.585Z"
     },
     {
       "id": "pm_003",
@@ -228,7 +111,7 @@
       "accountName": "Yen Ngo",
       "accountNumber": "nhim300997@gmail.com",
       "isDefault": false,
-      "createdAt": "2026-10-31T02:30:50.083Z"
+      "createdAt": "2026-10-31T03:01:27.585Z"
     }
   ],
   "earningTasks": [
@@ -238,11 +121,11 @@
       "description": "Lên lịch và xuất bản thành công 10 video hoặc hình ảnh qua Topify Calendar.",
       "rewardAmount": 50000,
       "category": "CONTENT",
-      "progress": 10,
+      "progress": 8,
       "maxProgress": 10,
       "unit": "bài đăng",
       "isClaimed": false,
-      "isCompleted": true,
+      "isCompleted": false,
       "expiresAt": "2026-10-19T00:00:00.000Z"
     },
     {
@@ -267,7 +150,7 @@
       "progress": 3,
       "maxProgress": 3,
       "unit": "shop",
-      "isClaimed": true,
+      "isClaimed": false,
       "isCompleted": true,
       "expiresAt": "2027-12-31T23:59:59.000Z"
     },
@@ -280,7 +163,7 @@
       "progress": 1,
       "maxProgress": 1,
       "unit": "chiến dịch",
-      "isClaimed": true,
+      "isClaimed": false,
       "isCompleted": true,
       "expiresAt": "2027-12-31T23:59:59.000Z"
     },
@@ -293,9 +176,175 @@
       "progress": 3,
       "maxProgress": 3,
       "unit": "kênh",
-      "isClaimed": false,
+      "isClaimed": true,
       "isCompleted": true,
       "expiresAt": "2027-12-31T23:59:59.000Z"
+    }
+  ],
+  "referralProfile": {
+    "code": "TOP-YEN99",
+    "referralLink": "https://topify.app/ref/TOP-YEN99",
+    "qrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://topify.app/ref/TOP-YEN99",
+    "totalClicks": 1420,
+    "totalRegistrations": 168,
+    "totalTrialUsers": 95,
+    "totalPaidSubscribers": 28,
+    "conversionRate": 16.67,
+    "totalCommissionEarned": 18450000,
+    "pendingCommission": 1250000
+  },
+  "referredUsers": [
+    {
+      "id": "ref_u_01",
+      "name": "Công ty CP May Mặc Thăng Long",
+      "emailMasked": "cty_t***@gmail.com",
+      "registeredAt": "2026-10-14T08:30:00.000Z",
+      "plan": "PRO",
+      "status": "ACTIVE_PAID",
+      "commissionEarned": 598000
+    },
+    {
+      "id": "ref_u_02",
+      "name": "Shop Mẹ & Bé Nhật Bản",
+      "emailMasked": "shop_***@yahoo.com",
+      "registeredAt": "2026-10-08T12:00:00.000Z",
+      "plan": "STARTER",
+      "status": "ACTIVE_PAID",
+      "commissionEarned": 299000
+    },
+    {
+      "id": "ref_u_03",
+      "name": "Nội Thất Gỗ Xanh Decor",
+      "emailMasked": "goxanh_***@gmail.com",
+      "registeredAt": "2026-10-11T15:20:00.000Z",
+      "plan": "FREE",
+      "status": "TRIAL",
+      "commissionEarned": 0
+    },
+    {
+      "id": "ref_u_04",
+      "name": "Học Viện Thẩm Mỹ Seoul",
+      "emailMasked": "seoul_***@gmail.com",
+      "registeredAt": "2026-10-02T10:15:00.000Z",
+      "plan": "ENTERPRISE",
+      "status": "ACTIVE_PAID",
+      "commissionEarned": 2500000
+    }
+  ],
+  "commissionRules": [
+    {
+      "id": "rule_starter",
+      "planName": "Gói Starter (299.000 VND/tháng)",
+      "firstMonthRate": 15,
+      "recurringRate": 5,
+      "cookieDays": 30,
+      "payoutSchedule": "Ngày 15 hàng tháng",
+      "description": "Nhận 15% doanh thu tháng đầu tiên và 5% mỗi tháng khách hàng gia hạn dịch vụ."
+    },
+    {
+      "id": "rule_pro",
+      "planName": "Gói Pro Creator (599.000 VND/tháng)",
+      "firstMonthRate": 20,
+      "recurringRate": 10,
+      "cookieDays": 60,
+      "payoutSchedule": "Ngày 15 hàng tháng",
+      "description": "Nhận 20% doanh thu tháng đầu tiên và 10% doanh thu định kỳ trọn đời."
+    },
+    {
+      "id": "rule_enterprise",
+      "planName": "Gói Doanh Nghiệp (Enterprise)",
+      "firstMonthRate": 25,
+      "recurringRate": 10,
+      "cookieDays": 90,
+      "payoutSchedule": "Đối soát 24h sau khi ký hợp đồng",
+      "description": "Hoa hồng 25% giá trị hợp đồng thanh toán lần đầu cho hợp đồng năm."
+    }
+  ],
+  "commissionHistory": [
+    {
+      "id": "comm_tx_001",
+      "orderId": "ORD_2026_1088",
+      "referredUserName": "Công ty CP May Mặc Thăng Long",
+      "planName": "Gói Pro Creator (1 Năm)",
+      "orderAmount": 5990000,
+      "commissionRate": 20,
+      "commissionAmount": 1198000,
+      "status": "PENDING",
+      "createdAt": "2026-10-14T09:00:00.000Z",
+      "payoutDate": "2026-10-15"
+    },
+    {
+      "id": "comm_tx_002",
+      "orderId": "ORD_2026_1042",
+      "referredUserName": "Shop Mẹ & Bé Nhật Bản",
+      "planName": "Gói Starter (Hàng tháng)",
+      "orderAmount": 299000,
+      "commissionRate": 15,
+      "commissionAmount": 44850,
+      "status": "APPROVED",
+      "createdAt": "2026-10-08T12:00:00.000Z",
+      "payoutDate": "2026-10-15"
+    },
+    {
+      "id": "comm_tx_003",
+      "orderId": "ORD_2026_0991",
+      "referredUserName": "Học Viện Thẩm Mỹ Seoul",
+      "planName": "Gói Enterprise",
+      "orderAmount": 24000000,
+      "commissionRate": 25,
+      "commissionAmount": 6000000,
+      "status": "PAID",
+      "createdAt": "2026-10-02T10:15:00.000Z",
+      "payoutDate": "2026-10-03"
+    }
+  ],
+  "fraudAlerts": [
+    {
+      "id": "frd_001",
+      "referralCode": "TOP-YEN99",
+      "suspectedUserId": "usr_fake_882",
+      "suspectedUserName": "yen.clone1@gmail.com",
+      "ipAddress": "118.69.182.10",
+      "deviceFingerprint": "fp_macbook_m1_chrome_129",
+      "reasons": [
+        "Trùng địa chỉ IP với người giới thiệu (Self-referral detection)",
+        "Trùng dấu vân tay phần cứng / trình duyệt (Device fingerprint match)"
+      ],
+      "riskScore": 95,
+      "riskLevel": "HIGH_RISK",
+      "actionTaken": "COMMISSION_HELD",
+      "detectedAt": "2026-10-13T14:10:00.000Z"
+    },
+    {
+      "id": "frd_002",
+      "referralCode": "TOP-YEN99",
+      "suspectedUserId": "usr_rapid_991",
+      "suspectedUserName": "marketing.lead.bulk@tempmail.com",
+      "ipAddress": "42.119.220.4",
+      "deviceFingerprint": "fp_win_headless_bot_44",
+      "reasons": [
+        "Phát hiện tần suất đăng ký bất thường (7 tài khoản/giờ từ cùng subnet IP)",
+        "Sử dụng dịch vụ email tạm thời (TempMail Disposable)"
+      ],
+      "riskScore": 75,
+      "riskLevel": "HIGH_RISK",
+      "actionTaken": "SUSPENDED",
+      "detectedAt": "2026-10-12T03:22:00.000Z"
+    },
+    {
+      "id": "frd_003",
+      "referralCode": "TOP-YEN99",
+      "suspectedUserId": "usr_clean_102",
+      "suspectedUserName": "phuong.nguyen@vietbrand.vn",
+      "ipAddress": "14.161.40.88",
+      "deviceFingerprint": "fp_iphone15_safari_18",
+      "reasons": [
+        "Tài khoản chưa phát sinh bài đăng sau 24h"
+      ],
+      "riskScore": 15,
+      "riskLevel": "SAFE",
+      "actionTaken": "DISMISSED",
+      "detectedAt": "2026-10-14T07:15:00.000Z"
     }
   ]
 }
