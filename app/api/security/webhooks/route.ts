@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, pingResult, ...data });
     }
 
+    if (action === 'retry') {
+      const { logId } = body;
+      if (!logId) {
+        return NextResponse.json({ error: 'logId is required' }, { status: 400 });
+      }
+      const retryResult = securityEngineStore.retryWebhookDelivery(logId);
+      const data = securityEngineStore.getWebhooks();
+      return NextResponse.json({ success: true, retryResult, ...data });
+    }
+
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to process webhook action' }, { status: 500 });

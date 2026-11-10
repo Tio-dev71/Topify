@@ -4,7 +4,8 @@ import { securityEngineStore } from '@/lib/security/security-engine';
 export async function GET() {
   try {
     const data = securityEngineStore.getActiveSessionsAndIps();
-    return NextResponse.json(data);
+    const loginHistory = securityEngineStore.getLoginHistory();
+    return NextResponse.json({ ...data, loginHistory });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to fetch sessions and IPs' }, { status: 500 });
   }

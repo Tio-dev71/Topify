@@ -53,6 +53,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success, apiKeys });
     }
 
+    if (action === 'rotate') {
+      if (!keyId) {
+        return NextResponse.json({ error: 'keyId is required' }, { status: 400 });
+      }
+      const { key, newSecret } = securityEngineStore.rotateApiKey(keyId);
+      const apiKeys = securityEngineStore.getApiKeys();
+      return NextResponse.json({ success: true, key, newSecret, apiKeys });
+    }
+
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to process API key action' }, { status: 500 });
