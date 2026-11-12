@@ -601,21 +601,21 @@ export function FacebookPostAutomationTab() {
             <span className="text-xs text-gray-400 font-medium">Gợi ý nhanh:</span>
             <button
               onClick={() => handlePresetSelect('https://www.facebook.com/tintucvtv24')}
-              className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-purple-50 hover:text-purple-700 transition-colors font-medium"
+              className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-purple-50 hover:text-purple-700 transition-colors font-medium cursor-pointer"
             >
               VTV24
             </button>
             <button
               onClick={() => handlePresetSelect('https://www.facebook.com/VinFastAuto.VN')}
-              className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-purple-50 hover:text-purple-700 transition-colors font-medium"
+              className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-purple-50 hover:text-purple-700 transition-colors font-medium cursor-pointer"
             >
               VinFast VN
             </button>
             <button
-              onClick={() => handlePresetSelect('https://www.facebook.com/The.Coffee.House.2014')}
-              className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-purple-50 hover:text-purple-700 transition-colors font-medium"
+              onClick={() => handlePresetSelect('https://www.facebook.com/groups/congdongkinhdoanhtmdt')}
+              className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors font-medium border border-purple-200 cursor-pointer"
             >
-              The Coffee House
+              👥 Nhóm Kinh Doanh TMĐT
             </button>
           </div>
         </div>
@@ -627,7 +627,7 @@ export function FacebookPostAutomationTab() {
               type="text"
               value={targetUrl}
               onChange={e => setTargetUrl(e.target.value)}
-              placeholder="Nhập link Fanpage Facebook (VD: https://www.facebook.com/tintucvtv24)..."
+              placeholder="Dán link Fanpage hoặc Group Facebook bất kỳ (VD: https://facebook.com/groups/... hoặc https://facebook.com/page)..."
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all font-mono"
             />
           </div>

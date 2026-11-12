@@ -299,16 +299,17 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-12 p-6">
       {/* Header */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-xs space-y-4">
+        {/* Title and Metadata (Full Width - No text squishing) */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
               {activeTab === 'trending' ? 'Phân hệ M6 • F110' : 'Phân hệ M6 • F112'}
             </span>
             <span className="text-xs font-medium text-gray-400">Social Listening</span>
           </div>
 
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2.5 leading-snug">
             {activeTab === 'trending' ? (
               <>
                 <Flame className="w-6 h-6 sm:w-7 sm:h-7 text-amber-500 fill-amber-500 shrink-0" />
@@ -321,59 +322,63 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
               </>
             )}
           </h1>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-3xl">
+          <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-4xl leading-relaxed">
             {activeTab === 'trending'
               ? 'Phát hiện nội dung tăng trưởng nhanh theo vận tốc tương tác (Velocity Score) trên đa nền tảng để tham khảo, lấy cảm hứng và 1-click Remix tạo bài viết mới.'
               : 'Thiết lập quy tắc cảnh báo khi keyword hoặc điểm viral score vượt ngưỡng (50–98 điểm); nhận thông báo tức thì qua Desktop App và Email.'}
           </p>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start xl:self-center">
-          <button
-            onClick={() => {
-              if (activeTab === 'trending') fetchTrending();
-              else fetchAlerts();
-            }}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs whitespace-nowrap shrink-0"
-          >
-            <RefreshCw className="w-4 h-4 shrink-0" />
-            <span>Làm mới</span>
-          </button>
-
-          {activeTab === 'alerts' && (
-            <button
-              onClick={handleTestTrigger}
-              disabled={triggeringTest}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl transition-colors shadow-xs whitespace-nowrap shrink-0"
-              title="Kích hoạt ngay một cảnh báo mẫu điểm 96/100 để kiểm chứng"
-            >
-              <Zap className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{triggeringTest ? 'Đang kích hoạt...' : 'Thử nghiệm Cảnh báo (Test Alert)'}</span>
-            </button>
-          )}
-
-          {activeTab === 'alerts' ? (
-            <button
-              onClick={() => setShowCreateRuleModal(true)}
-              className="btn-primary flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl shadow-xs whitespace-nowrap shrink-0"
-            >
-              <Plus className="w-4 h-4 shrink-0" />
-              <span>Thiết lập Cảnh báo mới (F112)</span>
-            </button>
-          ) : (
+        {/* Action Toolbar (Placed cleanly below header to prevent squeezing) */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => {
-                handleTabChange('alerts');
-                setShowCreateRuleModal(true);
+                if (activeTab === 'trending') fetchTrending();
+                else fetchAlerts();
               }}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors shadow-xs whitespace-nowrap shrink-0"
-              title="Chuyển sang F112 để thiết lập quy tắc tự động gửi thông báo khi phát hiện nội dung vượt ngưỡng"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors shadow-2xs whitespace-nowrap cursor-pointer"
             >
-              <Bell className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>Cài đặt cảnh báo vượt ngưỡng</span>
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span>Làm mới</span>
             </button>
-          )}
+
+            {activeTab === 'alerts' && (
+              <button
+                onClick={handleTestTrigger}
+                disabled={triggeringTest}
+                className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors shadow-2xs whitespace-nowrap cursor-pointer disabled:opacity-50"
+                title="Kích hoạt ngay một cảnh báo mẫu điểm 96/100 để kiểm chứng"
+              >
+                <Zap className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>{triggeringTest ? 'Đang kích hoạt...' : 'Thử nghiệm Cảnh báo (Test Alert)'}</span>
+              </button>
+            )}
+          </div>
+
+          <div>
+            {activeTab === 'alerts' ? (
+              <button
+                onClick={() => setShowCreateRuleModal(true)}
+                className="btn-primary flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl shadow-xs whitespace-nowrap cursor-pointer"
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                <span>Thiết lập Cảnh báo mới (F112)</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  handleTabChange('alerts');
+                  setShowCreateRuleModal(true);
+                }}
+                className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors shadow-2xs whitespace-nowrap cursor-pointer"
+                title="Chuyển sang F112 để thiết lập quy tắc tự động gửi thông báo khi phát hiện nội dung vượt ngưỡng"
+              >
+                <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Cài đặt cảnh báo vượt ngưỡng</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -831,20 +836,22 @@ export default function ViralAlerts({ defaultTab }: ViralAlertsProps) {
           {/* Rules Configuration Panel (Right Column) */}
           <div className="lg:col-span-5 xl:col-span-4 space-y-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-gray-100">
-                <div className="min-w-0">
-                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2 whitespace-nowrap">
+              <div className="flex items-center justify-between gap-2.5 mb-4 pb-3 border-b border-gray-100">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
                     <Sliders className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span>Quy Tắc Ngưỡng Cảnh Báo</span>
+                    <span className="truncate">Quy Tắc Ngưỡng (F112)</span>
                   </h3>
-                  <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">Tự động kích hoạt khi vượt ngưỡng</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                    Tự động kích hoạt khi vượt ngưỡng
+                  </p>
                 </div>
                 <button
                   onClick={() => setShowCreateRuleModal(true)}
-                  className="btn-primary text-xs font-bold px-3 py-1.5 rounded-xl flex items-center justify-center gap-1 shadow-2xs whitespace-nowrap shrink-0 self-start sm:self-auto"
+                  className="btn-primary text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center justify-center gap-1 shadow-xs whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span>Thêm quy tắc</span>
+                  <span>Thêm mới</span>
                 </button>
               </div>
 
