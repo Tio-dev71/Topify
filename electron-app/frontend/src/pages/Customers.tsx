@@ -880,14 +880,14 @@ export default function Customers({
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full text-left text-xs min-w-[960px]">
               <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-500 uppercase text-[10px] font-semibold tracking-wider">
                 <tr>
-                  <th className="py-3 px-4">Khách hàng / Kênh</th>
-                  <th className="py-3 px-4">Thông tin liên hệ</th>
+                  <th className="py-3 px-4 whitespace-nowrap min-w-[220px]">Khách hàng / Kênh</th>
+                  <th className="py-3 px-4 whitespace-nowrap min-w-[180px]">Thông tin liên hệ</th>
                   <th
-                    className="py-3 px-4"
+                    className="py-3 px-4 whitespace-nowrap min-w-[180px]"
                     title="Tiêu chí F100: Hồ sơ đầy đủ (30đ: Họ tên +10, SĐT +10, Email +10) + Tương tác thực tế (30đ: hỏi mua/hỏi giá) + Lịch sử mua hàng (40đ: có đơn thành công). HOT ≥ 70đ, WARM 40-69đ, COLD < 40đ."
                   >
                     <div className="flex items-center gap-1 cursor-help">
@@ -895,9 +895,9 @@ export default function Customers({
                       <Info className="w-3 h-3 text-gray-400" />
                     </div>
                   </th>
-                  <th className="py-3 px-4">Giao dịch (Deals)</th>
-                  <th className="py-3 px-4">Ngày tạo</th>
-                  <th className="py-3 px-4 text-right min-w-[120px]">Thao tác</th>
+                  <th className="py-3 px-4 whitespace-nowrap min-w-[150px]">Giao dịch (Deals)</th>
+                  <th className="py-3 px-4 whitespace-nowrap min-w-[120px]">Ngày tạo</th>
+                  <th className="py-3 px-4 text-right min-w-[120px] whitespace-nowrap">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
