@@ -313,6 +313,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Validate customData against workspace custom field definitions if provided (F099)
+    if (customData !== undefined && customData !== null && typeof customData === 'object') {
+      const setting = await prisma.systemSetting.findUnique({
+        where: { key: `crm_custom_fields_${workspaceId}` },
+      });
+      if (setting?.value) {
+        try {
+          const fieldDefs: any[] = JSON.parse(setting.value);
+          if (Array.isArray(fieldDefs)) {
+            for (const f of fieldDefs) {
+              const val = (customData as any)[f.key];
+              const isEmpty = val === undefined || val === null || (typeof val === 'string' && val.trim() === '');
+              if (f.required && isEmpty) {
+                return NextResponse.json(
+                  { error: `Trường tùy biến "${f.name}" (${f.key}) là bắt buộc, không được để trống!` },
+                  { status: 400 }
+                );
+              }
+              if (!isEmpty && f.type === 'NUMBER' && isNaN(Number(val))) {
+                return NextResponse.json(
+                  { error: `Trường tùy biến "${f.name}" phải là định dạng số hợp lệ!` },
+                  { status: 400 }
+                );
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Validation error for custom fields:', e);
+        }
+      }
+    }
+
     const customer = await prisma.customer.create({
       data: {
         name,
@@ -415,6 +447,38 @@ export async function PATCH(req: NextRequest) {
 
     if (!existing) {
       return NextResponse.json({ error: 'Không tìm thấy khách hàng' }, { status: 404 });
+    }
+
+    // Validate customData against workspace custom field definitions if provided (F099)
+    if (customData !== undefined && customData !== null && typeof customData === 'object') {
+      const setting = await prisma.systemSetting.findUnique({
+        where: { key: `crm_custom_fields_${workspaceId}` },
+      });
+      if (setting?.value) {
+        try {
+          const fieldDefs: any[] = JSON.parse(setting.value);
+          if (Array.isArray(fieldDefs)) {
+            for (const f of fieldDefs) {
+              const val = (customData as any)[f.key];
+              const isEmpty = val === undefined || val === null || (typeof val === 'string' && val.trim() === '');
+              if (f.required && isEmpty) {
+                return NextResponse.json(
+                  { error: `Trường tùy biến "${f.name}" (${f.key}) là bắt buộc, không được để trống!` },
+                  { status: 400 }
+                );
+              }
+              if (!isEmpty && f.type === 'NUMBER' && isNaN(Number(val))) {
+                return NextResponse.json(
+                  { error: `Trường tùy biến "${f.name}" phải là định dạng số hợp lệ!` },
+                  { status: 400 }
+                );
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Validation error for custom fields in PATCH:', e);
+        }
+      }
     }
 
     const updateData: any = {};

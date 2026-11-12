@@ -54,6 +54,7 @@ export default function CustomFieldsTab({
   // Selected customer for preview / testing
   const [selectedCustId, setSelectedCustId] = useState<string>('');
   const [customerValues, setCustomerValues] = useState<Record<string, any>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [savingValues, setSavingValues] = useState(false);
 
   // Add field form
@@ -111,7 +112,7 @@ export default function CustomFieldsTab({
         setCustomerValues((target.customData as any) || {});
       } else {
         const current = customerList.find(c => c.id === selectedCustId);
-        if (current && current.customData && Object.keys(customerValues).length === 0) {
+        if (current && current.customData) {
           setCustomerValues((current.customData as any) || {});
         }
       }
@@ -120,6 +121,7 @@ export default function CustomFieldsTab({
 
   const handleSelectCustomer = (custId: string) => {
     setSelectedCustId(custId);
+    setFieldErrors({});
     if (!custId) {
       setCustomerValues({});
       return;
@@ -128,12 +130,46 @@ export default function CustomFieldsTab({
     setCustomerValues((cust?.customData as any) || {});
   };
 
+  const handleValueChange = (key: string, val: any) => {
+    setCustomerValues(prev => ({ ...prev, [key]: val }));
+    if (fieldErrors[key]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
   const handleSaveCustomerValues = async () => {
     if (!selectedCustId) {
       toast.error('Vui lòng chọn khách hàng để gán dữ liệu');
       return;
     }
 
+    // Comprehensive validation for required fields & types (F099)
+    const errors: Record<string, string> = {};
+    for (const f of fields) {
+      const val = customerValues[f.key];
+      const isEmpty = val === undefined || val === null || (typeof val === 'string' && val.trim() === '');
+      
+      if (f.required && isEmpty) {
+        errors[f.key] = `Trường "${f.name}" là bắt buộc, không được để trống!`;
+      } else if (!isEmpty) {
+        if (f.type === 'NUMBER' && isNaN(Number(val))) {
+          errors[f.key] = `Trường "${f.name}" phải là chữ số hợp lệ!`;
+        }
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const firstError = Object.values(errors)[0];
+      toast.error(firstError);
+      return;
+    }
+
+    setFieldErrors({});
     setSavingValues(true);
     try {
       await api.patch('/crm/customers', {
@@ -147,8 +183,8 @@ export default function CustomFieldsTab({
         prev.map(c => (c.id === selectedCustId ? { ...c, customData: customerValues } : c))
       );
       if (onCustomerUpdated) onCustomerUpdated();
-    } catch {
-      toast.error('Lỗi khi lưu dữ liệu tùy biến');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi lưu dữ liệu tùy biến');
     } finally {
       setSavingValues(false);
     }
@@ -379,49 +415,82 @@ export default function CustomFieldsTab({
                   Chưa có trường tùy biến nào. Hãy tạo trường mới ở cột bên trái trước khi gán dữ liệu.
                 </div>
               ) : (
-                fields.map((field) => (
-                  <div key={field.id} className="space-y-1">
-                    <label className="text-[11px] font-bold text-gray-700 block">
-                      {field.name} {field.required && <span className="text-rose-500">*</span>}
-                    </label>
+                fields.map((field) => {
+                  const hasError = Boolean(fieldErrors[field.key]);
 
-                    {field.type === 'SELECT' ? (
-                      <select
-                        value={customerValues[field.key] || ''}
-                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
-                        className="w-full p-2 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="">-- Chọn {field.name} --</option>
-                        {field.options?.map((opt, i) => (
-                          <option key={i} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : field.type === 'NUMBER' ? (
-                      <input
-                        type="number"
-                        value={customerValues[field.key] ?? ''}
-                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value === '' ? '' : Number(e.target.value) })}
-                        placeholder={`Nhập ${field.name}...`}
-                        className="w-full p-2 rounded-lg border border-gray-200 text-xs font-mono focus:outline-none focus:border-indigo-500"
-                      />
-                    ) : field.type === 'DATE' ? (
-                      <input
-                        type="date"
-                        value={customerValues[field.key] || ''}
-                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
-                        className="w-full p-2 rounded-lg border border-gray-200 text-xs bg-white focus:outline-none focus:border-indigo-500"
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        value={customerValues[field.key] || ''}
-                        onChange={e => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
-                        placeholder={`Nhập ${field.name}...`}
-                        className="w-full p-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-indigo-500"
-                      />
-                    )}
-                  </div>
-                ))
+                  return (
+                    <div key={field.id} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-gray-700 block">
+                          {field.name} {field.required && <span className="text-rose-500">*</span>}
+                        </label>
+                        {field.required && (
+                          <span className="text-[9px] text-rose-500 font-semibold bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                            Bắt buộc
+                          </span>
+                        )}
+                      </div>
+
+                      {field.type === 'SELECT' ? (
+                        <select
+                          value={customerValues[field.key] || ''}
+                          onChange={e => handleValueChange(field.key, e.target.value)}
+                          className={`w-full p-2 rounded-lg border text-xs bg-white focus:outline-none focus:border-indigo-500 transition-colors ${
+                            hasError
+                              ? 'border-rose-400 bg-rose-50/20 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                              : 'border-gray-200'
+                          }`}
+                        >
+                          <option value="">-- Chọn {field.name} --</option>
+                          {field.options?.map((opt, i) => (
+                            <option key={i} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : field.type === 'NUMBER' ? (
+                        <input
+                          type="number"
+                          value={customerValues[field.key] ?? ''}
+                          onChange={e => handleValueChange(field.key, e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder={`Nhập ${field.name}...`}
+                          className={`w-full p-2 rounded-lg border text-xs font-mono focus:outline-none focus:border-indigo-500 transition-colors ${
+                            hasError
+                              ? 'border-rose-400 bg-rose-50/20 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                              : 'border-gray-200'
+                          }`}
+                        />
+                      ) : field.type === 'DATE' ? (
+                        <input
+                          type="date"
+                          value={customerValues[field.key] || ''}
+                          onChange={e => handleValueChange(field.key, e.target.value)}
+                          className={`w-full p-2 rounded-lg border text-xs bg-white focus:outline-none focus:border-indigo-500 transition-colors ${
+                            hasError
+                              ? 'border-rose-400 bg-rose-50/20 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                              : 'border-gray-200'
+                          }`}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={customerValues[field.key] || ''}
+                          onChange={e => handleValueChange(field.key, e.target.value)}
+                          placeholder={`Nhập ${field.name}...`}
+                          className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:border-indigo-500 transition-colors ${
+                            hasError
+                              ? 'border-rose-400 bg-rose-50/20 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                              : 'border-gray-200'
+                          }`}
+                        />
+                      )}
+
+                      {hasError && (
+                        <p className="text-[10px] text-rose-500 font-semibold flex items-center gap-1 mt-0.5 animate-in fade-in">
+                          <span>⚠️</span> {fieldErrors[field.key]}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
 
