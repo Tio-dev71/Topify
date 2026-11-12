@@ -26,117 +26,123 @@ export interface LeadItem {
   convertedDealId?: string;
 }
 
-// Default initial leads demonstrating all 4 channels: Inbox, Form, Import, Referral
-let initialLeads: LeadItem[] = [
-  {
-    id: 'lead_inbox_1',
-    name: 'Nguyễn Hoàng Nam',
-    phone: '0988112233',
-    email: 'nam.nguyen@techcorp.vn',
-    company: 'TechCorp Vietnam',
-    source: 'INBOX',
-    sourceDetail: 'Inbox Fanpage Topify - Tin nhắn Messenger',
-    status: 'NEW',
-    leadScore: 88,
-    temperature: 'HOT',
-    demand: 'Quan tâm phần mềm quản lý nội dung đa kênh & kết nối CRM',
-    estimatedValue: 15000000,
-    assignedTo: 'Nguyễn Văn A',
-    assignedAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-    notes: 'Khách nhắn hỏi từ chiến dịch quảng cáo Facebook, cần tư vấn gói doanh nghiệp 1 năm.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-  },
-  {
-    id: 'lead_form_1',
-    name: 'Đặng Thùy Dung',
-    phone: '0977445566',
-    email: 'thuydung.haian@gmail.com',
-    company: 'Công ty Cổ phần May Mặc Hải An',
-    source: 'FORM',
-    sourceDetail: 'Web Form Thu Lead (F102) - Landing Page Nhận Báo Giá',
-    status: 'CONTACTING',
-    leadScore: 92,
-    temperature: 'HOT',
-    demand: 'Yêu cầu báo giá đặt may 300 áo polo đồng phục cao cấp cho sự kiện Q4',
-    estimatedValue: 45000000,
-    assignedTo: 'Trần Thị B',
-    assignedAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    notes: 'Đã gửi email catalog mẫu vải, hẹn gọi lại lúc 14:00 chiều nay.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-  },
-  {
-    id: 'lead_import_1',
-    name: 'Trần Văn Bình',
-    phone: '0912334455',
-    email: 'binh.tran@vietlogistics.com',
-    company: 'Việt Logistics & Supply Chain',
-    source: 'IMPORT',
-    sourceDetail: 'Nhập từ file Excel: Danh_sach_hoi_thao_TechExpo_T11.xlsx',
-    status: 'QUALIFIED',
-    leadScore: 78,
-    temperature: 'WARM',
-    demand: 'Tìm giải pháp gửi tin Zalo ZNS và quản lý quy trình CSKH tự động',
-    estimatedValue: 24000000,
-    assignedTo: 'Lê Hoàng C',
-    assignedAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-    notes: 'Thu thập từ quầy triển lãm số 12, đã xác nhận người phụ trách công nghệ thông tin.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
-  },
-  {
-    id: 'lead_referral_1',
-    name: 'Lê Thị Mai Anh',
-    phone: '0903889900',
-    email: 'maianh.le@fintechvn.com',
-    company: 'Fintech Solutions Group',
-    source: 'REFERRAL',
-    sourceDetail: 'Giới thiệu bởi Đối tác Kế toán Minh Đức (Mã ref: REF-MINHDUC)',
-    status: 'QUALIFIED',
-    leadScore: 95,
-    temperature: 'HOT',
-    demand: 'Triển khai toàn diện Topify cho 5 chi nhánh bán lẻ đồ gia dụng thông minh',
-    estimatedValue: 68000000,
-    assignedTo: 'Nguyễn Văn A',
-    assignedAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-    notes: 'Đối tác giới thiệu đánh giá cao khả năng Social Listening và chốt sale đa kênh.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 720).toISOString(),
-  },
-  {
-    id: 'lead_inbox_2',
-    name: 'Vũ Đức Thắng',
-    phone: '0933556677',
-    email: 'thangvu@shoppro.vn',
-    company: 'ShopPro Thời Trang Trẻ',
-    source: 'INBOX',
-    sourceDetail: 'Inbox TikTok Shop Live - Khách hỏi bot tự động chốt đơn',
-    status: 'NEW',
-    leadScore: 72,
-    temperature: 'WARM',
-    demand: 'Hỏi tính năng tự động quét comment và gửi tin nhắn chốt đơn trên livestream',
-    estimatedValue: 8500000,
-    assignedTo: 'Trần Thị B',
-    assignedAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    notes: 'Đang chạy 3 kênh TikTok Shop, mỗi phiên live có ~400 mắt xem.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 1440).toISOString(),
-  },
-  {
-    id: 'lead_form_2',
-    name: 'Hoàng Nhật Minh',
-    phone: '0944778899',
-    email: 'nhatminh@fnbviet.com',
-    company: 'Chuỗi Cà phê F&B Sài Gòn',
-    source: 'FORM',
-    sourceDetail: 'Web Form Thu Lead (F102) - Form Nhận Ebook & Dùng Thử',
-    status: 'CONVERTED',
-    leadScore: 90,
-    temperature: 'HOT',
-    demand: 'Đăng ký dùng thử hệ thống chăm sóc khách hàng tự động & đo lường ROI',
-    estimatedValue: 18000000,
-    assignedTo: 'Nguyễn Văn A',
-    assignedAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-    notes: 'Đã hoàn tất chuyển đổi thành Khách hàng chính thức và khởi tạo Deal bán hàng.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 2880).toISOString(),
-  },
-];
+// Helper to map DB Customer to LeadItem
+function mapCustomerToLead(c: any): LeadItem {
+  const custom = (c.customData as any) || {};
+  const rawSource = String(c.source || '').toUpperCase();
+  const tagsStr = String(c.tags || '').toUpperCase();
+
+  // Determine standard 4 channels: INBOX, FORM, IMPORT, REFERRAL
+  let cleanSource: LeadItem['source'] = 'INBOX';
+  if (
+    rawSource === 'FORM' ||
+    rawSource === 'LANDING_PAGE' ||
+    rawSource === 'WEB_FORM' ||
+    tagsStr.includes('F102') ||
+    tagsStr.includes('LANDINGPAGE') ||
+    tagsStr.includes('FORM')
+  ) {
+    cleanSource = 'FORM';
+  } else if (
+    rawSource === 'IMPORT' ||
+    rawSource === 'EXCEL' ||
+    rawSource === 'CSV' ||
+    tagsStr.includes('IMPORT')
+  ) {
+    cleanSource = 'IMPORT';
+  } else if (
+    rawSource === 'REFERRAL' ||
+    rawSource === 'REF' ||
+    rawSource === 'AFFILIATE' ||
+    tagsStr.includes('REFERRAL') ||
+    tagsStr.includes('GIỚI THIỆU')
+  ) {
+    cleanSource = 'REFERRAL';
+  } else {
+    cleanSource = 'INBOX';
+  }
+
+  // Determine source detail description
+  let sourceDetail = custom.sourceDetail;
+  if (!sourceDetail) {
+    if (cleanSource === 'FORM') {
+      sourceDetail = 'Web Form Thu Lead (F102) - Landing Page';
+    } else if (cleanSource === 'IMPORT') {
+      sourceDetail = custom.fileName ? `Nhập từ file: ${custom.fileName}` : 'Nhập từ file Excel/CSV';
+    } else if (cleanSource === 'REFERRAL') {
+      sourceDetail = 'Giới thiệu / Đối tác kinh doanh';
+    } else {
+      if (rawSource === 'TIKTOK') {
+        sourceDetail = 'Inbox TikTok Shop Live / Tin nhắn TikTok';
+      } else if (rawSource === 'FACEBOOK') {
+        sourceDetail = 'Inbox Fanpage Facebook / Messenger';
+      } else if (rawSource === 'INSTAGRAM') {
+        sourceDetail = 'Inbox Instagram Direct';
+      } else if (rawSource === 'ZALO') {
+        sourceDetail = 'Tin nhắn Zalo OA / Cá nhân';
+      } else {
+        sourceDetail = 'Hộp thư trực tiếp (Inbox)';
+      }
+    }
+  }
+
+  // Determine status
+  let status: LeadItem['status'] = 'NEW';
+  if (custom.leadStatus) {
+    status = custom.leadStatus;
+  } else if (
+    c.tags?.includes('Khách hàng chính thức') ||
+    c.tags?.includes('Chuyển đổi') ||
+    (c.deals && c.deals.length > 0) ||
+    custom.isCustomer === true
+  ) {
+    status = 'CONVERTED';
+  } else if (c.tags?.toLowerCase().includes('tiềm năng') || c.tags?.includes('VIP')) {
+    status = 'QUALIFIED';
+  } else if (c.tags?.toLowerCase().includes('đang liên hệ')) {
+    status = 'CONTACTING';
+  } else {
+    status = 'NEW';
+  }
+
+  // Lead score & temperature
+  const leadScore = Number(custom.leadScore) || (status === 'CONVERTED' ? 95 : 80);
+  const temperature: LeadItem['temperature'] =
+    leadScore >= 85 ? 'HOT' : leadScore >= 60 ? 'WARM' : 'COLD';
+
+  // Demand & estimated value
+  const demand =
+    custom.demand ||
+    c.notes ||
+    (c.deals && c.deals[0]?.title) ||
+    'Quan tâm giải pháp và dịch vụ';
+  const estimatedValue =
+    Number(custom.estimatedValue) ||
+    (c.deals && c.deals.length > 0
+      ? c.deals.reduce((sum: number, d: any) => sum + (d.value || 0), 0)
+      : 10000000);
+
+  return {
+    id: c.id,
+    name: c.name || 'Khách tiềm năng',
+    phone: c.phone || '',
+    email: c.email || undefined,
+    company: custom.company || undefined,
+    source: cleanSource,
+    sourceDetail,
+    status,
+    leadScore,
+    temperature,
+    demand,
+    estimatedValue,
+    assignedTo: custom.assignedTo || 'Chưa phân công',
+    assignedAvatar: custom.assignedAvatar || undefined,
+    notes: c.notes || undefined,
+    createdAt: c.createdAt ? new Date(c.createdAt).toISOString() : new Date().toISOString(),
+    convertedCustomerId: custom.convertedCustomerId || (status === 'CONVERTED' ? c.id : undefined),
+    convertedDealId: custom.convertedDealId || (c.deals && c.deals[0]?.id) || undefined,
+  };
+}
 
 // Helper to compute stats
 function computeLeadStats(leads: LeadItem[]) {
@@ -171,7 +177,27 @@ function computeLeadStats(leads: LeadItem[]) {
   };
 }
 
-// GET /api/crm/leads - List leads with multi-source filtering (F092)
+// Helper to fetch all leads from DB for a workspace
+async function fetchDbLeads(workspaceId?: string): Promise<LeadItem[]> {
+  try {
+    const customers = await prisma.customer.findMany({
+      where: {
+        workspaceId: workspaceId || undefined,
+      },
+      include: {
+        deals: { select: { id: true, title: true, value: true, status: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return customers.map(mapCustomerToLead);
+  } catch (err) {
+    console.error('[API_LEADS_FETCH_DB_ERROR]', err);
+    return [];
+  }
+}
+
+// GET /api/crm/leads - List leads with multi-source filtering (F092) - 100% Real DB Data
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -186,68 +212,8 @@ export async function GET(req: NextRequest) {
     const assignedTo = searchParams.get('assignedTo');
     const workspaceId = (session.user as any).workspaceId;
 
-    // Check DB customers that have lead tag or source
-    let dbLeads: LeadItem[] = [];
-    try {
-      const customers = await prisma.customer.findMany({
-        where: {
-          workspaceId: workspaceId || undefined,
-          OR: [
-            { tags: { contains: 'LEAD', mode: 'insensitive' } },
-            { tags: { contains: 'F092', mode: 'insensitive' } },
-            { source: { in: ['INBOX', 'FORM', 'IMPORT', 'REFERRAL', 'LANDING_PAGE'] } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (customers && customers.length > 0) {
-        dbLeads = customers.map((c: any) => {
-          const rawSource = (c.source || 'INBOX').toUpperCase();
-          const cleanSource: LeadItem['source'] =
-            rawSource === 'FORM' || rawSource === 'LANDING_PAGE'
-              ? 'FORM'
-              : rawSource === 'IMPORT'
-              ? 'IMPORT'
-              : rawSource === 'REFERRAL'
-              ? 'REFERRAL'
-              : 'INBOX';
-
-          const custom = (c.customData as any) || {};
-          return {
-            id: c.id,
-            name: c.name || 'Khách tiềm năng mới',
-            phone: c.phone || 'Chưa có SĐT',
-            email: c.email || undefined,
-            company: custom.company || undefined,
-            source: cleanSource,
-            sourceDetail: custom.sourceDetail || `Kênh ${cleanSource}`,
-            status: custom.leadStatus || 'NEW',
-            leadScore: custom.leadScore || 80,
-            temperature: custom.leadScore >= 85 ? 'HOT' : custom.leadScore >= 60 ? 'WARM' : 'COLD',
-            demand: custom.demand || c.notes || 'Cần tư vấn dịch vụ',
-            estimatedValue: Number(custom.estimatedValue) || 10000000,
-            assignedTo: custom.assignedTo || 'Chưa phân công',
-            assignedAvatar: custom.assignedAvatar,
-            notes: c.notes || undefined,
-            createdAt: c.createdAt ? new Date(c.createdAt).toISOString() : new Date().toISOString(),
-            convertedCustomerId: custom.convertedCustomerId,
-            convertedDealId: custom.convertedDealId,
-          };
-        });
-      }
-    } catch {
-      // Prisma fallback
-    }
-
-    // Merge in-memory initial leads with DB leads, deduplicating by phone/id
-    const combinedMap = new Map<string, LeadItem>();
-    [...initialLeads, ...dbLeads].forEach((item) => {
-      const key = item.phone || item.id;
-      combinedMap.set(key, item);
-    });
-
-    let leads = Array.from(combinedMap.values());
+    const allLeads = await fetchDbLeads(workspaceId);
+    let leads = [...allLeads];
 
     // Apply filters
     if (source && source !== 'ALL') {
@@ -269,14 +235,11 @@ export async function GET(req: NextRequest) {
           l.phone.toLowerCase().includes(search) ||
           (l.email && l.email.toLowerCase().includes(search)) ||
           (l.company && l.company.toLowerCase().includes(search)) ||
-          l.demand.toLowerCase().includes(search)
+          (l.demand && l.demand.toLowerCase().includes(search)) ||
+          (l.notes && l.notes.toLowerCase().includes(search))
       );
     }
 
-    // Sort by createdAt desc
-    leads.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const allLeads = Array.from(combinedMap.values());
     const stats = computeLeadStats(allLeads);
 
     return NextResponse.json({
@@ -291,7 +254,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/crm/leads - Create, Bulk Import, or Convert Lead (F092)
+// POST /api/crm/leads - Create, Bulk Import, or Convert Lead (F092) - 100% Real DB Data
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -303,66 +266,46 @@ export async function POST(req: NextRequest) {
     const action = body.action || (body.leads ? 'bulk_import' : 'create');
     const workspaceId = (session.user as any).workspaceId;
 
-    // 1. BULK IMPORT LEADS FROM EXCEL/CSV
+    // 1. BULK IMPORT LEADS FROM EXCEL/CSV (100% DB INSERT)
     if (action === 'bulk_import') {
       const rawLeads = Array.isArray(body.leads) ? body.leads : [];
       if (rawLeads.length === 0) {
         return NextResponse.json({ error: 'Danh sách nhập trống' }, { status: 400 });
       }
 
-      const importedItems: LeadItem[] = [];
-
+      let importedCount = 0;
       for (const item of rawLeads) {
         if (!item.name && !item.phone) continue;
 
         const cleanPhone = String(item.phone || '').replace(/[\s\-\.\(\)]/g, '');
         const cleanName = item.name ? String(item.name).trim() : 'Khách tiềm năng';
-        const cleanSource = (item.source || 'IMPORT').toUpperCase() as LeadItem['source'];
+        const cleanSource = (item.source || 'IMPORT').toUpperCase();
 
-        const newLead: LeadItem = {
-          id: `lead_import_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          name: cleanName,
-          phone: cleanPhone || '0900000000',
-          email: item.email ? String(item.email).trim() : undefined,
-          company: item.company ? String(item.company).trim() : undefined,
-          source: cleanSource,
-          sourceDetail: item.sourceDetail || `Nhập từ file Excel: ${item.fileName || 'Danh_sach_leads.xlsx'}`,
-          status: 'NEW',
-          leadScore: Number(item.leadScore) || Math.floor(Math.random() * 20) + 70,
-          temperature: 'WARM',
-          demand: item.demand ? String(item.demand).trim() : 'Nhu cầu nhận tư vấn sản phẩm',
-          estimatedValue: Number(item.estimatedValue) || 10000000,
-          assignedTo: item.assignedTo || 'Nguyễn Văn A',
-          notes: item.notes || 'Nhập hàng loạt qua file Excel/CSV',
-          createdAt: new Date().toISOString(),
-        };
-
-        importedItems.push(newLead);
-        initialLeads.unshift(newLead);
-
-        // Optionally persist to DB
         try {
           await prisma.customer.create({
             data: {
               workspaceId: workspaceId || undefined,
-              name: newLead.name,
-              phone: newLead.phone,
-              email: newLead.email,
-              source: newLead.source,
-              tags: `Lead, F092, ${newLead.source}`,
-              notes: newLead.demand,
+              name: cleanName,
+              phone: cleanPhone || '0900000000',
+              email: item.email ? String(item.email).trim() : null,
+              source: cleanSource,
+              tags: `Lead, F092, ${cleanSource}`,
+              notes: item.demand ? String(item.demand).trim() : 'Nhập hàng loạt qua file Excel/CSV',
               customData: {
                 isLead: true,
-                leadStatus: newLead.status,
-                leadScore: newLead.leadScore,
-                demand: newLead.demand,
-                estimatedValue: newLead.estimatedValue,
-                assignedTo: newLead.assignedTo,
+                leadStatus: 'NEW',
+                leadScore: Number(item.leadScore) || 75,
+                demand: item.demand ? String(item.demand).trim() : 'Nhu cầu nhận tư vấn sản phẩm',
+                estimatedValue: Number(item.estimatedValue) || 10000000,
+                assignedTo: item.assignedTo || 'Chưa phân công',
+                company: item.company ? String(item.company).trim() : undefined,
+                sourceDetail: item.sourceDetail || `Nhập từ file: ${item.fileName || 'Danh_sach_leads.xlsx'}`,
               },
             },
           });
-        } catch {
-          // In-memory fallback
+          importedCount++;
+        } catch (insertErr) {
+          console.error('[API_LEADS_BULK_IMPORT_ITEM_ERROR]', insertErr);
         }
       }
 
@@ -370,189 +313,165 @@ export async function POST(req: NextRequest) {
         userId: session.user.id,
         action: 'IMPORT',
         entityType: 'LEAD',
-        entityId: `bulk_${importedItems.length}`,
-        metadata: { count: importedItems.length },
+        entityId: `bulk_${importedCount}`,
+        metadata: { count: importedCount },
       }).catch(() => null);
 
+      const allLeads = await fetchDbLeads(workspaceId);
       return NextResponse.json({
         success: true,
-        message: `Đã nhập thành công ${importedItems.length} khách hàng tiềm năng!`,
-        importedCount: importedItems.length,
-        leads: initialLeads,
-        stats: computeLeadStats(initialLeads),
+        message: `Đã nhập thành công ${importedCount} khách hàng tiềm năng vào cơ sở dữ liệu!`,
+        importedCount,
+        leads: allLeads,
+        stats: computeLeadStats(allLeads),
       });
     }
 
-    // 2. CONVERT LEAD TO CUSTOMER & DEAL (1-CLICK CONVERSION)
+    // 2. CONVERT LEAD TO CUSTOMER & DEAL (1-CLICK CONVERSION IN DB)
     if (action === 'convert') {
       const { id, dealTitle, dealValue, pipelineId, stageId } = body;
-      const targetLead = initialLeads.find((l) => l.id === id);
-
-      if (!targetLead) {
-        return NextResponse.json({ error: 'Không tìm thấy khách hàng tiềm năng' }, { status: 404 });
+      if (!id) {
+        return NextResponse.json({ error: 'Thiếu id khách hàng tiềm năng' }, { status: 400 });
       }
 
-      targetLead.status = 'CONVERTED';
+      const customer = await prisma.customer.findFirst({
+        where: {
+          id,
+          workspaceId: workspaceId || undefined,
+        },
+        include: { deals: true },
+      });
 
-      let customerId = targetLead.id;
-      let dealId = `deal_${Date.now()}`;
+      if (!customer) {
+        return NextResponse.json({ error: 'Không tìm thấy khách hàng tiềm năng trong dữ liệu' }, { status: 404 });
+      }
 
-      // Persist or link official Customer & Deal in DB
-      try {
-        let dbCustomer = await prisma.customer.findFirst({
-          where: {
-            OR: [
-              { id: targetLead.id },
-              ...(targetLead.phone ? [{ phone: targetLead.phone }] : []),
-            ],
-          },
+      const custom = (customer.customData as any) || {};
+
+      // Determine pipeline & stage for deal creation
+      let effectivePipelineId = pipelineId;
+      let effectiveStageId = stageId;
+
+      if (!effectivePipelineId || !effectiveStageId) {
+        const defaultPipeline = await prisma.pipeline.findFirst({
+          where: { workspaceId: workspaceId || undefined },
+          include: { stages: { orderBy: { sortOrder: 'asc' }, take: 1 } },
         });
 
-        if (!dbCustomer) {
-          dbCustomer = await prisma.customer.create({
-            data: {
-              workspaceId: workspaceId || undefined,
-              name: targetLead.name,
-              phone: targetLead.phone,
-              email: targetLead.email,
-              source: targetLead.source,
-              tags: 'Khách hàng chính thức, Chuyển đổi từ Lead F092',
-              notes: targetLead.notes,
-              customData: {
-                isCustomer: true,
-                convertedFromLeadId: targetLead.id,
-              },
-            },
-          });
+        if (defaultPipeline) {
+          effectivePipelineId = defaultPipeline.id;
+          effectiveStageId = defaultPipeline.stages[0]?.id;
         }
-
-        customerId = dbCustomer.id;
-
-        // If deal creation requested or default deal
-        const effectiveDealTitle = dealTitle || `Hợp đồng: ${targetLead.demand || targetLead.name}`;
-        const effectiveDealValue = Number(dealValue) || targetLead.estimatedValue || 15000000;
-
-        let effectivePipelineId = pipelineId;
-        let effectiveStageId = stageId;
-
-        if (!effectivePipelineId || !effectiveStageId) {
-          const defaultPipeline = await prisma.pipeline.findFirst({
-            where: { workspaceId: workspaceId || undefined },
-            include: { stages: { orderBy: { sortOrder: 'asc' }, take: 1 } },
-          });
-
-          if (defaultPipeline) {
-            effectivePipelineId = defaultPipeline.id;
-            effectiveStageId = defaultPipeline.stages[0]?.id;
-          }
-        }
-
-        if (effectivePipelineId && effectiveStageId) {
-          const newDeal = await prisma.deal.create({
-            data: {
-              workspaceId: workspaceId || undefined,
-              title: effectiveDealTitle,
-              value: effectiveDealValue,
-              customerId,
-              pipelineId: effectivePipelineId,
-              stageId: effectiveStageId,
-              status: 'OPEN',
-            },
-          });
-          dealId = newDeal.id;
-        }
-      } catch (dbErr) {
-        console.warn('[CONVERT_LEAD_DB_WARN]', dbErr);
       }
 
-      targetLead.convertedCustomerId = customerId;
-      targetLead.convertedDealId = dealId;
+      let dealId: string | undefined;
+      if (effectivePipelineId && effectiveStageId) {
+        const effectiveDealTitle = dealTitle || `Hợp đồng: ${custom.demand || customer.name || 'Khách hàng'}`;
+        const effectiveDealValue = Number(dealValue) || Number(custom.estimatedValue) || 15000000;
+
+        const newDeal = await prisma.deal.create({
+          data: {
+            workspaceId: workspaceId || undefined,
+            title: effectiveDealTitle,
+            value: effectiveDealValue,
+            customerId: customer.id,
+            pipelineId: effectivePipelineId,
+            stageId: effectiveStageId,
+            status: 'OPEN',
+          },
+        });
+        dealId = newDeal.id;
+      }
+
+      // Update tags and customData
+      const existingTags = customer.tags ? customer.tags.split(',').map((t) => t.trim()) : [];
+      if (!existingTags.includes('Khách hàng chính thức')) {
+        existingTags.push('Khách hàng chính thức');
+      }
+      if (!existingTags.includes('Chuyển đổi từ Lead F092')) {
+        existingTags.push('Chuyển đổi từ Lead F092');
+      }
+
+      const updatedCustomer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          tags: existingTags.join(', '),
+          customData: {
+            ...custom,
+            isCustomer: true,
+            leadStatus: 'CONVERTED',
+            convertedCustomerId: customer.id,
+            convertedDealId: dealId || custom.convertedDealId,
+          },
+        },
+        include: { deals: true },
+      });
 
       await recordAuditLog({
         userId: session.user.id,
         action: 'UPDATE',
         entityType: 'LEAD_CONVERT',
-        entityId: targetLead.id,
-        metadata: { customerId, dealId },
+        entityId: customer.id,
+        metadata: { customerId: customer.id, dealId },
       }).catch(() => null);
 
+      const allLeads = await fetchDbLeads(workspaceId);
       return NextResponse.json({
         success: true,
-        message: `Đã chuyển đổi thành công khách hàng "${targetLead.name}" thành Khách hàng chính thức & Tạo Cơ hội bán hàng!`,
-        lead: targetLead,
-        stats: computeLeadStats(initialLeads),
+        message: `Đã chuyển đổi thành công khách hàng "${customer.name}" thành Khách hàng chính thức & Tạo Cơ hội bán hàng!`,
+        lead: mapCustomerToLead(updatedCustomer),
+        stats: computeLeadStats(allLeads),
       });
     }
 
-    // 3. CREATE LEAD MANUALLY
+    // 3. CREATE LEAD MANUALLY (100% DB INSERT)
     const { name, phone, email, company, source, sourceDetail, demand, estimatedValue, assignedTo, notes } = body;
 
     if (!name && !phone) {
       return NextResponse.json({ error: 'Vui lòng cung cấp ít nhất Họ tên hoặc Số điện thoại' }, { status: 400 });
     }
 
-    const cleanSource = (source || 'MANUAL').toUpperCase() as LeadItem['source'];
+    const cleanSource = (source || 'INBOX').toUpperCase();
+    const cleanPhone = phone ? String(phone).replace(/[\s\-\.\(\)]/g, '') : '';
+    const cleanName = name ? String(name).trim() : 'Khách tiềm năng mới';
 
-    const newLead: LeadItem = {
-      id: `lead_${Date.now()}`,
-      name: name ? String(name).trim() : 'Khách tiềm năng mới',
-      phone: phone ? String(phone).replace(/[\s\-\.\(\)]/g, '') : '',
-      email: email ? String(email).trim() : undefined,
-      company: company ? String(company).trim() : undefined,
-      source: cleanSource,
-      sourceDetail: sourceDetail || `Kênh ${cleanSource} trực tiếp`,
-      status: 'NEW',
-      leadScore: Number(body.leadScore) || 80,
-      temperature: (Number(body.leadScore) || 80) >= 85 ? 'HOT' : 'WARM',
-      demand: demand ? String(demand).trim() : 'Cần tư vấn dịch vụ',
-      estimatedValue: Number(estimatedValue) || 10000000,
-      assignedTo: assignedTo || 'Nguyễn Văn A',
-      notes: notes ? String(notes).trim() : undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    initialLeads.unshift(newLead);
-
-    // Persist to DB
-    try {
-      await prisma.customer.create({
-        data: {
-          workspaceId: workspaceId || undefined,
-          name: newLead.name,
-          phone: newLead.phone,
-          email: newLead.email,
-          source: newLead.source,
-          tags: `Lead, F092, ${newLead.source}`,
-          notes: newLead.notes || newLead.demand,
-          customData: {
-            isLead: true,
-            leadStatus: newLead.status,
-            leadScore: newLead.leadScore,
-            demand: newLead.demand,
-            estimatedValue: newLead.estimatedValue,
-            assignedTo: newLead.assignedTo,
-            company: newLead.company,
-            sourceDetail: newLead.sourceDetail,
-          },
+    const newCustomer = await prisma.customer.create({
+      data: {
+        workspaceId: workspaceId || undefined,
+        name: cleanName,
+        phone: cleanPhone || '0900000000',
+        email: email ? String(email).trim() : null,
+        source: cleanSource,
+        tags: `Lead, F092, ${cleanSource}`,
+        notes: notes || demand || 'Khách tiềm năng mới tạo từ CRM',
+        customData: {
+          isLead: true,
+          leadStatus: 'NEW',
+          leadScore: Number(body.leadScore) || 80,
+          demand: demand ? String(demand).trim() : 'Cần tư vấn dịch vụ',
+          estimatedValue: Number(estimatedValue) || 10000000,
+          assignedTo: assignedTo || 'Chưa phân công',
+          company: company ? String(company).trim() : undefined,
+          sourceDetail: sourceDetail || `Kênh ${cleanSource} trực tiếp`,
         },
-      });
-    } catch {
-      // In-memory fallback
-    }
+      },
+      include: { deals: true },
+    });
 
     await recordAuditLog({
       userId: session.user.id,
       action: 'CREATE',
       entityType: 'LEAD',
-      entityId: newLead.id,
-      metadata: { name: newLead.name, source: newLead.source },
+      entityId: newCustomer.id,
+      metadata: { name: newCustomer.name, source: newCustomer.source },
     }).catch(() => null);
 
+    const allLeads = await fetchDbLeads(workspaceId);
     return NextResponse.json({
       success: true,
       message: 'Đã thêm khách hàng tiềm năng thành công!',
-      lead: newLead,
-      stats: computeLeadStats(initialLeads),
+      lead: mapCustomerToLead(newCustomer),
+      stats: computeLeadStats(allLeads),
     });
   } catch (error: any) {
     console.error('[API_LEADS_POST]', error);
@@ -560,7 +479,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/crm/leads - Update lead status or details (F092)
+// PATCH /api/crm/leads - Update lead status or details (F092) - 100% Real DB Update
 export async function PATCH(req: NextRequest) {
   try {
     const session = await auth();
@@ -588,133 +507,71 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Thiếu id khách hàng tiềm năng' }, { status: 400 });
     }
 
-    let targetLead = initialLeads.find((l) => l.id === id);
-    if (targetLead) {
-      if (name !== undefined) targetLead.name = String(name).trim();
-      if (phone !== undefined) targetLead.phone = String(phone).replace(/[\s\-\.\(\)]/g, '');
-      if (email !== undefined) targetLead.email = email ? String(email).trim() : undefined;
-      if (company !== undefined) targetLead.company = company ? String(company).trim() : undefined;
-      if (source !== undefined) targetLead.source = source;
-      if (sourceDetail !== undefined) targetLead.sourceDetail = sourceDetail;
-      if (status) targetLead.status = status;
-      if (notes !== undefined) targetLead.notes = notes;
-      if (assignedTo !== undefined) targetLead.assignedTo = assignedTo;
-      if (demand !== undefined) targetLead.demand = demand;
-      if (estimatedValue !== undefined) targetLead.estimatedValue = Number(estimatedValue);
+    const workspaceId = (session.user as any).workspaceId;
+
+    const existing = await prisma.customer.findFirst({
+      where: {
+        id,
+        workspaceId: workspaceId || undefined,
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Không tìm thấy khách hàng tiềm năng' }, { status: 404 });
     }
 
-    // Update in DB if exists
-    let dbCustomer: any = null;
-    try {
-      if (typeof (prisma as any).customer?.findUnique === 'function') {
-        const existing = await prisma.customer.findUnique({
-          where: { id },
-        });
-        if (existing) {
-          const existingCustom = (existing.customData as any) || {};
-          const updatedCustom = {
-            ...existingCustom,
-            isLead: true,
-            ...(company !== undefined && { company: company ? String(company).trim() : undefined }),
-            ...(sourceDetail !== undefined && { sourceDetail: sourceDetail ? String(sourceDetail).trim() : undefined }),
-            ...(demand !== undefined && { demand: demand ? String(demand).trim() : undefined }),
-            ...(estimatedValue !== undefined && { estimatedValue: Number(estimatedValue) }),
-            ...(assignedTo !== undefined && { assignedTo: assignedTo ? String(assignedTo).trim() : undefined }),
-            ...(status !== undefined && { leadStatus: status }),
-          };
+    const existingCustom = (existing.customData as any) || {};
+    const updatedCustom = {
+      ...existingCustom,
+      isLead: true,
+      ...(company !== undefined && { company: company ? String(company).trim() : undefined }),
+      ...(sourceDetail !== undefined && { sourceDetail: sourceDetail ? String(sourceDetail).trim() : undefined }),
+      ...(demand !== undefined && { demand: demand ? String(demand).trim() : undefined }),
+      ...(estimatedValue !== undefined && { estimatedValue: Number(estimatedValue) }),
+      ...(assignedTo !== undefined && { assignedTo: assignedTo ? String(assignedTo).trim() : undefined }),
+      ...(status !== undefined && { leadStatus: status }),
+    };
 
-          const cleanSource = source ? String(source).toUpperCase() : undefined;
+    const cleanSource = source ? String(source).toUpperCase() : undefined;
 
-          if (typeof (prisma as any).customer?.update === 'function') {
-            dbCustomer = await prisma.customer.update({
-              where: { id },
-              data: {
-                ...(name !== undefined && { name: String(name).trim() }),
-                ...(phone !== undefined && { phone: String(phone).replace(/[\s\-\.\(\)]/g, '') }),
-                ...(email !== undefined && { email: email ? String(email).trim() : null }),
-                ...(cleanSource !== undefined && {
-                  source: cleanSource,
-                  tags: `Lead, F092, ${cleanSource}`,
-                }),
-                ...(notes !== undefined && { notes: notes ? String(notes).trim() : null }),
-                customData: updatedCustom,
-              },
-            });
-          }
-        }
-      } else if (typeof (prisma as any).customer?.updateMany === 'function') {
-        await (prisma as any).customer.updateMany({
-          where: { id },
-          data: {
-            notes: notes !== undefined ? notes : undefined,
-            customData: {
-              leadStatus: status,
-              assignedTo,
-              demand,
-              estimatedValue,
-            },
-          },
-        });
-      }
-    } catch (dbErr) {
-      console.error('[API_LEADS_PATCH_DB]', dbErr);
-    }
-
-    if (!targetLead && dbCustomer) {
-      const custom = (dbCustomer.customData as any) || {};
-      const rawSource = (dbCustomer.source || 'INBOX').toUpperCase();
-      const cleanSource: LeadItem['source'] =
-        rawSource === 'FORM' || rawSource === 'LANDING_PAGE'
-          ? 'FORM'
-          : rawSource === 'IMPORT'
-          ? 'IMPORT'
-          : rawSource === 'REFERRAL'
-          ? 'REFERRAL'
-          : 'INBOX';
-
-      targetLead = {
-        id: dbCustomer.id,
-        name: dbCustomer.name || 'Khách tiềm năng mới',
-        phone: dbCustomer.phone || '',
-        email: dbCustomer.email || undefined,
-        company: custom.company || undefined,
-        source: cleanSource,
-        sourceDetail: custom.sourceDetail || `Kênh ${cleanSource}`,
-        status: custom.leadStatus || 'NEW',
-        leadScore: custom.leadScore || 80,
-        temperature: (custom.leadScore || 80) >= 85 ? 'HOT' : (custom.leadScore || 80) >= 60 ? 'WARM' : 'COLD',
-        demand: custom.demand || dbCustomer.notes || 'Cần tư vấn dịch vụ',
-        estimatedValue: Number(custom.estimatedValue) || 10000000,
-        assignedTo: custom.assignedTo || 'Chưa gán',
-        assignedAvatar: custom.assignedAvatar,
-        notes: dbCustomer.notes || undefined,
-        createdAt: dbCustomer.createdAt ? new Date(dbCustomer.createdAt).toISOString() : new Date().toISOString(),
-        convertedCustomerId: custom.convertedCustomerId,
-        convertedDealId: custom.convertedDealId,
-      };
-    }
+    const updatedCustomer = await prisma.customer.update({
+      where: { id: existing.id },
+      data: {
+        ...(name !== undefined && { name: String(name).trim() }),
+        ...(phone !== undefined && { phone: String(phone).replace(/[\s\-\.\(\)]/g, '') }),
+        ...(email !== undefined && { email: email ? String(email).trim() : null }),
+        ...(cleanSource !== undefined && {
+          source: cleanSource,
+          tags: `Lead, F092, ${cleanSource}`,
+        }),
+        ...(notes !== undefined && { notes: notes ? String(notes).trim() : null }),
+        customData: updatedCustom,
+      },
+      include: { deals: true },
+    });
 
     await recordAuditLog({
       userId: session.user.id,
       action: 'UPDATE',
       entityType: 'LEAD',
       entityId: id,
-      metadata: { name: targetLead?.name, status, assignedTo },
+      metadata: { name: updatedCustomer.name, status, assignedTo },
     }).catch(() => null);
 
+    const allLeads = await fetchDbLeads(workspaceId);
     return NextResponse.json({
       success: true,
       message: 'Đã cập nhật thông tin khách hàng tiềm năng thành công',
-      lead: targetLead,
-      stats: computeLeadStats(initialLeads),
+      lead: mapCustomerToLead(updatedCustomer),
+      stats: computeLeadStats(allLeads),
     });
   } catch (error: any) {
     console.error('[API_LEADS_PATCH]', error);
-    return NextResponse.json({ error: 'Lỗi cập nhật' }, { status: 500 });
+    return NextResponse.json({ error: 'Lỗi cập nhật khách hàng tiềm năng' }, { status: 500 });
   }
 }
 
-// DELETE /api/crm/leads - Delete lead (F092)
+// DELETE /api/crm/leads - Delete lead (F092) - 100% Real DB Delete
 export async function DELETE(req: NextRequest) {
   try {
     const session = await auth();
@@ -729,24 +586,30 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Thiếu id cần xóa' }, { status: 400 });
     }
 
-    initialLeads = initialLeads.filter((l) => l.id !== id);
+    const workspaceId = (session.user as any).workspaceId;
 
-    try {
-      await prisma.customer.deleteMany({
-        where: { id },
-      });
-    } catch {
-      // Ignore
-    }
+    await prisma.customer.deleteMany({
+      where: {
+        id,
+        workspaceId: workspaceId || undefined,
+      },
+    });
 
+    await recordAuditLog({
+      userId: session.user.id,
+      action: 'DELETE',
+      entityType: 'LEAD',
+      entityId: id,
+    }).catch(() => null);
+
+    const allLeads = await fetchDbLeads(workspaceId);
     return NextResponse.json({
       success: true,
-      message: 'Đã xóa khách hàng tiềm năng',
-      stats: computeLeadStats(initialLeads),
+      message: 'Đã xóa khách hàng tiềm năng thành công',
+      stats: computeLeadStats(allLeads),
     });
   } catch (error: any) {
     console.error('[API_LEADS_DELETE]', error);
-    return NextResponse.json({ error: 'Lỗi xóa' }, { status: 500 });
+    return NextResponse.json({ error: 'Lỗi xóa khách hàng tiềm năng' }, { status: 500 });
   }
 }
-

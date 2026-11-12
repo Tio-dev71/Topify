@@ -63,6 +63,7 @@ export async function GET() {
 
         return {
           id: m.id,
+          name: user?.name || m.email.split('@')[0],
           email: m.email,
           role: m.role,
           createdAt: m.createdAt,
@@ -74,6 +75,35 @@ export async function GET() {
         };
       })
     );
+
+    // Also include any workspace Users not in AllowedEmail (e.g. Workspace Owner / Creator)
+    try {
+      const workspaceUsers = await prisma.user.findMany({
+        where: workspaceId ? { workspaceId } : undefined,
+        select: { id: true, name: true, email: true, role: true, createdAt: true, licenseKey: true, password: true },
+      });
+
+      const existingEmails = new Set(enrichedMembers.map((m) => m.email.toLowerCase()));
+      for (const u of workspaceUsers) {
+        if (!existingEmails.has(u.email.toLowerCase())) {
+          enrichedMembers.push({
+            id: u.id,
+            name: u.name || u.email.split('@')[0],
+            email: u.email,
+            role: u.role,
+            createdAt: u.createdAt,
+            invitedBy: null,
+            userId: u.id,
+            licenseKey: u.licenseKey,
+            hasPassword: !!u.password,
+            defaultPassword: 'Topify@123',
+          });
+          existingEmails.add(u.email.toLowerCase());
+        }
+      }
+    } catch {
+      // Ignore user query failure
+    }
 
     return NextResponse.json({ members: enrichedMembers });
   } catch (error: any) {

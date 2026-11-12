@@ -229,7 +229,7 @@ export default function LeadsTab({
           sourceDetail: '',
           demand: '',
           estimatedValue: 10000000,
-          assignedTo: 'Nguyễn Văn A',
+          assignedTo: 'Chưa phân công',
           notes: '',
         });
         fetchLeads();
@@ -367,33 +367,8 @@ export default function LeadsTab({
       const text = event.target?.result as string;
       const lines = text.split('\n').filter((l) => l.trim() !== '');
       if (lines.length <= 1) {
-        // Fallback sample import rows
-        setPreviewLeads([
-          {
-            name: 'Vũ Thị Minh Hạnh',
-            phone: '0978665544',
-            email: 'minhhanh@vinaretail.com',
-            company: 'VinaRetail Group',
-            demand: 'Triển khai phần mềm quản lý 10 trang Fanpage và TikTok Shop',
-            estimatedValue: 30000000,
-          },
-          {
-            name: 'Nguyễn Thành Long',
-            phone: '0919223344',
-            email: 'thanhlong@logistics24.vn',
-            company: 'Logistics 24 Giờ',
-            demand: 'Gửi thông báo đơn hàng tự động qua ZNS và Facebook Messenger',
-            estimatedValue: 18000000,
-          },
-          {
-            name: 'Phạm Thu Trang',
-            phone: '0983112299',
-            email: 'thutrang@thoitrangeva.com',
-            company: 'Thời Trang EVA Design',
-            demand: 'Chốt đơn tự động qua livestream và gắn nhãn khách hàng tiềm năng',
-            estimatedValue: 25000000,
-          },
-        ]);
+        toast.error('File không chứa dữ liệu khách hàng nào (ngoài dòng tiêu đề)');
+        setPreviewLeads([]);
         return;
       }
 
@@ -938,8 +913,10 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                               className="w-6 h-6 rounded-full object-cover shrink-0"
                             />
                           ) : (
-                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0">
-                              {(lead.assignedTo || 'A').slice(0, 1)}
+                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0 text-slate-600 dark:text-slate-300">
+                              {lead.assignedTo && lead.assignedTo !== 'Chưa phân công'
+                                ? lead.assignedTo.slice(0, 1).toUpperCase()
+                                : '?'}
                             </div>
                           )}
                           <span className={`text-xs font-medium whitespace-nowrap ${
@@ -1166,11 +1143,7 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                         </option>
                       ))
                     ) : (
-                      <>
-                        <option value="yến ngô">yến ngô (Admin)</option>
-                        <option value="minh@topify.vn">minh@topify.vn (Nhân viên)</option>
-                        <option value="abc@company.com">abc@company.com (Nhân viên)</option>
-                      </>
+                      <option value="Chưa phân công">Chưa phân công</option>
                     )}
                   </select>
                 </div>
@@ -1682,11 +1655,7 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                         </option>
                       ))
                     ) : (
-                      <>
-                        <option value="yến ngô">yến ngô (Admin)</option>
-                        <option value="minh@topify.vn">minh@topify.vn (Nhân viên)</option>
-                        <option value="Nguyễn Văn A">Nguyễn Văn A</option>
-                      </>
+                      <option value="Chưa phân công">Chưa phân công</option>
                     )}
                   </select>
                 </div>
