@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { recordAuditLog } from '@/lib/audit-log';
 import { getFacebookDeepPosts, getFacebookPageInfo } from '@/lib/rapidapi/client';
 import { getVTV24CanonicalPosts, getTodayDynamicPosts } from '@/app/api/competitors/posts/sync/route';
+import { scrapeFacebookPostsUnified } from '@/lib/facebook-scraper';
 
 export const LIKE_UNIT_PRICE = 50; // 50 VNĐ / like
 export const COMMENT_UNIT_PRICE = 70; // 70 VNĐ / comment
@@ -131,7 +132,7 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     // ========================================================
-    // ACTION 1: SCAN LATEST POSTS FROM FACEBOOK PAGE/URL
+    // ACTION 1: SCAN LATEST POSTS FROM FACEBOOK PAGE/URL (Unified with F051)
     // ========================================================
     if (action === 'scan') {
       const { targetUrl, pageId, limit = 10 } = body;
@@ -139,197 +140,35 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Vui lòng cung cấp link Fanpage hoặc Page ID cần quét.' }, { status: 400 });
       }
 
-      const inputUrl = String(targetUrl || '').trim();
-      let scrapedPosts: any[] = [];
-      let pageName = 'Facebook Fanpage';
-
-      // 1. Check if user provided VTV24 or standard known page
-      const isVtv24 = inputUrl.toLowerCase().includes('vtv24') || (pageId && pageId.includes('vtv24'));
-
-      // Try rapidapi if available
-      try {
-        if (!isVtv24 && (inputUrl.includes('facebook.com') || inputUrl.includes('fb.watch') || inputUrl.includes('/groups/'))) {
-          const apiRes = await getFacebookDeepPosts(inputUrl, { maxPages: 2, minPosts: limit });
-          if (apiRes?.posts && apiRes.posts.length > 0) {
-            scrapedPosts = apiRes.posts.map((p: any, idx: number) => {
-              const pId = p.id || p.post_id || p.external_id || `fb_post_${Date.now()}_${idx}`;
-              const postUrl = p.url || p.post_url || p.link || (pId.startsWith('http') ? pId : `${inputUrl.replace(/\/$/, '')}/posts/${pId}`);
-              const rawDate = p.created_time || p.timestamp || p.time;
-              let postedAt = new Date();
-              if (rawDate) {
-                postedAt = typeof rawDate === 'number' || /^\d+$/.test(String(rawDate))
-                  ? new Date(parseInt(String(rawDate), 10) * 1000)
-                  : new Date(rawDate);
-              }
-              return {
-                id: pId,
-                externalId: pId,
-                url: postUrl,
-                content: p.message || p.text || p.content || p.caption || 'Bài viết không có nội dung văn bản',
-                mediaUrl: p.image || p.full_picture || p.media_url || p.thumbnail || null,
-                likesCount: Number(p.likes_count || p.reactions_count || Math.floor(Math.random() * 200) + 15),
-                commentsCount: Number(p.comments_count || Math.floor(Math.random() * 50) + 5),
-                sharesCount: Number(p.shares_count || Math.floor(Math.random() * 20) + 1),
-                postedAt: postedAt.toISOString(),
-              };
-            });
-          }
-        }
-      } catch (scrapeErr) {
-        console.warn('[FB_SCAN] Scrape API warning, falling back to local database or canonical posts:', scrapeErr);
-      }
-
-      // 2. Fallback to existing Competitor posts in DB
-      if (scrapedPosts.length === 0) {
-        const dbPosts = await prisma.competitorPost.findMany({
-          where: pageId ? { pageId } : (inputUrl ? { page: { url: { contains: inputUrl } } } : {}),
-          orderBy: { postedAt: 'desc' },
-          take: limit,
-          include: { page: { select: { name: true, url: true } } },
-        }).catch(() => []);
-
-        if (dbPosts.length > 0) {
-          pageName = dbPosts[0].page?.name || pageName;
-          scrapedPosts = dbPosts.map(p => ({
-            id: p.id,
-            externalId: p.externalId || p.id,
-            url: p.page?.url ? `${p.page.url}/posts/${p.externalId || p.id}` : `https://facebook.com/watch/?v=${p.id}`,
-            content: p.content || 'Bài viết trên Fanpage đối thủ',
-            mediaUrl: p.mediaUrl,
-            likesCount: p.likesCount,
-            commentsCount: p.commentsCount,
-            sharesCount: p.sharesCount,
-            postedAt: p.postedAt ? p.postedAt.toISOString() : new Date().toISOString(),
-          }));
+      let urlToScan = String(targetUrl || '').trim();
+      if (!urlToScan && pageId) {
+        const foundPage = await prisma.competitorPage.findUnique({ where: { id: pageId } });
+        if (foundPage?.url) {
+          urlToScan = foundPage.url;
         }
       }
 
-      // 3. Fallback: Parse target URL dynamically (Page, Group, Profile) instead of hardcoding VTV24!
-      if (scrapedPosts.length === 0) {
-        if (isVtv24) {
-          const canonical = getVTV24CanonicalPosts();
-          const dynamic = getTodayDynamicPosts('VTV24', inputUrl || 'https://facebook.com/tintucvtv24');
-          const merged = [...dynamic, ...canonical].slice(0, limit);
+      if (!urlToScan) {
+        return NextResponse.json({ error: 'Không tìm thấy liên kết Fanpage cần quét.' }, { status: 400 });
+      }
 
-          scrapedPosts = merged.map((p, idx) => ({
-            id: p.externalId || `canonical_${idx}`,
-            externalId: p.externalId,
-            url: `https://www.facebook.com/tintucvtv24/posts/${p.externalId}`,
-            content: p.content,
-            mediaUrl: p.mediaUrl,
-            likesCount: p.likesCount,
-            commentsCount: p.commentsCount,
-            sharesCount: p.sharesCount,
-            postedAt: p.postedAt.toISOString(),
-          }));
-          pageName = 'Trung tâm Tin tức VTV24';
-        } else {
-          // Dynamic URL extraction for ANY Group or Fanpage
-          const isGroup = inputUrl.includes('/groups/');
-          let entityName = 'Trang Facebook';
-          const baseUrl = inputUrl.replace(/\/$/, '');
+      const userWorkspaceId = (session.user as any).workspaceId;
+      const scrapeResult = await scrapeFacebookPostsUnified(urlToScan, limit, userWorkspaceId);
 
-          if (isGroup) {
-            const groupMatch = inputUrl.match(/\/groups\/([^/?#]+)/i);
-            const groupId = groupMatch ? groupMatch[1] : 'group';
-            // Format nice human-readable name from slug or ID
-            const readableName = groupId.replace(/[-_.]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            entityName = /^\d+$/.test(groupId) ? `Nhóm Facebook (${groupId})` : `Nhóm ${readableName}`;
-            pageName = entityName;
-          } else {
-            // Fanpage slug
-            const pageMatch = inputUrl.match(/facebook\.com\/([^/?#]+)/i);
-            const pageSlug = pageMatch && !['watch', 'reel', 'stories', 'share', 'permalink.php'].includes(pageMatch[1]) ? pageMatch[1] : 'Fanpage';
-            const readableName = pageSlug.replace(/[-_.]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            entityName = readableName;
-            pageName = entityName;
-          }
-
-          // Generate dynamic, contextually accurate posts belonging to THIS specific Group/Page
-          const sampleTemplates = isGroup ? [
-            {
-              title: `[Thảo luận] Chia sẻ kinh nghiệm và xu hướng mới nhất trong tuần`,
-              content: `Chào mọi người trong ${entityName}! Hôm nay admin tổng hợp một số thông tin cập nhật và giải pháp hữu ích cho cộng đồng. Mọi người cùng thảo luận và để lại ý kiến dưới phần bình luận nhé!`,
-              mediaUrl: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `[Q&A Hàng Tuần] Giải đáp thắc mắc và kết nối thành viên`,
-              content: `Bài viết ghim kết nối thành viên: Mọi người đang gặp khó khăn gì trong công việc hay vận hành thì comment bên dưới để các chuyên gia trong nhóm hỗ trợ ngay nhé!`,
-              mediaUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `[Tài Liệu Miễn Phí] Bộ tài liệu và quy trình chuẩn hoá nội bộ`,
-              content: `Admin vừa biên soạn xong tài liệu thực chiến cho nhóm. Link tải và hướng dẫn áp dụng chi tiết mình để ở comment đầu tiên, anh em thả tim và chấm (.) để nhận nhé!`,
-              mediaUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `[Khảo Sát Ý Kiến] Đánh giá hiệu quả chiến dịch tháng này`,
-              content: `Thăm dò ý kiến nhanh các thành viên trong nhóm về xu hướng thị trường và định hướng phát triển sắp tới. Hãy vote phương án phù hợp với bạn!`,
-              mediaUrl: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `[Thông Báo] Lịch sinh hoạt và chia sẻ chuyên sâu tuần tới`,
-              content: `Tuần này nhóm chúng ta sẽ có buổi giao lưu trực tuyến về các chủ đề hot. Thành viên quan tâm nhớ đăng ký trước để ban quản trị chuẩn bị tài liệu nhé.`,
-              mediaUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&auto=format&fit=crop&q=60',
-            },
-          ] : [
-            {
-              title: `Cập nhật sản phẩm & thông tin chính thức mới nhất`,
-              content: `Thông báo chính thức từ ${entityName}: Chúng tôi vừa ra mắt những cập nhật vượt bậc nhằm nâng cao trải nghiệm của quý khách hàng. Chi tiết xem tại liên kết bên dưới!`,
-              mediaUrl: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `Chương trình tri ân và ưu đãi đặc quyền cho khách hàng`,
-              content: `Đừng bỏ lỡ ưu đãi lớn nhất mùa này! Ưu đãi áp dụng cho tất cả khách hàng thân thiết tương tác với bài viết hôm nay.`,
-              mediaUrl: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `Chia sẻ câu chuyện thương hiệu và hành trình kiến tạo giá trị`,
-              content: `Mỗi bước tiến của chúng tôi đều có sự đồng hành của bạn. Hãy cùng nhìn lại những dấu mốc ấn tượng và định hướng sắp tới.`,
-              mediaUrl: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `Góc tư vấn chuyên môn: Tối ưu quy trình và tăng trưởng bền vững`,
-              content: `Bí quyết giúp nâng cao hiệu suất và đạt được mục tiêu nhanh chóng. Lưu lại bài viết và chia sẻ nếu thấy hữu ích nhé!`,
-              mediaUrl: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&auto=format&fit=crop&q=60',
-            },
-            {
-              title: `Giải đáp câu hỏi thường gặp (Q&A) từ cộng đồng`,
-              content: `Tổng hợp những câu hỏi được quan tâm nhiều nhất trong tuần qua và hướng dẫn xử lý nhanh gọn từ đội ngũ chăm sóc khách hàng.`,
-              mediaUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&auto=format&fit=crop&q=60',
-            },
-          ];
-
-          const now = Date.now();
-          scrapedPosts = Array.from({ length: Math.min(limit, 15) }).map((_, idx) => {
-            const tpl = sampleTemplates[idx % sampleTemplates.length];
-            const postId = `${100000000000000 + Math.floor(Math.random() * 900000000000000) + idx}`;
-            const postUrl = isGroup
-              ? `${baseUrl}/posts/${postId}`
-              : `${baseUrl}/posts/${postId}`;
-            const postDate = new Date(now - (idx * 3600 * 1000 * (idx + 2)));
-
-            return {
-              id: postId,
-              externalId: postId,
-              url: postUrl,
-              content: tpl.content,
-              mediaUrl: tpl.mediaUrl,
-              likesCount: Math.floor(Math.random() * 350) + 45,
-              commentsCount: Math.floor(Math.random() * 85) + 12,
-              sharesCount: Math.floor(Math.random() * 30) + 3,
-              postedAt: postDate.toISOString(),
-            };
-          });
-        }
+      if (scrapeResult.posts.length === 0) {
+        return NextResponse.json({
+          error: 'Không thể cào dữ liệu từ Fanpage này. Vui lòng kiểm tra lại liên kết hoặc Fanpage chưa có bài viết công khai.',
+        }, { status: 400 });
       }
 
       return NextResponse.json({
         success: true,
-        pageName,
-        targetUrl: inputUrl,
-        postsCount: scrapedPosts.length,
-        posts: scrapedPosts,
+        pageName: scrapeResult.pageName,
+        avatarUrl: scrapeResult.avatarUrl,
+        targetUrl: urlToScan,
+        postsCount: scrapeResult.posts.length,
+        posts: scrapeResult.posts,
+        source: scrapeResult.source,
         scannedAt: new Date().toISOString(),
       });
     }

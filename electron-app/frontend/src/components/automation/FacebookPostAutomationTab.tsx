@@ -71,6 +71,8 @@ export function FacebookPostAutomationTab() {
   const [scannedPosts, setScannedPosts] = useState<ScannedPost[]>([]);
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
   const [pageTitle, setPageTitle] = useState('');
+  const [scanSource, setScanSource] = useState<string>('');
+  const [trackedPages, setTrackedPages] = useState<Array<{ id: string; name: string; url: string }>>([]);
 
   // Auto-Interact Settings
   const [likesPerPost, setLikesPerPost] = useState(20);
@@ -107,7 +109,19 @@ export function FacebookPostAutomationTab() {
     fetchTasksAndStats();
     fetchAccounts();
     fetchWallet();
+    fetchTrackedPages();
   }, []);
+
+  const fetchTrackedPages = async () => {
+    try {
+      const res = await api.get('/competitors');
+      if (Array.isArray(res.data?.pages)) {
+        setTrackedPages(res.data.pages);
+      }
+    } catch (e) {
+      console.error('Failed to load tracked competitors', e);
+    }
+  };
 
   const fetchTasksAndStats = async () => {
     try {
@@ -169,9 +183,11 @@ export function FacebookPostAutomationTab() {
       if (res.data?.success && Array.isArray(res.data.posts)) {
         setScannedPosts(res.data.posts);
         setPageTitle(res.data.pageName || 'Fanpage Facebook');
+        setScanSource(res.data.source || '');
         // By default select all scanned posts
         setSelectedPostIds(new Set(res.data.posts.map((p: any) => p.id)));
-        toast.success(`Đã quét thành công ${res.data.posts.length} bài viết mới nhất!`);
+        toast.success(`Đã quét thành công ${res.data.posts.length} bài viết thực tế từ Facebook!`);
+        fetchTrackedPages();
       } else {
         toast.error('Không tìm thấy bài viết nào hoặc Fanpage ở chế độ riêng tư.');
       }
@@ -598,7 +614,24 @@ export function FacebookPostAutomationTab() {
 
           {/* Quick presets */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 font-medium">Gợi ý nhanh:</span>
+            <span className="text-xs text-gray-400 font-medium">Gợi ý & Đối thủ F051:</span>
+            {trackedPages.slice(0, 3).map(tp => (
+              <button
+                key={tp.id}
+                onClick={() => handlePresetSelect(tp.url)}
+                className="text-xs px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors font-semibold border border-rose-200 cursor-pointer flex items-center gap-1"
+                title={`Theo dõi từ F051: ${tp.url}`}
+              >
+                <span>🎯</span>
+                <span>{tp.name || 'Đối thủ F051'}</span>
+              </button>
+            ))}
+            <button
+              onClick={() => handlePresetSelect('https://www.facebook.com/StayeaPhuQuocOfficial/')}
+              className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors font-semibold border border-purple-200 cursor-pointer"
+            >
+              Stayea Phú Quốc
+            </button>
             <button
               onClick={() => handlePresetSelect('https://www.facebook.com/tintucvtv24')}
               className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-purple-50 hover:text-purple-700 transition-colors font-medium cursor-pointer"
@@ -610,12 +643,6 @@ export function FacebookPostAutomationTab() {
               className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-purple-50 hover:text-purple-700 transition-colors font-medium cursor-pointer"
             >
               VinFast VN
-            </button>
-            <button
-              onClick={() => handlePresetSelect('https://www.facebook.com/groups/congdongkinhdoanhtmdt')}
-              className="text-xs px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors font-medium border border-purple-200 cursor-pointer"
-            >
-              👥 Nhóm Kinh Doanh TMĐT
             </button>
           </div>
         </div>
@@ -679,9 +706,14 @@ export function FacebookPostAutomationTab() {
           </label>
 
           {pageTitle && (
-            <span className="text-purple-700 font-semibold bg-purple-50 px-3 py-1 rounded-lg">
-              Đang xem bài từ: {pageTitle}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-purple-700 font-semibold bg-purple-50 px-3 py-1 rounded-lg">
+                Đang xem bài từ: {pageTitle}
+              </span>
+              <span className="text-emerald-700 font-medium bg-emerald-50 px-2.5 py-1 rounded-lg text-[11px] border border-emerald-200">
+                ✓ Quét trực tiếp Facebook (Dữ liệu thật 100%)
+              </span>
+            </div>
           )}
         </div>
       </div>

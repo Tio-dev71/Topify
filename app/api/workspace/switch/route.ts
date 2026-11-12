@@ -45,6 +45,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Yêu cầu đăng nhập' }, { status: 401 });
     }
 
+    // Role check: Only SUPER_ADMIN and ADMIN are permitted to switch workspaces.
+    // STAFF is strictly bound to their assigned workspace.
+    if (user.role === 'STAFF') {
+      return NextResponse.json(
+        { error: 'Nhân viên (STAFF) không có quyền chuyển đổi không gian làm việc.' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { workspaceId } = body;
 

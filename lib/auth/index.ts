@@ -38,7 +38,7 @@ export const auth = async (...args: any[]) => {
       const token = authHeader.split(' ')[1];
       const decoded = jwtPackage.verify(token, JWT_SECRET) as any;
       let userId = decoded.sub || decoded.id;
-      let workspaceId = decoded.workspaceId || customWorkspaceId;
+      let workspaceId = decoded.workspaceId;
 
       if (userId) {
         // Verify user exists in database to prevent foreign key errors
@@ -57,10 +57,12 @@ export const auth = async (...args: any[]) => {
 
         if (dbUser) {
           userId = dbUser.id;
+          // Only SUPER_ADMIN and ADMIN are allowed to switch/override workspace via custom header.
+          // STAFF is strictly bound to their assigned workspace.
           if (customWorkspaceId && (dbUser.role === 'SUPER_ADMIN' || dbUser.role === 'ADMIN')) {
             workspaceId = customWorkspaceId;
           } else {
-            workspaceId = customWorkspaceId || decoded.workspaceId || dbUser.workspaceId;
+            workspaceId = decoded.workspaceId || dbUser.workspaceId;
           }
           if (!workspaceId) {
             workspaceId = await ensureUserWorkspace(userId, dbUser.name || decoded.name);
@@ -77,8 +79,13 @@ export const auth = async (...args: any[]) => {
         }
       }
 
-      if (!workspaceId && userId) {
+      const isPrivileged = decoded.role === 'SUPER_ADMIN' || decoded.role === 'ADMIN';
+      const effectiveWorkspaceId = (isPrivileged && customWorkspaceId) ? customWorkspaceId : (workspaceId || decoded.workspaceId);
+
+      if (!effectiveWorkspaceId && userId) {
         workspaceId = await ensureUserWorkspace(userId, decoded.name);
+      } else {
+        workspaceId = effectiveWorkspaceId;
       }
       
       return {
@@ -87,7 +94,7 @@ export const auth = async (...args: any[]) => {
           role: decoded.role,
           name: decoded.name,
           email: decoded.email,
-          workspaceId: customWorkspaceId || workspaceId,
+          workspaceId,
         }
       };
     } catch (e) {

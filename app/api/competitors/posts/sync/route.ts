@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { getFacebookDeepPosts, getRealTimeNews, getTiktokUserPosts } from '@/lib/rapidapi/client';
 import axios from 'axios';
 import { recordAuditLog } from '@/lib/audit-log';
+import { scrapeFacebookPostsUnified } from '@/lib/facebook-scraper';
 
 interface RawPostData {
   externalId: string;
@@ -287,61 +288,89 @@ export async function POST(req: NextRequest) {
                     (page.name && page.name.toLowerCase().includes('vtv24'));
 
     // -------------------------------------------------------------
-    // CASE 1: FACEBOOK FANPAGE / GROUP
+    // CASE 1: FACEBOOK FANPAGE / GROUP (Unified Scraper)
     // -------------------------------------------------------------
     if (isFacebook) {
       try {
-        const { posts: fbItems } = await getFacebookDeepPosts(targetUrl, {
-          maxPages: 12,
-          minPosts: 20,
-          stopBeforeDate: startOfTodayVN,
-        });
-
-        for (const item of fbItems) {
-          const externalId = (item.post_id || item.id || '').toString();
-          if (!externalId) continue;
-
-          const content = item.message || item.text || item.content || item.description || 'Bài viết không có tiêu đề';
-          
-          let mediaUrl: string | null = null;
-          if (item.image && typeof item.image === 'object' && item.image.uri) {
-            mediaUrl = item.image.uri;
-          } else if (typeof item.image === 'string') {
-            mediaUrl = item.image;
-          } else if (item.image_url) {
-            mediaUrl = item.image_url;
-          } else if (item.video_thumbnail) {
-            mediaUrl = item.video_thumbnail;
-          } else if (item.video_url) {
-            mediaUrl = item.video_url;
+        const fbResult = await scrapeFacebookPostsUnified(targetUrl, 20, page.workspaceId);
+        if (fbResult.posts.length > 0) {
+          if (fbResult.pageName && (!page.name || page.name === 'Facebook Fanpage' || page.name === 'Trang Facebook')) {
+            await prisma.competitorPage.update({
+              where: { id: pageId },
+              data: { name: fbResult.pageName, avatar: fbResult.avatarUrl || page.avatar }
+            }).catch(() => {});
           }
-
-          const likesCount = parseInt(item.reactions_count || item.likes || '0', 10);
-          const commentsCount = parseInt(item.comments_count || item.comments || '0', 10);
-          const sharesCount = parseInt(item.reshare_count || item.shares || '0', 10);
-
-          let postedAt = new Date();
-          const ts = item.timestamp || item.created_time || item.time;
-          if (ts) {
-            if (typeof ts === 'number' || /^\d+$/.test(String(ts))) {
-              postedAt = new Date(parseInt(String(ts), 10) * 1000);
-            } else {
-              postedAt = new Date(ts);
-            }
+          for (const item of fbResult.posts) {
+            collectedPosts.push({
+              externalId: item.externalId,
+              content: item.content,
+              mediaUrl: item.mediaUrl,
+              likesCount: item.likesCount,
+              commentsCount: item.commentsCount,
+              sharesCount: item.sharesCount,
+              postedAt: new Date(item.postedAt),
+            });
           }
-
-          collectedPosts.push({
-            externalId,
-            content,
-            mediaUrl,
-            likesCount: isNaN(likesCount) ? 0 : likesCount,
-            commentsCount: isNaN(commentsCount) ? 0 : commentsCount,
-            sharesCount: isNaN(sharesCount) ? 0 : sharesCount,
-            postedAt: !isNaN(postedAt.getTime()) ? postedAt : new Date(),
-          });
         }
       } catch (fbErr) {
-        console.warn('[COMPETITOR_SYNC] Facebook scraper failed, falling back to news/canonical data:', fbErr);
+        console.warn('[COMPETITOR_SYNC] Unified Facebook scraper failed:', fbErr);
+      }
+
+      // If Playwright unified scraper returned fewer than 5 posts, fallback to RapidAPI
+      if (collectedPosts.length < 5) {
+        try {
+          const { posts: fbItems } = await getFacebookDeepPosts(targetUrl, {
+            maxPages: 12,
+            minPosts: 20,
+            stopBeforeDate: startOfTodayVN,
+          });
+
+          for (const item of fbItems) {
+            const externalId = (item.post_id || item.id || '').toString();
+            if (!externalId || collectedPosts.some(cp => cp.externalId === externalId)) continue;
+
+            const content = item.message || item.text || item.content || item.description || 'Bài viết không có tiêu đề';
+            
+            let mediaUrl: string | null = null;
+            if (item.image && typeof item.image === 'object' && item.image.uri) {
+              mediaUrl = item.image.uri;
+            } else if (typeof item.image === 'string') {
+              mediaUrl = item.image;
+            } else if (item.image_url) {
+              mediaUrl = item.image_url;
+            } else if (item.video_thumbnail) {
+              mediaUrl = item.video_thumbnail;
+            } else if (item.video_url) {
+              mediaUrl = item.video_url;
+            }
+
+            const likesCount = parseInt(item.reactions_count || item.likes || '0', 10);
+            const commentsCount = parseInt(item.comments_count || item.comments || '0', 10);
+            const sharesCount = parseInt(item.reshare_count || item.shares || '0', 10);
+
+            let postedAt = new Date();
+            const ts = item.timestamp || item.created_time || item.time;
+            if (ts) {
+              if (typeof ts === 'number' || /^\d+$/.test(String(ts))) {
+                postedAt = new Date(parseInt(String(ts), 10) * 1000);
+              } else {
+                postedAt = new Date(ts);
+              }
+            }
+
+            collectedPosts.push({
+              externalId,
+              content,
+              mediaUrl,
+              likesCount: isNaN(likesCount) ? 0 : likesCount,
+              commentsCount: isNaN(commentsCount) ? 0 : commentsCount,
+              sharesCount: isNaN(sharesCount) ? 0 : sharesCount,
+              postedAt: !isNaN(postedAt.getTime()) ? postedAt : new Date(),
+            });
+          }
+        } catch (fbErr) {
+          console.warn('[COMPETITOR_SYNC] Facebook scraper fallback failed:', fbErr);
+        }
       }
     }
 
