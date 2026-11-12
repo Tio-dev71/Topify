@@ -799,18 +799,18 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-left border-collapse">
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-slate-700">
+            <table className="w-full min-w-[1280px] text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/75 dark:bg-slate-900/40 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Khách hàng tiềm năng</th>
-                  <th className="py-3 px-4">Liên hệ</th>
-                  <th className="py-3 px-4">Nguồn Lead (F092)</th>
-                  <th className="py-3 px-4">Nhu cầu & Giá trị dự kiến</th>
-                  <th className="py-3 px-4 text-center">Điểm (Score)</th>
-                  <th className="py-3 px-4">Trạng thái</th>
-                  <th className="py-3 px-4">Phụ trách</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
+                <tr className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/90 dark:bg-slate-900/50 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="py-3.5 px-4 min-w-[240px] whitespace-nowrap">Khách hàng tiềm năng</th>
+                  <th className="py-3.5 px-4 min-w-[170px] whitespace-nowrap">Liên hệ</th>
+                  <th className="py-3.5 px-4 min-w-[170px] whitespace-nowrap">Nguồn Lead (F092)</th>
+                  <th className="py-3.5 px-4 min-w-[210px] whitespace-nowrap">Nhu cầu & Giá trị dự kiến</th>
+                  <th className="py-3.5 px-4 min-w-[110px] text-center whitespace-nowrap">Điểm (Score)</th>
+                  <th className="py-3.5 px-4 min-w-[160px] whitespace-nowrap">Trạng thái</th>
+                  <th className="py-3.5 px-4 min-w-[170px] whitespace-nowrap">Phụ trách</th>
+                  <th className="py-3.5 px-4 min-w-[150px] text-right whitespace-nowrap">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 text-xs">
@@ -825,24 +825,24 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                       className="hover:bg-indigo-50/30 dark:hover:bg-slate-700/30 transition-colors group"
                     >
                       {/* Name & Company */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 min-w-[240px]">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
                             {lead.name ? lead.name.slice(0, 1).toUpperCase() : 'L'}
                           </div>
-                          <div>
-                            <div className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                          <div className="min-w-0">
+                            <div className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 whitespace-nowrap">
                               <span>{lead.name}</span>
                               {isConverted && (
-                                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300">
-                                  Khách hàng chính thức
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold shrink-0">
+                                  Đã chốt
                                 </span>
                               )}
                             </div>
                             {lead.company && (
-                              <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
-                                <Building className="w-3 h-3 text-slate-400" />
-                                <span>{lead.company}</span>
+                              <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                                <Building className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="truncate max-w-[180px]">{lead.company}</span>
                               </div>
                             )}
                           </div>
@@ -850,13 +850,13 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                       </td>
 
                       {/* Phone & Email */}
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <div className="font-mono font-medium text-slate-900 dark:text-slate-100">
+                      <td className="py-3.5 px-4 min-w-[170px]">
+                        <div className="space-y-0.5 whitespace-nowrap">
+                          <div className="font-mono font-semibold text-slate-900 dark:text-slate-100">
                             {lead.phone}
                           </div>
                           {lead.email && (
-                            <div className="text-[11px] text-slate-500 truncate max-w-[150px]">
+                            <div className="text-[11px] text-slate-500 truncate max-w-[160px]" title={lead.email}>
                               {lead.email}
                             </div>
                           )}
@@ -864,37 +864,37 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                       </td>
 
                       {/* Source */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 min-w-[170px]">
                         <div className="space-y-1">
                           <span
-                            className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-lg border font-bold ${sourceBadge.color}`}
+                            className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-0.5 rounded-lg border font-bold whitespace-nowrap ${sourceBadge.color}`}
                           >
-                            <SourceIcon className="w-3 h-3" />
+                            <SourceIcon className="w-3 h-3 shrink-0" />
                             <span>{sourceBadge.label}</span>
                           </span>
-                          <p className="text-[10px] text-slate-500 truncate max-w-[180px]" title={lead.sourceDetail}>
+                          <p className="text-[10px] text-slate-500 truncate max-w-[160px] whitespace-nowrap" title={lead.sourceDetail}>
                             {lead.sourceDetail}
                           </p>
                         </div>
                       </td>
 
                       {/* Demand & Estimated Value */}
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-1 max-w-[220px]">
-                          <p className="text-gray-900 dark:text-slate-200 font-medium line-clamp-2" title={lead.demand}>
+                      <td className="py-3.5 px-4 min-w-[210px]">
+                        <div className="space-y-1">
+                          <p className="text-gray-900 dark:text-slate-200 font-medium text-xs line-clamp-1 max-w-[200px]" title={lead.demand}>
                             {lead.demand}
                           </p>
-                          <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                          <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
                             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(lead.estimatedValue)}
                           </div>
                         </div>
                       </td>
 
                       {/* Score */}
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-3.5 px-4 min-w-[110px] text-center">
                         <div className="inline-flex flex-col items-center">
                           <span
-                            className={`text-xs font-black font-mono px-2 py-0.5 rounded-md ${
+                            className={`text-xs font-black font-mono px-2 py-0.5 rounded-md whitespace-nowrap ${
                               lead.leadScore >= 85
                                 ? 'bg-rose-50 text-rose-600 border border-rose-200'
                                 : lead.leadScore >= 60
@@ -904,19 +904,19 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                           >
                             {lead.leadScore}/100
                           </span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5 whitespace-nowrap">
                             {lead.temperature}
                           </span>
                         </div>
                       </td>
 
                       {/* Status Dropdown */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 min-w-[160px]">
                         <select
                           value={lead.status}
                           onChange={(e) => handleStatusChange(lead.id, e.target.value as any)}
                           aria-label={`Trạng thái của lead ${lead.name}`}
-                          className={`text-xs font-semibold py-1 px-2 rounded-lg border focus:outline-none cursor-pointer transition ${getStatusBadgeColor(
+                          className={`text-xs font-semibold py-1.5 px-2.5 rounded-xl border focus:outline-none cursor-pointer transition whitespace-nowrap w-full ${getStatusBadgeColor(
                             lead.status
                           )}`}
                         >
@@ -929,40 +929,42 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                       </td>
 
                       {/* Assignee */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
+                      <td className="py-3.5 px-4 min-w-[170px]">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
                           {lead.assignedAvatar ? (
                             <img
                               src={lead.assignedAvatar}
                               alt={lead.assignedTo || 'Staff'}
-                              className="w-6 h-6 rounded-full object-cover"
+                              className="w-6 h-6 rounded-full object-cover shrink-0"
                             />
                           ) : (
-                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold">
+                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold shrink-0">
                               {(lead.assignedTo || 'A').slice(0, 1)}
                             </div>
                           )}
-                          <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">
-                            {lead.assignedTo || 'Chưa gán'}
+                          <span className={`text-xs font-medium whitespace-nowrap ${
+                            lead.assignedTo ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 italic'
+                          }`}>
+                            {lead.assignedTo || 'Chưa phân công'}
                           </span>
                         </div>
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-3.5 px-4 min-w-[150px] text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                           {!isConverted ? (
                             <button
                               type="button"
                               onClick={() => handleOpenConvertModal(lead)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition cursor-pointer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
                               title="Chuyển đổi thành Khách hàng chính thức & Tạo Cơ hội bán hàng"
                             >
-                              <span>Chuyển đổi</span>
-                              <ArrowRight className="w-3 h-3" />
+                              <span className="whitespace-nowrap">Chuyển đổi</span>
+                              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                             </button>
                           ) : (
-                            <span className="text-[11px] text-emerald-600 font-bold px-2 py-0.5 bg-emerald-50 rounded-md border border-emerald-200">
+                            <span className="text-[11px] text-emerald-600 font-bold px-2.5 py-1 bg-emerald-50 rounded-lg border border-emerald-200 whitespace-nowrap">
                               ✓ Đã chốt
                             </span>
                           )}
@@ -970,7 +972,7 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                           <button
                             type="button"
                             onClick={() => handleOpenEditModal(lead)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-700 transition cursor-pointer shrink-0"
                             title="Chỉnh sửa thông tin lead"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -982,7 +984,7 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                               setSelectedLeadForDetail(lead);
                               setShowDetailModal(true);
                             }}
-                            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer shrink-0"
                             title="Xem chi tiết"
                           >
                             <Target className="w-3.5 h-3.5" />
@@ -991,7 +993,7 @@ Trần Tuấn Kiệt,0909887766,tuankiet@fnbviet.vn,Hệ thống F&B Sài Gòn,T
                           <button
                             type="button"
                             onClick={() => handleDeleteLead(lead.id, lead.name)}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition cursor-pointer"
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition cursor-pointer shrink-0"
                             title="Xóa lead"
                           >
                             <X className="w-3.5 h-3.5" />
