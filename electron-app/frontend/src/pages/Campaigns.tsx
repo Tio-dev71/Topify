@@ -266,6 +266,34 @@ export default function Campaigns() {
 
   // F135: Linked Content Plan
   const [newLinkedPlan, setNewLinkedPlan] = useState('plan_q4_ecommerce');
+  const [availableContentPlans, setAvailableContentPlans] = useState<Array<{ id: string; label: string; group?: string }>>([]);
+
+  useEffect(() => {
+    api.get('/content/plans')
+      .then((res) => {
+        if (res.data?.plans && Array.isArray(res.data.plans) && res.data.plans.length > 0) {
+          const list: Array<{ id: string; label: string; group?: string }> = [];
+          const groups = new Set<string>();
+          res.data.plans.forEach((p: any) => {
+            let g = '';
+            try {
+              const desc = typeof p.description === 'string' ? JSON.parse(p.description) : p.description;
+              g = desc?.planGroup;
+            } catch {}
+            if (g && !groups.has(g)) {
+              groups.add(g);
+              list.push({ id: `group_${g}`, label: `${g} (Nhóm kế hoạch Content Studio)`, group: g });
+            }
+            list.push({ id: p.id, label: `${p.title} - ${p.pillar?.title || 'Kế hoạch'}`, group: g });
+          });
+          if (list.length > 0) {
+            setAvailableContentPlans(list);
+            setNewLinkedPlan(list[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // F136: Campaign Assignee & Team Lead
   const [newAssignee, setNewAssignee] = useState('user_1');
@@ -1845,18 +1873,49 @@ export default function Campaigns() {
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-semibold text-[var(--color-foreground)]">Gắn với Kế hoạch Nội dung (Content Plan)</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-[var(--color-foreground)]">Gắn với Kế hoạch Nội dung (Content Plan)</label>
+                    <a
+                      href="/pillars"
+                      className="text-[10px] text-indigo-600 hover:text-indigo-700 font-semibold underline"
+                    >
+                      Quản lý Kế hoạch (Pillars &amp; Plans) &rarr;
+                    </a>
+                  </div>
                   <select
                     value={newLinkedPlan}
                     onChange={(e) => setNewLinkedPlan(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] focus:outline-none text-xs"
                   >
-                    <option value="plan_q4_ecommerce">Kế hoạch Quý 4 - Chiến Dịch E-commerce &amp; Livestream (Content Studio)</option>
-                    <option value="plan_brand_awareness">Kế hoạch Định Vị Thương Hiệu &amp; Video Viral TikTok</option>
-                    <option value="plan_holiday_sale">Kế hoạch Tri Ân Khách Hàng Dịp Lễ &amp; Mini-game</option>
-                    <option value="plan_new_launch">Kế hoạch Ra Mắt Dòng Sản Phẩm Mới</option>
+                    {availableContentPlans.length > 0 ? (
+                      <>
+                        <optgroup label="Kế hoạch thực tế (Content Studio &amp; Pillars)">
+                          {availableContentPlans.map((plan) => (
+                            <option key={plan.id} value={plan.id}>
+                              {plan.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Mẫu chiến dịch mẫu (Preset Plans)">
+                          <option value="plan_q4_ecommerce">Kế hoạch Quý 4 - Chiến Dịch E-commerce &amp; Livestream (Content Studio)</option>
+                          <option value="plan_brand_awareness">Kế hoạch Định Vị Thương Hiệu &amp; Video Viral TikTok</option>
+                          <option value="plan_holiday_sale">Kế hoạch Tri Ân Khách Hàng Dịp Lễ &amp; Mini-game</option>
+                          <option value="plan_new_launch">Kế hoạch Ra Mắt Dòng Sản Phẩm Mới</option>
+                        </optgroup>
+                      </>
+                    ) : (
+                      <>
+                        <option value="plan_q4_ecommerce">Kế hoạch Quý 4 - Chiến Dịch E-commerce &amp; Livestream (Content Studio)</option>
+                        <option value="plan_brand_awareness">Kế hoạch Định Vị Thương Hiệu &amp; Video Viral TikTok</option>
+                        <option value="plan_holiday_sale">Kế hoạch Tri Ân Khách Hàng Dịp Lễ &amp; Mini-game</option>
+                        <option value="plan_new_launch">Kế hoạch Ra Mắt Dòng Sản Phẩm Mới</option>
+                      </>
+                    )}
                   </select>
+                  <p className="text-[10px] text-gray-500">
+                    Kế hoạch nội dung được cấu hình và đồng bộ từ Module <strong>Chủ đề nội dung (Pillars &amp; Plans - F073)</strong> hoặc <strong>Content Studio (M2)</strong>.
+                  </p>
                 </div>
               </div>
 
