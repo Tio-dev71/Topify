@@ -293,17 +293,35 @@ export function formatFriendlyPublishError(rawError?: string | null, platform?: 
     };
   }
 
-  // 4. Token expired / Invalid grant / Auth error
+  // 4. Token expired / Invalid grant / Auth error / FAILED_NEED_REAUTH
   if (
-    (errLower.includes('token') && (errLower.includes('expired') || errLower.includes('invalid_grant'))) ||
+    errLower.includes('failed_need_reauth') ||
+    errLower.includes('oauthexception') ||
+    errLower.includes('checkpoint') ||
+    (errLower.includes('token') && (errLower.includes('expired') || errLower.includes('invalid') || errLower.includes('invalid_grant'))) ||
     errLower.includes('unauthorized') ||
     errLower.includes('status: expired') ||
     errLower.includes('hết hạn phiên đăng nhập')
   ) {
     return {
-      reason: 'Phiên kết nối mạng xã hội đã hết hạn hoặc bị thu hồi quyền truy cập.',
+      reason: 'Phiên kết nối mạng xã hội đã hết hạn, tài khoản bị checkpoint hoặc cần cấp lại quyền truy cập.',
       guide: 'Vui lòng vào mục "Cài đặt" -> "Kết nối mạng xã hội" để liên kết lại tài khoản này.',
       isTokenExpired: true,
+      raw: rawError,
+    };
+  }
+
+  // 4.1 Rate limit / Too many requests
+  if (
+    errLower.includes('rate_limited') ||
+    errLower.includes('rate limit') ||
+    errLower.includes('too many requests') ||
+    errLower.includes('user request limit reached')
+  ) {
+    return {
+      reason: 'Đã chạm giới hạn tần suất gửi bài lên mạng xã hội (Rate Limit).',
+      guide: 'Hệ thống đã tự động tạm dừng để bảo vệ tài khoản khỏi bị checkpoint. Bạn có thể thử lại sau ít phút hoặc dãn cách lịch đăng bài.',
+      isDailyLimit: true,
       raw: rawError,
     };
   }

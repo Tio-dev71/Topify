@@ -68,6 +68,7 @@ export function FacebookPostAutomationTab() {
   const [targetUrl, setTargetUrl] = useState('https://www.facebook.com/tintucvtv24');
   const [scanLimit, setScanLimit] = useState(10);
   const [scanning, setScanning] = useState(false);
+  const [scanStep, setScanStep] = useState('');
   const [scannedPosts, setScannedPosts] = useState<ScannedPost[]>([]);
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
   const [pageTitle, setPageTitle] = useState('');
@@ -173,6 +174,10 @@ export function FacebookPostAutomationTab() {
     }
 
     setScanning(true);
+    setScanStep('Đang kết nối Facebook...');
+    const t1 = setTimeout(() => setScanStep('Đang phân tích và trích xuất bài viết...'), 1800);
+    const t2 = setTimeout(() => setScanStep('Đang đồng bộ dữ liệu bài viết mới...'), 4000);
+
     try {
       const res = await api.post('/automation/facebook-posts', {
         action: 'scan',
@@ -195,7 +200,10 @@ export function FacebookPostAutomationTab() {
       console.error('Scan error', err);
       toast.error(err.response?.data?.error || 'Lỗi khi quét bài viết mới');
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setScanning(false);
+      setScanStep('');
     }
   };
 
@@ -679,7 +687,7 @@ export function FacebookPostAutomationTab() {
               {scanning ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Đang quét bài viết...</span>
+                  <span>{scanStep || 'Đang quét bài viết...'}</span>
                 </>
               ) : (
                 <>

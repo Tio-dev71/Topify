@@ -5,6 +5,23 @@ import { recordAuditLog } from '@/lib/audit-log';
 
 export const dynamic = 'force-dynamic';
 
+export type CustomFieldValueMap = Record<string, string | number | boolean | string[] | null | undefined>;
+
+export interface LeadCustomData extends CustomFieldValueMap {
+  isLead?: boolean;
+  isCustomer?: boolean;
+  leadStatus?: 'NEW' | 'CONTACTING' | 'QUALIFIED' | 'UNQUALIFIED' | 'CONVERTED';
+  leadScore?: number;
+  demand?: string;
+  estimatedValue?: number;
+  company?: string;
+  sourceDetail?: string;
+  assigneeName?: string;
+  assigneeAvatar?: string;
+  convertedCustomerId?: string;
+  convertedDealId?: string;
+}
+
 export interface LeadItem {
   id: string;
   name: string;
@@ -28,7 +45,7 @@ export interface LeadItem {
 
 // Helper to map DB Customer to LeadItem
 function mapCustomerToLead(c: any): LeadItem {
-  const custom = (c.customData as any) || {};
+  const custom = (c.customData as LeadCustomData) || {};
   const rawSource = String(c.source || '').toUpperCase();
   const tagsStr = String(c.tags || '').toUpperCase();
 
@@ -346,7 +363,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Không tìm thấy khách hàng tiềm năng trong dữ liệu' }, { status: 404 });
       }
 
-      const custom = (customer.customData as any) || {};
+      const custom = (customer.customData as LeadCustomData) || {};
 
       // Determine pipeline & stage for deal creation
       let effectivePipelineId = pipelineId;
@@ -365,47 +382,56 @@ export async function POST(req: NextRequest) {
       }
 
       let dealId: string | undefined;
-      if (effectivePipelineId && effectiveStageId) {
-        const effectiveDealTitle = dealTitle || `Hợp đồng: ${custom.demand || customer.name || 'Khách hàng'}`;
-        const effectiveDealValue = Number(dealValue) || Number(custom.estimatedValue) || 15000000;
 
-        const newDeal = await prisma.deal.create({
+      // Wrap lead-to-deal conversion in an atomic transaction
+      const { updatedCustomer, createdDealId } = await prisma.$transaction(async (tx) => {
+        let newDealId: string | undefined;
+        if (effectivePipelineId && effectiveStageId) {
+          const effectiveDealTitle = dealTitle || `Hợp đồng: ${custom.demand || customer.name || 'Khách hàng'}`;
+          const effectiveDealValue = Number(dealValue) || Number(custom.estimatedValue) || 15000000;
+
+          const newDeal = await tx.deal.create({
+            data: {
+              workspaceId: workspaceId || undefined,
+              title: effectiveDealTitle,
+              value: effectiveDealValue,
+              customerId: customer.id,
+              pipelineId: effectivePipelineId,
+              stageId: effectiveStageId,
+              status: 'OPEN',
+            },
+          });
+          newDealId = newDeal.id;
+        }
+
+        // Update tags and customData
+        const existingTags = customer.tags ? customer.tags.split(',').map((t) => t.trim()) : [];
+        if (!existingTags.includes('Khách hàng chính thức')) {
+          existingTags.push('Khách hàng chính thức');
+        }
+        if (!existingTags.includes('Chuyển đổi từ Lead F092')) {
+          existingTags.push('Chuyển đổi từ Lead F092');
+        }
+
+        const updated = await tx.customer.update({
+          where: { id: customer.id },
           data: {
-            workspaceId: workspaceId || undefined,
-            title: effectiveDealTitle,
-            value: effectiveDealValue,
-            customerId: customer.id,
-            pipelineId: effectivePipelineId,
-            stageId: effectiveStageId,
-            status: 'OPEN',
+            tags: existingTags.join(', '),
+            customData: {
+              ...custom,
+              isCustomer: true,
+              leadStatus: 'CONVERTED',
+              convertedCustomerId: customer.id,
+              convertedDealId: newDealId || custom.convertedDealId,
+            },
           },
+          include: { deals: true },
         });
-        dealId = newDeal.id;
-      }
 
-      // Update tags and customData
-      const existingTags = customer.tags ? customer.tags.split(',').map((t) => t.trim()) : [];
-      if (!existingTags.includes('Khách hàng chính thức')) {
-        existingTags.push('Khách hàng chính thức');
-      }
-      if (!existingTags.includes('Chuyển đổi từ Lead F092')) {
-        existingTags.push('Chuyển đổi từ Lead F092');
-      }
-
-      const updatedCustomer = await prisma.customer.update({
-        where: { id: customer.id },
-        data: {
-          tags: existingTags.join(', '),
-          customData: {
-            ...custom,
-            isCustomer: true,
-            leadStatus: 'CONVERTED',
-            convertedCustomerId: customer.id,
-            convertedDealId: dealId || custom.convertedDealId,
-          },
-        },
-        include: { deals: true },
+        return { updatedCustomer: updated, createdDealId: newDealId };
       });
+
+      dealId = createdDealId;
 
       await recordAuditLog({
         userId: session.user.id,
@@ -520,7 +546,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Không tìm thấy khách hàng tiềm năng' }, { status: 404 });
     }
 
-    const existingCustom = (existing.customData as any) || {};
+    const existingCustom = (existing.customData as LeadCustomData) || {};
     const updatedCustom = {
       ...existingCustom,
       isLead: true,

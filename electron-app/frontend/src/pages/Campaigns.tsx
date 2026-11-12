@@ -910,6 +910,11 @@ export default function Campaigns() {
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[var(--color-muted)] text-[var(--color-foreground)]">
                             {camp.objectiveType}
                           </span>
+                          {(camp as any).isDemo && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                              Bản mẫu demo
+                            </span>
+                          )}
                         </div>
                         <h3 className="font-bold text-sm text-[var(--color-foreground)] group-hover:text-[var(--color-primary)] transition-colors line-clamp-1">
                           {camp.name}

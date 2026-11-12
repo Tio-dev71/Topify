@@ -17,8 +17,8 @@ import {
 
 const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
-// In-memory fallback store
-let memoryCampaigns: EnrichedCampaign[] = [...SAMPLE_CAMPAIGNS];
+// In-memory fallback store for temporary unpersisted items
+let memoryCampaigns: EnrichedCampaign[] = [];
 
 async function resolveUserAndWorkspace(req: NextRequest) {
   let userId: string | null = null;
@@ -101,6 +101,22 @@ function mapFromPrismaStatus(prismaStatus: string, metadataStatus?: string): Cam
   return (prismaStatus as CampaignStatus) || 'PLANNING';
 }
 
+export interface CampaignMetadataJSON {
+  description?: string;
+  status?: string;
+  channels?: ChannelKey[];
+  kpis?: CampaignKPI[];
+  budgetCategories?: CampaignBudgetCategory[];
+  phases?: CampaignPhase[];
+  ownerName?: string;
+  ownerAvatar?: string;
+  tasksCount?: number;
+  completedTasksCount?: number;
+  assetsCount?: number;
+  contentPlanId?: string;
+  contentPlanTitle?: string;
+}
+
 function parseCampaignMetadata(dc: any, defaultOwnerName: string, defaultOwnerAvatar?: string): EnrichedCampaign {
   let descText = dc.description || '';
   let channels: ChannelKey[] = ['TIKTOK', 'FACEBOOK'];
@@ -116,7 +132,7 @@ function parseCampaignMetadata(dc: any, defaultOwnerName: string, defaultOwnerAv
 
   try {
     if (typeof descText === 'string' && descText.startsWith('{') && descText.endsWith('}')) {
-      const parsed = JSON.parse(descText);
+      const parsed: CampaignMetadataJSON = JSON.parse(descText);
       descText = parsed.description ?? '';
       metadataStatus = parsed.status;
       channels = Array.isArray(parsed.channels) ? parsed.channels : channels;
@@ -257,7 +273,10 @@ export async function GET(req: NextRequest) {
 
     // 3. Fallback to sample campaigns if still completely empty (initial discovery)
     if (campaigns.length === 0) {
-      campaigns = [...SAMPLE_CAMPAIGNS];
+      campaigns = SAMPLE_CAMPAIGNS.map((c) => ({
+        ...c,
+        isDemo: true,
+      }));
     }
 
     // 4. Apply filters

@@ -20,6 +20,48 @@ const activePublishingPostIds = new Set<string>();
 let isCheckingDuePosts = false;
 
 /**
+ * Identify authentication, token expiration, checkpoint, or permission revocation errors
+ */
+export function isAuthOrTokenError(errorMessage?: string | null): boolean {
+  if (!errorMessage) return false;
+  const msg = errorMessage.toLowerCase();
+  return (
+    msg.includes('failed_need_reauth') ||
+    msg.includes('oauthexception') ||
+    msg.includes('invalid oauth') ||
+    msg.includes('error validating access token') ||
+    msg.includes('session has expired') ||
+    msg.includes('invalid token') ||
+    msg.includes('token_expired') ||
+    msg.includes('token expired') ||
+    msg.includes('expired access token') ||
+    msg.includes('checkpoint') ||
+    msg.includes('unauthenticated') ||
+    msg.includes('chưa kết nối tài khoản') ||
+    msg.includes('401 unauthorized') ||
+    msg.includes('access token could not be decrypted') ||
+    msg.includes('invalid_grant') ||
+    msg.includes('code 190') // Meta OAuth error 190: Invalid access token
+  );
+}
+
+/**
+ * Identify rate limit or daily quota exceeded errors
+ */
+export function isRateLimitError(errorMessage?: string | null): boolean {
+  if (!errorMessage) return false;
+  const msg = errorMessage.toLowerCase();
+  return (
+    msg.includes('rate limit') ||
+    msg.includes('too many requests') ||
+    msg.includes('429') ||
+    msg.includes('user request limit reached') ||
+    msg.includes('quota exceeded') ||
+    msg.includes('uploadlimitexceeded')
+  );
+}
+
+/**
  * Execute publishing for a specific post directly without relying on BullMQ/Redis.
  */
 export async function publishPostDirectly(postId: string): Promise<{
@@ -178,7 +220,7 @@ export async function publishPostDirectly(postId: string): Promise<{
     }
 
     if (!socialAccount) {
-      const errMsg = `Chưa kết nối tài khoản ${provider}. Vui lòng vào Cài đặt để liên kết tài khoản trước khi đăng bài.`;
+      const errMsg = `[FAILED_NEED_REAUTH] Chưa kết nối tài khoản ${provider}. Vui lòng vào Cài đặt để liên kết tài khoản trước khi đăng bài.`;
       console.warn(`⚠️ [PublisherService] ${errMsg} (Post ${postId}, Platform: ${postPlatform.platform})`);
 
       await prisma.postPlatform.update({
@@ -197,6 +239,18 @@ export async function publishPostDirectly(postId: string): Promise<{
           message: errMsg,
         },
       });
+
+      if (post.workspaceId) {
+        await prisma.mentionAlert.create({
+          data: {
+            title: `⚠️ Thiếu kết nối tài khoản ${provider}`,
+            message: `Bài viết "${post.title?.slice(0, 50)}" chưa thể xuất bản do chưa liên kết tài khoản ${provider}.`,
+            keyword: 'FAILED_NEED_REAUTH',
+            workspaceId: post.workspaceId,
+            isRead: false,
+          },
+        }).catch(() => {});
+      }
 
       allSuccess = false;
       continue;
@@ -250,14 +304,10 @@ export async function publishPostDirectly(postId: string): Promise<{
         result = await publisher.publishReel(postForPlatform as Post, post.videoAsset, socialAccount, postPlatform);
       }
 
-      // Handle token expiration/auth errors
+      // Handle token expiration / OAuth / checkpoint errors
       const isChannelMissing = result.errorMessage?.includes('youtubeSignupRequired') || result.errorMessage?.includes('chưa tạo Kênh YouTube');
-      if (!result.success && !isChannelMissing && (result.errorMessage?.toLowerCase().includes('token') || result.errorMessage?.toLowerCase().includes('expired'))) {
-        await prisma.socialAccount.update({
-          where: { id: socialAccount.id },
-          data: { status: 'DISCONNECTED' },
-        }).catch(() => {});
-      }
+      const isAuthError = !isChannelMissing && isAuthOrTokenError(result.errorMessage);
+      const isRateLimit = isRateLimitError(result.errorMessage);
 
       if (result.success) {
         await prisma.postPlatform.update({
@@ -279,6 +329,80 @@ export async function publishPostDirectly(postId: string): Promise<{
         });
 
         anySuccess = true;
+      } else if (isAuthError) {
+        // Tag FAILED_NEED_REAUTH, disconnect socialAccount, send in-app notification
+        await prisma.socialAccount.update({
+          where: { id: socialAccount.id },
+          data: { status: 'DISCONNECTED' },
+        }).catch(() => {});
+
+        const taggedErrorMsg = `[FAILED_NEED_REAUTH] ${result.errorMessage || 'Lỗi xác thực: Token đã hết hạn hoặc bị checkpoint. Vui lòng kết nối lại tài khoản.'}`;
+
+        await prisma.postPlatform.update({
+          where: { id: postPlatform.id },
+          data: {
+            status: 'FAILED',
+            errorMessage: taggedErrorMsg,
+          },
+        });
+
+        await prisma.publishLog.create({
+          data: {
+            postId,
+            platform: postPlatform.platform,
+            level: 'ERROR',
+            message: taggedErrorMsg,
+            metadata: { isAuthError: true, errorCode: 'FAILED_NEED_REAUTH', provider },
+          },
+        });
+
+        if (post.workspaceId) {
+          await prisma.mentionAlert.create({
+            data: {
+              title: `⚠️ Lỗi xác thực tài khoản ${provider} - Cần kết nối lại`,
+              message: `Bài viết "${post.title?.slice(0, 60)}" không thể xuất bản lên ${postPlatform.platform} do token đăng nhập hết hạn hoặc tài khoản bị checkpoint. Vui lòng kết nối lại tài khoản trong Cài đặt.`,
+              keyword: 'FAILED_NEED_REAUTH',
+              workspaceId: post.workspaceId,
+              isRead: false,
+            },
+          }).catch(() => {});
+        }
+
+        allSuccess = false;
+      } else if (isRateLimit) {
+        const taggedErrorMsg = `[RATE_LIMITED] ${result.errorMessage || 'Đạt giới hạn tần suất đăng.'}`;
+
+        await prisma.postPlatform.update({
+          where: { id: postPlatform.id },
+          data: {
+            status: 'FAILED',
+            errorMessage: taggedErrorMsg,
+          },
+        });
+
+        await prisma.publishLog.create({
+          data: {
+            postId,
+            platform: postPlatform.platform,
+            level: 'WARN',
+            message: taggedErrorMsg,
+            metadata: { isRateLimit: true, provider },
+          },
+        });
+
+        if (post.workspaceId) {
+          await prisma.mentionAlert.create({
+            data: {
+              title: `⏳ Giới hạn tần suất đăng trên ${provider}`,
+              message: `Bài viết "${post.title?.slice(0, 60)}" chạm giới hạn tần suất đăng của nền tảng. Hệ thống khuyến nghị giãn cách thời gian đăng bài.`,
+              keyword: 'RATE_LIMIT',
+              workspaceId: post.workspaceId,
+              isRead: false,
+            },
+          }).catch(() => {});
+        }
+
+        allSuccess = false;
       } else {
         await prisma.postPlatform.update({
           where: { id: postPlatform.id },
@@ -303,11 +427,34 @@ export async function publishPostDirectly(postId: string): Promise<{
       const errMessage = error instanceof Error ? error.message : String(error);
       console.error(`❌ [PublisherService] Lỗi ngoại lệ khi đăng lên ${postPlatform.platform}:`, error);
 
+      const isAuthEx = isAuthOrTokenError(errMessage);
+      const isRateLim = isRateLimitError(errMessage);
+      const finalMsg = isAuthEx ? `[FAILED_NEED_REAUTH] ${errMessage}` : isRateLim ? `[RATE_LIMITED] ${errMessage}` : errMessage;
+
+      if (isAuthEx && socialAccount) {
+        await prisma.socialAccount.update({
+          where: { id: socialAccount.id },
+          data: { status: 'DISCONNECTED' },
+        }).catch(() => {});
+
+        if (post.workspaceId) {
+          await prisma.mentionAlert.create({
+            data: {
+              title: `⚠️ Lỗi xác thực tài khoản ${provider} - Cần kết nối lại`,
+              message: `Bài viết "${post.title?.slice(0, 60)}" gặp sự cố xác thực: ${errMessage}. Vui lòng kết nối lại tài khoản.`,
+              keyword: 'FAILED_NEED_REAUTH',
+              workspaceId: post.workspaceId,
+              isRead: false,
+            },
+          }).catch(() => {});
+        }
+      }
+
       await prisma.postPlatform.update({
         where: { id: postPlatform.id },
         data: {
           status: 'FAILED',
-          errorMessage: errMessage,
+          errorMessage: finalMsg,
         },
       });
 
@@ -316,8 +463,8 @@ export async function publishPostDirectly(postId: string): Promise<{
           postId,
           platform: postPlatform.platform,
           level: 'ERROR',
-          message: `Lỗi ngoại lệ: ${errMessage}`,
-          metadata: { stack: error instanceof Error ? error.stack : undefined },
+          message: `Lỗi ngoại lệ: ${finalMsg}`,
+          metadata: { stack: error instanceof Error ? error.stack : undefined, isAuthError: isAuthEx },
         },
       });
 
@@ -410,6 +557,13 @@ export async function publishPostDirectly(postId: string): Promise<{
 
   console.log(`✅ [PublisherService] Hoàn tất bài viết ${postId} với trạng thái: ${finalStatus}`);
   return { success: allSuccess, status: finalStatus };
+} catch (fatalErr: any) {
+  console.error(`💥 [PublisherService] Lỗi nghiêm trọng khi xuất bản bài viết ${postId}:`, fatalErr);
+  await prisma.post.update({
+    where: { id: postId },
+    data: { status: 'FAILED' },
+  }).catch(() => {});
+  return { success: false, status: 'FAILED', error: fatalErr?.message || String(fatalErr) };
 } finally {
   activePublishingPostIds.delete(postId);
 }
