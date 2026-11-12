@@ -215,7 +215,7 @@ export default function DataRetentionBackupTab() {
       createdAt: backup.createdAt,
       type: backup.type,
       exportedAt: new Date().toISOString(),
-      topifyVersion: '1.3.87',
+      topifyVersion: '1.3.88',
     };
     const blob = new Blob([JSON.stringify(dummyData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
