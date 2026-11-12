@@ -155,7 +155,7 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const id = body.dealId || body.id;
-    const { title, value, customerId, stageId, status, expectedClose, probability, ownerId } = body;
+    const { title, value, customerId, pipelineId, stageId, status, expectedClose, probability, ownerId } = body;
     const workspaceId = (session.user as any).workspaceId;
 
     if (!id) {
@@ -166,6 +166,7 @@ export async function PATCH(req: NextRequest) {
     if (title !== undefined) data.title = title;
     if (value !== undefined) data.value = typeof value === 'string' ? parseFloat(value) || 0 : value;
     if (customerId !== undefined) data.customerId = customerId || null;
+    if (pipelineId) data.pipelineId = pipelineId;
     if (stageId) data.stageId = stageId;
     if (probability !== undefined) data.probability = Math.min(100, Math.max(0, parseInt(probability) || 0));
     if (ownerId !== undefined) data.ownerId = ownerId || null;

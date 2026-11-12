@@ -168,6 +168,7 @@ export default function Deals() {
     id: '',
     title: '',
     value: 5000000,
+    pipelineId: '',
     stageId: '',
     probability: 80,
     status: 'OPEN' as 'OPEN' | 'WON' | 'LOST',
@@ -181,6 +182,7 @@ export default function Deals() {
   const [dealForm, setDealForm] = useState({
     title: '',
     value: 5000000,
+    pipelineId: '',
     stageId: 'stage_1',
     probability: 80,
     expectedClose: '',
@@ -245,10 +247,12 @@ export default function Deals() {
   const currentPipeline = pipelines.find(p => p.id === selectedPipelineId) || pipelines[0] || { stages: DEFAULT_STAGES };
 
   const handleOpenCreateModal = () => {
+    const pipe = pipelines.find(p => p.id === selectedPipelineId) || pipelines[0];
     setDealForm({
       title: '',
       value: 5000000,
-      stageId: currentPipeline.stages[0]?.id || 'stage_1',
+      pipelineId: pipe?.id || selectedPipelineId,
+      stageId: pipe?.stages[0]?.id || 'stage_1',
       probability: 80,
       expectedClose: '',
       ownerId: teamMembers[0]?.id || '',
@@ -278,11 +282,12 @@ export default function Deals() {
 
     setSubmitting(true);
     try {
+      const chosenPipeId = dealForm.pipelineId || selectedPipelineId;
       const payload: any = {
         title: dealForm.title.trim(),
         value: Number(dealForm.value) || 0,
         stageId: dealForm.stageId,
-        pipelineId: selectedPipelineId,
+        pipelineId: chosenPipeId,
         probability: Number(dealForm.probability) || 0,
         expectedClose: dealForm.expectedClose || undefined,
         ownerId: dealForm.ownerId || undefined,
@@ -313,7 +318,7 @@ export default function Deals() {
           title: dealForm.title,
           value: Number(dealForm.value),
           stageId: dealForm.stageId,
-          pipelineId: selectedPipelineId,
+          pipelineId: chosenPipeId,
           probability: Number(dealForm.probability) || 80,
           expectedClose: dealForm.expectedClose || null,
           status: 'OPEN',
@@ -324,6 +329,10 @@ export default function Deals() {
           owner: selectedMember ? { name: selectedMember.name, email: selectedMember.email } : { name: 'Yến Ngô' }
         };
         setDeals(prev => [newDeal, ...prev]);
+      }
+
+      if (chosenPipeId !== selectedPipelineId) {
+        setSelectedPipelineId(chosenPipeId);
       }
 
       if (res.data?.createdCustomer) {
@@ -343,11 +352,14 @@ export default function Deals() {
 
   const handleOpenEditModal = (deal: Deal) => {
     setEditingDeal(deal);
+    const pipeId = deal.pipelineId || (pipelines.find(p => p.stages.some(s => s.id === deal.stageId))?.id) || selectedPipelineId;
+    const pipe = pipelines.find(p => p.id === pipeId) || currentPipeline;
     setEditForm({
       id: deal.id,
       title: deal.title || '',
       value: deal.value || 0,
-      stageId: deal.stageId || currentPipeline.stages[0]?.id || '',
+      pipelineId: pipeId,
+      stageId: deal.stageId || pipe.stages[0]?.id || '',
       probability: deal.probability ?? 75,
       status: (deal.status as any) || 'OPEN',
       expectedClose: deal.expectedClose ? deal.expectedClose.slice(0, 10) : '',
@@ -370,6 +382,7 @@ export default function Deals() {
         id: editForm.id,
         title: editForm.title.trim(),
         value: Number(editForm.value) || 0,
+        pipelineId: editForm.pipelineId,
         stageId: editForm.stageId,
         probability: Number(editForm.probability),
         status: editForm.status,
@@ -381,6 +394,9 @@ export default function Deals() {
       if (res.data?.id || res.data?.deal?.id) {
         toast.success('Cập nhật cơ hội bán hàng thành công!');
         fetchDealsAndCustomers();
+        if (editForm.pipelineId && editForm.pipelineId !== selectedPipelineId) {
+          setSelectedPipelineId(editForm.pipelineId);
+        }
         setIsEditModalOpen(false);
         setEditingDeal(null);
       } else {
@@ -420,6 +436,12 @@ export default function Deals() {
     (d.customer?.phone && d.customer.phone.includes(searchTerm))
   );
 
+  const currentPipelineDeals = filteredDeals.filter(d => {
+    if (d.pipelineId && d.pipelineId === selectedPipelineId) return true;
+    if (!d.pipelineId && currentPipeline.stages.some(s => s.id === d.stageId)) return true;
+    return false;
+  });
+
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
 
   const filteredCustomers = customers.filter(c => {
@@ -449,6 +471,84 @@ export default function Deals() {
         </button>
       </div>
 
+      {/* ────────────────────────────────────────────────────────────────────────
+          KÊNH BÁN HÀNG & GIAI ĐOẠN SELECTOR (F094 / F095)
+          ──────────────────────────────────────────────────────────────────────── */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <Kanban className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                  Kênh Bán Hàng & Quy Trình Áp Dụng (F094)
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                  {pipelines.length} quy trình
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Chọn quy trình bán hàng để xem bảng phễu Kanban và các giai đoạn tương ứng (F095)
+              </p>
+            </div>
+          </div>
+
+          <div className="text-[11px] text-gray-500 font-medium bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+            Quy trình hiện tại: <strong className="text-indigo-600 font-bold">{currentPipeline.name}</strong> ({currentPipeline.stages.length} giai đoạn)
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
+          {pipelines.map((pipe) => {
+            const isSelected = pipe.id === selectedPipelineId;
+            const pipeDeals = deals.filter(d => d.pipelineId === pipe.id || (!d.pipelineId && pipe.stages.some(s => s.id === d.stageId)));
+            const pipeTotalValue = pipeDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+
+            return (
+              <button
+                key={pipe.id}
+                type="button"
+                onClick={() => setSelectedPipelineId(pipe.id)}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2.5 transition-all cursor-pointer shrink-0 border ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 border-indigo-600 text-white shadow-xs ring-2 ring-indigo-200'
+                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : 'bg-indigo-500'}`} />
+                  <span className="font-bold">{pipe.name}</span>
+                </div>
+
+                {pipe.isDefault && (
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
+                    isSelected ? 'bg-white/20 text-white border border-white/30' : 'bg-gray-100 text-gray-500 border border-gray-200'
+                  }`}>
+                    Mặc định
+                  </span>
+                )}
+
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold font-mono ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                }`}>
+                  {pipeDeals.length} deals • {pipe.stages?.length || 0} bước
+                </span>
+
+                {pipeTotalValue > 0 && (
+                  <span className={`text-[10px] font-mono hidden md:inline ${
+                    isSelected ? 'text-indigo-100' : 'text-emerald-600 font-semibold'
+                  }`}>
+                    {pipeTotalValue.toLocaleString('vi-VN')} ₫
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Search & Stats */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="relative w-full max-w-sm">
@@ -463,9 +563,12 @@ export default function Deals() {
         </div>
 
         <div className="text-xs text-gray-500 flex items-center gap-3">
-          <span>Tổng số cơ hội: <strong className="text-gray-900 font-semibold">{filteredDeals.length}</strong></span>
+          <span>
+            Cơ hội trong quy trình: <strong className="text-indigo-600 font-semibold">{currentPipelineDeals.length}</strong>
+            <span className="text-gray-400"> (Tổng hệ thống: {deals.length})</span>
+          </span>
           <span>•</span>
-          <span>Khách hàng CRM kết nối: <strong className="text-indigo-600 font-semibold">{customers.length}</strong></span>
+          <span>Khách hàng CRM kết nối: <strong className="text-gray-900 font-semibold">{customers.length}</strong></span>
         </div>
       </div>
 
@@ -475,7 +578,7 @@ export default function Deals() {
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 items-start scrollbar-thin">
           {currentPipeline.stages.map((stage) => {
-            const stageDeals = filteredDeals.filter(d => d.stageId === stage.id);
+            const stageDeals = currentPipelineDeals.filter(d => d.stageId === stage.id);
             const totalValue = stageDeals.reduce((sum, d) => sum + (d.value || 0), 0);
 
             return (
@@ -663,9 +766,9 @@ export default function Deals() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Giá trị hợp đồng (VNĐ) *</label>
+                  <label className="font-bold text-gray-700 block mb-1">Giá trị (VNĐ) *</label>
                   <input
                     type="number"
                     required
@@ -678,13 +781,40 @@ export default function Deals() {
                 </div>
 
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Giai đoạn ban đầu</label>
+                  <label className="font-bold text-gray-700 block mb-1">
+                    Quy trình (Pipeline) *
+                  </label>
+                  <select
+                    value={dealForm.pipelineId}
+                    onChange={(e) => {
+                      const newPipeId = e.target.value;
+                      const pipe = pipelines.find(p => p.id === newPipeId) || currentPipeline;
+                      setDealForm({
+                        ...dealForm,
+                        pipelineId: newPipeId,
+                        stageId: pipe.stages[0]?.id || '',
+                      });
+                    }}
+                    className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-500 text-xs bg-white font-medium"
+                  >
+                    {pipelines.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.isDefault ? '(Mặc định)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">
+                    Giai đoạn (Stage) *
+                  </label>
                   <select
                     value={dealForm.stageId}
                     onChange={e => setDealForm({ ...dealForm, stageId: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-500 text-xs bg-white"
+                    className="w-full p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-indigo-500 text-xs bg-white font-medium"
                   >
-                    {currentPipeline.stages.map(s => (
+                    {(pipelines.find(p => p.id === dealForm.pipelineId)?.stages || currentPipeline.stages).map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
@@ -1059,7 +1189,7 @@ export default function Deals() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Giá trị hợp đồng (VNĐ)
@@ -1075,6 +1205,31 @@ export default function Deals() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Quy trình (Pipeline)
+                  </label>
+                  <select
+                    value={editForm.pipelineId}
+                    onChange={(e) => {
+                      const newPipeId = e.target.value;
+                      const pipe = pipelines.find(p => p.id === newPipeId) || currentPipeline;
+                      setEditForm({
+                        ...editForm,
+                        pipelineId: newPipeId,
+                        stageId: pipe.stages[0]?.id || '',
+                      });
+                    }}
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 font-medium"
+                  >
+                    {pipelines.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.isDefault ? '(Mặc định)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Giai đoạn (Stage)
                   </label>
                   <select
@@ -1082,7 +1237,7 @@ export default function Deals() {
                     onChange={(e) => setEditForm({ ...editForm, stageId: e.target.value })}
                     className="w-full text-xs px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-900 font-medium"
                   >
-                    {currentPipeline.stages.map((s) => (
+                    {(pipelines.find(p => p.id === editForm.pipelineId)?.stages || currentPipeline.stages).map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
                       </option>
