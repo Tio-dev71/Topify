@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SAMPLE_ASSETS, CampaignAssetItem, AssetApprovalStatus, AssetType } from '@/lib/campaigns/engine';
 
-let memoryAssets: CampaignAssetItem[] = [...SAMPLE_ASSETS];
+let memoryAssets: CampaignAssetItem[] = [];
 
 // GET /api/campaigns/assets?campaignId=...
 export async function GET(req: NextRequest) {
@@ -9,9 +9,19 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const campaignId = url.searchParams.get('campaignId');
     const status = url.searchParams.get('status');
+    const includeDemo = url.searchParams.get('includeDemo') === 'true';
 
     let assets = [...memoryAssets];
-    if (campaignId) {
+    if (includeDemo || campaignId === 'camp_1') {
+      const existingIds = new Set(assets.map((a) => a.id));
+      for (const sample of SAMPLE_ASSETS) {
+        if (!existingIds.has(sample.id)) {
+          assets.push(sample);
+        }
+      }
+    }
+
+    if (campaignId && campaignId !== 'ALL') {
       assets = assets.filter((a) => a.campaignId === campaignId);
     }
     if (status && status !== 'ALL') {
@@ -112,6 +122,28 @@ export async function PATCH(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('[API_CAMPAIGN_ASSETS_PATCH]', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// DELETE /api/campaigns/assets?id=...
+export async function DELETE(req: NextRequest) {
+  try {
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'id là bắt buộc' }, { status: 400 });
+    }
+
+    memoryAssets = memoryAssets.filter((a) => a.id !== id);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Đã xóa tài nguyên thành công',
+    });
+  } catch (error: any) {
+    console.error('[API_CAMPAIGN_ASSETS_DELETE]', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -30,6 +30,8 @@ import {
   Users,
   Edit3,
   Upload,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -164,7 +166,10 @@ export default function Campaigns() {
       const cached = localStorage.getItem('topify_campaign_assets_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Clean out any stale demo assets belonging to 'camp_1' if workspace has real campaigns
+          return parsed.filter((a) => a.campaignId !== 'camp_1');
+        }
       }
     } catch {}
     return INITIAL_ASSETS;
@@ -207,6 +212,18 @@ export default function Campaigns() {
           if (merged.length > 0 && !selectedCampaignId) {
             setSelectedCampaignId(merged[0].id);
           }
+
+          // Clean assets cache from orphan campaigns
+          if (merged.length > 0) {
+            const validIds = new Set(merged.map((c) => c.id));
+            setAssets((prev) => {
+              const filtered = prev.filter((a) => validIds.has(a.campaignId) || a.campaignId === 'camp_default');
+              try {
+                localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(filtered));
+              } catch {}
+              return filtered;
+            });
+          }
         }
       } catch (err) {
         console.warn('Campaigns API fallback to state:', err);
@@ -219,29 +236,47 @@ export default function Campaigns() {
 
   // Fetch Assets when selectedCampaignId changes
   useEffect(() => {
-    const query = selectedCampaignId ? `?campaignId=${selectedCampaignId}` : '';
+    const query = selectedCampaignId && selectedCampaignId !== 'ALL' ? `?campaignId=${selectedCampaignId}` : '';
     api.get(`/campaigns/assets${query}`)
       .then((res) => {
         if (res.data?.success && Array.isArray(res.data?.assets)) {
           setAssets((prev) => {
             const serverAssets: CampaignAssetItem[] = res.data.assets;
-            const serverIds = new Set(serverAssets.map((a) => a.id));
-            const unpersisted = prev.filter((a) => !serverIds.has(a.id));
-            const merged = [...serverAssets, ...unpersisted];
+            let updated: CampaignAssetItem[];
+            if (!selectedCampaignId || selectedCampaignId === 'ALL') {
+              const serverIds = new Set(serverAssets.map((a) => a.id));
+              const unpersisted = prev.filter((a) => !serverIds.has(a.id) && a.campaignId !== 'camp_1');
+              updated = [...serverAssets, ...unpersisted];
+            } else {
+              const others = prev.filter((a) => a.campaignId !== selectedCampaignId && a.campaignId !== 'camp_1');
+              updated = [...others, ...serverAssets];
+            }
+
+            // Ensure no camp_1 leaks if camp_1 is not a real campaign
+            if (campaigns.length > 0) {
+              const validCampIds = new Set(campaigns.map((c) => c.id));
+              updated = updated.filter((a) => validCampIds.has(a.campaignId) || a.campaignId === 'camp_default');
+            }
+
             try {
-              localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(merged));
+              localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(updated));
             } catch {}
-            return merged;
+            return updated;
           });
         }
       })
       .catch(() => {});
-  }, [selectedCampaignId]);
+  }, [selectedCampaignId, campaigns]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterObjective, setFilterObjective] = useState<string>('ALL');
+
+  // Tab 3: Asset Filter & Search State (F137)
+  const [assetFilterStatus, setAssetFilterStatus] = useState<string>('ALL');
+  const [assetSearchQuery, setAssetSearchQuery] = useState<string>('');
+  const [targetAssetCampId, setTargetAssetCampId] = useState<string>('');
 
   // Create Campaign Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -581,10 +616,12 @@ export default function Campaigns() {
     toast.success('Đã tạo và lưu chiến dịch mới thành công (F133 - F136)!');
   };
 
-  // Handle Approve / Reject Asset (F137)
-  const handleUpdateAssetStatus = async (assetId: string, status: AssetApprovalStatus) => {
+  // Handle Approve / Reject / Re-evaluate Asset (F137)
+  const handleUpdateAssetStatus = async (assetId: string, status: AssetApprovalStatus, customNote?: string) => {
     const reviewerName = currentUser?.name ? `${currentUser.name} (Quản trị)` : 'Bạn (Quản trị)';
-    const finalNote = reviewNote || (status === 'APPROVED' ? 'Đã phê duyệt đạt chuẩn.' : 'Cần chỉnh sửa lại theo yêu cầu.');
+    const finalNote = customNote !== undefined 
+      ? customNote 
+      : reviewNote || (status === 'APPROVED' ? 'Đã phê duyệt đạt chuẩn.' : status === 'REJECTED' ? 'Cần chỉnh sửa lại theo yêu cầu.' : '');
 
     setAssets((prev) => {
       const updated = prev.map((a) => {
@@ -592,8 +629,8 @@ export default function Campaigns() {
           return {
             ...a,
             approvalStatus: status,
-            reviewedBy: reviewerName,
-            reviewerNote: finalNote,
+            reviewedBy: status === 'PENDING_REVIEW' ? undefined : reviewerName,
+            reviewerNote: status === 'PENDING_REVIEW' ? '' : finalNote,
             updatedAt: new Date().toISOString(),
           };
         }
@@ -609,8 +646,8 @@ export default function Campaigns() {
       await api.patch('/campaigns/assets', {
         id: assetId,
         approvalStatus: status,
-        reviewerNote: finalNote,
-        reviewedBy: reviewerName,
+        reviewerNote: status === 'PENDING_REVIEW' ? '' : finalNote,
+        reviewedBy: status === 'PENDING_REVIEW' ? '' : reviewerName,
       });
     } catch (err) {
       console.warn('Sync asset review status warning:', err);
@@ -618,7 +655,31 @@ export default function Campaigns() {
 
     setReviewAssetTarget(null);
     setReviewNote('');
-    toast.success(status === 'APPROVED' ? 'Đã phê duyệt tài nguyên!' : 'Đã từ chối tài nguyên và gửi phản hồi.');
+    if (status === 'APPROVED') {
+      toast.success('Đã phê duyệt tài nguyên!');
+    } else if (status === 'REJECTED') {
+      toast.success('Đã từ chối tài nguyên và gửi phản hồi.');
+    } else {
+      toast.success('Đã đưa tài nguyên về hàng đợi chờ duyệt lại!');
+    }
+  };
+
+  // Handle Delete Asset (F137)
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa tài nguyên này khỏi kho duyệt?')) return;
+    setAssets((prev) => {
+      const updated = prev.filter((a) => a.id !== assetId);
+      try {
+        localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    try {
+      await api.delete(`/campaigns/assets?id=${assetId}`);
+      toast.success('Đã xóa tài nguyên khỏi kho duyệt');
+    } catch (err) {
+      console.warn('Backend asset delete warning:', err);
+    }
   };
 
   // Handle Create / Upload New Creative Asset (F137)
@@ -627,8 +688,7 @@ export default function Campaigns() {
       toast.error('Vui lòng nhập tên tài nguyên');
       return;
     }
-    const targetCampId = selectedCampaignId || campaigns[0]?.id || 'camp_default';
-    const targetCamp = campaigns.find((c) => c.id === targetCampId);
+    const targetCampId = targetAssetCampId || (selectedCampaignId && selectedCampaignId !== 'ALL' ? selectedCampaignId : campaigns[0]?.id) || 'camp_default';
     const fileSizeNum = parseFloat(newAssetFileSize) ? Math.round(parseFloat(newAssetFileSize) * 1024 * 1024) : 2500000;
 
     const newAsset: CampaignAssetItem = {
@@ -796,9 +856,25 @@ export default function Campaigns() {
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Kho Asset & Luồng Duyệt (F137)</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-amber-500/10 text-amber-500">
-              {assets.filter((a) => a.approvalStatus === 'PENDING_REVIEW').length} chờ duyệt
-            </span>
+            {(() => {
+              const pendingCount = (
+                selectedCampaignId && selectedCampaignId !== 'ALL'
+                  ? assets.filter((a) => a.campaignId === selectedCampaignId)
+                  : assets
+              ).filter((a) => a.approvalStatus === 'PENDING_REVIEW').length;
+
+              return (
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium transition-all ${
+                    pendingCount > 0
+                      ? 'bg-amber-500/15 text-amber-500 font-bold border border-amber-500/25'
+                      : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
+                  }`}
+                >
+                  {pendingCount} chờ duyệt
+                </span>
+              );
+            })()}
           </button>
 
           <button
@@ -819,17 +895,23 @@ export default function Campaigns() {
           <div className="flex items-center gap-2 pb-2">
             <span className="text-xs text-[var(--color-muted-foreground)] font-medium">Chiến dịch:</span>
             <select
-              value={selectedCampaignId}
+              value={selectedCampaignId || 'ALL'}
               onChange={(e) => setSelectedCampaignId(e.target.value)}
-              className="px-2.5 py-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] text-xs text-[var(--color-foreground)] focus:outline-none max-w-xs truncate"
+              className="px-2.5 py-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] text-xs text-[var(--color-foreground)] focus:outline-none max-w-xs truncate font-medium"
             >
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              <option value="ALL">
+                🌟 Tất cả chiến dịch ({assets.filter((a) => a.approvalStatus === 'PENDING_REVIEW').length} chờ duyệt)
+              </option>
+              {campaigns.map((c) => {
+                const cPending = assets.filter((a) => a.campaignId === c.id && a.approvalStatus === 'PENDING_REVIEW').length;
+                return (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {cPending > 0 ? `(${cPending} chờ duyệt)` : ''}
+                  </option>
+                );
+              })}
             </select>
-            {currentCampaign && (
+            {currentCampaign && selectedCampaignId !== 'ALL' && (
               <button
                 onClick={() => openEditModal(currentCampaign)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] text-xs font-semibold transition-all"
@@ -1295,14 +1377,18 @@ export default function Campaigns() {
       {/* TAB 3: CREATIVE ASSETS & APPROVAL (F137) */}
       {/* ==================================================================== */}
       {activeTab === 'assets' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-bold text-[var(--color-foreground)] flex items-center gap-2">
                 <span>Kho Tài Nguyên Sáng Tạo & Luồng Duyệt (Asset & Approval Flow - F137)</span>
-                {currentCampaign && (
+                {selectedCampaignId && selectedCampaignId !== 'ALL' && currentCampaign ? (
                   <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-semibold border border-indigo-500/20">
                     {currentCampaign.name}
+                  </span>
+                ) : (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 font-semibold border border-indigo-500/20">
+                    Toàn bộ chiến dịch ({campaigns.length})
                   </span>
                 )}
               </h3>
@@ -1311,7 +1397,10 @@ export default function Campaigns() {
               </p>
             </div>
             <button
-              onClick={() => setIsAddAssetModalOpen(true)}
+              onClick={() => {
+                setTargetAssetCampId(selectedCampaignId && selectedCampaignId !== 'ALL' ? selectedCampaignId : (campaigns[0]?.id || ''));
+                setIsAddAssetModalOpen(true);
+              }}
               className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 transition-all flex items-center gap-1.5 w-max"
             >
               <Upload className="w-4 h-4" />
@@ -1319,131 +1408,285 @@ export default function Campaigns() {
             </button>
           </div>
 
-          {/* Asset List Table */}
+          {/* Sub-bar: Status Tabs & Search Filter */}
           {(() => {
-            const displayedAssets = selectedCampaignId
+            const inScopeAssets = selectedCampaignId && selectedCampaignId !== 'ALL'
               ? assets.filter((a) => a.campaignId === selectedCampaignId)
               : assets;
 
+            const pendingCount = inScopeAssets.filter((a) => a.approvalStatus === 'PENDING_REVIEW').length;
+            const approvedCount = inScopeAssets.filter((a) => a.approvalStatus === 'APPROVED').length;
+            const rejectedCount = inScopeAssets.filter((a) => a.approvalStatus === 'REJECTED').length;
+
+            const filteredByStatus = assetFilterStatus === 'ALL'
+              ? inScopeAssets
+              : inScopeAssets.filter((a) => a.approvalStatus === assetFilterStatus);
+
+            const displayedAssets = filteredByStatus.filter((a) => {
+              if (!assetSearchQuery.trim()) return true;
+              const q = assetSearchQuery.toLowerCase();
+              return (
+                a.name.toLowerCase().includes(q) ||
+                (a.reviewerNote && a.reviewerNote.toLowerCase().includes(q)) ||
+                (a.reviewedBy && a.reviewedBy.toLowerCase().includes(q)) ||
+                a.type.toLowerCase().includes(q)
+              );
+            });
+
             return (
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[var(--color-muted)]/50 text-[var(--color-muted-foreground)] font-semibold border-b border-[var(--color-border)]">
-                    <tr>
-                      <th className="py-3 px-4">Tên tài nguyên</th>
-                      <th className="py-3 px-3">Loại tệp</th>
-                      <th className="py-3 px-3">Kích thước</th>
-                      <th className="py-3 px-3">Trạng thái duyệt</th>
-                      <th className="py-3 px-3">Người duyệt & Ghi chú</th>
-                      <th className="py-3 px-4 text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-border)]">
-                    {displayedAssets.map((ast) => (
-                      <tr key={ast.id} className="hover:bg-[var(--color-muted)]/30 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
-                              {ast.type === 'VIDEO' ? <Video className="w-4 h-4" /> : ast.type === 'DOCUMENT' ? <FileText className="w-4 h-4" /> : <Image className="w-4 h-4" />}
-                            </div>
-                            <div>
-                              <div className="font-semibold text-[var(--color-foreground)]">{ast.name}</div>
-                              <div className="text-[10px] text-[var(--color-muted-foreground)]">
-                                Đăng tải: {formatDateWithYear(ast.uploadedAt)}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)]">
+                  {/* Status Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => setAssetFilterStatus('ALL')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        assetFilterStatus === 'ALL'
+                          ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                          : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+                      }`}
+                    >
+                      Tất cả ({inScopeAssets.length})
+                    </button>
 
-                        <td className="py-3 px-3">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--color-muted)] text-[var(--color-foreground)]">
-                            {ast.type}
-                          </span>
-                        </td>
+                    <button
+                      onClick={() => setAssetFilterStatus('PENDING_REVIEW')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        assetFilterStatus === 'PENDING_REVIEW'
+                          ? 'bg-amber-500 text-white shadow-sm font-semibold'
+                          : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Chờ duyệt ({pendingCount})</span>
+                    </button>
 
-                        <td className="py-3 px-3 text-[var(--color-muted-foreground)]">
-                          {Math.round(ast.fileSize / 1024 / 1024 * 10) / 10} MB
-                        </td>
+                    <button
+                      onClick={() => setAssetFilterStatus('APPROVED')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        assetFilterStatus === 'APPROVED'
+                          ? 'bg-emerald-500 text-white shadow-sm font-semibold'
+                          : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Đã duyệt ({approvedCount})</span>
+                    </button>
 
-                        <td className="py-3 px-3">
-                          {ast.approvalStatus === 'APPROVED' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1 w-max">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Đã duyệt</span>
-                            </span>
-                          ) : ast.approvalStatus === 'REJECTED' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center gap-1 w-max">
-                              <X className="w-3 h-3" />
-                              <span>Từ chối</span>
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1 w-max">
-                              <Clock className="w-3 h-3" />
-                              <span>Chờ duyệt</span>
-                            </span>
-                          )}
-                        </td>
+                    <button
+                      onClick={() => setAssetFilterStatus('REJECTED')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        assetFilterStatus === 'REJECTED'
+                          ? 'bg-rose-500 text-white shadow-sm font-semibold'
+                          : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
+                      }`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Từ chối ({rejectedCount})</span>
+                    </button>
+                  </div>
 
-                        <td className="py-3 px-3">
-                          {ast.reviewedBy ? (
-                            <div className="space-y-0.5">
-                              <div className="font-medium text-[var(--color-foreground)]">{ast.reviewedBy}</div>
-                              <div className="text-[10px] text-[var(--color-muted-foreground)] line-clamp-1 italic">
-                                &quot;{ast.reviewerNote}&quot;
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-[var(--color-muted-foreground)] italic">Chưa duyệt</span>
-                          )}
-                        </td>
+                  {/* Asset Search Bar */}
+                  <div className="relative min-w-[200px] max-w-xs flex-1">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
+                    <input
+                      type="text"
+                      placeholder="Tìm asset, định dạng, ghi chú..."
+                      value={assetSearchQuery}
+                      onChange={(e) => setAssetSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+                    />
+                  </div>
+                </div>
 
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {(ast.approvalStatus === 'PENDING_REVIEW' || ast.approvalStatus === 'DRAFT') && (
-                              <>
-                                <button
-                                  onClick={() => handleUpdateAssetStatus(ast.id, 'APPROVED')}
-                                  className="px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
-                                  title="Duyệt nhanh"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Duyệt</span>
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setReviewAssetTarget(ast);
-                                    setReviewNote('');
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
-                                  title="Từ chối kèm góp ý"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                  <span>Từ chối</span>
-                                </button>
-                              </>
-                            )}
-                            <a
-                              href={ast.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-1 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
-                              title="Xem tệp"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {displayedAssets.length === 0 && (
+                {/* Asset List Table */}
+                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[var(--color-muted)]/50 text-[var(--color-muted-foreground)] font-semibold border-b border-[var(--color-border)]">
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-xs text-[var(--color-muted-foreground)] italic">
-                          Chưa có tài nguyên nào cho chiến dịch này. Bấm &quot;Tải lên Asset mới&quot; để thêm tệp sáng tạo vào luồng duyệt!
-                        </td>
+                        <th className="py-3 px-4">Tên tài nguyên</th>
+                        {(!selectedCampaignId || selectedCampaignId === 'ALL') && (
+                          <th className="py-3 px-3">Chiến dịch</th>
+                        )}
+                        <th className="py-3 px-3">Loại tệp</th>
+                        <th className="py-3 px-3">Kích thước</th>
+                        <th className="py-3 px-3">Trạng thái duyệt</th>
+                        <th className="py-3 px-3">Người duyệt & Ghi chú</th>
+                        <th className="py-3 px-4 text-right">Thao tác</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-border)]">
+                      {displayedAssets.map((ast) => {
+                        const parentCamp = campaigns.find((c) => c.id === ast.campaignId);
+
+                        return (
+                          <tr key={ast.id} className="hover:bg-[var(--color-muted)]/30 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0">
+                                  {ast.type === 'VIDEO' ? <Video className="w-4 h-4" /> : ast.type === 'DOCUMENT' ? <FileText className="w-4 h-4" /> : <Image className="w-4 h-4" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-[var(--color-foreground)] truncate max-w-xs" title={ast.name}>
+                                    {ast.name}
+                                  </div>
+                                  <div className="text-[10px] text-[var(--color-muted-foreground)]">
+                                    Đăng tải: {formatDateWithYear(ast.uploadedAt)}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {(!selectedCampaignId || selectedCampaignId === 'ALL') && (
+                              <td className="py-3 px-3">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 whitespace-nowrap">
+                                  {parentCamp?.name || 'Chiến dịch khác'}
+                                </span>
+                              </td>
+                            )}
+
+                            <td className="py-3 px-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--color-muted)] text-[var(--color-foreground)]">
+                                {ast.type}
+                              </span>
+                            </td>
+
+                            <td className="py-3 px-3 text-[var(--color-muted-foreground)] whitespace-nowrap">
+                              {Math.round(ast.fileSize / 1024 / 1024 * 10) / 10} MB
+                            </td>
+
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              {ast.approvalStatus === 'APPROVED' ? (
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1 w-max">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>Đã duyệt</span>
+                                </span>
+                              ) : ast.approvalStatus === 'REJECTED' ? (
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-500 border border-rose-500/20 flex items-center gap-1 w-max">
+                                  <X className="w-3 h-3" />
+                                  <span>Từ chối</span>
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1 w-max animate-pulse">
+                                  <Clock className="w-3 h-3" />
+                                  <span>Chờ duyệt</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3">
+                              {ast.reviewedBy ? (
+                                <div className="space-y-0.5 max-w-xs">
+                                  <div className="font-medium text-[var(--color-foreground)]">{ast.reviewedBy}</div>
+                                  <div className="text-[10px] text-[var(--color-muted-foreground)] line-clamp-1 italic" title={ast.reviewerNote}>
+                                    &quot;{ast.reviewerNote}&quot;
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-[var(--color-muted-foreground)] italic">Chưa duyệt</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {(ast.approvalStatus === 'PENDING_REVIEW' || ast.approvalStatus === 'DRAFT') && (
+                                  <>
+                                    <button
+                                      onClick={() => handleUpdateAssetStatus(ast.id, 'APPROVED')}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
+                                      title="Duyệt nhanh"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Duyệt</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setReviewAssetTarget(ast);
+                                        setReviewNote('');
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
+                                      title="Từ chối kèm góp ý"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                      <span>Từ chối</span>
+                                    </button>
+                                  </>
+                                )}
+
+                                {(ast.approvalStatus === 'APPROVED' || ast.approvalStatus === 'REJECTED') && (
+                                  <>
+                                    <button
+                                      onClick={() => handleUpdateAssetStatus(ast.id, 'PENDING_REVIEW')}
+                                      className="px-2 py-1 rounded-lg bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white text-xs font-semibold transition-all flex items-center gap-1"
+                                      title="Đưa về hàng đợi chờ xét duyệt lại"
+                                    >
+                                      <RotateCcw className="w-3 h-3" />
+                                      <span>Duyệt lại</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setReviewAssetTarget(ast);
+                                        setReviewNote(ast.reviewerNote || '');
+                                      }}
+                                      className="p-1 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+                                      title="Sửa ghi chú"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+
+                                <a
+                                  href={ast.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-1 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+                                  title="Xem tệp"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </a>
+
+                                <button
+                                  onClick={() => handleDeleteAsset(ast.id)}
+                                  className="p-1 rounded-lg border border-transparent hover:border-rose-500/30 hover:bg-rose-500/10 text-[var(--color-muted-foreground)] hover:text-rose-500 transition-colors"
+                                  title="Xóa tài nguyên"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {displayedAssets.length === 0 && (
+                        <tr>
+                          <td colSpan={(!selectedCampaignId || selectedCampaignId === 'ALL') ? 7 : 6} className="py-12 text-center text-xs text-[var(--color-muted-foreground)]">
+                            {assetFilterStatus === 'PENDING_REVIEW' ? (
+                              <div className="flex flex-col items-center justify-center gap-1.5">
+                                <CheckCircle2 className="w-8 h-8 text-emerald-500 opacity-80" />
+                                <span className="font-semibold text-[var(--color-foreground)]">Không có tài nguyên nào đang chờ duyệt</span>
+                                <span>Tất cả tài nguyên sáng tạo của chiến dịch này đã được xử lý xong.</span>
+                              </div>
+                            ) : assetFilterStatus === 'APPROVED' ? (
+                              <div className="flex flex-col items-center justify-center gap-1.5">
+                                <Clock className="w-8 h-8 text-amber-500 opacity-60" />
+                                <span>Chưa có tài nguyên nào được phê duyệt.</span>
+                              </div>
+                            ) : assetFilterStatus === 'REJECTED' ? (
+                              <div className="flex flex-col items-center justify-center gap-1.5">
+                                <CheckCircle2 className="w-8 h-8 text-emerald-500 opacity-60" />
+                                <span>Không có tài nguyên nào bị từ chối.</span>
+                              </div>
+                            ) : (
+                              <span>Chưa có tài nguyên nào cho chiến dịch này. Bấm &quot;Tải lên Asset mới&quot; để thêm tệp sáng tạo vào luồng duyệt!</span>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             );
           })()}
@@ -2125,18 +2368,32 @@ export default function Campaigns() {
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL: REJECT ASSET WITH REASON */}
+      {/* MODAL: REJECT / EDIT NOTE ASSET */}
       {/* ==================================================================== */}
       {reviewAssetTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl shadow-2xl p-5 space-y-4">
             <h3 className="font-bold text-sm text-[var(--color-foreground)] flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-500" />
-              <span>Góp ý chỉnh sửa & Từ chối tài nguyên</span>
+              {reviewAssetTarget.approvalStatus === 'APPROVED' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>Chỉnh sửa ghi chú phê duyệt</span>
+                </>
+              ) : reviewAssetTarget.approvalStatus === 'REJECTED' ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-rose-500" />
+                  <span>Chỉnh sửa lý do từ chối</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-rose-500" />
+                  <span>Góp ý chỉnh sửa & Từ chối tài nguyên</span>
+                </>
+              )}
             </h3>
 
             <p className="text-xs text-[var(--color-muted-foreground)]">
-              Vui lòng nêu rõ lý do từ chối để bộ phận Media & Design điều chỉnh kịp thời cho chiến dịch.
+              Tài nguyên: <strong className="text-[var(--color-foreground)]">{reviewAssetTarget.name}</strong>
             </p>
 
             <textarea
@@ -2154,12 +2411,21 @@ export default function Campaigns() {
               >
                 Hủy
               </button>
-              <button
-                onClick={() => handleUpdateAssetStatus(reviewAssetTarget.id, 'REJECTED')}
-                className="px-3.5 py-1.5 rounded-xl bg-rose-500 text-white hover:opacity-95 text-xs font-semibold shadow-sm"
-              >
-                Xác nhận từ chối
-              </button>
+              {reviewAssetTarget.approvalStatus === 'APPROVED' ? (
+                <button
+                  onClick={() => handleUpdateAssetStatus(reviewAssetTarget.id, 'APPROVED', reviewNote)}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500 text-white hover:opacity-95 text-xs font-semibold shadow-sm"
+                >
+                  Lưu ghi chú
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleUpdateAssetStatus(reviewAssetTarget.id, 'REJECTED', reviewNote)}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-500 text-white hover:opacity-95 text-xs font-semibold shadow-sm"
+                >
+                  Xác nhận từ chối
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2187,14 +2453,19 @@ export default function Campaigns() {
             <div className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-medium text-[var(--color-foreground)] mb-1">
-                  Chiến dịch áp dụng
+                  Chiến dịch áp dụng *
                 </label>
-                <input
-                  type="text"
-                  disabled
-                  value={currentCampaign?.name || 'Chiến dịch chung'}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/50 text-[var(--color-foreground)] text-xs cursor-not-allowed"
-                />
+                <select
+                  value={targetAssetCampId || (selectedCampaignId && selectedCampaignId !== 'ALL' ? selectedCampaignId : (campaigns[0]?.id || ''))}
+                  onChange={(e) => setTargetAssetCampId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none focus:border-indigo-500 font-medium"
+                >
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
