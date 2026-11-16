@@ -1364,9 +1364,11 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
               {[
                 { id: 'ALL', label: 'Tất cả' },
+                { id: 'DEPOSIT', label: 'Nạp tiền' },
                 { id: 'COMMISSION', label: 'Hoa hồng' },
                 { id: 'EARNING', label: 'Nhiệm vụ' },
                 { id: 'WITHDRAWAL', label: 'Rút tiền' },
+                { id: 'SERVICE_PAYMENT', label: 'Chi dịch vụ' },
                 { id: 'REFUND', label: 'Hoàn tiền' },
               ].map(tab => (
                 <button
@@ -1428,18 +1430,27 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                         <span className={`px-2 py-0.5 rounded-md font-semibold text-[11px] ${
                           tx.type === 'COMMISSION' ? 'bg-purple-50 text-purple-700' :
                           tx.type === 'EARNING' ? 'bg-blue-50 text-blue-700' :
-                          tx.type === 'REFUND' ? 'bg-emerald-50 text-emerald-700' :
-                          'bg-amber-50 text-amber-700'
+                          tx.type === 'DEPOSIT' ? 'bg-emerald-50 text-emerald-700' :
+                          tx.type === 'WITHDRAWAL' ? 'bg-amber-50 text-amber-700' :
+                          tx.type === 'SERVICE_PAYMENT' ? 'bg-indigo-50 text-indigo-700' :
+                          tx.type === 'REFUND' ? 'bg-teal-50 text-teal-700' :
+                          'bg-gray-100 text-gray-700'
                         }`}>
-                          {tx.type}
+                          {tx.type === 'COMMISSION' ? 'HOA HỒNG' :
+                           tx.type === 'EARNING' ? 'NHIỆM VỤ' :
+                           tx.type === 'DEPOSIT' ? 'NẠP TIỀN' :
+                           tx.type === 'WITHDRAWAL' ? 'RÚT TIỀN' :
+                           tx.type === 'SERVICE_PAYMENT' ? 'CHI DỊCH VỤ' :
+                           tx.type === 'REFUND' ? 'HOÀN TIỀN' :
+                           tx.type}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-gray-800 font-medium">
                         {tx.description}
                       </td>
                       <td className="py-3.5 px-4 font-bold">
-                        <span className={tx.amount > 0 ? 'text-emerald-600' : 'text-gray-900'}>
-                          {tx.amount > 0 ? `+${tx.amount.toLocaleString()}` : tx.amount.toLocaleString()} VND
+                        <span className={tx.amount > 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                          {tx.amount > 0 ? `+${tx.amount.toLocaleString()}` : `${tx.amount.toLocaleString()}`} VND
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
