@@ -832,6 +832,28 @@ async function taskFbBuffPost(page, config, profileId) {
   }
   await safeWait(page, 3000 + Math.random() * 2000);
 
+  // Kiểm tra nếu bị redirect sang trang đăng nhập hoặc checkpoint
+  const currentUrl = page.url();
+  if (currentUrl.includes('/login') || currentUrl.includes('/checkpoint') || currentUrl.includes('stype=lo')) {
+    throw new Error(`Phiên Facebook bị gián đoạn hoặc bị đăng xuất khi mở bài viết: ${config.targetUrl}`);
+  }
+
+  // Kiểm tra bài viết có hiển thị được không
+  const pageCheck = await safePageEvaluate(page, () => {
+    const text = document.body ? document.body.innerText : '';
+    if (text.includes('Bạn hiện không xem được nội dung này') || text.includes('This content isn\'t available right now')) {
+      return { unavailable: true, reason: 'Nội dung bài viết không công khai hoặc đã bị gỡ' };
+    }
+    if (text.includes('Khám phá những điều bạn yêu thích') || text.includes('Explore the things you love') || text.includes('Nhập mật khẩu')) {
+      return { unavailable: true, reason: 'Tài khoản chưa đăng nhập vào Facebook' };
+    }
+    return { unavailable: false };
+  });
+
+  if (pageCheck.unavailable) {
+    throw new Error(`[BuffPost] ${pageCheck.reason}: ${config.targetUrl}`);
+  }
+
   // Pause videos to prevent auto-scrolling to next Reel
   await safePageEvaluate(page, () => {
     const videos = document.querySelectorAll('video');

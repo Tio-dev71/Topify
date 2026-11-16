@@ -242,6 +242,21 @@ export async function scrapeFacebookWithPlaywright(
         const items: any[] = [];
         const arts = Array.from(document.querySelectorAll('div[role="article"]'));
 
+        function parseCount(str: string): number {
+          if (!str) return 0;
+          const cleaned = str.trim().replace(/\s+/g, '');
+          const match = cleaned.match(/^(\d+(?:[.,]\d+)?)([kKmM])?$/);
+          if (!match) {
+            const numOnly = cleaned.replace(/[^\d]/g, '');
+            return numOnly ? parseInt(numOnly, 10) : 0;
+          }
+          let val = parseFloat(match[1].replace(',', '.'));
+          const unit = match[2] ? match[2].toUpperCase() : '';
+          if (unit === 'K') val *= 1000;
+          else if (unit === 'M') val *= 1000000;
+          return Math.round(val);
+        }
+
         arts.forEach((art, artIdx) => {
           // Find permalink anchor
           const links = Array.from(art.querySelectorAll('a'))
@@ -285,11 +300,114 @@ export async function scrapeFacebookWithPlaywright(
             );
           const mediaUrl = imgs[0] || null;
 
+          // Real engagement metrics extraction
+          let likesCount = 0;
+          let commentsCount = 0;
+          let sharesCount = 0;
+          let rawDateStr = '';
+
+          // 1. Reactions (Likes)
+          const reactionEls = art.querySelectorAll(
+            '[aria-label*="cảm xúc"], [aria-label*="bày tỏ cảm xúc"], [aria-label*="reactions"], [aria-label*="reaction"], [aria-label*="lượt thích"], [aria-label*="người thích"]'
+          );
+          for (const el of Array.from(reactionEls)) {
+            const label = el.getAttribute('aria-label') || '';
+            const m =
+              label.match(/(\d+(?:[.,]\d+)?\s*[kKmM]?)\s*(?:người|lượt thích|thích|reactions?)/i) ||
+              label.match(/bày tỏ cảm xúc:?\s*(\d+(?:[.,]\d+)?\s*[kKmM]?)/i);
+            if (m && m[1]) {
+              likesCount = parseCount(m[1]);
+              break;
+            }
+          }
+
+          if (likesCount === 0) {
+            const toolbar = art.querySelector('span[role="toolbar"]');
+            if (toolbar && toolbar.parentElement) {
+              const txt = toolbar.parentElement.textContent || '';
+              const m = txt.match(/(\d+(?:[.,]\d+)?\s*[kKmM]?)/);
+              if (m && m[1]) likesCount = parseCount(m[1]);
+            }
+          }
+
+          // 2. Comments & Shares
+          const interactiveElements = Array.from(art.querySelectorAll('div[role="button"], span, a'));
+          for (const el of interactiveElements) {
+            const t = (el.textContent || '').trim();
+            const aria = (el.getAttribute('aria-label') || '').trim();
+            const fullText = `${t} ${aria}`;
+
+            if (commentsCount === 0) {
+              const cMatch = fullText.match(/(\d+(?:[.,]\d+)?\s*[kKmM]?)\s*(?:bình luận|comments?)/i);
+              if (cMatch && cMatch[1]) {
+                commentsCount = parseCount(cMatch[1]);
+              }
+            }
+
+            if (sharesCount === 0) {
+              const sMatch = fullText.match(/(\d+(?:[.,]\d+)?\s*[kKmM]?)\s*(?:lượt chia sẻ|chia sẻ|shares?)/i);
+              if (sMatch && sMatch[1]) {
+                sharesCount = parseCount(sMatch[1]);
+              }
+            }
+          }
+
+          // 3. Post Date / Relative Time string
+          const dateLinks = Array.from(art.querySelectorAll('a')).filter((a) => {
+            const h = (a as HTMLAnchorElement).href || '';
+            return (
+              h.includes('/posts/') ||
+              h.includes('/videos/') ||
+              h.includes('/photos/') ||
+              h.includes('permalink.php') ||
+              h.includes('story_fbid')
+            );
+          });
+
+          for (const dl of dateLinks) {
+            const aria = dl.getAttribute('aria-label');
+            const txt = dl.textContent?.trim();
+            if (
+              aria &&
+              (aria.includes('phút') ||
+                aria.includes('giờ') ||
+                aria.includes('ngày') ||
+                aria.includes('Tháng') ||
+                aria.includes('min') ||
+                aria.includes('hr') ||
+                aria.includes('day'))
+            ) {
+              rawDateStr = aria;
+              break;
+            }
+            if (
+              txt &&
+              (txt.includes('phút') ||
+                txt.includes('giờ') ||
+                txt.includes('ngày') ||
+                txt.includes('Tháng') ||
+                txt.includes('min') ||
+                txt.includes('hr') ||
+                txt.includes('day') ||
+                txt.includes('Hôm qua') ||
+                txt.includes('Vừa xong') ||
+                txt.includes('Yesterday') ||
+                txt.includes('Just now'))
+            ) {
+              rawDateStr = txt;
+              break;
+            }
+          }
+
           if (content || mainLink || mediaUrl) {
             items.push({
               mainLink,
               content: content || 'Bài viết trên Facebook',
               mediaUrl,
+              likesCount,
+              commentsCount,
+              sharesCount,
+              rawDateStr,
               artIdx,
             });
           }
@@ -313,9 +431,44 @@ export async function scrapeFacebookWithPlaywright(
             postId = `fb_${Date.now()}_${collected.length + 1}`;
           }
 
-          // Offset timestamp slightly for chronological sorting
-          const offsetHours = collected.length * 3;
-          const postDate = new Date(Date.now() - offsetHours * 3600 * 1000);
+          // Parse actual post timestamp from Facebook DOM
+          let postDate = new Date();
+          if (item.rawDateStr) {
+            const s = item.rawDateStr.toLowerCase().trim();
+            if (s.includes('vừa xong') || s.includes('just now')) {
+              postDate = new Date();
+            } else {
+              const minMatch = s.match(/(\d+)\s*(?:phút|phut|min|mins|m\b)/);
+              const hrMatch = s.match(/(\d+)\s*(?:giờ|gio|hour|hours|hr|hrs|h\b)/);
+              const dayMatch = s.match(/(\d+)\s*(?:ngày|ngay|day|days|d\b)/);
+
+              if (minMatch) {
+                postDate = new Date(Date.now() - parseInt(minMatch[1], 10) * 60 * 1000);
+              } else if (hrMatch) {
+                postDate = new Date(Date.now() - parseInt(hrMatch[1], 10) * 3600 * 1000);
+              } else if (dayMatch) {
+                postDate = new Date(Date.now() - parseInt(dayMatch[1], 10) * 86400 * 1000);
+              } else if (s.includes('hôm qua') || s.includes('yesterday')) {
+                const timeMatch = s.match(/(\d{1,2}):(\d{2})/);
+                postDate = new Date(Date.now() - 86400 * 1000);
+                if (timeMatch) {
+                  postDate.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0);
+                }
+              } else {
+                const monthMatch = s.match(/(\d{1,2})\s+(?:tháng|thg|\/)\s*(\d{1,2})(?:,?\s*(\d{4}))?/i);
+                if (monthMatch) {
+                  const day = parseInt(monthMatch[1], 10);
+                  const month = parseInt(monthMatch[2], 10) - 1;
+                  const year = monthMatch[3] ? parseInt(monthMatch[3], 10) : new Date().getFullYear();
+                  postDate = new Date(year, month, day);
+                  const timeMatch = s.match(/lúc\s*(\d{1,2}):(\d{2})/i) || s.match(/at\s*(\d{1,2}):(\d{2})/i);
+                  if (timeMatch) {
+                    postDate.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0);
+                  }
+                }
+              }
+            }
+          }
 
           collected.push({
             id: postId,
@@ -323,9 +476,9 @@ export async function scrapeFacebookWithPlaywright(
             url: cleanLink || targetUrl,
             content: item.content,
             mediaUrl: item.mediaUrl,
-            likesCount: Math.floor(Math.random() * 280) + 25,
-            commentsCount: Math.floor(Math.random() * 45) + 5,
-            sharesCount: Math.floor(Math.random() * 20) + 1,
+            likesCount: Number(item.likesCount) || 0,
+            commentsCount: Number(item.commentsCount) || 0,
+            sharesCount: Number(item.sharesCount) || 0,
             postedAt: postDate.toISOString(),
           });
         }

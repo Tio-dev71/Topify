@@ -15,6 +15,7 @@ const {
   checkFacebookLoggedIn,
   syncCookiesToApi
 } = require('./playwright-runner');
+const { getOrCreateDeviceProfile, injectDeviceFingerprint } = require('./device-fingerprint');
 
 
 const stopFlags = new Set(); // Keep track of stopped tasks
@@ -189,57 +190,68 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
   console.log(`[Automation] Profile ${profileId} chưa có phiên đăng nhập hợp lệ. Bắt đầu Auto-login với UID: ${uid}...`);
 
   // Xử lý form đăng nhập hoặc CAA Remembered Profile
-  let emailInput = page.locator('input[name="email"], #email').first();
-  let hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
+  // 1. Kiểm tra nếu hộp thoại mật khẩu đã mở sẵn trên màn hình
+  const passInputDirect = page.locator('input[type="password"], input[name="pass"], #pass').first();
+  const isDirectPassVisible = await passInputDirect.isVisible({ timeout: 2000 }).catch(() => false);
 
-  if (!hasEmail) {
-    const otherProfileBtn = page.locator(
-      'div[role="button"]:has-text("Use another profile"), ' +
-      'div[role="button"]:has-text("Dùng trang cá nhân khác"), ' +
-      'div[role="button"]:has-text("Đăng nhập bằng tài khoản khác"), ' +
-      'div[aria-label*="another profile"], ' +
-      'div[aria-label*="trang cá nhân khác"]'
-    ).first();
-
-    if (await otherProfileBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
-      console.log(`[Automation] Nhấp "Dùng trang cá nhân khác" cho profile ${profileId}...`);
-      await otherProfileBtn.click();
-      await page.waitForSelector('input[name="email"], #email, input[name="pass"]', { timeout: 7000 }).catch(() => {});
-      hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
-    }
-  }
-
-  if (hasEmail) {
-    console.log(`[Automation] Điền tài khoản và mật khẩu cho UID ${uid}...`);
-    await emailInput.fill(uid);
-    await safeWait(page, 300);
-    const passInput = page.locator('input[name="pass"], #pass').first();
-    await passInput.fill(password);
+  if (isDirectPassVisible) {
+    console.log(`[Automation] Phát hiện hộp thoại mật khẩu cho tài khoản đã lưu ${uid}, đang nhập mật khẩu...`);
+    await passInputDirect.fill(password);
   } else {
-    const continueBtn = page.locator(
-      'div[role="button"]:has-text("Continue"), ' +
-      'div[role="button"]:has-text("Tiếp tục"), ' +
-      'div[aria-label*="Continue"], ' +
-      'div[aria-label*="Tiếp tục"]'
-    ).first();
+    let emailInput = page.locator('input[name="email"], #email').first();
+    let hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
 
-    if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
-      console.log(`[Automation] Nhấp "Tiếp tục" cho tài khoản đã lưu ${profileId}...`);
-      await continueBtn.click();
-      await page.waitForSelector('input[name="pass"], #pass', { timeout: 7000 }).catch(() => {});
-      const passInput = page.locator('input[name="pass"], #pass').first();
+    if (!hasEmail) {
+      const otherProfileBtn = page.locator(
+        'div[role="button"]:has-text("Use another profile"), ' +
+        'div[role="button"]:has-text("Dùng trang cá nhân khác"), ' +
+        'div[role="button"]:has-text("Đăng nhập bằng tài khoản khác"), ' +
+        'div[aria-label*="another profile"], ' +
+        'div[aria-label*="trang cá nhân khác"]'
+      ).first();
+
+      if (await otherProfileBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+        console.log(`[Automation] Nhấp "Dùng trang cá nhân khác" cho profile ${profileId}...`);
+        await otherProfileBtn.click();
+        await page.waitForSelector('input[name="email"], #email, input[type="password"], input[name="pass"]', { timeout: 7000 }).catch(() => {});
+        hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
+      }
+    }
+
+    if (hasEmail) {
+      console.log(`[Automation] Điền tài khoản và mật khẩu cho UID ${uid}...`);
+      await emailInput.fill(uid);
+      await safeWait(page, 300);
+      const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
       await passInput.fill(password);
     } else {
-      await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await safeWait(page, 2000);
-      emailInput = page.locator('input[name="email"], #email').first();
-      if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await emailInput.fill(uid);
-        await safeWait(page, 300);
-        const passInput = page.locator('input[name="pass"], #pass').first();
+      const continueBtn = page.locator(
+        'div[role="button"]:has-text("Continue"), ' +
+        'div[role="button"]:has-text("Tiếp tục"), ' +
+        'button:has-text("Continue"), ' +
+        'button:has-text("Tiếp tục"), ' +
+        'div[aria-label*="Continue"], ' +
+        'div[aria-label*="Tiếp tục"]'
+      ).first();
+
+      if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+        console.log(`[Automation] Nhấp "Tiếp tục" cho tài khoản đã lưu ${profileId}...`);
+        await continueBtn.click();
+        await page.waitForSelector('input[type="password"], input[name="pass"], #pass', { timeout: 7000 }).catch(() => {});
+        const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
         await passInput.fill(password);
       } else {
-        throw new Error(`Không tìm thấy form đăng nhập Facebook cho profile ${profileId}`);
+        await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await safeWait(page, 2000);
+        emailInput = page.locator('input[name="email"], #email').first();
+        if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+          await emailInput.fill(uid);
+          await safeWait(page, 300);
+          const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
+          await passInput.fill(password);
+        } else {
+          throw new Error(`Không tìm thấy form đăng nhập Facebook cho profile ${profileId}`);
+        }
       }
     }
   }
@@ -255,7 +267,9 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
     '#loginbutton, ' +
     'button:has-text("Đăng nhập"), ' +
     'button:has-text("Log in"), ' +
-    'button:has-text("Log In")'
+    'button:has-text("Log In"), ' +
+    'div[role="button"]:has-text("Đăng nhập"), ' +
+    'div[role="button"]:has-text("Log In")'
   ).first();
 
   if (await submitBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
@@ -384,10 +398,13 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
   try {
     const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', safeProfileId);
 
+    // Lấy hoặc tạo cấu hình thiết bị phần cứng & hệ điều hành giả lập riêng biệt cho nick này
+    const deviceProfile = getOrCreateDeviceProfile(safeProfileId, userDataDir);
+    console.log(`[Automation] Profile [${safeProfileId}] áp dụng cấu hình máy: ${deviceProfile.name}`);
+
     let currentProxyCleanup = null;
 
     const buildLaunchOptions = async (proxyString) => {
-      const fp = generateFingerprint();
       const options = {
         headless: false,
         args: [
@@ -398,14 +415,16 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
           '--disable-blink-features=AutomationControlled',
           '--disable-infobars',
           '--no-sandbox',
-          '--test-type',
           '--no-default-browser-check',
-          '--no-first-run'
+          '--no-first-run',
+          '--enforce-webrtc-ip-permission-check',
+          '--force-webrtc-ip-handling-policy=default_public_interface_only',
+          '--webrtc-ip-handling-policy=disable_non_proxied_udp',
         ],
         viewport: null,
-        userAgent: fp.userAgent,
-        locale: fp.locale,
-        timezoneId: fp.timezoneId
+        userAgent: deviceProfile.userAgent,
+        locale: deviceProfile.locale || 'vi-VN',
+        timezoneId: deviceProfile.timezoneId || 'Asia/Ho_Chi_Minh'
       };
 
       if (proxyString) {
@@ -444,11 +463,9 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
           currentProxyCleanup = null;
         }
         if (currentProxyToUse) {
-          console.warn('[Automation] Khởi động với proxy lỗi, tự động chuyển sang kết nối trực tiếp:', launchErr.message);
+          console.error('[Automation] Khởi động với proxy thất bại:', launchErr.message);
           cleanStaleLockFiles(userDataDir);
-          currentProxyToUse = null;
-          launchOpts = await buildLaunchOptions(null);
-          browser = await launchBrowserInstance(launchOpts);
+          throw new Error(`Không thể khởi động trình duyệt qua proxy [${currentProxyToUse}]: ${launchErr.message}. Vui lòng kiểm tra lại proxy.`);
         } else {
           throw launchErr;
         }
@@ -456,9 +473,8 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
 
       browser.proxyConfigStr = currentProxyToUse || '';
 
-      await browser.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      });
+      // Tiêm toàn diện fingerprint phần cứng: CPU cores, RAM, GPU WebGL, Screen, Client Hints, WebDriver
+      await injectDeviceFingerprint(browser, deviceProfile);
 
       browser.on('close', async () => {
         if (browser._proxyCleanup) {
@@ -476,31 +492,20 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
     let page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
     await page.bringToFront();
     
-    // TỰ ĐỘNG ĐĂNG NHẬP / NẠP COOKIE TRƯỚC KHI THỰC HIỆN TÁC VỤ (có dự phòng proxy lỗi)
+    // TỰ ĐỘNG ĐĂNG NHẬP / NẠP COOKIE TRƯỚC KHI THỰC HIỆN TÁC VỤ
     try {
       await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId);
     } catch (authErr) {
       const isProxyFailure = isNetworkOrProxyFailure(authErr);
 
       if (browser.proxyConfigStr && isProxyFailure) {
-        console.warn(`[Automation] Proxy gặp sự cố khi xác thực (${authErr.message}), chuyển sang kết nối trực tiếp...`);
-        if (browser._proxyCleanup) {
-          await browser._proxyCleanup().catch(() => {});
+        console.warn(`[Automation] Proxy gặp sự cố khi xác thực (${authErr.message}), thử lại 1 lần...`);
+        await safeWait(page, 3000);
+        try {
+          await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId);
+        } catch (retryErr) {
+          throw new Error(`Proxy [${browser.proxyConfigStr}] không kết nối được hoặc timeout khi đăng nhập. Dừng tác vụ để bảo vệ an toàn cho tài khoản.`);
         }
-        await browser.close().catch(() => {});
-        activeBrowsers.delete(safeProfileId);
-        cleanStaleLockFiles(userDataDir);
-
-        const directOpts = await buildLaunchOptions(null);
-        browser = await launchBrowserInstance(directOpts);
-        browser.proxyConfigStr = '';
-        activeBrowsers.set(safeProfileId, browser);
-
-        pages = browser.pages();
-        page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
-        await page.bringToFront();
-
-        await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId);
       } else {
         throw authErr;
       }

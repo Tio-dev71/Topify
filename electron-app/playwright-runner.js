@@ -4,16 +4,39 @@ const os = require('os');
 const fs = require('fs');
 const { anonymizeProxy, closeAnonymizedProxy } = require('proxy-chain');
 const captchaSolver = require('./captcha-solver');
+const { getOrCreateDeviceProfile, injectDeviceFingerprint } = require('./device-fingerprint');
 
 
 const activeBrowsers = new Map();
 
-// Generate a fake fingerprint
+// Generate a fake fingerprint matching host platform
 function generateFingerprint() {
+  const isMac = process.platform === 'darwin';
+  const isWin = process.platform === 'win32';
+
+  if (isMac) {
+    return {
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+      locale: 'vi-VN',
+      timezoneId: 'Asia/Ho_Chi_Minh',
+      platform: 'MacIntel',
+    };
+  }
+
+  if (isWin) {
+    return {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+      locale: 'vi-VN',
+      timezoneId: 'Asia/Ho_Chi_Minh',
+      platform: 'Win32',
+    };
+  }
+
   return {
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
     locale: 'vi-VN',
     timezoneId: 'Asia/Ho_Chi_Minh',
+    platform: 'Linux x86_64',
   };
 }
 
@@ -526,25 +549,59 @@ async function dismissFacebookPopups(page) {
 
 async function checkFacebookLoggedIn(browser, page) {
   try {
+    const currentUrl = page.url();
+    const isLoginOrCheckpoint = currentUrl.includes('/login') ||
+      currentUrl.includes('/checkpoint') ||
+      currentUrl.includes('/recover') ||
+      currentUrl.includes('two_step_verification') ||
+      currentUrl.includes('stype=lo');
+    if (isLoginOrCheckpoint) return false;
+
+    const domStatus = await safePageEvaluate(page, () => {
+      // 1. Kiểm tra nếu có trường mật khẩu hoặc form đăng nhập đang hiển thị (kể cả modal lưu tài khoản)
+      const passInputs = Array.from(document.querySelectorAll('input[type="password"], input[name="pass"], #pass'));
+      const hasVisiblePassInput = passInputs.some(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (hasVisiblePassInput) return { loggedIn: false, reason: 'has_password_input' };
+
+      const emailInputs = Array.from(document.querySelectorAll('input[name="email"], #email'));
+      const hasVisibleEmailInput = emailInputs.some(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (hasVisibleEmailInput) return { loggedIn: false, reason: 'has_email_input' };
+
+      const pageText = document.body ? document.body.innerText : '';
+      if (
+        pageText.includes('Khám phá những điều bạn yêu thích') ||
+        pageText.includes('Explore the things you love') ||
+        pageText.includes('Nhập mật khẩu')
+      ) {
+        return { loggedIn: false, reason: 'caa_lock_screen' };
+      }
+
+      // 2. Kiểm tra dấu hiệu đã đăng nhập thành công vào trang cá nhân / bảng tin
+      const hasFeedOrMain = !!document.querySelector('div[role="feed"], div[role="main"], div[aria-label*="Bạn đang nghĩ gì"], div[aria-label*="What\'s on your mind"]');
+      const hasAccountMenu = !!document.querySelector('div[aria-label="Account"], div[aria-label="Tài khoản"], svg[aria-label="Your profile"], svg[aria-label*="Trang cá nhân"]');
+      const hasSearch = !!document.querySelector('input[placeholder*="Tìm kiếm"], input[placeholder*="Search Facebook"]');
+      const hasNav = !!document.querySelector('div[role="navigation"], div[role="banner"]');
+
+      if ((hasFeedOrMain || hasAccountMenu || hasSearch) && hasNav) {
+        return { loggedIn: true };
+      }
+
+      return { loggedIn: false, reason: 'no_authenticated_nav' };
+    }).catch(() => ({ loggedIn: false, reason: 'eval_error' }));
+
+    if (!domStatus.loggedIn) {
+      return false;
+    }
+
     const cookies = await browser.cookies('https://www.facebook.com');
     const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
-
-    const isDomLoggedIn = await safePageEvaluate(page, () => {
-      const nav = document.querySelector('div[role="navigation"]') ||
-        document.querySelector('div[role="banner"]') ||
-        document.querySelector('form[action*="/search/"]') ||
-        document.querySelector('div[aria-label="Account"]') ||
-        document.querySelector('div[aria-label="Tài khoản"]') ||
-        document.querySelector('svg[aria-label="Your profile"]') ||
-        document.querySelector('[aria-label="Facebook"][role="link"]');
-      const hasLoginForm = document.querySelector('input[name="email"]') ||
-        document.querySelector('#email') ||
-        document.querySelector('button[name="login"]');
-      return !!nav && !hasLoginForm;
-    }).catch(() => false);
-
-    const isLoginOrCheckpoint = page.url().includes('/login') || page.url().includes('/checkpoint');
-    return (hasCUser || isDomLoggedIn) && !isLoginOrCheckpoint;
+    return hasCUser;
   } catch (e) {
     return false;
   }
@@ -619,10 +676,13 @@ async function runPlaywrightLogin(accountData) {
 
     const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', safeProfileId);
 
+    // Lấy hoặc tạo cấu hình thiết bị phần cứng & hệ điều hành giả lập riêng biệt cho nick này
+    const deviceProfile = getOrCreateDeviceProfile(safeProfileId, userDataDir);
+    console.log(`[Playwright] Profile [${safeProfileId}] áp dụng cấu hình máy: ${deviceProfile.name}`);
+
     let currentProxyCleanup = null;
 
     const buildLaunchOptions = async (proxyString) => {
-      const fp = generateFingerprint();
       const options = {
         headless: false,
         args: [
@@ -633,14 +693,16 @@ async function runPlaywrightLogin(accountData) {
           '--disable-blink-features=AutomationControlled',
           '--disable-infobars',
           '--no-sandbox',
-          '--test-type',
           '--no-default-browser-check',
-          '--no-first-run'
+          '--no-first-run',
+          '--enforce-webrtc-ip-permission-check',
+          '--force-webrtc-ip-handling-policy=default_public_interface_only',
+          '--webrtc-ip-handling-policy=disable_non_proxied_udp',
         ],
         viewport: null,
-        userAgent: fp.userAgent,
-        locale: fp.locale,
-        timezoneId: fp.timezoneId
+        userAgent: deviceProfile.userAgent,
+        locale: deviceProfile.locale || 'vi-VN',
+        timezoneId: deviceProfile.timezoneId || 'Asia/Ho_Chi_Minh'
       };
 
       if (proxyString) {
@@ -680,11 +742,9 @@ async function runPlaywrightLogin(accountData) {
           currentProxyCleanup = null;
         }
         if (currentProxyToUse) {
-          console.warn('[Playwright] Khởi động với proxy lỗi, tự động chuyển sang kết nối trực tiếp:', launchErr.message);
+          console.error('[Playwright] Khởi động với proxy thất bại:', launchErr.message);
           cleanStaleLockFiles(userDataDir);
-          currentProxyToUse = null;
-          launchOpts = await buildLaunchOptions(null);
-          browser = await launchBrowserInstance(launchOpts);
+          throw new Error(`Không thể khởi động trình duyệt qua proxy [${currentProxyToUse}]: ${launchErr.message}. Vui lòng kiểm tra lại proxy.`);
         } else {
           throw launchErr;
         }
@@ -692,9 +752,8 @@ async function runPlaywrightLogin(accountData) {
 
       browser.proxyConfigStr = currentProxyToUse || '';
 
-      await browser.addInitScript(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-      });
+      // Tiêm toàn diện fingerprint phần cứng: CPU cores, RAM, GPU WebGL, Screen, Client Hints, WebDriver
+      await injectDeviceFingerprint(browser, deviceProfile);
 
       browser.on('page', async (newPage) => {
         try {
@@ -730,7 +789,7 @@ async function runPlaywrightLogin(accountData) {
       }
     }
 
-    // Điều hướng vào Facebook với cơ chế tự động thử lại và tự động chuyển Direct nếu Proxy gặp sự cố
+    // Điều hướng vào Facebook
     const navigateToFacebook = async (targetPage, timeout = 35000) => {
       try {
         await targetPage.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout });
@@ -746,39 +805,14 @@ async function runPlaywrightLogin(accountData) {
       const isNetFail = isNetworkOrProxyFailure(navResult);
       console.warn(`[Playwright] Điều hướng lần 1 gặp sự cố (${navResult.message || navResult}).`);
 
-      if (browser.proxyConfigStr && isNetFail) {
-        console.warn(`[Playwright] Proxy ${browser.proxyConfigStr} gặp sự cố (${navResult.message}). Tự động đổi sang kết nối mạng trực tiếp...`);
-        if (browser._proxyCleanup) {
-          await browser._proxyCleanup().catch(() => { });
-        }
-        await browser.close().catch(() => { });
-        activeBrowsers.delete(safeProfileId);
-        cleanStaleLockFiles(userDataDir);
-
-        const directOpts = await buildLaunchOptions(null);
-        browser = await launchBrowserInstance(directOpts);
-        browser.proxyConfigStr = '';
-        activeBrowsers.set(safeProfileId, browser);
-
-        pages = browser.pages();
-        page = pages.find(p => p.url().includes('facebook.com') && !p.isClosed()) || (pages.length > 0 ? pages[0] : await browser.newPage());
-        await cleanupExtraTabs(browser, page);
-        await page.bringToFront();
-
-        if (cookie) {
-          const parsedCookies = parseCookies(cookie, '.facebook.com');
-          if (parsedCookies.length > 0) await browser.addCookies(parsedCookies).catch(() => { });
-        }
-
-        navResult = await navigateToFacebook(page, 35000);
-      } else if (isNetFail) {
-        console.warn(`[Playwright] Thử lại điều hướng Facebook lần 2 sau lỗi kết nối...`);
-        await page.waitForTimeout(2000);
+      if (isNetFail) {
+        console.warn(`[Playwright] Thử lại điều hướng Facebook lần 2 qua proxy...`);
+        await page.waitForTimeout(3000);
         navResult = await navigateToFacebook(page, 40000);
       }
 
       if (navResult !== true) {
-        throw navResult;
+        throw new Error(`Không thể kết nối vào Facebook (${navResult.message || navResult}). Vui lòng kiểm tra lại proxy.`);
       }
     }
 
@@ -799,8 +833,17 @@ async function runPlaywrightLogin(accountData) {
     }
 
     // Xử lý màn hình đăng nhập hoặc màn hình CAA "Lưu tài khoản" (Saved Profile)
+    // 1. Kiểm tra nếu hộp thoại mật khẩu đã mở sẵn trên màn hình
+    const passInputDirect = page.locator('input[type="password"], input[name="pass"], #pass').first();
+    const isDirectPassVisible = await passInputDirect.isVisible({ timeout: 2000 }).catch(() => false);
+
+    if (isDirectPassVisible) {
+      console.log(`[Playwright] Nhập mật khẩu cho tài khoản đã lưu ${uid}...`);
+      await passInputDirect.fill(password, { timeout: 3000 }).catch(() => { });
+    }
+
     let emailInput = page.locator('input[name="email"], #email').first();
-    let hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
+    let hasEmail = !isDirectPassVisible && await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
 
     if (!hasEmail) {
       const otherProfileBtn = page.locator(
@@ -836,8 +879,8 @@ async function runPlaywrightLogin(accountData) {
       if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
         console.log('[Playwright] Nhấp "Tiếp tục" cho tài khoản đã lưu...');
         await continueBtn.click().catch(() => { });
-        await page.waitForSelector('input[name="pass"], #pass', { timeout: 4000 }).catch(() => { });
-        const passInput = page.locator('input[name="pass"], #pass').first();
+        await page.waitForSelector('input[type="password"], input[name="pass"], #pass', { timeout: 5000 }).catch(() => { });
+        const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
         await passInput.fill(password, { timeout: 3000 }).catch(() => { });
       } else {
         // Fallback: chuyển đến trang login trực tiếp
@@ -848,7 +891,7 @@ async function runPlaywrightLogin(accountData) {
         if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
           await emailInput.fill(uid).catch(() => { });
           await page.waitForTimeout(300);
-          const passInput = page.locator('input[name="pass"], #pass').first();
+          const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
           await passInput.fill(password, { timeout: 3000 }).catch(() => { });
         }
       }

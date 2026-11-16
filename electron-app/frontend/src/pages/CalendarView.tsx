@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Clock, 
-  CheckCircle2, 
-  Calendar as CalendarIcon, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Clock,
+  CheckCircle2,
+  Calendar as CalendarIcon,
   StickyNote,
   Trash2,
   X,
@@ -164,7 +164,7 @@ export default function CalendarView() {
   const handleDeleteNote = async (id: string) => {
     try {
       await api.delete(`/calendar/notes/${id}`);
-    } catch {}
+    } catch { }
     setNotes(notes.filter(n => n.id !== id));
     toast.success('Đã xóa ghi chú');
   };
@@ -283,19 +283,17 @@ export default function CalendarView() {
             return (
               <div
                 key={idx}
-                className={`p-2 min-h-[90px] flex flex-col justify-between transition-colors ${
-                  !isCurrentMonth ? 'bg-gray-50/40 text-gray-300' : 'bg-white'
-                } ${isCurrentDay ? 'bg-indigo-50/20' : ''}`}
+                className={`p-2 min-h-[90px] flex flex-col justify-between transition-colors ${!isCurrentMonth ? 'bg-gray-50/40 text-gray-300' : 'bg-white'
+                  } ${isCurrentDay ? 'bg-indigo-50/20' : ''}`}
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span
-                    className={`text-xs font-semibold rounded-full w-6 h-6 flex items-center justify-center ${
-                      isCurrentDay
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : isCurrentMonth
+                    className={`text-xs font-semibold rounded-full w-6 h-6 flex items-center justify-center ${isCurrentDay
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : isCurrentMonth
                         ? 'text-gray-700'
                         : 'text-gray-400'
-                    }`}
+                      }`}
                   >
                     {format(day, 'd')}
                   </span>
@@ -331,15 +329,14 @@ export default function CalendarView() {
                       <div
                         key={post.id}
                         onClick={() => setSelectedPost(post)}
-                        className={`p-1.5 rounded-md text-[10px] font-medium truncate cursor-pointer transition flex items-center gap-1 ${
-                          post.status === 'PUBLISHED'
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
-                            : post.status === 'SCHEDULED'
+                        className={`p-1.5 rounded-md text-[10px] font-medium truncate cursor-pointer transition flex items-center gap-1 ${post.status === 'PUBLISHED'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                          : post.status === 'SCHEDULED'
                             ? 'bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100'
                             : post.status === 'FAILED'
-                            ? 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                              ? 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
                         title={`${timeFormatted ? `[${timeFormatted}] ` : ''}${post.title}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
@@ -430,22 +427,21 @@ export default function CalendarView() {
               </div>
               <div>
                 <span className="font-bold text-gray-500 block mb-0.5">Trạng thái:</span>
-                <span className={`inline-flex px-2 py-0.5 rounded-md font-semibold text-[11px] ${
-                  selectedPost.status === 'PUBLISHED'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : selectedPost.status === 'SCHEDULED'
+                <span className={`inline-flex px-2 py-0.5 rounded-md font-semibold text-[11px] ${selectedPost.status === 'PUBLISHED'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : selectedPost.status === 'SCHEDULED'
                     ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                     : selectedPost.status === 'FAILED'
-                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
                   {selectedPost.status === 'PUBLISHED'
                     ? 'Đã xuất bản'
                     : selectedPost.status === 'SCHEDULED'
-                    ? 'Đã lên lịch'
-                    : selectedPost.status === 'FAILED'
-                    ? 'Đăng thất bại'
-                    : selectedPost.status}
+                      ? 'Đã lên lịch'
+                      : selectedPost.status === 'FAILED'
+                        ? 'Đăng thất bại'
+                        : selectedPost.status}
                 </span>
               </div>
               {selectedPost.scheduledAt && (
