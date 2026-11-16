@@ -155,7 +155,7 @@ export default function Campaigns() {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch {}
+    } catch { }
     return INITIAL_CAMPAIGNS;
   });
 
@@ -166,7 +166,7 @@ export default function Campaigns() {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
       }
-    } catch {}
+    } catch { }
     return '';
   });
 
@@ -180,7 +180,7 @@ export default function Campaigns() {
           return parsed.filter((a) => a.campaignId !== 'camp_1');
         }
       }
-    } catch {}
+    } catch { }
     return INITIAL_ASSETS;
   });
 
@@ -191,7 +191,7 @@ export default function Campaigns() {
     try {
       const uStr = localStorage.getItem('topify_user') || localStorage.getItem('user');
       if (uStr) return JSON.parse(uStr);
-    } catch {}
+    } catch { }
     return null;
   }, []);
 
@@ -211,12 +211,12 @@ export default function Campaigns() {
               const unpersisted = cachedCamps.filter((c) => !fetchedIds.has(c.id));
               merged = [...fetched, ...unpersisted];
             }
-          } catch {}
+          } catch { }
 
           setCampaigns(merged);
           try {
             localStorage.setItem('topify_campaigns_cache', JSON.stringify(merged));
-          } catch {}
+          } catch { }
 
           if (merged.length > 0 && !selectedCampaignId) {
             setSelectedCampaignId(merged[0].id);
@@ -229,7 +229,7 @@ export default function Campaigns() {
               const filtered = prev.filter((a) => validIds.has(a.campaignId) || a.campaignId === 'camp_default');
               try {
                 localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(filtered));
-              } catch {}
+              } catch { }
               return filtered;
             });
           }
@@ -269,12 +269,12 @@ export default function Campaigns() {
 
             try {
               localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(updated));
-            } catch {}
+            } catch { }
             return updated;
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [selectedCampaignId, campaigns]);
 
   // Filters
@@ -339,7 +339,7 @@ export default function Campaigns() {
             try {
               const desc = typeof p.description === 'string' ? JSON.parse(p.description) : p.description;
               g = desc?.planGroup;
-            } catch {}
+            } catch { }
             if (g && !groups.has(g)) {
               groups.add(g);
               list.push({ id: `group_${g}`, label: `${g} (Nhóm kế hoạch Content Studio)`, group: g });
@@ -352,7 +352,7 @@ export default function Campaigns() {
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // F136: Campaign Assignee & Team Lead
@@ -445,7 +445,7 @@ export default function Campaigns() {
       const next = prev.map((c) => (c.id === editingCampaign.id ? updatedCamp : c));
       try {
         localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -503,13 +503,13 @@ export default function Campaigns() {
     const foundMember = workspaceMembers.find(m => (m.id || m.email) === newAssignee);
     const chosenMember = foundMember
       ? {
-          name: `${foundMember.name || foundMember.email.split('@')[0]} (${foundMember.role === 'ADMIN' ? 'Lead' : 'Thành viên'})`,
-          avatar: foundMember.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-        }
+        name: `${foundMember.name || foundMember.email.split('@')[0]} (${foundMember.role === 'ADMIN' ? 'Lead' : 'Thành viên'})`,
+        avatar: foundMember.image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+      }
       : {
-          name: newAssignee.includes('@') ? newAssignee.split('@')[0] : 'Quản lý chiến dịch',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-        };
+        name: newAssignee.includes('@') ? newAssignee.split('@')[0] : 'Quản lý chiến dịch',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+      };
 
     const newCamp: EnrichedCampaign = {
       id: `camp_${Date.now()}`,
@@ -593,7 +593,7 @@ export default function Campaigns() {
     setSelectedCampaignId(newCamp.id);
     try {
       localStorage.setItem('topify_campaigns_cache', JSON.stringify(nextCampaigns));
-    } catch {}
+    } catch { }
 
     setIsCreateModalOpen(false);
 
@@ -629,7 +629,7 @@ export default function Campaigns() {
           const updated = prev.map((c) => (c.id === newCamp.id ? serverCamp : c));
           try {
             localStorage.setItem('topify_campaigns_cache', JSON.stringify(updated));
-          } catch {}
+          } catch { }
           return updated;
         });
         setSelectedCampaignId(serverCamp.id);
@@ -644,8 +644,8 @@ export default function Campaigns() {
   // Handle Approve / Reject / Re-evaluate Asset (F137)
   const handleUpdateAssetStatus = async (assetId: string, status: AssetApprovalStatus, customNote?: string) => {
     const reviewerName = currentUser?.name ? `${currentUser.name} (Quản trị)` : 'Bạn (Quản trị)';
-    const finalNote = customNote !== undefined 
-      ? customNote 
+    const finalNote = customNote !== undefined
+      ? customNote
       : reviewNote || (status === 'APPROVED' ? 'Đã phê duyệt đạt chuẩn.' : status === 'REJECTED' ? 'Cần chỉnh sửa lại theo yêu cầu.' : '');
 
     setAssets((prev) => {
@@ -663,7 +663,7 @@ export default function Campaigns() {
       });
       try {
         localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
 
@@ -696,7 +696,7 @@ export default function Campaigns() {
       const updated = prev.filter((a) => a.id !== assetId);
       try {
         localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
     try {
@@ -733,7 +733,7 @@ export default function Campaigns() {
       const next = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
       try {
         localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -785,7 +785,7 @@ export default function Campaigns() {
       const next = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
       try {
         localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -832,7 +832,7 @@ export default function Campaigns() {
       const next = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
       try {
         localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -877,7 +877,7 @@ export default function Campaigns() {
       const next = [newAsset, ...prev];
       try {
         localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(next));
-      } catch {}
+      } catch { }
       return next;
     });
 
@@ -894,7 +894,7 @@ export default function Campaigns() {
           const synced = prev.map((a) => (a.id === newAsset.id ? res.data.asset : a));
           try {
             localStorage.setItem('topify_campaign_assets_cache', JSON.stringify(synced));
-          } catch {}
+          } catch { }
           return synced;
         });
       }
@@ -985,9 +985,8 @@ export default function Campaigns() {
               setIsCreateModalOpen(true);
             }}
             disabled={!canManageCampaigns}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm transition-all shadow-sm ${
-              canManageCampaigns ? 'bg-[var(--color-primary)] hover:opacity-95 cursor-pointer' : 'bg-gray-400 opacity-60 cursor-not-allowed'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm transition-all shadow-sm ${canManageCampaigns ? 'bg-[var(--color-primary)] hover:opacity-95 cursor-pointer' : 'bg-gray-400 opacity-60 cursor-not-allowed'
+              }`}
           >
             <Plus className="w-4 h-4" />
             <span>Tạo chiến dịch mới</span>
@@ -1015,11 +1014,10 @@ export default function Campaigns() {
         <div className="flex items-center gap-6">
           <button
             onClick={() => setActiveTab('campaigns')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'campaigns'
-                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${activeTab === 'campaigns'
+              ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+              }`}
           >
             <Rocket className="w-4 h-4" />
             <span>Danh sách Chiến dịch</span>
@@ -1030,11 +1028,10 @@ export default function Campaigns() {
 
           <button
             onClick={() => setActiveTab('progress')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'progress'
-                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${activeTab === 'progress'
+              ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+              }`}
           >
             <BarChart3 className="w-4 h-4" />
             <span>Tiến độ Hợp nhất (F138)</span>
@@ -1042,11 +1039,10 @@ export default function Campaigns() {
 
           <button
             onClick={() => setActiveTab('assets')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'assets'
-                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${activeTab === 'assets'
+              ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+              }`}
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Kho Asset & Luồng Duyệt (F137)</span>
@@ -1059,11 +1055,10 @@ export default function Campaigns() {
 
               return (
                 <span
-                  className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium transition-all ${
-                    pendingCount > 0
-                      ? 'bg-amber-500/15 text-amber-500 font-bold border border-amber-500/25'
-                      : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
-                  }`}
+                  className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium transition-all ${pendingCount > 0
+                    ? 'bg-amber-500/15 text-amber-500 font-bold border border-amber-500/25'
+                    : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)]'
+                    }`}
                 >
                   {pendingCount} chờ duyệt
                 </span>
@@ -1073,11 +1068,10 @@ export default function Campaigns() {
 
           <button
             onClick={() => setActiveTab('report')}
-            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'report'
-                ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            }`}
+            className={`pb-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-all ${activeTab === 'report'
+              ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'border-transparent text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+              }`}
           >
             <TrendingUp className="w-4 h-4" />
             <span>Báo cáo Tổng kết & ROI (F139)</span>
@@ -1218,9 +1212,8 @@ export default function Campaigns() {
                         {camp.channels.map((ch) => (
                           <span
                             key={ch}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
-                              CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
-                            }`}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
+                              }`}
                           >
                             {ch}
                           </span>
@@ -1266,9 +1259,8 @@ export default function Campaigns() {
                       </div>
                       <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all ${
-                            spentPct > 100 ? 'bg-rose-500' : spentPct > 80 ? 'bg-amber-500' : 'bg-emerald-500'
-                          }`}
+                          className={`h-full rounded-full transition-all ${spentPct > 100 ? 'bg-rose-500' : spentPct > 80 ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
                           style={{ width: `${Math.min(100, spentPct)}%` }}
                         />
                       </div>
@@ -1356,323 +1348,319 @@ export default function Campaigns() {
             </button>
           </div>
         ) : (
-        <div className="space-y-6">
-          {/* Header Summary */}
-          <div className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
+          <div className="space-y-6">
+            {/* Header Summary */}
+            <div className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-[var(--color-foreground)]">
+                      {currentCampaign.name}
+                    </h2>
+                    {renderStatusBadge(currentCampaign.status)}
+                  </div>
+                  <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
+                    {currentCampaign.description}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted-foreground)] mt-2">
+                    <div className="flex items-center gap-1.5 font-medium text-[var(--color-foreground)]">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span className="whitespace-nowrap">{formatCampaignDateRange(currentCampaign.startDate, currentCampaign.endDate)}</span>
+                    </div>
+                    <div className="flex items-center flex-wrap gap-1">
+                      {currentCampaign.channels.map((ch) => (
+                        <span
+                          key={ch}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
+                            }`}
+                        >
+                          {ch}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-[var(--color-foreground)]">
-                    {currentCampaign.name}
-                  </h2>
-                  {renderStatusBadge(currentCampaign.status)}
-                </div>
-                <p className="text-xs text-[var(--color-muted-foreground)] mt-1">
-                  {currentCampaign.description}
-                </p>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted-foreground)] mt-2">
-                  <div className="flex items-center gap-1.5 font-medium text-[var(--color-foreground)]">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                    <span className="whitespace-nowrap">{formatCampaignDateRange(currentCampaign.startDate, currentCampaign.endDate)}</span>
-                  </div>
-                  <div className="flex items-center flex-wrap gap-1">
-                    {currentCampaign.channels.map((ch) => (
-                      <span
-                        key={ch}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
-                        }`}
-                      >
-                        {ch}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setActiveTab('report')}
-                  className="px-3.5 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-semibold flex items-center gap-1.5"
-                >
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Báo cáo ROI</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 4 Trục Tiến độ Hợp nhất (Content, Tasks, KPIs, Budget) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-3 border-t border-[var(--color-border)]">
-              {/* 1. Content Progress */}
-              <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--color-muted-foreground)] font-medium">Tiến độ Xuất bản</span>
-                  <span className="font-bold text-blue-500">
-                    {Math.round(
-                      (currentCampaign.phases.reduce((a, b) => a + b.publishedPostsCount, 0) /
-                        (currentCampaign.phases.reduce((a, b) => a + b.targetPostsCount, 0) || 1)) * 100
-                    )}%
-                  </span>
-                </div>
-                <div className="text-xl font-bold text-[var(--color-foreground)]">
-                  {currentCampaign.phases.reduce((a, b) => a + b.publishedPostsCount, 0)} /{' '}
-                  {currentCampaign.phases.reduce((a, b) => a + b.targetPostsCount, 0)} bài
-                </div>
-                <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 rounded-full"
-                    style={{
-                      width: `${Math.round(
-                        (currentCampaign.phases.reduce((a, b) => a + b.publishedPostsCount, 0) /
-                          (currentCampaign.phases.reduce((a, b) => a + b.targetPostsCount, 0) || 1)) * 100
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* 2. Task Progress (Kết nối M9) */}
-              <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--color-muted-foreground)] font-medium">Công việc liên quan (M9)</span>
-                  <span className="font-bold text-indigo-400">
-                    {Math.round((currentCampaign.completedTasksCount / (currentCampaign.tasksCount || 1)) * 100)}%
-                  </span>
-                </div>
-                <div className="text-xl font-bold text-[var(--color-foreground)]">
-                  {currentCampaign.completedTasksCount} / {currentCampaign.tasksCount} task hoàn thành
-                </div>
-                <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500 rounded-full"
-                    style={{
-                      width: `${Math.round((currentCampaign.completedTasksCount / (currentCampaign.tasksCount || 1)) * 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* 3. KPI Completion */}
-              <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--color-muted-foreground)] font-medium">KPI Mục tiêu</span>
-                  <span className="font-bold text-emerald-500">
-                    {currentCampaign.kpis[0]?.completionRate || 0}%
-                  </span>
-                </div>
-                <div className="text-xl font-bold text-[var(--color-foreground)] truncate">
-                  {(currentCampaign.kpis[0]?.currentValue || 0).toLocaleString('vi-VN')} {currentCampaign.kpis[0]?.unit}
-                </div>
-                <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full"
-                    style={{ width: `${Math.min(100, currentCampaign.kpis[0]?.completionRate || 0)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* 4. Budget Burn Rate */}
-              <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--color-muted-foreground)] font-medium">Giải ngân Ngân sách</span>
-                  <span className="font-bold text-purple-400">
-                    {Math.round((currentCampaign.totalSpent / (currentCampaign.totalBudget || 1)) * 100)}%
-                  </span>
-                </div>
-                <div className="text-xl font-bold text-[var(--color-foreground)]">
-                  {currentCampaign.totalSpent.toLocaleString('vi-VN')}đ
-                </div>
-                <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-purple-500 rounded-full"
-                    style={{
-                      width: `${Math.min(100, Math.round((currentCampaign.totalSpent / (currentCampaign.totalBudget || 1)) * 100))}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Timeline Phases View (F135 & F138) */}
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-[var(--color-foreground)] flex items-center gap-2">
-                  <span>Kế hoạch Nội dung theo Giai đoạn (Campaign Timeline Phases)</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-semibold border border-blue-500/20">
-                    F135 & F138
-                  </span>
-                </h3>
-                <p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
-                  Phân bổ mật độ nội dung, kích hoạt action đăng bài tự động và theo dõi tiến độ xuất bản thực chiến.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={handleExecuteAllPlanAutomation}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-semibold shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
-                  title="Tự động hóa toàn bộ kế hoạch: Tiến hành quét và xuất bản các bài viết đến hạn của tất cả giai đoạn"
-                >
-                  <Zap className="w-3.5 h-3.5 fill-current" />
-                  <span>Kích hoạt Toàn Kế hoạch</span>
-                </button>
-
-                <button
-                  onClick={() => setIsAddPhaseModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] text-xs font-medium flex items-center gap-1 transition-all"
-                >
-                  <PlusCircle className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Thêm Giai đoạn</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {currentCampaign.phases.map((ph, idx) => {
-                const phaseProgress = Math.round((ph.publishedPostsCount / (ph.targetPostsCount || 1)) * 100);
-                const remainingPosts = Math.max(0, ph.targetPostsCount - ph.publishedPostsCount);
-
-                return (
-                  <div
-                    key={ph.id}
-                    className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/10 space-y-3 hover:border-indigo-500/30 transition-all"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-sm">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <div className="font-semibold text-xs text-[var(--color-foreground)] flex items-center gap-2">
-                            <span>{ph.name}</span>
-                            {phaseProgress >= 100 && (
-                              <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold flex items-center gap-0.5">
-                                <CheckCircle className="w-3 h-3" />
-                                <span>Hoàn thành</span>
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-[var(--color-muted-foreground)] whitespace-nowrap mt-0.5 flex items-center gap-1.5">
-                            <Calendar className="w-3 h-3 text-indigo-400" />
-                            <span>{formatCampaignDateRange(ph.startDate, ph.endDate)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right Action & Stats Controls */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 text-xs mr-1">
-                          <span className="text-[var(--color-muted-foreground)]">
-                            Đã đăng: <strong className="text-[var(--color-foreground)]">{ph.publishedPostsCount}/{ph.targetPostsCount} bài</strong>
-                          </span>
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${phaseProgress >= 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                            {phaseProgress}%
-                          </span>
-                        </div>
-
-                        {/* Quick Action Buttons */}
-                        <div className="flex items-center gap-1 bg-[var(--color-card)] p-1 rounded-xl border border-[var(--color-border)] shadow-sm">
-                          <button
-                            onClick={() => handleExecutePhaseAction(ph.id, 1)}
-                            disabled={remainingPosts === 0}
-                            className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                              remainingPosts > 0
-                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white'
-                                : 'opacity-40 cursor-not-allowed text-[var(--color-muted-foreground)]'
-                            }`}
-                            title="Ghi nhận xuất bản nhanh +1 bài cho giai đoạn này"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>+1 bài</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleExecutePhaseAction(ph.id, -1)}
-                            disabled={ph.publishedPostsCount === 0}
-                            className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
-                              ph.publishedPostsCount > 0
-                                ? 'hover:bg-rose-500/15 hover:text-rose-500 text-[var(--color-muted-foreground)]'
-                                : 'opacity-30 cursor-not-allowed text-[var(--color-muted-foreground)]'
-                            }`}
-                            title="Giảm 1 bài đã đăng"
-                          >
-                            -1
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setActivePhaseAction(ph);
-                              setPhaseActionPostCount(remainingPosts > 0 ? 1 : 1);
-                              setPhaseActionChannel(currentCampaign.channels[0] || 'YOUTUBE');
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
-                            title="Kích hoạt Action Đăng bài / Lên lịch tự động hóa cho giai đoạn này"
-                          >
-                            <Play className="w-3 h-3 fill-current" />
-                            <span>Chạy Action</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-[var(--color-muted-foreground)] pl-9">
-                      {ph.description}
-                    </p>
-
-                    {/* Progress Bar & Sub-indicators */}
-                    <div className="pl-9 space-y-1.5">
-                      <div className="w-full h-2 bg-[var(--color-muted)] rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            phaseProgress >= 100
-                              ? 'bg-emerald-500'
-                              : 'bg-gradient-to-r from-blue-500 to-indigo-600'
-                          }`}
-                          style={{ width: `${Math.min(100, phaseProgress)}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-[var(--color-muted-foreground)] pt-0.5">
-                        <span>
-                          {remainingPosts > 0
-                            ? `Còn lại ${remainingPosts} bài viết cần xuất bản trong giai đoạn này`
-                            : 'Đã hoàn thành toàn bộ bài viết dự kiến!'}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px]">Kênh:</span>
-                          {currentCampaign.channels.map((ch) => (
-                            <span
-                              key={ch}
-                              className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${CHANNEL_BADGE_STYLES[ch] || 'bg-muted text-foreground'}`}
-                            >
-                              {ch}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {currentCampaign.phases.length === 0 && (
-                <div className="py-10 text-center text-xs text-[var(--color-muted-foreground)] border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-card)]/50 space-y-2">
-                  <Clock className="w-8 h-8 text-[var(--color-muted-foreground)] opacity-40 mx-auto" />
-                  <div className="font-semibold text-[var(--color-foreground)]">Chưa thiết lập giai đoạn (Timeline Phases) cho chiến dịch này</div>
-                  <p className="max-w-sm mx-auto">Bấm &quot;Thêm Giai đoạn&quot; để phân bổ mật độ bài viết theo từng mốc thời gian tiếp thị.</p>
                   <button
-                    onClick={() => setIsAddPhaseModalOpen(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600 transition-all inline-flex items-center gap-1 mt-2"
+                    onClick={() => setActiveTab('report')}
+                    className="px-3.5 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-semibold flex items-center gap-1.5"
                   >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    <span>Thêm Giai đoạn đầu tiên</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Báo cáo ROI</span>
                   </button>
                 </div>
-              )}
+              </div>
+
+              {/* 4 Trục Tiến độ Hợp nhất (Content, Tasks, KPIs, Budget) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-3 border-t border-[var(--color-border)]">
+                {/* 1. Content Progress */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--color-muted-foreground)] font-medium">Tiến độ Xuất bản</span>
+                    <span className="font-bold text-blue-500">
+                      {Math.round(
+                        (currentCampaign.phases.reduce((a, b) => a + b.publishedPostsCount, 0) /
+                          (currentCampaign.phases.reduce((a, b) => a + b.targetPostsCount, 0) || 1)) * 100
+                      )}%
+                    </span>
+                  </div>
+                  <div className="text-xl font-bold text-[var(--color-foreground)]">
+                    {currentCampaign.phases.reduce((a, b) => a + b.publishedPostsCount, 0)} /{' '}
+                    {currentCampaign.phases.reduce((a, b) => a + b.targetPostsCount, 0)} bài
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full"
+                      style={{
+                        width: `${Math.round(
+                          (currentCampaign.phases.reduce((a, b) => a + b.publishedPostsCount, 0) /
+                            (currentCampaign.phases.reduce((a, b) => a + b.targetPostsCount, 0) || 1)) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Task Progress (Kết nối M9) */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--color-muted-foreground)] font-medium">Công việc liên quan (M9)</span>
+                    <span className="font-bold text-indigo-400">
+                      {Math.round((currentCampaign.completedTasksCount / (currentCampaign.tasksCount || 1)) * 100)}%
+                    </span>
+                  </div>
+                  <div className="text-xl font-bold text-[var(--color-foreground)]">
+                    {currentCampaign.completedTasksCount} / {currentCampaign.tasksCount} task hoàn thành
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500 rounded-full"
+                      style={{
+                        width: `${Math.round((currentCampaign.completedTasksCount / (currentCampaign.tasksCount || 1)) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 3. KPI Completion */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--color-muted-foreground)] font-medium">KPI Mục tiêu</span>
+                    <span className="font-bold text-emerald-500">
+                      {currentCampaign.kpis[0]?.completionRate || 0}%
+                    </span>
+                  </div>
+                  <div className="text-xl font-bold text-[var(--color-foreground)] truncate">
+                    {(currentCampaign.kpis[0]?.currentValue || 0).toLocaleString('vi-VN')} {currentCampaign.kpis[0]?.unit}
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full"
+                      style={{ width: `${Math.min(100, currentCampaign.kpis[0]?.completionRate || 0)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Budget Burn Rate */}
+                <div className="p-3.5 rounded-xl bg-[var(--color-muted)]/20 border border-[var(--color-border)] space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--color-muted-foreground)] font-medium">Giải ngân Ngân sách</span>
+                    <span className="font-bold text-purple-400">
+                      {Math.round((currentCampaign.totalSpent / (currentCampaign.totalBudget || 1)) * 100)}%
+                    </span>
+                  </div>
+                  <div className="text-xl font-bold text-[var(--color-foreground)]">
+                    {currentCampaign.totalSpent.toLocaleString('vi-VN')}đ
+                  </div>
+                  <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-purple-500 rounded-full"
+                      style={{
+                        width: `${Math.min(100, Math.round((currentCampaign.totalSpent / (currentCampaign.totalBudget || 1)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline Phases View (F135 & F138) */}
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--color-foreground)] flex items-center gap-2">
+                    <span>Kế hoạch Nội dung theo Giai đoạn (Campaign Timeline Phases)</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-semibold border border-blue-500/20">
+                      F135 & F138
+                    </span>
+                  </h3>
+                  <p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
+                    Phân bổ mật độ nội dung, kích hoạt action đăng bài tự động và theo dõi tiến độ xuất bản thực chiến.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={handleExecuteAllPlanAutomation}
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-semibold shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
+                    title="Tự động hóa toàn bộ kế hoạch: Tiến hành quét và xuất bản các bài viết đến hạn của tất cả giai đoạn"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    <span>Kích hoạt Toàn Kế hoạch</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsAddPhaseModalOpen(true)}
+                    className="px-3 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] text-xs font-medium flex items-center gap-1 transition-all"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Thêm Giai đoạn</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {currentCampaign.phases.map((ph, idx) => {
+                  const phaseProgress = Math.round((ph.publishedPostsCount / (ph.targetPostsCount || 1)) * 100);
+                  const remainingPosts = Math.max(0, ph.targetPostsCount - ph.publishedPostsCount);
+
+                  return (
+                    <div
+                      key={ph.id}
+                      className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/10 space-y-3 hover:border-indigo-500/30 transition-all"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-sm">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <div className="font-semibold text-xs text-[var(--color-foreground)] flex items-center gap-2">
+                              <span>{ph.name}</span>
+                              {phaseProgress >= 100 && (
+                                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold flex items-center gap-0.5">
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>Hoàn thành</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-[var(--color-muted-foreground)] whitespace-nowrap mt-0.5 flex items-center gap-1.5">
+                              <Calendar className="w-3 h-3 text-indigo-400" />
+                              <span>{formatCampaignDateRange(ph.startDate, ph.endDate)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Action & Stats Controls */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 text-xs mr-1">
+                            <span className="text-[var(--color-muted-foreground)]">
+                              Đã đăng: <strong className="text-[var(--color-foreground)]">{ph.publishedPostsCount}/{ph.targetPostsCount} bài</strong>
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${phaseProgress >= 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                              {phaseProgress}%
+                            </span>
+                          </div>
+
+                          {/* Quick Action Buttons */}
+                          <div className="flex items-center gap-1 bg-[var(--color-card)] p-1 rounded-xl border border-[var(--color-border)] shadow-sm">
+                            <button
+                              onClick={() => handleExecutePhaseAction(ph.id, 1)}
+                              disabled={remainingPosts === 0}
+                              className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${remainingPosts > 0
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white'
+                                : 'opacity-40 cursor-not-allowed text-[var(--color-muted-foreground)]'
+                                }`}
+                              title="Ghi nhận xuất bản nhanh +1 bài cho giai đoạn này"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>+1 bài</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleExecutePhaseAction(ph.id, -1)}
+                              disabled={ph.publishedPostsCount === 0}
+                              className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${ph.publishedPostsCount > 0
+                                ? 'hover:bg-rose-500/15 hover:text-rose-500 text-[var(--color-muted-foreground)]'
+                                : 'opacity-30 cursor-not-allowed text-[var(--color-muted-foreground)]'
+                                }`}
+                              title="Giảm 1 bài đã đăng"
+                            >
+                              -1
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setActivePhaseAction(ph);
+                                setPhaseActionPostCount(remainingPosts > 0 ? 1 : 1);
+                                setPhaseActionChannel(currentCampaign.channels[0] || 'YOUTUBE');
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
+                              title="Kích hoạt Action Đăng bài / Lên lịch tự động hóa cho giai đoạn này"
+                            >
+                              <Play className="w-3 h-3 fill-current" />
+                              <span>Chạy Action</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-[var(--color-muted-foreground)] pl-9">
+                        {ph.description}
+                      </p>
+
+                      {/* Progress Bar & Sub-indicators */}
+                      <div className="pl-9 space-y-1.5">
+                        <div className="w-full h-2 bg-[var(--color-muted)] rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${phaseProgress >= 100
+                              ? 'bg-emerald-500'
+                              : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                              }`}
+                            style={{ width: `${Math.min(100, phaseProgress)}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-[var(--color-muted-foreground)] pt-0.5">
+                          <span>
+                            {remainingPosts > 0
+                              ? `Còn lại ${remainingPosts} bài viết cần xuất bản trong giai đoạn này`
+                              : 'Đã hoàn thành toàn bộ bài viết dự kiến!'}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px]">Kênh:</span>
+                            {currentCampaign.channels.map((ch) => (
+                              <span
+                                key={ch}
+                                className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${CHANNEL_BADGE_STYLES[ch] || 'bg-muted text-foreground'}`}
+                              >
+                                {ch}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {currentCampaign.phases.length === 0 && (
+                  <div className="py-10 text-center text-xs text-[var(--color-muted-foreground)] border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-card)]/50 space-y-2">
+                    <Clock className="w-8 h-8 text-[var(--color-muted-foreground)] opacity-40 mx-auto" />
+                    <div className="font-semibold text-[var(--color-foreground)]">Chưa thiết lập giai đoạn (Timeline Phases) cho chiến dịch này</div>
+                    <p className="max-w-sm mx-auto">Bấm &quot;Thêm Giai đoạn&quot; để phân bổ mật độ bài viết theo từng mốc thời gian tiếp thị.</p>
+                    <button
+                      onClick={() => setIsAddPhaseModalOpen(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600 transition-all inline-flex items-center gap-1 mt-2"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Thêm Giai đoạn đầu tiên</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
         )
       )}
 
@@ -1743,22 +1731,20 @@ export default function Campaigns() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => setAssetFilterStatus('ALL')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                        assetFilterStatus === 'ALL'
-                          ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                          : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${assetFilterStatus === 'ALL'
+                        ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                        : 'bg-[var(--color-muted)] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+                        }`}
                     >
                       Tất cả ({inScopeAssets.length})
                     </button>
 
                     <button
                       onClick={() => setAssetFilterStatus('PENDING_REVIEW')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${
-                        assetFilterStatus === 'PENDING_REVIEW'
-                          ? 'bg-amber-500 text-white shadow-sm font-semibold'
-                          : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${assetFilterStatus === 'PENDING_REVIEW'
+                        ? 'bg-amber-500 text-white shadow-sm font-semibold'
+                        : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
+                        }`}
                     >
                       <Clock className="w-3.5 h-3.5" />
                       <span>Chờ duyệt ({pendingCount})</span>
@@ -1766,11 +1752,10 @@ export default function Campaigns() {
 
                     <button
                       onClick={() => setAssetFilterStatus('APPROVED')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${
-                        assetFilterStatus === 'APPROVED'
-                          ? 'bg-emerald-500 text-white shadow-sm font-semibold'
-                          : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${assetFilterStatus === 'APPROVED'
+                        ? 'bg-emerald-500 text-white shadow-sm font-semibold'
+                        : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                        }`}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Đã duyệt ({approvedCount})</span>
@@ -1778,11 +1763,10 @@ export default function Campaigns() {
 
                     <button
                       onClick={() => setAssetFilterStatus('REJECTED')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${
-                        assetFilterStatus === 'REJECTED'
-                          ? 'bg-rose-500 text-white shadow-sm font-semibold'
-                          : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all ${assetFilterStatus === 'REJECTED'
+                        ? 'bg-rose-500 text-white shadow-sm font-semibold'
+                        : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
+                        }`}
                     >
                       <X className="w-3.5 h-3.5" />
                       <span>Từ chối ({rejectedCount})</span>
@@ -2015,142 +1999,141 @@ export default function Campaigns() {
             </button>
           </div>
         ) : (
-        <div className="space-y-6">
-          {/* Verdict Banner */}
-          <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500 text-white">
-                  {currentCampaign.status === 'PLANNING'
-                    ? '📋 ĐANG LÊN KẾ HOẠCH'
-                    : currentCampaign.financialSummary.rating === 'OUTSTANDING'
-                    ? '🏆 THÀNH CÔNG VƯỢT BẬC'
-                    : '⭐ ĐẠT MỤC TIÊU'}
+          <div className="space-y-6">
+            {/* Verdict Banner */}
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500 text-white">
+                    {currentCampaign.status === 'PLANNING'
+                      ? '📋 ĐANG LÊN KẾ HOẠCH'
+                      : currentCampaign.financialSummary.rating === 'OUTSTANDING'
+                        ? '🏆 THÀNH CÔNG VƯỢT BẬC'
+                        : '⭐ ĐẠT MỤC TIÊU'}
+                  </span>
+                  <span className="text-sm font-semibold text-[var(--color-foreground)]">
+                    {currentCampaign.name}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--color-muted-foreground)]">
+                  {currentCampaign.financialSummary.summaryVerdict}
+                </p>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted-foreground)] pt-1">
+                  <div className="flex items-center gap-1.5 font-medium text-[var(--color-foreground)]">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span className="whitespace-nowrap">{formatCampaignDateRange(currentCampaign.startDate, currentCampaign.endDate)}</span>
+                  </div>
+                  <div className="flex items-center flex-wrap gap-1">
+                    {currentCampaign.channels.map((ch) => (
+                      <span
+                        key={ch}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
+                          }`}
+                      >
+                        {ch}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    toast.success('Đã tải xuống Báo cáo tổng kết chiến dịch dạng PDF!');
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 text-xs font-semibold shadow-sm transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Xuất Báo Cáo Chiến Dịch</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Financial Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
+                <span className="text-xs text-[var(--color-muted-foreground)]">Doanh thu ghi nhận (Revenue)</span>
+                <div className="text-2xl font-bold text-emerald-500">
+                  {currentCampaign.financialSummary.totalRevenue.toLocaleString('vi-VN')}đ
+                </div>
+                <span className="text-[11px] text-[var(--color-muted-foreground)]">Từ CRM Deals & Đơn hàng</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
+                <span className="text-xs text-[var(--color-muted-foreground)]">Chi phí thực tế (Total Spend)</span>
+                <div className="text-2xl font-bold text-[var(--color-foreground)]">
+                  {currentCampaign.financialSummary.totalActualSpend.toLocaleString('vi-VN')}đ
+                </div>
+                <span className="text-[11px] text-blue-400">
+                  Trong đó Ads: {currentCampaign.financialSummary.paidAdsSpend.toLocaleString('vi-VN')}đ
                 </span>
-                <span className="text-sm font-semibold text-[var(--color-foreground)]">
-                  {currentCampaign.name}
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
+                <span className="text-xs text-[var(--color-muted-foreground)]">Tỷ suất sinh lời ROI %</span>
+                <div className="text-2xl font-bold text-indigo-400">
+                  +{currentCampaign.financialSummary.roiPercentage}%
+                </div>
+                <span className="text-[11px] text-emerald-500 font-semibold">
+                  Lợi nhuận ròng: +{currentCampaign.financialSummary.netProfit.toLocaleString('vi-VN')}đ
                 </span>
               </div>
-              <p className="text-xs text-[var(--color-muted-foreground)]">
-                {currentCampaign.financialSummary.summaryVerdict}
-              </p>
-              <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-muted-foreground)] pt-1">
-                <div className="flex items-center gap-1.5 font-medium text-[var(--color-foreground)]">
-                  <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                  <span className="whitespace-nowrap">{formatCampaignDateRange(currentCampaign.startDate, currentCampaign.endDate)}</span>
+
+              <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
+                <span className="text-xs text-[var(--color-muted-foreground)]">Chỉ số ROAS quảng cáo</span>
+                <div className="text-2xl font-bold text-purple-400">
+                  {currentCampaign.financialSummary.roas}x
                 </div>
-                <div className="flex items-center flex-wrap gap-1">
-                  {currentCampaign.channels.map((ch) => (
-                    <span
-                      key={ch}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        CHANNEL_BADGE_STYLES[ch] || 'bg-[var(--color-muted)] text-[var(--color-foreground)] border-transparent'
-                      }`}
-                    >
-                      {ch}
-                    </span>
-                  ))}
-                </div>
+                <span className="text-[11px] text-[var(--color-muted-foreground)]">1đ Ads mang về {currentCampaign.financialSummary.roas}đ Doanh thu</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  toast.success('Đã tải xuống Báo cáo tổng kết chiến dịch dạng PDF!');
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 text-xs font-semibold shadow-sm transition-all"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Xuất Báo Cáo Chiến Dịch</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Financial Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
-              <span className="text-xs text-[var(--color-muted-foreground)]">Doanh thu ghi nhận (Revenue)</span>
-              <div className="text-2xl font-bold text-emerald-500">
-                {currentCampaign.financialSummary.totalRevenue.toLocaleString('vi-VN')}đ
-              </div>
-              <span className="text-[11px] text-[var(--color-muted-foreground)]">Từ CRM Deals & Đơn hàng</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
-              <span className="text-xs text-[var(--color-muted-foreground)]">Chi phí thực tế (Total Spend)</span>
-              <div className="text-2xl font-bold text-[var(--color-foreground)]">
-                {currentCampaign.financialSummary.totalActualSpend.toLocaleString('vi-VN')}đ
-              </div>
-              <span className="text-[11px] text-blue-400">
-                Trong đó Ads: {currentCampaign.financialSummary.paidAdsSpend.toLocaleString('vi-VN')}đ
-              </span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
-              <span className="text-xs text-[var(--color-muted-foreground)]">Tỷ suất sinh lời ROI %</span>
-              <div className="text-2xl font-bold text-indigo-400">
-                +{currentCampaign.financialSummary.roiPercentage}%
-              </div>
-              <span className="text-[11px] text-emerald-500 font-semibold">
-                Lợi nhuận ròng: +{currentCampaign.financialSummary.netProfit.toLocaleString('vi-VN')}đ
-              </span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-1">
-              <span className="text-xs text-[var(--color-muted-foreground)]">Chỉ số ROAS quảng cáo</span>
-              <div className="text-2xl font-bold text-purple-400">
-                {currentCampaign.financialSummary.roas}x
-              </div>
-              <span className="text-[11px] text-[var(--color-muted-foreground)]">1đ Ads mang về {currentCampaign.financialSummary.roas}đ Doanh thu</span>
-            </div>
-          </div>
-
-          {/* Unit Economics: CPL & CPA */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-3">
-              <h4 className="text-sm font-bold text-[var(--color-foreground)] flex items-center gap-2">
-                <Users className="w-4 h-4 text-blue-400" />
-                <span>Hiệu quả Thu thập Khách hàng Tiềm năng (Leads)</span>
-              </h4>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
-                  <span className="text-[11px] text-[var(--color-muted-foreground)]">Tổng Lead thu về</span>
-                  <div className="text-xl font-bold text-[var(--color-foreground)]">
-                    {currentCampaign.financialSummary.totalLeads} leads
+            {/* Unit Economics: CPL & CPA */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-3">
+                <h4 className="text-sm font-bold text-[var(--color-foreground)] flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-400" />
+                  <span>Hiệu quả Thu thập Khách hàng Tiềm năng (Leads)</span>
+                </h4>
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
+                    <span className="text-[11px] text-[var(--color-muted-foreground)]">Tổng Lead thu về</span>
+                    <div className="text-xl font-bold text-[var(--color-foreground)]">
+                      {currentCampaign.financialSummary.totalLeads} leads
+                    </div>
                   </div>
-                </div>
-                <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
-                  <span className="text-[11px] text-[var(--color-muted-foreground)]">Chi phí trên mỗi Lead (CPL)</span>
-                  <div className="text-xl font-bold text-emerald-500">
-                    {currentCampaign.financialSummary.costPerLead.toLocaleString('vi-VN')}đ
+                  <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
+                    <span className="text-[11px] text-[var(--color-muted-foreground)]">Chi phí trên mỗi Lead (CPL)</span>
+                    <div className="text-xl font-bold text-emerald-500">
+                      {currentCampaign.financialSummary.costPerLead.toLocaleString('vi-VN')}đ
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-3">
-              <h4 className="text-sm font-bold text-[var(--color-foreground)] flex items-center gap-2">
-                <ArrowUpRight className="w-4 h-4 text-emerald-500" />
-                <span>Hiệu quả Chuyển đổi Đơn hàng (Acquisition)</span>
-              </h4>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
-                  <span className="text-[11px] text-[var(--color-muted-foreground)]">Tổng Đơn hàng chốt</span>
-                  <div className="text-xl font-bold text-[var(--color-foreground)]">
-                    {currentCampaign.financialSummary.totalOrders} đơn
+              <div className="p-5 rounded-2xl bg-[var(--color-card)] border border-[var(--color-border)] space-y-3">
+                <h4 className="text-sm font-bold text-[var(--color-foreground)] flex items-center gap-2">
+                  <ArrowUpRight className="w-4 h-4 text-emerald-500" />
+                  <span>Hiệu quả Chuyển đổi Đơn hàng (Acquisition)</span>
+                </h4>
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
+                    <span className="text-[11px] text-[var(--color-muted-foreground)]">Tổng Đơn hàng chốt</span>
+                    <div className="text-xl font-bold text-[var(--color-foreground)]">
+                      {currentCampaign.financialSummary.totalOrders} đơn
+                    </div>
                   </div>
-                </div>
-                <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
-                  <span className="text-[11px] text-[var(--color-muted-foreground)]">Chi phí trên mỗi Đơn (CPA)</span>
-                  <div className="text-xl font-bold text-indigo-400">
-                    {currentCampaign.financialSummary.costPerAcquisition.toLocaleString('vi-VN')}đ
+                  <div className="p-3 rounded-xl bg-[var(--color-muted)]/30 border border-[var(--color-border)]">
+                    <span className="text-[11px] text-[var(--color-muted-foreground)]">Chi phí trên mỗi Đơn (CPA)</span>
+                    <div className="text-xl font-bold text-indigo-400">
+                      {currentCampaign.financialSummary.costPerAcquisition.toLocaleString('vi-VN')}đ
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
         )
       )}
 
@@ -2708,11 +2691,10 @@ export default function Campaigns() {
                   <button
                     type="button"
                     onClick={() => setPhaseActionType('INSTANT_PUBLISH')}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      phaseActionType === 'INSTANT_PUBLISH'
-                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500 font-semibold'
-                        : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
-                    }`}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${phaseActionType === 'INSTANT_PUBLISH'
+                      ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500 font-semibold'
+                      : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
+                      }`}
                   >
                     <div className="flex items-center gap-1.5 mb-1 font-bold">
                       <Zap className="w-3.5 h-3.5" />
@@ -2726,11 +2708,10 @@ export default function Campaigns() {
                   <button
                     type="button"
                     onClick={() => setPhaseActionType('AUTO_SCHEDULE')}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      phaseActionType === 'AUTO_SCHEDULE'
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-semibold'
-                        : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
-                    }`}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${phaseActionType === 'AUTO_SCHEDULE'
+                      ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-semibold'
+                      : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
+                      }`}
                   >
                     <div className="flex items-center gap-1.5 mb-1 font-bold">
                       <Calendar className="w-3.5 h-3.5" />
@@ -2744,11 +2725,10 @@ export default function Campaigns() {
                   <button
                     type="button"
                     onClick={() => setPhaseActionType('MANUAL_LOG')}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      phaseActionType === 'MANUAL_LOG'
-                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500 font-semibold'
-                        : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
-                    }`}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${phaseActionType === 'MANUAL_LOG'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500 font-semibold'
+                      : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
+                      }`}
                   >
                     <div className="flex items-center gap-1.5 mb-1 font-bold">
                       <CheckCircle className="w-3.5 h-3.5" />
