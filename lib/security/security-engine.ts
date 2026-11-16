@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 // =========================================================================
 // TYPES & INTERFACES FOR M15: SECURITY & INTEGRATIONS (F163 - F170)
 // =========================================================================
@@ -200,6 +203,40 @@ export interface BackupSnapshot {
 // =========================================================================
 
 class SecurityEngineStore {
+  private rbacFilePath = path.join(process.cwd(), 'data', 'rbac-matrix.json');
+
+  constructor() {
+    this.loadRbacFromDisk();
+  }
+
+  private loadRbacFromDisk() {
+    try {
+      if (fs.existsSync(this.rbacFilePath)) {
+        const raw = fs.readFileSync(this.rbacFilePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.rbacPermissions = parsed;
+        }
+      } else {
+        this.saveRbacToDisk();
+      }
+    } catch (e) {
+      console.error('[SECURITY_ENGINE] Failed to load RBAC from disk', e);
+    }
+  }
+
+  private saveRbacToDisk() {
+    try {
+      const dir = path.dirname(this.rbacFilePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.rbacFilePath, JSON.stringify(this.rbacPermissions, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('[SECURITY_ENGINE] Failed to save RBAC to disk', e);
+    }
+  }
+
   // F163: 2FA State
   private twoFactor: TwoFactorState = {
     isEnabled: false,
@@ -883,6 +920,7 @@ class SecurityEngineStore {
       if (role === 'owner') return false; // Owner always has all rights
       const targetRole: 'admin' | 'editor' | 'viewer' = role === 'staff' ? 'viewer' : (role as any);
       item[targetRole] = value;
+      this.saveRbacToDisk();
       this.recordAuditLog('admin@topify.app', 'OWNER', `RBAC_UPDATED_${permissionKey.toUpperCase()}`, 'PERMISSION', 'SUCCESS');
       return true;
     }

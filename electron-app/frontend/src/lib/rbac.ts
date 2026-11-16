@@ -122,9 +122,32 @@ export function canUser(
 }
 
 let cachedMatrix: RolePermissionItem[] | null = null;
+try {
+  const localCached = localStorage.getItem('topify_rbac_matrix');
+  if (localCached) {
+    cachedMatrix = JSON.parse(localCached);
+  }
+} catch {}
+
+export function setCachedRbacMatrix(newMatrix: RolePermissionItem[]) {
+  cachedMatrix = newMatrix;
+  try {
+    localStorage.setItem('topify_rbac_matrix', JSON.stringify(newMatrix));
+    window.dispatchEvent(new CustomEvent('topify_rbac_updated', { detail: newMatrix }));
+  } catch {}
+}
 
 export function useRbac() {
-  const [matrix, setMatrix] = useState<RolePermissionItem[]>(cachedMatrix || DEFAULT_RBAC_MATRIX);
+  const [matrix, setMatrix] = useState<RolePermissionItem[]>(() => {
+    if (cachedMatrix && Array.isArray(cachedMatrix) && cachedMatrix.length > 0) {
+      return cachedMatrix;
+    }
+    try {
+      const localCached = localStorage.getItem('topify_rbac_matrix');
+      if (localCached) return JSON.parse(localCached);
+    } catch {}
+    return DEFAULT_RBAC_MATRIX;
+  });
 
   let currentUser: any = null;
   try {
@@ -142,15 +165,31 @@ export function useRbac() {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Listen to local rbac update event across tabs/components
+    const handleUpdate = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail) && isMounted) {
+        setMatrix(e.detail);
+      }
+    };
+    window.addEventListener('topify_rbac_updated', handleUpdate);
+
     api.get('/security/rbac')
       .then((res) => {
         if (res.data?.permissions && isMounted) {
           cachedMatrix = res.data.permissions;
+          try {
+            localStorage.setItem('topify_rbac_matrix', JSON.stringify(res.data.permissions));
+          } catch {}
           setMatrix(res.data.permissions);
         }
       })
       .catch(() => {});
-    return () => { isMounted = false; };
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('topify_rbac_updated', handleUpdate);
+    };
   }, []);
 
   const can = (permissionKey: string): boolean => {

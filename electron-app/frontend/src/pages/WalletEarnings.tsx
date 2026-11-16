@@ -34,6 +34,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../lib/axios';
 import { toast } from 'sonner';
 import { useRbac } from '../lib/rbac';
+import { PermissionDeniedCard } from '../components/common/PermissionDeniedCard';
 
 interface WalletEarningsProps {
   defaultTab?: 'balance' | 'transactions' | 'payment_methods' | 'tasks' | 'referral';
@@ -1028,6 +1029,10 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
       toast.error(err.response?.data?.error || 'Không thể cập nhật biện pháp xử lý');
     }
   };
+
+  if (!isOwner && !isAdmin && !can('wallet.view')) {
+    return <PermissionDeniedCard permissionKey="wallet.view" moduleName="Ví Điện Tử & Thu Nhập" />;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in p-2 sm:p-4 max-w-7xl mx-auto">

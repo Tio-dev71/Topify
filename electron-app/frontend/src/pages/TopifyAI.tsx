@@ -38,11 +38,13 @@ import {
   Pencil,
   BarChart3,
   Coins,
-  Target
+  Target,
+  ShieldAlert
 } from 'lucide-react';
 import api from '../lib/axios';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useRbac } from '../lib/rbac';
 import { CampaignPlannerTab } from '../components/ai/CampaignPlannerTab';
 import { AnalyticsCopilotTab } from '../components/ai/AnalyticsCopilotTab';
 import { SafetyModerationTab } from '../components/ai/SafetyModerationTab';
@@ -177,8 +179,10 @@ export default function TopifyAI() {
   } catch (e) {
     user = null;
   }
+  const { can, isOwner, isStaff, roleDisplayName } = useRbac();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const isAdmin = user?.role === 'ADMIN' || isSuperAdmin;
+  const isAdmin = user?.role === 'ADMIN' || isSuperAdmin || isOwner;
+  const hasAiAccess = isAdmin || can('automation.manage');
   const canManagePersonas = isAdmin;
 
   // ==========================================
@@ -452,6 +456,10 @@ export default function TopifyAI() {
   };
 
   const handleOpenCreateSessionModal = () => {
+    if (!hasAiAccess) {
+      toast.error(`Tài khoản vai trò ${roleDisplayName} chưa được cấp quyền tạo phiên AI theo Ma Trận Phân Quyền RBAC.`);
+      return;
+    }
     const activePersonaObj = personas.find((p) => p.id === selectedPersona) || personas[0];
     const defaultPersonaId = activePersonaObj ? activePersonaObj.id : 'MARKETING_STRATEGIST';
     setNewSessionTitle(`Tư vấn ${activePersonaObj ? activePersonaObj.name : 'Chiến Lược'}`);
@@ -633,6 +641,10 @@ export default function TopifyAI() {
   };
 
   const handleSendMessage = async () => {
+    if (!hasAiAccess) {
+      toast.error(`Tài khoản vai trò ${roleDisplayName} chưa được cấp quyền gửi yêu cầu AI theo Ma Trận Phân Quyền RBAC.`);
+      return;
+    }
     if (!inputMessage.trim() || !currentSessionId) return;
     const userText = inputMessage;
     setInputMessage('');
@@ -985,6 +997,21 @@ export default function TopifyAI() {
         </button>
       </div>
 
+      {/* RBAC Mode Alert */}
+      {!hasAiAccess && (
+        <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 flex items-center justify-between text-amber-800 text-xs shadow-sm">
+          <div className="flex items-center gap-3">
+            <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <span className="font-bold">Chế độ giới hạn quyền ({roleDisplayName}):</span>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Tài khoản của bạn chưa được cấp quyền sử dụng AI Hub trong <strong>Ma Trận Phân Quyền (RBAC)</strong>. Chức năng tạo phiên mới (+ Phiên mới), nạp Prompt và gửi yêu cầu sinh nội dung AI đang bị khóa.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* TAB 1: AI CHAT ASSISTANT (F156) */}
       {/* ========================================================================= */}
@@ -1000,9 +1027,13 @@ export default function TopifyAI() {
                 </h3>
                 <button
                   onClick={handleOpenCreateSessionModal}
-                  disabled={loading}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-xs flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap shrink-0 active:scale-95 cursor-pointer"
-                  title="Tạo phiên mới kèm Prompt nạp"
+                  disabled={loading || !hasAiAccess}
+                  className={`px-3 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap shrink-0 ${
+                    hasAiAccess
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95 cursor-pointer'
+                      : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                  }`}
+                  title={!hasAiAccess ? 'Tài khoản chưa được cấp quyền RBAC tạo phiên mới' : 'Tạo phiên mới kèm Prompt nạp'}
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Mới</span>
@@ -1140,8 +1171,13 @@ export default function TopifyAI() {
                 )}
                 <button
                   onClick={handleOpenCreateSessionModal}
-                  className="px-3 py-1.5 text-xs rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 shadow-2xs transition-colors font-semibold"
-                  title="Khởi tạo phiên mới"
+                  disabled={!hasAiAccess}
+                  className={`px-3 py-1.5 text-xs rounded-xl flex items-center gap-1.5 shadow-2xs transition-colors font-semibold ${
+                    hasAiAccess
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                      : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                  }`}
+                  title={!hasAiAccess ? 'Tài khoản chưa được cấp quyền RBAC tạo phiên mới' : 'Khởi tạo phiên mới'}
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span className="whitespace-nowrap">Phiên mới</span>
@@ -1230,15 +1266,20 @@ export default function TopifyAI() {
               <div className="flex gap-2">
                 <input
                   type="text"
+                  disabled={!hasAiAccess}
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                  placeholder="Nhập câu hỏi hoặc yêu cầu cho Topify AI..."
-                  className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  placeholder={
+                    !hasAiAccess
+                      ? `Chế độ chỉ xem (${roleDisplayName}). Cần quyền Quản trị viên để chat AI...`
+                      : 'Nhập câu hỏi hoặc yêu cầu cho Topify AI...'
+                  }
+                  className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSendMessage}
-                  disabled={loading || !inputMessage.trim()}
+                  disabled={loading || !hasAiAccess || !inputMessage.trim()}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium flex items-center gap-2 shadow-sm transition-all"
                 >
                   <Send className="w-4 h-4" />

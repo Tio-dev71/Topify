@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
+import { useRbac } from '../lib/rbac';
 
 export type CampaignStatus = 'DRAFT' | 'PLANNING' | 'RUNNING' | 'PAUSED' | 'COMPLETED';
 export type CampaignObjectiveType = 'REVENUE' | 'LEADS' | 'REACH' | 'APP_INSTALL' | 'CONVERSIONS';
@@ -141,6 +142,9 @@ const INITIAL_CAMPAIGNS: EnrichedCampaign[] = [];
 const INITIAL_ASSETS: CampaignAssetItem[] = [];
 
 export default function Campaigns() {
+  const { can, isOwner, isAdmin, roleDisplayName } = useRbac();
+  const canManageCampaigns = isOwner || isAdmin || can('campaigns.manage');
+
   const [activeTab, setActiveTab] = useState<'campaigns' | 'progress' | 'assets' | 'report'>('campaigns');
 
   // Campaigns state (persisted to localStorage cache for zero-flicker retention)
@@ -973,14 +977,38 @@ export default function Campaigns() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white hover:opacity-95 font-medium text-sm transition-all shadow-sm"
+            onClick={() => {
+              if (!canManageCampaigns) {
+                toast.error(`Tài khoản vai trò ${roleDisplayName} chưa được cấp quyền tạo chiến dịch theo Ma Trận Phân Quyền RBAC.`);
+                return;
+              }
+              setIsCreateModalOpen(true);
+            }}
+            disabled={!canManageCampaigns}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium text-sm transition-all shadow-sm ${
+              canManageCampaigns ? 'bg-[var(--color-primary)] hover:opacity-95 cursor-pointer' : 'bg-gray-400 opacity-60 cursor-not-allowed'
+            }`}
           >
             <Plus className="w-4 h-4" />
             <span>Tạo chiến dịch mới</span>
           </button>
         </div>
       </div>
+
+      {/* RBAC Warning Banner for Staff */}
+      {!canManageCampaigns && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between text-amber-800 text-xs">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <span className="font-bold">Chế độ chỉ xem ({roleDisplayName}):</span>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Bạn không có quyền tạo hoặc chỉnh sửa chiến dịch theo <strong>Ma Trận Phân Quyền (RBAC)</strong>. Liên hệ Quản trị viên nếu cần cấp quyền.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div className="flex items-center justify-between border-b border-[var(--color-border)]">

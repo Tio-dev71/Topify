@@ -1,5 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { topifyAiStore } from '@/lib/ai/topify-ai-engine';
+import { securityEngineStore } from '@/lib/security/security-engine';
+import { auth } from '@/lib/auth';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function getAuthRole(req: NextRequest): Promise<string> {
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7).trim();
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.role) return decoded.role;
+    } catch {}
+  }
+  try {
+    const session = await auth();
+    if (session?.user?.role) return session.user.role;
+  } catch {}
+  return 'STAFF';
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,6 +45,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const userRole = await getAuthRole(req);
+    if (!securityEngineStore.hasPermission(userRole, 'automation.manage')) {
+      return NextResponse.json({
+        error: 'Tài khoản của bạn (Nhân viên) chưa được cấp quyền sử dụng AI Studio theo Ma Trận Phân Quyền RBAC.',
+      }, { status: 403 });
+    }
+
     const body = await req.json();
     const { action, sessionId, title, persona, message, systemPrompt, name, emoji, description, welcomeMessage, createdBy, personaId } = body;
 
@@ -102,6 +130,13 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const userRole = await getAuthRole(req);
+    if (!securityEngineStore.hasPermission(userRole, 'automation.manage')) {
+      return NextResponse.json({
+        error: 'Tài khoản của bạn (Nhân viên) chưa được cấp quyền xóa phiên AI theo Ma Trận Phân Quyền RBAC.',
+      }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const sessionId = searchParams.get('sessionId');
     if (!sessionId) {

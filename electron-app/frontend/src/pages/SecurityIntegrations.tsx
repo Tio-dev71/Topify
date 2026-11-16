@@ -13,6 +13,8 @@ import {
   Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRbac } from '../lib/rbac';
+import { PermissionDeniedCard } from '../components/common/PermissionDeniedCard';
 
 // Import M15 Sub-Feature Tabs F163 - F170
 import TwoFactorTab from '../components/security/TwoFactorTab';
@@ -35,7 +37,12 @@ export type SecurityTabId =
   | 'backup_retention';
 
 export default function SecurityIntegrations() {
+  const { can, isOwner, isAdmin } = useRbac();
   const [activeTab, setActiveTab] = useState<SecurityTabId>('2fa');
+
+  if (!isOwner && !isAdmin && !can('developer.manage')) {
+    return <PermissionDeniedCard permissionKey="developer.manage" moduleName="Bảo Mật & Tích Hợp (M15)" />;
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem('topify_active_security_tab') as SecurityTabId | null;

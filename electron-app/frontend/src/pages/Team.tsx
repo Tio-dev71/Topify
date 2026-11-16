@@ -30,7 +30,7 @@ import {
 import { toast } from 'sonner';
 import api from '../lib/axios';
 import { useNavigate } from 'react-router-dom';
-import { useRbac } from '../lib/rbac';
+import { useRbac, setCachedRbacMatrix } from '../lib/rbac';
 
 interface TeamMember {
   id: string;
@@ -229,11 +229,11 @@ export default function Team() {
     setSavingRbacKey(`${permissionKey}-${role}`);
 
     // Optimistic UI update
-    setRbacMatrix((prev) =>
-      prev.map((item) =>
-        item.permissionKey === permissionKey ? { ...item, [role]: nextValue } : item
-      )
+    const optimisticUpdated = rbacMatrix.map((item) =>
+      item.permissionKey === permissionKey ? { ...item, [role]: nextValue } : item
     );
+    setRbacMatrix(optimisticUpdated);
+    setCachedRbacMatrix(optimisticUpdated);
 
     try {
       const res = await api.post('/security/rbac', {
@@ -243,14 +243,18 @@ export default function Team() {
       });
       if (res.data?.success) {
         toast.success(`Đã cập nhật quyền ${permissionKey} cho vai trò ${role.toUpperCase()}`);
+        if (res.data?.permissions) {
+          setRbacMatrix(res.data.permissions);
+          setCachedRbacMatrix(res.data.permissions);
+        }
       }
     } catch (e: any) {
       // Revert on error
-      setRbacMatrix((prev) =>
-        prev.map((item) =>
-          item.permissionKey === permissionKey ? { ...item, [role]: currentValue } : item
-        )
+      const reverted = rbacMatrix.map((item) =>
+        item.permissionKey === permissionKey ? { ...item, [role]: currentValue } : item
       );
+      setRbacMatrix(reverted);
+      setCachedRbacMatrix(reverted);
       toast.error(e.response?.data?.error || 'Lỗi khi cập nhật quyền RBAC');
     } finally {
       setSavingRbacKey(null);

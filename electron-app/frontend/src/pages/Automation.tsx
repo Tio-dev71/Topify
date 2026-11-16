@@ -19,12 +19,18 @@ import { FacebookPostAutomationTab } from '../components/automation/FacebookPost
 import { RuleBuilderModal } from '../components/automation/RuleBuilderModal';
 import { TemplatesModal } from '../components/automation/TemplatesModal';
 import { useRbac } from '../lib/rbac';
+import { PermissionDeniedCard } from '../components/common/PermissionDeniedCard';
 import { toast } from 'sonner';
 
 type AutomationTabKey = 'workflows' | 'templates' | 'logs' | 'fb_posts' | 'social';
 
 export default function Automation() {
-  const { can, roleDisplayName } = useRbac();
+  const { can, isOwner, isAdmin, roleDisplayName } = useRbac();
+
+  if (!isOwner && !isAdmin && !can('automation.manage')) {
+    return <PermissionDeniedCard permissionKey="automation.manage" moduleName="Tự Động Hóa (M11)" />;
+  }
+
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromQuery = searchParams.get('tab') as AutomationTabKey | null;
   const [activeTab, setActiveTab] = useState<AutomationTabKey>('workflows');

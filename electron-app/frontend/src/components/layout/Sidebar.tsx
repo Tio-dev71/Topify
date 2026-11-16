@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useRbac } from '../../lib/rbac';
 import {
   LayoutDashboard,
   Calendar,
@@ -47,14 +48,17 @@ import {
   UserCheck,
 } from 'lucide-react';
 
+interface NavItem {
+  key: string;
+  href: string;
+  icon: any;
+  badge?: string;
+  permission?: string;
+}
+
 interface NavSection {
   title: string;
-  items: {
-    key: string;
-    href: string;
-    icon: any;
-    badge?: string;
-  }[];
+  items: NavItem[];
 }
 
 const navSections: NavSection[] = [
@@ -68,29 +72,29 @@ const navSections: NavSection[] = [
   {
     title: 'NỘI DUNG & SÁNG TẠO',
     items: [
-      { key: 'Quản lý bài viết', href: '/posts', icon: Calendar },
-      { key: 'Lịch nội dung (Calendar)', href: '/calendar', icon: Calendar },
-      { key: 'Chủ đề nội dung (Pillars)', href: '/pillars', icon: Layers, badge: 'F073' },
-      { key: 'Mẫu bài viết (Templates)', href: '/templates', icon: LayoutTemplate },
-      { key: 'Hashtags & Mẫu CTA', href: '/hashtags', icon: Hash },
-      { key: 'Phê duyệt bài viết', href: '/approval', icon: CheckCircle2 },
-      { key: 'Tạo liên kết UTM', href: '/utm', icon: Link2 },
+      { key: 'Quản lý bài viết', href: '/posts', icon: Calendar, permission: 'posts.manage' },
+      { key: 'Lịch nội dung (Calendar)', href: '/calendar', icon: Calendar, permission: 'posts.manage' },
+      { key: 'Chủ đề nội dung (Pillars)', href: '/pillars', icon: Layers, badge: 'F073', permission: 'posts.manage' },
+      { key: 'Mẫu bài viết (Templates)', href: '/templates', icon: LayoutTemplate, permission: 'posts.manage' },
+      { key: 'Hashtags & Mẫu CTA', href: '/hashtags', icon: Hash, permission: 'posts.manage' },
+      { key: 'Phê duyệt bài viết', href: '/approval', icon: CheckCircle2, permission: 'posts.manage' },
+      { key: 'Tạo liên kết UTM', href: '/utm', icon: Link2, permission: 'posts.manage' },
       { key: 'Thư viện Media (Tệp tin)', href: '/media/library', icon: ImageIcon },
-      { key: 'Media Studio AI', href: '/media/studio', icon: Film },
-      { key: 'Studio Nội dung & Spin', href: '/content-studio', icon: Wand2 },
-      { key: 'Nội dung Evergreen', href: '/evergreen', icon: Repeat },
+      { key: 'Media Studio AI', href: '/media/studio', icon: Film, permission: 'automation.manage' },
+      { key: 'Studio Nội dung & Spin', href: '/content-studio', icon: Wand2, permission: 'posts.manage' },
+      { key: 'Nội dung Evergreen', href: '/evergreen', icon: Repeat, permission: 'posts.manage' },
       { key: 'Tải video / media', href: '/downloader', icon: Download },
     ],
   },
   {
     title: 'MẠNG XÃ HỘI & TỰ ĐỘNG HÓA',
     items: [
-      { key: 'Tự động hóa', href: '/automation', icon: Play },
-      { key: 'Auto Like & Cmt FB (F145)', href: '/automation?tab=fb_posts', icon: ThumbsUp, badge: '50đ/70đ' },
-      { key: 'Tài khoản Facebook', href: '/accounts', icon: Users },
-      { key: 'Quản lý Proxy', href: '/proxies', icon: Globe },
-      { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart },
-      { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play },
+      { key: 'Tự động hóa', href: '/automation', icon: Play, permission: 'automation.manage' },
+      { key: 'Auto Like & Cmt FB (F145)', href: '/automation?tab=fb_posts', icon: ThumbsUp, badge: '50đ/70đ', permission: 'automation.manage' },
+      { key: 'Tài khoản Facebook', href: '/accounts', icon: Users, permission: 'automation.manage' },
+      { key: 'Quản lý Proxy', href: '/proxies', icon: Globe, permission: 'automation.manage' },
+      { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart, permission: 'automation.manage' },
+      { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play, permission: 'automation.manage' },
       { key: 'Thám tử xu hướng (MXH)', href: '/intelligence/social-search', icon: Search },
       { key: 'Theo dõi từ khóa (F109)', href: '/intelligence/keywords', icon: Hash, badge: 'F109' },
       { key: 'Xu hướng bùng nổ (F110)', href: '/intelligence/trending', icon: TrendingUp, badge: 'F110' },
@@ -112,25 +116,25 @@ const navSections: NavSection[] = [
       { key: 'Quét trùng & Hợp nhất (F101)', href: '/crm/duplicate-merge', icon: GitMerge },
       { key: 'Nhúng Form Thu Lead (F102)', href: '/crm/embed-form', icon: Code2 },
       { key: 'Quản lý công việc (Tasks)', href: '/tasks', icon: CheckSquare },
-      { key: 'Chiến dịch (Campaigns)', href: '/campaigns', icon: Rocket },
+      { key: 'Chiến dịch (Campaigns)', href: '/campaigns', icon: Rocket, permission: 'campaigns.manage' },
     ],
   },
   {
     title: 'TÀI CHÍNH & TĂNG TRƯỞNG',
     items: [
-      { key: 'Ví & Hoa hồng (Wallet)', href: '/wallet', icon: Wallet },
-      { key: 'Tiếp thị liên kết (Referral)', href: '/referral', icon: Gift },
+      { key: 'Ví & Hoa hồng (Wallet)', href: '/wallet', icon: Wallet, permission: 'wallet.view' },
+      { key: 'Tiếp thị liên kết (Referral)', href: '/referral', icon: Gift, permission: 'wallet.view' },
     ],
   },
   {
     title: 'HỆ THỐNG & CÀI ĐẶT',
     items: [
-      { key: 'Thành viên & Nhóm (F116/F117)', href: '/team', icon: Users },
-      { key: 'Gói cước & Quota (M8)', href: '/settings?tab=quota', icon: PieChart },
-      { key: 'Topify AI Hub', href: '/ai', icon: Sparkles },
-      { key: 'Bảo mật & Tích hợp', href: '/security', icon: ShieldCheck },
-      { key: 'Nhật ký hoạt động', href: '/history', icon: Activity },
-      { key: 'Cài đặt hệ thống', href: '/settings', icon: Settings },
+      { key: 'Thành viên & Nhóm (F116/F117)', href: '/team', icon: Users, permission: 'workspace.manage' },
+      { key: 'Gói cước & Quota (M8)', href: '/settings?tab=quota', icon: PieChart, permission: 'workspace.manage' },
+      { key: 'Topify AI Hub', href: '/ai', icon: Sparkles, permission: 'automation.manage' },
+      { key: 'Bảo mật & Tích hợp', href: '/security', icon: ShieldCheck, permission: 'developer.manage' },
+      { key: 'Nhật ký hoạt động', href: '/history', icon: Activity, permission: 'workspace.manage' },
+      { key: 'Cài đặt hệ thống', href: '/settings', icon: Settings, permission: 'workspace.manage' },
     ],
   },
 ];
@@ -156,6 +160,14 @@ export function Sidebar() {
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isWorkspaceAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+
+  const { can, isOwner, isAdmin } = useRbac();
+
+  const isItemVisible = (item: NavItem) => {
+    if (isOwner || isAdmin) return true;
+    if (!item.permission) return true;
+    return can(item.permission);
+  };
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
@@ -234,50 +246,55 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 py-4 px-3 overflow-y-auto space-y-5">
-          {navSections.map((section, idx) => (
-            <div key={section.title} className={idx > 0 ? 'pt-4 border-t border-gray-100' : ''}>
-              {!collapsed && (
-                <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                  {section.title}
-                </p>
-              )}
-              <div className="space-y-1">
-                {section.items.map((item) => {
-                  const active = isActive(item.href);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.key}
-                      to={item.href}
-                      onClick={() => setMobileOpen(false)}
-                      className={`
-                        flex items-center gap-3 px-3 py-2 rounded-xl text-[12.5px] font-medium
-                        transition-all duration-200 group
-                        ${active
-                          ? 'bg-blue-50 text-[var(--color-primary)] font-bold'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                        }
-                        ${collapsed ? 'justify-center px-2' : ''}
-                      `}
-                      title={collapsed ? item.key : undefined}
-                    >
-                      <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--color-primary)]' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                      {!collapsed && (
-                        <div className="flex items-center justify-between flex-1 min-w-0">
-                          <span className="truncate">{item.key}</span>
-                          {item.badge && (
-                            <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700">
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </Link>
-                  );
-                })}
+          {navSections.map((section, idx) => {
+            const visibleItems = section.items.filter(isItemVisible);
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={section.title} className={idx > 0 ? 'pt-4 border-t border-gray-100' : ''}>
+                {!collapsed && (
+                  <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    {section.title}
+                  </p>
+                )}
+                <div className="space-y-1">
+                  {visibleItems.map((item) => {
+                    const active = isActive(item.href);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.key}
+                        to={item.href}
+                        onClick={() => setMobileOpen(false)}
+                        className={`
+                          flex items-center gap-3 px-3 py-2 rounded-xl text-[12.5px] font-medium
+                          transition-all duration-200 group
+                          ${active
+                            ? 'bg-blue-50 text-[var(--color-primary)] font-bold'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          }
+                          ${collapsed ? 'justify-center px-2' : ''}
+                        `}
+                        title={collapsed ? item.key : undefined}
+                      >
+                        <Icon className={`w-[17px] h-[17px] flex-shrink-0 ${active ? 'text-[var(--color-primary)]' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                        {!collapsed && (
+                          <div className="flex items-center justify-between flex-1 min-w-0">
+                            <span className="truncate">{item.key}</span>
+                            {item.badge && (
+                              <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Super Admin & Workspace Management section */}
           {isWorkspaceAdmin && (

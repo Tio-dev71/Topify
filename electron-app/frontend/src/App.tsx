@@ -42,6 +42,7 @@ import Keywords from './pages/Keywords';
 import Layout from './components/layout/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ScrollToTop } from './components/layout/ScrollToTop';
+import { RbacGuard } from './components/common/PermissionDeniedCard';
 
 function App() {
   return (
@@ -79,13 +80,13 @@ function App() {
           <Route path="/competitors" element={<Competitors />} />
           <Route path="/intelligence/keywords" element={<Keywords />} />
           <Route path="/keywords" element={<Keywords />} />
-          <Route path="/media/studio" element={<MediaStudio />} />
+          <Route path="/media/studio" element={<RbacGuard permission="automation.manage" moduleName="Media Studio AI"><MediaStudio /></RbacGuard>} />
           <Route path="/media/library" element={<MediaLibrary />} />
-          <Route path="/accounts" element={<FacebookAccounts />} />
+          <Route path="/accounts" element={<RbacGuard permission="automation.manage" moduleName="Tài Khoản Facebook"><FacebookAccounts /></RbacGuard>} />
           <Route path="/tasks" element={<Tasks />} />
-          <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/campaigns" element={<RbacGuard permission="campaigns.manage" moduleName="Chiến Dịch"><Campaigns /></RbacGuard>} />
 
-          <Route path="/live" element={<Live />} />
+          <Route path="/live" element={<RbacGuard permission="automation.manage" moduleName="Phát Trực Tiếp"><Live /></RbacGuard>} />
           <Route path="/posts" element={<Posts />} />
           <Route path="/posts/:id" element={<PostDetail />} />
           <Route path="/calendar" element={<CalendarView />} />
@@ -100,19 +101,19 @@ function App() {
           <Route path="/content/approval" element={<Approval />} />
           <Route path="/utm" element={<UTMBuilder />} />
           <Route path="/content/utm" element={<UTMBuilder />} />
-          <Route path="/create" element={<CreatePost />} />
+          <Route path="/create" element={<RbacGuard permission="posts.manage" moduleName="Tạo Bài Viết"><CreatePost /></RbacGuard>} />
           <Route path="/evergreen" element={<Evergreen />} />
-          <Route path="/content-studio" element={<ContentStudio />} />
+          <Route path="/content-studio" element={<RbacGuard permission="posts.manage" moduleName="Studio Nội Dung & Spin"><ContentStudio /></RbacGuard>} />
           <Route path="/downloader" element={<Downloader />} />
-          <Route path="/proxies" element={<Proxies />} />
-          <Route path="/automation" element={<Automation />} />
-          <Route path="/automation/facebook-posts" element={<Automation />} />
-          <Route path="/facebook-automation" element={<Automation />} />
-          <Route path="/buff" element={<BuffSystem />} />
-          <Route path="/wallet" element={<WalletEarnings />} />
-          <Route path="/referral" element={<WalletEarnings defaultTab="referral" />} />
-          <Route path="/ai" element={<TopifyAI />} />
-          <Route path="/security" element={<SecurityIntegrations />} />
+          <Route path="/proxies" element={<RbacGuard permission="automation.manage" moduleName="Quản Lý Proxy"><Proxies /></RbacGuard>} />
+          <Route path="/automation" element={<RbacGuard permission="automation.manage" moduleName="Tự Động Hóa"><Automation /></RbacGuard>} />
+          <Route path="/automation/facebook-posts" element={<RbacGuard permission="automation.manage" moduleName="Tự Động Hóa"><Automation /></RbacGuard>} />
+          <Route path="/facebook-automation" element={<RbacGuard permission="automation.manage" moduleName="Tự Động Hóa"><Automation /></RbacGuard>} />
+          <Route path="/buff" element={<RbacGuard permission="automation.manage" moduleName="Tăng Tương Tác"><BuffSystem /></RbacGuard>} />
+          <Route path="/wallet" element={<RbacGuard permission="wallet.view" moduleName="Ví Điện Tử & Thu Nhập"><WalletEarnings /></RbacGuard>} />
+          <Route path="/referral" element={<RbacGuard permission="wallet.view" moduleName="Tiếp Thị Liên Kết"><WalletEarnings defaultTab="referral" /></RbacGuard>} />
+          <Route path="/ai" element={<RbacGuard permission="automation.manage" moduleName="Topify AI Hub"><TopifyAI /></RbacGuard>} />
+          <Route path="/security" element={<RbacGuard permission="developer.manage" moduleName="Bảo Mật & Tích Hợp"><SecurityIntegrations /></RbacGuard>} />
           <Route path="/history" element={<History />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
