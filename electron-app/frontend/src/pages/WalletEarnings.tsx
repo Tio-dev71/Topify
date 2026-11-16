@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Wallet, 
   ArrowDownToLine, 
+  ArrowDownLeft,
   ArrowUpRight, 
   CreditCard, 
   TrendingUp, 
@@ -59,6 +60,25 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
   const [selectedMethodId, setSelectedMethodId] = useState('');
   const [withdrawNote, setWithdrawNote] = useState('');
   const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
+
+  // Real Deposit / Top-up Modal State (VietQR 24/7)
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [depositAmount, setDepositAmount] = useState<number>(500000);
+  const [depositBank, setDepositBank] = useState<string>('MB');
+  const [depositTransferCode, setDepositTransferCode] = useState<string>(() => `TOP${Math.floor(100000 + Math.random() * 900000)}`);
+  const [submittingDeposit, setSubmittingDeposit] = useState(false);
+
+  // Pay With Wallet Modal State (Campaigns, Subscriptions, AI Credits, Proxies)
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payServiceType, setPayServiceType] = useState<'CAMPAIGN_BUDGET' | 'SUBSCRIPTION_PRO' | 'AI_CREDITS' | 'PROXY_PURCHASE'>('CAMPAIGN_BUDGET');
+  const [payAmount, setPayAmount] = useState<number>(500000);
+  const [payCampaignId, setPayCampaignId] = useState<string>('');
+  const [payNote, setPayNote] = useState<string>('');
+  const [submittingPay, setSubmittingPay] = useState(false);
+  const [availableCampaigns, setAvailableCampaigns] = useState<any[]>([]);
+
+  // Payout VietQR Modal State (Chi hộ / Quét mã chuyển khoản rút tiền)
+  const [payoutModalWd, setPayoutModalWd] = useState<any | null>(null);
 
   const [showAddMethodModal, setShowAddMethodModal] = useState(false);
   const [newMethodType, setNewMethodType] = useState('VIETQR');
@@ -125,6 +145,17 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
     fetchReferralData();
     fetchCommissionData();
     fetchFraudAlerts();
+
+    try {
+      const cachedCamps = localStorage.getItem('topify_campaigns_cache');
+      if (cachedCamps) {
+        const parsed = JSON.parse(cachedCamps);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAvailableCampaigns(parsed);
+          setPayCampaignId(parsed[0].id);
+        }
+      }
+    } catch {}
   }, []);
 
   const getClaimedLocalTaskIds = (): string[] => {
@@ -458,6 +489,149 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
       }
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Lỗi khi cập nhật trạng thái lệnh rút');
+    }
+  };
+
+  // Real Top-Up / Deposit Handler (VietQR 24/7)
+  const handleDepositSubmit = async () => {
+    if (!depositAmount || depositAmount < 10000) {
+      toast.error('Số tiền nạp tối thiểu là 10.000 VND');
+      return;
+    }
+    setSubmittingDeposit(true);
+    try {
+      const res = await api.post('/wallet/deposit', {
+        amount: depositAmount,
+        transferCode: depositTransferCode,
+        bankName: depositBank === 'MB' ? 'MB Bank' : depositBank === 'VCB' ? 'Vietcombank' : 'Techcombank',
+      });
+      if (res.data?.success) {
+        toast.success(`Nạp thành công ${depositAmount.toLocaleString()} VND vào ví Topify!`);
+        setShowDepositModal(false);
+        setDepositTransferCode(`TOP${Math.floor(100000 + Math.random() * 900000)}`);
+
+        // Update local wallet state
+        setWallet((prev: any) => ({
+          ...prev,
+          availableBalance: (prev?.availableBalance || 0) + depositAmount,
+        }));
+
+        const currentOffset = getLocalBalanceOffset() + depositAmount;
+        localStorage.setItem('topify_wallet_balance_offset', String(currentOffset));
+
+        const newTx = {
+          id: `tx_${Date.now()}`,
+          type: 'DEPOSIT',
+          amount: depositAmount,
+          description: `Nạp tiền qua VietQR 24/7 (${depositBank}) - Mã: ${depositTransferCode}`,
+          status: 'COMPLETED',
+          createdAt: new Date().toISOString(),
+        };
+        const localTxs = [newTx, ...getLocalTransactions()].slice(0, 50);
+        localStorage.setItem('topify_local_transactions', JSON.stringify(localTxs));
+        setTransactions((prev) => [newTx, ...prev]);
+
+        fetchWalletData(true);
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Lỗi khi nạp tiền vào ví');
+    } finally {
+      setSubmittingDeposit(false);
+    }
+  };
+
+  // Pay With Wallet Handler (Campaign Budget, Pro License, Proxies, AI Credits)
+  const handlePaySubmit = async () => {
+    if (!payAmount || payAmount <= 0) {
+      toast.error('Số tiền thanh toán không hợp lệ');
+      return;
+    }
+    if (payAmount > (wallet?.availableBalance || 0)) {
+      toast.error(`Số dư ví không đủ (${(wallet?.availableBalance || 0).toLocaleString()} VND). Vui lòng nạp thêm tiền!`);
+      return;
+    }
+
+    setSubmittingPay(true);
+    try {
+      const selectedCamp = availableCampaigns.find((c) => c.id === payCampaignId);
+      const res = await api.post('/wallet/pay', {
+        serviceType: payServiceType,
+        amount: payAmount,
+        campaignId: payCampaignId,
+        campaignName: selectedCamp?.name,
+        planName: payServiceType === 'SUBSCRIPTION_PRO' ? 'Gói Pro Creator (1 Tháng)' : undefined,
+        note: payNote,
+      });
+
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Thanh toán dịch vụ thành công!');
+        setShowPayModal(false);
+
+        // Deduct balance
+        setWallet((prev: any) => ({
+          ...prev,
+          availableBalance: Math.max(0, (prev?.availableBalance || 0) - payAmount),
+        }));
+
+        const currentOffset = getLocalBalanceOffset() - payAmount;
+        localStorage.setItem('topify_wallet_balance_offset', String(currentOffset));
+
+        // If funded campaign, update campaign budget in local storage
+        if (payServiceType === 'CAMPAIGN_BUDGET' && payCampaignId) {
+          try {
+            const cached = localStorage.getItem('topify_campaigns_cache');
+            if (cached) {
+              const camps = JSON.parse(cached);
+              const updated = camps.map((c: any) => c.id === payCampaignId ? { ...c, totalBudget: (c.totalBudget || 0) + payAmount } : c);
+              localStorage.setItem('topify_campaigns_cache', JSON.stringify(updated));
+            }
+          } catch {}
+        }
+
+        const newTx = {
+          id: `tx_${Date.now()}`,
+          type: 'WITHDRAWAL',
+          amount: -payAmount,
+          description: res.data?.transaction?.description || `Thanh toán dịch vụ ${payServiceType}`,
+          status: 'COMPLETED',
+          createdAt: new Date().toISOString(),
+        };
+        const localTxs = [newTx, ...getLocalTransactions()].slice(0, 50);
+        localStorage.setItem('topify_local_transactions', JSON.stringify(localTxs));
+        setTransactions((prev) => [newTx, ...prev]);
+
+        fetchWalletData(true);
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Lỗi khi thanh toán');
+    } finally {
+      setSubmittingPay(false);
+    }
+  };
+
+  // Reset demo data to clean real wallet
+  const handleResetWallet = async () => {
+    if (!window.confirm('Bạn có chắc muốn xóa dữ liệu demo giả lập (13 triệu, các giao dịch mẫu) để bắt đầu dùng chiếc ví thực tế sạch sẽ?')) return;
+    try {
+      localStorage.removeItem('topify_wallet_balance_offset');
+      localStorage.removeItem('topify_local_transactions');
+      localStorage.removeItem('topify_local_withdrawals');
+
+      const res = await api.post('/wallet/reset');
+      if (res.data?.success) {
+        toast.success(res.data.message || 'Đã chuyển về ví thực tế sạch sẽ!');
+        setWallet({
+          id: 'wal_user_real',
+          availableBalance: 0,
+          pendingBalance: 0,
+          totalWithdrawn: 0,
+          currency: 'VND',
+        });
+        setTransactions([]);
+        setWithdrawals([]);
+      }
+    } catch (e: any) {
+      toast.error('Lỗi khi thiết lập lại ví');
     }
   };
 
@@ -878,7 +1052,35 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start xl:self-center shrink-0 w-full sm:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2 self-start xl:self-center shrink-0 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            onClick={handleResetWallet}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all border border-gray-200"
+            title="Xóa dữ liệu demo giả lập (13 triệu, các giao dịch mẫu) để bắt đầu dùng chiếc ví thực tế sạch sẽ"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Reset Ví Demo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowDepositModal(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-2xl text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/20 transition-all whitespace-nowrap shrink-0"
+          >
+            <ArrowDownLeft className="w-4 h-4 shrink-0" />
+            💳 Nạp Tiền (VietQR)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPayModal(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-2xl text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-500/20 transition-all whitespace-nowrap shrink-0"
+          >
+            <Sparkles className="w-4 h-4 shrink-0" />
+            🛍️ Dùng Ví Chi Trả
+          </button>
+
           <button
             onClick={() => {
               if (!can('wallet.withdraw')) {
@@ -888,7 +1090,7 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
               setShowWithdrawModal(true);
             }}
             disabled={!can('wallet.withdraw')}
-            className={`flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold rounded-2xl text-white shadow-md transition-all whitespace-nowrap shrink-0 ${
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-2xl text-white shadow-md transition-all whitespace-nowrap shrink-0 ${
               can('wallet.withdraw')
                 ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 cursor-pointer'
                 : 'bg-gray-400 opacity-60 cursor-not-allowed shadow-none'
@@ -896,7 +1098,7 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
             title={!can('wallet.withdraw') ? 'Chỉ Chủ sở hữu (Owner) mới có quyền lập lệnh rút tiền theo RBAC' : 'Rút Tiền Ngay'}
           >
             <ArrowDownToLine className="w-4 h-4 shrink-0" />
-            Rút Tiền Ngay
+            📥 Rút Tiền
           </button>
         </div>
       </div>
@@ -1090,6 +1292,15 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                           {wd.status === 'PENDING' ? (
                             <div className="flex items-center justify-end gap-1.5">
                               <button
+                                type="button"
+                                onClick={() => setPayoutModalWd(wd)}
+                                className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-sm transition-all whitespace-nowrap flex items-center gap-1"
+                                title="Quét mã VietQR chuyển khoản chi hộ trực tiếp"
+                              >
+                                <QrCode className="w-3 h-3" />
+                                VietQR Chi Hộ
+                              </button>
+                              <button
                                 onClick={() => handleUpdateWithdrawalStatus(wd.id, 'COMPLETED')}
                                 className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-sm transition-all whitespace-nowrap"
                                 title="Phê duyệt lệnh rút và giải ngân tiền"
@@ -1105,7 +1316,17 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                               </button>
                             </div>
                           ) : wd.status === 'COMPLETED' ? (
-                            <span className="text-[11px] font-medium text-emerald-600">✓ Hoàn tất</span>
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-[11px] font-medium text-emerald-600">✓ Hoàn tất</span>
+                              <button
+                                type="button"
+                                onClick={() => setPayoutModalWd(wd)}
+                                className="text-[10px] text-gray-400 hover:text-blue-600 underline"
+                                title="Xem lại mã VietQR đã chi"
+                              >
+                                Xem mã QR
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-[11px] font-medium text-rose-600">✕ Đã hoàn tiền</span>
                           )}
@@ -2550,6 +2771,450 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Nạp Tiền Qua VietQR Modal */}
+      {showDepositModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 text-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg border border-gray-100 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Nạp Tiền Vào Ví Topify (VietQR 24/7)</h3>
+                  <p className="text-[11px] text-blue-100">Quét mã chuyển khoản liên ngân hàng 24/7 tự động cộng số dư</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDepositModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Chọn số tiền nạp nhanh */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1.5">Chọn nhanh số tiền nạp (VND):</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[100000, 200000, 500000, 1000000, 2000000, 5000000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setDepositAmount(amt)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                        depositAmount === amt
+                          ? 'bg-blue-50 border-blue-600 text-blue-700 shadow-sm'
+                          : 'border-gray-200 hover:border-blue-300 text-gray-700 bg-white'
+                      }`}
+                    >
+                      {amt.toLocaleString()} đ
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2">
+                  <input
+                    type="number"
+                    min="10000"
+                    step="10000"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(Math.max(0, Number(e.target.value)))}
+                    placeholder="Hoặc nhập số tiền tùy ý..."
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-blue-500 font-bold text-blue-700 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Chọn ngân hàng thụ hưởng Topify */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1.5">Chọn ngân hàng nhận:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'MB', name: 'MB Bank', acc: '0987654321', holder: 'CONG TY TOPIFY VIET NAM' },
+                    { id: 'VCB', name: 'Vietcombank', acc: '1029384756', holder: 'CONG TY TOPIFY VIET NAM' },
+                    { id: 'TCB', name: 'Techcombank', acc: '1903829471', holder: 'CONG TY TOPIFY VIET NAM' },
+                  ].map((bank) => (
+                    <button
+                      key={bank.id}
+                      type="button"
+                      onClick={() => setDepositBank(bank.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                        depositBank === bank.id
+                          ? 'bg-indigo-50 border-indigo-600 shadow-sm'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <p className="font-bold text-gray-900">{bank.name}</p>
+                      <p className="text-[10px] text-gray-500 font-mono">{bank.acc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* QR Code & Banking Details */}
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 p-4 rounded-2xl border border-blue-100 flex flex-col md:flex-row items-center gap-4">
+                <div className="w-40 h-40 bg-white p-2 rounded-2xl border border-blue-200 shadow-sm flex items-center justify-center shrink-0">
+                  <img
+                    src={`https://img.vietqr.io/image/${depositBank === 'MB' ? 'MB' : depositBank === 'VCB' ? 'VCB' : 'TCB'}-${depositBank === 'MB' ? '0987654321' : depositBank === 'VCB' ? '1029384756' : '1903829471'}-compact2.png?amount=${depositAmount}&addInfo=${depositTransferCode}&accountName=${encodeURIComponent('CONG TY TOPIFY VIET NAM')}`}
+                    alt="VietQR Topify Deposit"
+                    className="w-full h-full object-contain rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+
+                <div className="flex-1 space-y-2 w-full">
+                  <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                    <span className="text-gray-500 font-medium">Ngân hàng:</span>
+                    <span className="font-bold text-gray-900">{depositBank === 'MB' ? 'MB Bank (Quân Đội)' : depositBank === 'VCB' ? 'Vietcombank' : 'Techcombank'}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                    <span className="text-gray-500 font-medium">Số tài khoản:</span>
+                    <div className="flex items-center gap-1.5 font-bold font-mono text-blue-700">
+                      <span>{depositBank === 'MB' ? '0987654321' : depositBank === 'VCB' ? '1029384756' : '1903829471'}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(depositBank === 'MB' ? '0987654321' : depositBank === 'VCB' ? '1029384756' : '1903829471');
+                          toast.success('Đã sao chép số tài khoản');
+                        }}
+                        className="text-gray-400 hover:text-blue-600"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                    <span className="text-gray-500 font-medium">Chủ tài khoản:</span>
+                    <span className="font-bold text-gray-900">CONG TY TOPIFY VIET NAM</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                    <span className="text-gray-500 font-medium">Số tiền:</span>
+                    <span className="font-extrabold text-blue-700 text-sm">{depositAmount.toLocaleString()} VND</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500 font-medium">Nội dung CK:</span>
+                    <div className="flex items-center gap-1.5 font-bold font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      <span>{depositTransferCode}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(depositTransferCode);
+                          toast.success('Đã sao chép nội dung chuyển khoản');
+                        }}
+                        className="text-emerald-500 hover:text-emerald-700"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-800 text-[11px] leading-relaxed">
+                💡 <strong>Lưu ý:</strong> Vui lòng giữ đúng nội dung chuyển khoản <strong>{depositTransferCode}</strong> để giao dịch được hệ thống ghi nhận tự động. Sau khi hoàn tất chuyển khoản trên ứng dụng ngân hàng, bấm nút bên dưới để cộng tiền vào ví.
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowDepositModal(false)}
+                className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-100 font-semibold text-gray-700"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                disabled={submittingDeposit}
+                onClick={handleDepositSubmit}
+                className="px-6 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold transition-all shadow-md shadow-blue-500/20 flex items-center gap-2"
+              >
+                {submittingDeposit ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {submittingDeposit ? 'Đang xác thực giao dịch...' : 'Tôi Đã Chuyển Khoản & Cộng Tiền Ngay'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chi Trả Dịch Vụ Từ Ví Modal */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 text-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg border border-gray-100 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Thanh Toán Dịch Vụ Bằng Số Dư Ví</h3>
+                  <p className="text-[11px] text-purple-100">Dùng số dư khả dụng để nạp ngân sách chiến dịch, mua bản quyền, AI & Proxy</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPayModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Số dư hiện tại */}
+              <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl">
+                <div>
+                  <span className="text-[11px] text-emerald-800 font-medium">Số dư ví khả dụng hiện tại:</span>
+                  <div className="text-lg font-extrabold text-emerald-700">
+                    {(wallet?.availableBalance || 0).toLocaleString()} VND
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPayModal(false);
+                    setShowDepositModal(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-all shadow-sm flex items-center gap-1"
+                >
+                  <ArrowDownLeft className="w-3.5 h-3.5" />
+                  Nạp thêm
+                </button>
+              </div>
+
+              {/* Loại dịch vụ cần thanh toán */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1.5">Chọn dịch vụ muốn thanh toán:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'CAMPAIGN_BUDGET', name: '🎯 Ngân Sách Chiến Dịch (M10)', desc: 'Nạp quỹ chạy ads / phân phối bài viết', defaultPrice: 500000 },
+                    { id: 'SUBSCRIPTION_PRO', name: '⭐ Gói Bản Quyền Topify Pro', desc: 'Gia hạn 30 ngày automation không giới hạn', defaultPrice: 499000 },
+                    { id: 'AI_CREDITS', name: '🤖 Gói 1.000 Lượt AI Studio', desc: 'Sinh kịch bản, content viral, ảnh tự động', defaultPrice: 199000 },
+                    { id: 'PROXY_PURCHASE', name: '🌐 Gói Proxy Dân Cư / 4G (30 ngày)', desc: 'Bảo vệ tài khoản, xoay IP sạch chống checkpoint', defaultPrice: 250000 },
+                  ].map((svc) => (
+                    <button
+                      key={svc.id}
+                      type="button"
+                      onClick={() => {
+                        setPayServiceType(svc.id as any);
+                        setPayAmount(svc.defaultPrice);
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        payServiceType === svc.id
+                          ? 'bg-purple-50 border-purple-500 shadow-sm ring-1 ring-purple-500/20'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <p className="font-bold text-gray-900 text-xs">{svc.name}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{svc.desc}</p>
+                      <p className="text-[11px] font-bold text-purple-700 mt-1">{svc.defaultPrice.toLocaleString()} đ</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Nếu là nạp ngân sách chiến dịch: Cho phép chọn chiến dịch cụ thể */}
+              {payServiceType === 'CAMPAIGN_BUDGET' && (
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Chọn chiến dịch nhận ngân sách:</label>
+                  {availableCampaigns.length > 0 ? (
+                    <select
+                      value={payCampaignId}
+                      onChange={(e) => setPayCampaignId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 font-medium text-gray-900"
+                    >
+                      {availableCampaigns.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.platform || 'Đa kênh'}) - Ngân sách hiện tại: {(c.totalBudget || 0).toLocaleString()} đ
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-600 text-[11px]">
+                      Chưa có chiến dịch trong bộ nhớ cache. Ngân sách sẽ được ghi nhận vào quỹ chiến dịch chung.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Nhập số tiền chi trả */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Số tiền thanh toán (VND):</label>
+                <input
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(Math.max(0, Number(e.target.value)))}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-purple-500 font-bold text-purple-700 focus:outline-none"
+                />
+              </div>
+
+              {/* Ghi chú */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Ghi chú thanh toán (Tùy chọn):</label>
+                <input
+                  type="text"
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  placeholder="Ghi chú chi trả cho dự án..."
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-purple-500 font-medium text-gray-800 focus:outline-none"
+                />
+              </div>
+
+              {payAmount > (wallet?.availableBalance || 0) && (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-rose-800 text-[11px]">
+                  ⚠️ <strong>Cảnh báo:</strong> Số tiền thanh toán ({payAmount.toLocaleString()} VND) vượt quá số dư khả dụng trong ví ({(wallet?.availableBalance || 0).toLocaleString()} VND). Vui lòng nạp thêm tiền qua VietQR hoặc giảm số tiền.
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowPayModal(false)}
+                className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-100 font-semibold text-gray-700"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={submittingPay || payAmount > (wallet?.availableBalance || 0)}
+                onClick={handlePaySubmit}
+                className="px-6 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold transition-all shadow-md shadow-purple-500/20 flex items-center gap-2"
+              >
+                {submittingPay ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {submittingPay ? 'Đang trừ ví...' : 'Xác Nhận Thanh Toán'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VietQR Chi Hộ Cho Quản Trị Viên / Lệnh Rút Modal */}
+      {payoutModalWd && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 text-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg border border-gray-100 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <QrCode className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">VietQR Chi Hộ & Giải Ngân Trực Tiếp</h3>
+                  <p className="text-[11px] text-emerald-100">Quét mã bằng app ngân hàng để chuyển khoản thanh toán cho người nhận</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPayoutModalWd(null)}
+                className="p-1.5 rounded-full hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* VietQR Box */}
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50/40 p-4 rounded-2xl border border-emerald-100 flex flex-col md:flex-row items-center gap-4">
+                <div className="w-44 h-44 bg-white p-2 rounded-2xl border border-emerald-200 shadow-sm flex items-center justify-center shrink-0">
+                  <img
+                    src={`https://img.vietqr.io/image/${
+                      (payoutModalWd.bankName || 'MB')
+                        .replace(/Bank/gi, '')
+                        .replace(/\s+/g, '')
+                        .toUpperCase()
+                    }-${payoutModalWd.accountNumber || '04599672501'}-compact2.png?amount=${payoutModalWd.amount}&addInfo=${encodeURIComponent(`TOPIFY RUT ${payoutModalWd.id.slice(-6)}`)}&accountName=${encodeURIComponent(payoutModalWd.accountName || 'NGUOI NHAN')}`}
+                    alt="VietQR Chi Ho Payout"
+                    className="w-full h-full object-contain rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+
+                <div className="flex-1 space-y-2 w-full text-xs">
+                  <div className="flex items-center justify-between pb-1 border-b border-emerald-100">
+                    <span className="text-gray-500 font-medium">Người nhận:</span>
+                    <span className="font-bold text-gray-900">{payoutModalWd.accountName || 'Chủ tài khoản'}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-1 border-b border-emerald-100">
+                    <span className="text-gray-500 font-medium">Ngân hàng:</span>
+                    <span className="font-bold text-emerald-800">{payoutModalWd.bankName || payoutModalWd.paymentMethod}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-1 border-b border-emerald-100">
+                    <span className="text-gray-500 font-medium">Số tài khoản:</span>
+                    <div className="flex items-center gap-1.5 font-bold font-mono text-emerald-900">
+                      <span>{payoutModalWd.accountNumber || '04599672501'}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(payoutModalWd.accountNumber || '04599672501');
+                          toast.success('Đã sao chép số tài khoản');
+                        }}
+                        className="text-gray-400 hover:text-emerald-700"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pb-1 border-b border-emerald-100">
+                    <span className="text-gray-500 font-medium">Số tiền giải ngân:</span>
+                    <span className="font-extrabold text-emerald-700 text-sm">
+                      {payoutModalWd.amount?.toLocaleString()} VND
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500 font-medium">Nội dung CK:</span>
+                    <span className="font-bold font-mono text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                      TOPIFY RUT {payoutModalWd.id.slice(-6)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-700 text-[11px] leading-relaxed">
+                👉 <strong>Hướng dẫn:</strong> Mở app ngân hàng cá nhân hoặc doanh nghiệp bất kỳ, chọn <em>Quét mã QR</em> để quét trực tiếp mã trên. Sau khi ngân hàng báo chuyển tiền thành công, bấm nút <strong>"Xác nhận đã giải ngân"</strong> để chuyển trạng thái lệnh sang hoàn tất.
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setPayoutModalWd(null)}
+                className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-100 font-semibold text-gray-700"
+              >
+                Đóng
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleUpdateWithdrawalStatus(payoutModalWd.id, 'REJECTED');
+                    setPayoutModalWd(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold transition-all"
+                >
+                  Từ Chối & Hoàn Tiền Ví
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleUpdateWithdrawalStatus(payoutModalWd.id, 'COMPLETED');
+                    setPayoutModalWd(null);
+                  }}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  Xác Nhận Đã Giải Ngân Thành Công
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
