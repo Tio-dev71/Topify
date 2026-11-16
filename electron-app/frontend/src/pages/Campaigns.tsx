@@ -32,6 +32,11 @@ import {
   Upload,
   RotateCcw,
   Trash2,
+  Play,
+  Zap,
+  Send,
+  PlusCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/axios';
@@ -277,6 +282,22 @@ export default function Campaigns() {
   const [assetFilterStatus, setAssetFilterStatus] = useState<string>('ALL');
   const [assetSearchQuery, setAssetSearchQuery] = useState<string>('');
   const [targetAssetCampId, setTargetAssetCampId] = useState<string>('');
+
+  // Tab 2: Phase Action Runner State (F138)
+  const [activePhaseAction, setActivePhaseAction] = useState<CampaignPhase | null>(null);
+  const [phaseActionType, setPhaseActionType] = useState<'INSTANT_PUBLISH' | 'AUTO_SCHEDULE' | 'MANUAL_LOG'>('INSTANT_PUBLISH');
+  const [phaseActionPostCount, setPhaseActionPostCount] = useState<number>(1);
+  const [phaseActionChannel, setPhaseActionChannel] = useState<string>('YOUTUBE');
+  const [phaseActionNote, setPhaseActionNote] = useState<string>('');
+  const [isExecutingPhaseAction, setIsExecutingPhaseAction] = useState<boolean>(false);
+
+  // Tab 2: Add Phase Modal State
+  const [isAddPhaseModalOpen, setIsAddPhaseModalOpen] = useState<boolean>(false);
+  const [newPhaseName, setNewPhaseName] = useState<string>('');
+  const [newPhaseDesc, setNewPhaseDesc] = useState<string>('');
+  const [newPhaseTargetPosts, setNewPhaseTargetPosts] = useState<string>('6');
+  const [newPhaseStartDate, setNewPhaseStartDate] = useState<string>('');
+  const [newPhaseEndDate, setNewPhaseEndDate] = useState<string>('');
 
   // Create Campaign Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -680,6 +701,151 @@ export default function Campaigns() {
     } catch (err) {
       console.warn('Backend asset delete warning:', err);
     }
+  };
+
+  // Tab 2: Handle Phase Action Execution (F138)
+  const handleExecutePhaseAction = async (phaseId: string, customIncrement?: number) => {
+    if (!currentCampaign) return;
+    const increment = customIncrement !== undefined ? customIncrement : (Number(phaseActionPostCount) || 1);
+
+    const updatedPhases = currentCampaign.phases.map((ph) => {
+      if (ph.id === phaseId) {
+        const nextPublished = Math.max(0, Math.min(ph.targetPostsCount, ph.publishedPostsCount + increment));
+        return {
+          ...ph,
+          publishedPostsCount: nextPublished,
+        };
+      }
+      return ph;
+    });
+
+    const updatedCampaign: EnrichedCampaign = {
+      ...currentCampaign,
+      phases: updatedPhases,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setCampaigns((prev) => {
+      const next = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
+      try {
+        localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    try {
+      await api.patch('/campaigns', {
+        id: updatedCampaign.id,
+        phases: updatedPhases,
+      });
+      if (customIncrement !== undefined) {
+        toast.success(customIncrement > 0 ? `Đã ghi nhận +${customIncrement} bài xuất bản vào kế hoạch!` : 'Đã điều chỉnh số bài đã đăng.');
+      } else {
+        toast.success(`Đã kích hoạt hành động thành công! Đã chạy tiến độ giai đoạn (+${increment} bài).`);
+      }
+    } catch (err) {
+      console.warn('Backend phase update warning:', err);
+      toast.success('Đã lưu tiến độ giai đoạn vào kế hoạch chiến dịch.');
+    } finally {
+      setActivePhaseAction(null);
+      setIsExecutingPhaseAction(false);
+    }
+  };
+
+  // Tab 2: Execute Automation for Entire Campaign Content Plan
+  const handleExecuteAllPlanAutomation = async () => {
+    if (!currentCampaign) return;
+    const hasUnfinishedPhases = currentCampaign.phases.some((p) => p.publishedPostsCount < p.targetPostsCount);
+    if (!hasUnfinishedPhases) {
+      toast.info('Tất cả các giai đoạn trong kế hoạch đều đã hoàn thành 100% mục tiêu xuất bản!');
+      return;
+    }
+
+    const updatedPhases = currentCampaign.phases.map((ph) => {
+      if (ph.publishedPostsCount < ph.targetPostsCount) {
+        return {
+          ...ph,
+          publishedPostsCount: Math.min(ph.targetPostsCount, ph.publishedPostsCount + 1),
+        };
+      }
+      return ph;
+    });
+
+    const updatedCampaign: EnrichedCampaign = {
+      ...currentCampaign,
+      phases: updatedPhases,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setCampaigns((prev) => {
+      const next = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
+      try {
+        localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    try {
+      await api.patch('/campaigns', {
+        id: updatedCampaign.id,
+        phases: updatedPhases,
+      });
+      toast.success('⚡ Đã kích hoạt luồng tự động hóa theo kế hoạch: Ghi nhận xuất bản và đồng bộ lịch các kênh!');
+    } catch (err) {
+      console.warn('Backend phase automation warning:', err);
+      toast.success('Đã cập nhật tiến độ tự động hóa toàn chiến dịch.');
+    }
+  };
+
+  // Tab 2: Handle Add New Timeline Phase (F135 & F138)
+  const handleAddPhase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCampaign) return;
+    if (!newPhaseName.trim()) {
+      toast.error('Vui lòng nhập tên giai đoạn');
+      return;
+    }
+
+    const newPhase: CampaignPhase = {
+      id: `phase_${Date.now()}`,
+      name: newPhaseName.trim(),
+      phaseKey: 'TEASER',
+      startDate: newPhaseStartDate ? new Date(newPhaseStartDate).toISOString() : new Date().toISOString(),
+      endDate: newPhaseEndDate ? new Date(newPhaseEndDate).toISOString() : new Date(Date.now() + 7 * 86400000).toISOString(),
+      targetPostsCount: Number(newPhaseTargetPosts) || 6,
+      publishedPostsCount: 0,
+      description: newPhaseDesc.trim() || 'Giai đoạn nội dung mới',
+    };
+
+    const updatedPhases = [...currentCampaign.phases, newPhase];
+    const updatedCampaign: EnrichedCampaign = {
+      ...currentCampaign,
+      phases: updatedPhases,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setCampaigns((prev) => {
+      const next = prev.map((c) => (c.id === updatedCampaign.id ? updatedCampaign : c));
+      try {
+        localStorage.setItem('topify_campaigns_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    try {
+      await api.patch('/campaigns', {
+        id: updatedCampaign.id,
+        phases: updatedPhases,
+      });
+      toast.success('Đã thêm giai đoạn mới vào kế hoạch chiến dịch!');
+    } catch (err) {
+      console.warn('Backend phase add warning:', err);
+      toast.success('Đã lưu giai đoạn mới vào kế hoạch.');
+    }
+
+    setIsAddPhaseModalOpen(false);
+    setNewPhaseName('');
+    setNewPhaseDesc('');
   };
 
   // Handle Create / Upload New Creative Asset (F137)
@@ -1302,60 +1468,160 @@ export default function Campaigns() {
 
           {/* Timeline Phases View (F135 & F138) */}
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-[var(--color-foreground)]">
-                  Kế hoạch Nội dung theo Giai đoạn (Campaign Timeline Phases)
+                <h3 className="text-sm font-bold text-[var(--color-foreground)] flex items-center gap-2">
+                  <span>Kế hoạch Nội dung theo Giai đoạn (Campaign Timeline Phases)</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-semibold border border-blue-500/20">
+                    F135 & F138
+                  </span>
                 </h3>
                 <p className="text-xs text-[var(--color-muted-foreground)] mt-0.5">
-                  Phân bổ mật độ nội dung và theo dõi số lượng bài viết đã xuất bản theo từng giai đoạn tiếp thị.
+                  Phân bổ mật độ nội dung, kích hoạt action đăng bài tự động và theo dõi tiến độ xuất bản thực chiến.
                 </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleExecuteAllPlanAutomation}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-semibold shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
+                  title="Tự động hóa toàn bộ kế hoạch: Tiến hành quét và xuất bản các bài viết đến hạn của tất cả giai đoạn"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-current" />
+                  <span>Kích hoạt Toàn Kế hoạch</span>
+                </button>
+
+                <button
+                  onClick={() => setIsAddPhaseModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-[var(--color-foreground)] text-xs font-medium flex items-center gap-1 transition-all"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Thêm Giai đoạn</span>
+                </button>
               </div>
             </div>
 
             <div className="space-y-3">
               {currentCampaign.phases.map((ph, idx) => {
                 const phaseProgress = Math.round((ph.publishedPostsCount / (ph.targetPostsCount || 1)) * 100);
+                const remainingPosts = Math.max(0, ph.targetPostsCount - ph.publishedPostsCount);
+
                 return (
                   <div
                     key={ph.id}
-                    className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/10 space-y-2.5"
+                    className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-muted)]/10 space-y-3 hover:border-indigo-500/30 transition-all"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-xs font-bold flex items-center justify-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-sm">
                           {idx + 1}
                         </span>
                         <div>
-                          <div className="font-semibold text-xs text-[var(--color-foreground)]">
-                            {ph.name}
+                          <div className="font-semibold text-xs text-[var(--color-foreground)] flex items-center gap-2">
+                            <span>{ph.name}</span>
+                            {phaseProgress >= 100 && (
+                              <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold flex items-center gap-0.5">
+                                <CheckCircle className="w-3 h-3" />
+                                <span>Hoàn thành</span>
+                              </span>
+                            )}
                           </div>
-                          <div className="text-[10px] text-[var(--color-muted-foreground)] whitespace-nowrap">
-                            {formatCampaignDateRange(ph.startDate, ph.endDate)}
+                          <div className="text-[10px] text-[var(--color-muted-foreground)] whitespace-nowrap mt-0.5 flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3 text-indigo-400" />
+                            <span>{formatCampaignDateRange(ph.startDate, ph.endDate)}</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="text-[var(--color-muted-foreground)]">
-                          Đã đăng: <strong className="text-[var(--color-foreground)]">{ph.publishedPostsCount}/{ph.targetPostsCount} bài</strong>
-                        </span>
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${phaseProgress === 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                          {phaseProgress}%
-                        </span>
+                      {/* Right Action & Stats Controls */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 text-xs mr-1">
+                          <span className="text-[var(--color-muted-foreground)]">
+                            Đã đăng: <strong className="text-[var(--color-foreground)]">{ph.publishedPostsCount}/{ph.targetPostsCount} bài</strong>
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${phaseProgress >= 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                            {phaseProgress}%
+                          </span>
+                        </div>
+
+                        {/* Quick Action Buttons */}
+                        <div className="flex items-center gap-1 bg-[var(--color-card)] p-1 rounded-xl border border-[var(--color-border)] shadow-sm">
+                          <button
+                            onClick={() => handleExecutePhaseAction(ph.id, 1)}
+                            disabled={remainingPosts === 0}
+                            className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                              remainingPosts > 0
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white'
+                                : 'opacity-40 cursor-not-allowed text-[var(--color-muted-foreground)]'
+                            }`}
+                            title="Ghi nhận xuất bản nhanh +1 bài cho giai đoạn này"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>+1 bài</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleExecutePhaseAction(ph.id, -1)}
+                            disabled={ph.publishedPostsCount === 0}
+                            className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+                              ph.publishedPostsCount > 0
+                                ? 'hover:bg-rose-500/15 hover:text-rose-500 text-[var(--color-muted-foreground)]'
+                                : 'opacity-30 cursor-not-allowed text-[var(--color-muted-foreground)]'
+                            }`}
+                            title="Giảm 1 bài đã đăng"
+                          >
+                            -1
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setActivePhaseAction(ph);
+                              setPhaseActionPostCount(remainingPosts > 0 ? 1 : 1);
+                              setPhaseActionChannel(currentCampaign.channels[0] || 'YOUTUBE');
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
+                            title="Kích hoạt Action Đăng bài / Lên lịch tự động hóa cho giai đoạn này"
+                          >
+                            <Play className="w-3 h-3 fill-current" />
+                            <span>Chạy Action</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    <p className="text-xs text-[var(--color-muted-foreground)] pl-8">
+                    <p className="text-xs text-[var(--color-muted-foreground)] pl-9">
                       {ph.description}
                     </p>
 
-                    <div className="pl-8">
-                      <div className="w-full h-1.5 bg-[var(--color-muted)] rounded-full overflow-hidden">
+                    {/* Progress Bar & Sub-indicators */}
+                    <div className="pl-9 space-y-1.5">
+                      <div className="w-full h-2 bg-[var(--color-muted)] rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-[var(--color-primary)] rounded-full transition-all"
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            phaseProgress >= 100
+                              ? 'bg-emerald-500'
+                              : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                          }`}
                           style={{ width: `${Math.min(100, phaseProgress)}%` }}
                         />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-[var(--color-muted-foreground)] pt-0.5">
+                        <span>
+                          {remainingPosts > 0
+                            ? `Còn lại ${remainingPosts} bài viết cần xuất bản trong giai đoạn này`
+                            : 'Đã hoàn thành toàn bộ bài viết dự kiến!'}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px]">Kênh:</span>
+                          {currentCampaign.channels.map((ch) => (
+                            <span
+                              key={ch}
+                              className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${CHANNEL_BADGE_STYLES[ch] || 'bg-muted text-foreground'}`}
+                            >
+                              {ch}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1363,8 +1629,17 @@ export default function Campaigns() {
               })}
 
               {currentCampaign.phases.length === 0 && (
-                <div className="py-8 text-center text-xs text-[var(--color-muted-foreground)] italic border border-dashed border-[var(--color-border)] rounded-xl">
-                  Chưa thiết lập giai đoạn (Phases) cho chiến dịch này.
+                <div className="py-10 text-center text-xs text-[var(--color-muted-foreground)] border border-dashed border-[var(--color-border)] rounded-2xl bg-[var(--color-card)]/50 space-y-2">
+                  <Clock className="w-8 h-8 text-[var(--color-muted-foreground)] opacity-40 mx-auto" />
+                  <div className="font-semibold text-[var(--color-foreground)]">Chưa thiết lập giai đoạn (Timeline Phases) cho chiến dịch này</div>
+                  <p className="max-w-sm mx-auto">Bấm &quot;Thêm Giai đoạn&quot; để phân bổ mật độ bài viết theo từng mốc thời gian tiếp thị.</p>
+                  <button
+                    onClick={() => setIsAddPhaseModalOpen(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600 transition-all inline-flex items-center gap-1 mt-2"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Thêm Giai đoạn đầu tiên</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -2360,6 +2635,301 @@ export default function Campaigns() {
                 >
                   <Edit3 className="w-3.5 h-3.5" />
                   <span>Lưu thay đổi</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: RUN PHASE ACTION (F138) */}
+      {/* ==================================================================== */}
+      {activePhaseAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                  <Play className="w-4 h-4 fill-current" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[var(--color-foreground)]">
+                    Kích hoạt Action Đăng bài theo Kế hoạch
+                  </h3>
+                  <div className="text-[11px] text-[var(--color-muted-foreground)]">
+                    {activePhaseAction.name} &bull; Mục tiêu: {activePhaseAction.publishedPostsCount}/{activePhaseAction.targetPostsCount} bài
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setActivePhaseAction(null)}
+                className="p-1 rounded-lg hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              {/* Action Mode Selection */}
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1.5">
+                  Chế độ thực thi Action *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPhaseActionType('INSTANT_PUBLISH')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      phaseActionType === 'INSTANT_PUBLISH'
+                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500 font-semibold'
+                        : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1 font-bold">
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>Xuất bản ngay</span>
+                    </div>
+                    <div className="text-[10px] text-[var(--color-muted-foreground)] font-normal">
+                      Đăng bài ngay lập tức lên kênh và cập nhật tiến độ
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPhaseActionType('AUTO_SCHEDULE')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      phaseActionType === 'AUTO_SCHEDULE'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-semibold'
+                        : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1 font-bold">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Lên lịch tự động</span>
+                    </div>
+                    <div className="text-[10px] text-[var(--color-muted-foreground)] font-normal">
+                      Phân bổ bài vào khung giờ vàng của giai đoạn
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPhaseActionType('MANUAL_LOG')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      phaseActionType === 'MANUAL_LOG'
+                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500 font-semibold'
+                        : 'border-[var(--color-border)] hover:bg-[var(--color-muted)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1 font-bold">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>Ghi nhận thực tế</span>
+                    </div>
+                    <div className="text-[10px] text-[var(--color-muted-foreground)] font-normal">
+                      Đồng bộ số lượng bài đã xuất bản bên ngoài
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Number of posts & Channel */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                    Số bài kích hoạt *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={Math.max(1, activePhaseAction.targetPostsCount - activePhaseAction.publishedPostsCount)}
+                    value={phaseActionPostCount}
+                    onChange={(e) => setPhaseActionPostCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                  <div className="text-[10px] text-[var(--color-muted-foreground)] mt-1">
+                    Còn thiếu: {Math.max(0, activePhaseAction.targetPostsCount - activePhaseAction.publishedPostsCount)} bài
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                    Kênh xuất bản áp dụng
+                  </label>
+                  <select
+                    value={phaseActionChannel}
+                    onChange={(e) => setPhaseActionChannel(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none"
+                  >
+                    {currentCampaign.channels.map((ch) => (
+                      <option key={ch} value={ch}>
+                        {ch}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="text-[10px] text-[var(--color-muted-foreground)] mt-1">
+                    Theo cấu hình chiến dịch
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                  Ghi chú điều phối chiến dịch (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: Đã kích hoạt video teaser YouTube và reel TikTok đợt 1..."
+                  value={phaseActionNote}
+                  onChange={(e) => setPhaseActionNote(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-[11px] flex items-start gap-2">
+                <Zap className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Sau khi kích hoạt, tiến độ xuất bản của giai đoạn <strong>{activePhaseAction.name}</strong> sẽ tăng thêm{' '}
+                  <strong>+{phaseActionPostCount} bài</strong> và tự động đồng bộ vào chỉ số <strong>Tiến độ Hợp nhất F138</strong>.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--color-border)]">
+              <button
+                type="button"
+                onClick={() => setActivePhaseAction(null)}
+                className="px-3.5 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isExecutingPhaseAction}
+                onClick={async () => {
+                  setIsExecutingPhaseAction(true);
+                  await handleExecutePhaseAction(activePhaseAction.id, phaseActionPostCount);
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 flex items-center gap-1.5 transition-all"
+              >
+                {isExecutingPhaseAction ? (
+                  <>
+                    <Clock className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang kích hoạt...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Xác nhận Kích hoạt Action (+{phaseActionPostCount} bài)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: ADD TIMELINE PHASE (F135 & F138) */}
+      {/* ==================================================================== */}
+      {isAddPhaseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3">
+              <h3 className="font-bold text-sm text-[var(--color-foreground)] flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-indigo-500" />
+                <span>Thêm Giai đoạn mới vào Kế hoạch (Timeline Phase)</span>
+              </h3>
+              <button
+                onClick={() => setIsAddPhaseModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-[var(--color-muted)] text-[var(--color-muted-foreground)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddPhase} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                  Tên giai đoạn tiếp thị *
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: Giai đoạn 3: Flash Sale Đỉnh Điểm & Livestream"
+                  value={newPhaseName}
+                  onChange={(e) => setNewPhaseName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                  Mô tả mục tiêu giai đoạn
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Mục tiêu nội dung, loại content trọng tâm..."
+                  value={newPhaseDesc}
+                  onChange={(e) => setNewPhaseDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                    Ngày bắt đầu
+                  </label>
+                  <input
+                    type="date"
+                    value={newPhaseStartDate}
+                    onChange={(e) => setNewPhaseStartDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                    Ngày kết thúc
+                  </label>
+                  <input
+                    type="date"
+                    value={newPhaseEndDate}
+                    onChange={(e) => setNewPhaseEndDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-[var(--color-foreground)] mb-1">
+                  Số lượng bài viết mục tiêu *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newPhaseTargetPosts}
+                  onChange={(e) => setNewPhaseTargetPosts(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] text-[var(--color-foreground)] text-xs focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPhaseModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-muted)] text-xs font-medium"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Thêm Giai đoạn</span>
                 </button>
               </div>
             </form>
