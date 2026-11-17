@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
 
 function ResetPasswordForm() {
   const [password, setPassword] = useState('');
@@ -13,20 +14,75 @@ function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const router = useRouter();
 
   useEffect(() => {
-    if (!token) {
+    async function checkAuthOrToken() {
+      if (token) {
+        setError(null);
+        return;
+      }
+
+      const code = searchParams.get('code');
+      const supabase = createClient();
+
+      if (code) {
+        try {
+          const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+          if (!exErr) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.email) {
+              setUserEmail(user.email);
+              setError(null);
+              return;
+            }
+          }
+        } catch {}
+      }
+
+      // Check existing Supabase session (e.g. redirected from /auth/callback)
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.email) {
+          setUserEmail(user.email);
+          setError(null);
+          return;
+        }
+      } catch {}
+
+      // Check hash fragment (#access_token=...)
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        if (accessToken) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser(accessToken);
+            if (user?.email) {
+              setUserEmail(user.email);
+              setError(null);
+              return;
+            }
+          } catch {}
+        }
+      }
+
       setError('Đường dẫn không hợp lệ hoặc đã hết hạn.');
     }
-  }, [token]);
+
+    checkAuthOrToken();
+  }, [token, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!token && !userEmail) {
+      toast.error('Thiếu mã xác thực hoặc phiên đặt lại mật khẩu.');
+      return;
+    }
     
     if (password !== confirmPassword) {
       toast.error('Mật khẩu không khớp');
@@ -41,21 +97,31 @@ function ResetPasswordForm() {
     setLoading(true);
 
     try {
+      const supabase = createClient();
+      if (userEmail) {
+        await supabase.auth.updateUser({ password }).catch(() => null);
+      }
+
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ 
+          token: token || undefined, 
+          email: userEmail || undefined, 
+          password 
+        }),
       });
+
+      const data = await res.json().catch(() => null);
 
       if (res.ok) {
         setSuccess(true);
-        toast.success('Mật khẩu đã được đặt lại thành công!');
+        toast.success(data?.message || 'Mật khẩu đã được đặt lại thành công!');
         setTimeout(() => {
           router.push('/login');
         }, 3000);
       } else {
-        const data = await res.json();
-        toast.error(data.error || 'Có lỗi xảy ra, vui lòng thử lại');
+        toast.error(data?.error || `Có lỗi xảy ra (${res.status}), vui lòng thử lại`);
       }
     } catch {
       toast.error('Không thể kết nối đến máy chủ');

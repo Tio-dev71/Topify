@@ -24,12 +24,13 @@ function ForgotPasswordForm() {
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
 
+      const data = await res.json().catch(() => null);
+
       if (res.ok) {
         setSuccess(true);
-        toast.success('Đã gửi email hướng dẫn lấy lại mật khẩu');
+        toast.success(data?.message || 'Đã gửi email hướng dẫn lấy lại mật khẩu');
       } else {
-        const data = await res.json();
-        toast.error(data.error || 'Có lỗi xảy ra, vui lòng thử lại');
+        toast.error(data?.error || `Có lỗi xảy ra (${res.status}), vui lòng thử lại`);
       }
     } catch {
       toast.error('Không thể kết nối đến máy chủ');

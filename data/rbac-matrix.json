@@ -1,0 +1,74 @@
+[
+  {
+    "module": "Quản lý Bài Viết & Lịch Đăng",
+    "featureName": "Tạo, sửa & lên lịch đăng bài đa kênh",
+    "permissionKey": "posts.manage",
+    "owner": true,
+    "admin": true,
+    "editor": true,
+    "viewer": false
+  },
+  {
+    "module": "Quản lý Bài Viết & Lịch Đăng",
+    "featureName": "Xóa bài viết & xóa lịch vĩnh viễn",
+    "permissionKey": "posts.delete",
+    "owner": true,
+    "admin": true,
+    "editor": false,
+    "viewer": false
+  },
+  {
+    "module": "Ví Điện Tử & Thu Nhập (M12)",
+    "featureName": "Lập lệnh rút tiền & quản lý tài khoản ngân hàng",
+    "permissionKey": "wallet.withdraw",
+    "owner": true,
+    "admin": false,
+    "editor": false,
+    "viewer": false
+  },
+  {
+    "module": "Ví Điện Tử & Thu Nhập (M12)",
+    "featureName": "Xem số dư & lịch sử giao dịch",
+    "permissionKey": "wallet.view",
+    "owner": true,
+    "admin": true,
+    "editor": false,
+    "viewer": false
+  },
+  {
+    "module": "Tự Động Hóa (M11) & Topify AI (M14)",
+    "featureName": "Thiết lập Trigger & Kịch bản tự động",
+    "permissionKey": "automation.manage",
+    "owner": true,
+    "admin": true,
+    "editor": true,
+    "viewer": false
+  },
+  {
+    "module": "Cài Đặt & Nhà Phát Triển (M15)",
+    "featureName": "Tạo, thu hồi API Key & cấu hình Webhook",
+    "permissionKey": "developer.manage",
+    "owner": true,
+    "admin": true,
+    "editor": false,
+    "viewer": false
+  },
+  {
+    "module": "Quản Trị Workspace & Tổ Chức (M8)",
+    "featureName": "Quản lý thành viên, ghế ngồi & phân quyền RBAC",
+    "permissionKey": "workspace.manage",
+    "owner": true,
+    "admin": true,
+    "editor": false,
+    "viewer": false
+  },
+  {
+    "module": "Chiến Dịch & Nhiệm Vụ (M10, M09)",
+    "featureName": "Tạo, sửa & quản trị chiến dịch",
+    "permissionKey": "campaigns.manage",
+    "owner": true,
+    "admin": true,
+    "editor": true,
+    "viewer": false
+  }
+]
