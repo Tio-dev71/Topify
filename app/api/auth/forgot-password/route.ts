@@ -93,7 +93,11 @@ export async function POST(req: NextRequest) {
           tls: { rejectUnauthorized: false },
         });
 
-        const sender = process.env.SMTP_FROM || 'Topify <onboarding@resend.dev>';
+        let sender = process.env.SMTP_FROM || 'Topify <no-reply@topify.vn>';
+        // Nếu cấu hình cũ còn dính onboarding@resend.dev thì tự động dùng domain đã verify topify.vn
+        if (sender.includes('resend.dev')) {
+          sender = 'Topify <no-reply@topify.vn>';
+        }
         await transporter.sendMail({
           from: sender,
           to: email,
