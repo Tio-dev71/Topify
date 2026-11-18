@@ -464,7 +464,8 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
             setWallet((prev: any) => ({
               ...prev,
               availableBalance: (prev?.availableBalance || 0) + targetWd.amount,
-              pendingBalance: Math.max(0, (prev?.pendingBalance || 0) - targetWd.amount),
+              pendingBalance: targetWd.status === 'PENDING' ? Math.max(0, (prev?.pendingBalance || 0) - targetWd.amount) : (prev?.pendingBalance || 0),
+              totalWithdrawn: targetWd.status === 'COMPLETED' ? Math.max(0, (prev?.totalWithdrawn || 0) - targetWd.amount) : (prev?.totalWithdrawn || 0),
             }));
 
             const refundTx = {
@@ -3208,39 +3209,47 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                 Đóng
               </button>
               <div className="flex items-center gap-2">
-                {payoutModalWd.status === 'COMPLETED' ? (
-                  <span className="px-3.5 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 border border-emerald-200">
-                    <Check className="w-4 h-4 text-emerald-600" />
-                    Lệnh rút tiền đã được giải ngân hoàn tất
-                  </span>
-                ) : payoutModalWd.status === 'REJECTED' ? (
+                {payoutModalWd.status === 'REJECTED' ? (
                   <span className="px-3.5 py-2 rounded-xl bg-rose-100 text-rose-800 font-bold text-xs flex items-center gap-1.5 border border-rose-200">
                     <X className="w-4 h-4 text-rose-600" />
-                    Lệnh rút tiền đã bị từ chối / hoàn tiền ví
+                    Lệnh rút tiền đã bị từ chối / đã hoàn tiền ví
                   </span>
                 ) : (can('wallet.withdraw') || isOwner || isAdmin) ? (
                   <>
                     <button
                       type="button"
                       onClick={async () => {
+                        if (payoutModalWd.status === 'COMPLETED') {
+                          if (!confirm(`Lệnh này đã giải ngân ${payoutModalWd.amount.toLocaleString()} VND. Bạn có chắc chắn muốn hủy lệnh và hoàn lại toàn bộ số tiền này vào số dư ví khả dụng?`)) {
+                            return;
+                          }
+                        }
                         await handleUpdateWithdrawalStatus(payoutModalWd.id, 'REJECTED');
                         setPayoutModalWd(null);
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold transition-all cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold transition-all cursor-pointer text-xs"
+                      title="Hủy lệnh và hoàn trả tiền vào số dư ví"
                     >
                       Từ Chối & Hoàn Tiền Ví
                     </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await handleUpdateWithdrawalStatus(payoutModalWd.id, 'COMPLETED');
-                        setPayoutModalWd(null);
-                      }}
-                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Check className="w-4 h-4" />
-                      Xác Nhận Đã Giải Ngân Thành Công
-                    </button>
+                    {payoutModalWd.status === 'COMPLETED' ? (
+                      <span className="px-3.5 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 border border-emerald-200">
+                        <Check className="w-4 h-4 text-emerald-600" />
+                        Đã giải ngân
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await handleUpdateWithdrawalStatus(payoutModalWd.id, 'COMPLETED');
+                          setPayoutModalWd(null);
+                        }}
+                        className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer text-xs"
+                      >
+                        <Check className="w-4 h-4" />
+                        Xác Nhận Đã Giải Ngân Thành Công
+                      </button>
+                    )}
                   </>
                 ) : (
                   <span className="text-xs text-gray-500 italic">

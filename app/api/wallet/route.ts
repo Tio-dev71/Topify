@@ -158,10 +158,11 @@ export async function POST(req: NextRequest) {
 
     const { userId, role } = await authenticateUser(req);
 
-    // RBAC: Check wallet.withdraw permission (Owner only by default)
-    if (role && !securityEngineStore.hasPermission(role, 'wallet.withdraw')) {
+    // RBAC: Check wallet.withdraw permission (Owner & Admin by default, or permitted)
+    const isOwnerOrAdmin = role === 'SUPER_ADMIN' || role === 'OWNER' || role === 'ADMIN';
+    if (!isOwnerOrAdmin && role && !securityEngineStore.hasPermission(role, 'wallet.withdraw')) {
       return NextResponse.json({
-        error: 'Tài khoản không có quyền lập lệnh rút tiền theo Ma Trận Phân Quyền (RBAC). Chỉ Chủ sở hữu (Owner) mới được phép thực hiện.',
+        error: 'Tài khoản không có quyền lập lệnh rút tiền theo Ma Trận Phân Quyền (RBAC). Chỉ Quản trị viên hoặc Chủ sở hữu mới được phép thực hiện.',
       }, { status: 403 });
     }
 
@@ -186,6 +187,13 @@ export async function POST(req: NextRequest) {
             pending: 0,
             withdrawn: 0,
           },
+        });
+      }
+
+      if (withdrawAmount > dbWallet.balance && walletStore.getWallet().availableBalance >= withdrawAmount) {
+        dbWallet = await prisma.wallet.update({
+          where: { id: dbWallet.id },
+          data: { balance: walletStore.getWallet().availableBalance },
         });
       }
 

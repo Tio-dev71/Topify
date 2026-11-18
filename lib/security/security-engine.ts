@@ -329,7 +329,7 @@ class SecurityEngineStore {
       featureName: 'Lập lệnh rút tiền & quản lý tài khoản ngân hàng',
       permissionKey: 'wallet.withdraw',
       owner: true,
-      admin: false,
+      admin: true,
       editor: false,
       viewer: false,
     },

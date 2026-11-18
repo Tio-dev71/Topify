@@ -28,9 +28,15 @@ export async function PATCH(
     }).catch(() => null);
 
     if (dbWithdrawal) {
-      if (['COMPLETED', 'REJECTED'].includes(dbWithdrawal.status)) {
+      if (dbWithdrawal.status === status) {
         return NextResponse.json({
-          error: `Yêu cầu rút tiền này đã ở trạng thái ${dbWithdrawal.status}, không thể thay đổi tiếp.`,
+          error: `Yêu cầu rút tiền này đã ở trạng thái ${dbWithdrawal.status} rồi.`,
+        }, { status: 400 });
+      }
+
+      if (dbWithdrawal.status === 'REJECTED') {
+        return NextResponse.json({
+          error: 'Yêu cầu rút tiền này đã bị từ chối và hoàn tiền ví, không thể thay đổi tiếp.',
         }, { status: 400 });
       }
 
@@ -58,14 +64,25 @@ export async function PATCH(
             },
           });
         } else if (status === 'REJECTED') {
-          // Hoàn tiền lại số dư khả dụng, trừ tiền đang chờ
-          await tx.wallet.update({
-            where: { id: walletId },
-            data: {
-              balance: { increment: amount },
-              pending: { decrement: amount },
-            },
-          });
+          if (dbWithdrawal.status === 'COMPLETED') {
+            // Đã giải ngân trước đó -> bây giờ hoàn tiền ví: trừ tiền đã rút, cộng lại số dư khả dụng
+            await tx.wallet.update({
+              where: { id: walletId },
+              data: {
+                withdrawn: { decrement: amount },
+                balance: { increment: amount },
+              },
+            });
+          } else {
+            // Hoàn tiền lại số dư khả dụng, trừ tiền đang chờ
+            await tx.wallet.update({
+              where: { id: walletId },
+              data: {
+                balance: { increment: amount },
+                pending: { decrement: amount },
+              },
+            });
+          }
 
           // Ghi nhận giao dịch hoàn tiền
           await tx.walletTransaction.create({

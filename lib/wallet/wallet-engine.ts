@@ -751,10 +751,15 @@ export class WalletStoreManager {
     const wd = this.withdrawals.find((w) => w.id === id);
     if (!wd) return null;
 
-    if (['COMPLETED', 'REJECTED'].includes(wd.status)) {
-      throw new Error(`Yêu cầu rút tiền này đã ở trạng thái ${wd.status}`);
+    if (wd.status === status) {
+      return { withdrawal: wd, wallet: { ...this.wallet } };
     }
 
+    if (wd.status === 'REJECTED') {
+      throw new Error('Yêu cầu rút tiền này đã ở trạng thái REJECTED (Đã hoàn tiền ví), không thể thay đổi tiếp.');
+    }
+
+    const prevStatus = wd.status;
     wd.status = status;
     wd.processedAt = ['COMPLETED', 'REJECTED'].includes(status) ? new Date().toISOString() : undefined;
     if (note) wd.note = note;
@@ -765,8 +770,15 @@ export class WalletStoreManager {
       this.wallet.pendingBalance = Math.max(0, this.wallet.pendingBalance - wd.amount);
       this.wallet.totalWithdrawn += wd.amount;
     } else if (status === 'REJECTED') {
-      this.wallet.pendingBalance = Math.max(0, this.wallet.pendingBalance - wd.amount);
-      this.wallet.availableBalance += wd.amount;
+      if (prevStatus === 'COMPLETED') {
+        // Đã giải ngân trước đó -> hủy và hoàn tiền lại vào số dư khả dụng
+        this.wallet.totalWithdrawn = Math.max(0, this.wallet.totalWithdrawn - wd.amount);
+        this.wallet.availableBalance += wd.amount;
+      } else {
+        // Đang chờ xử lý -> chuyển từ pending sang available
+        this.wallet.pendingBalance = Math.max(0, this.wallet.pendingBalance - wd.amount);
+        this.wallet.availableBalance += wd.amount;
+      }
 
       refundTx = {
         id: `tx_${Date.now()}`,
