@@ -3208,27 +3208,45 @@ export default function WalletEarnings({ defaultTab }: WalletEarningsProps = {})
                 Đóng
               </button>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleUpdateWithdrawalStatus(payoutModalWd.id, 'REJECTED');
-                    setPayoutModalWd(null);
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold transition-all"
-                >
-                  Từ Chối & Hoàn Tiền Ví
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleUpdateWithdrawalStatus(payoutModalWd.id, 'COMPLETED');
-                    setPayoutModalWd(null);
-                  }}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  Xác Nhận Đã Giải Ngân Thành Công
-                </button>
+                {payoutModalWd.status === 'COMPLETED' ? (
+                  <span className="px-3.5 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 border border-emerald-200">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    Lệnh rút tiền đã được giải ngân hoàn tất
+                  </span>
+                ) : payoutModalWd.status === 'REJECTED' ? (
+                  <span className="px-3.5 py-2 rounded-xl bg-rose-100 text-rose-800 font-bold text-xs flex items-center gap-1.5 border border-rose-200">
+                    <X className="w-4 h-4 text-rose-600" />
+                    Lệnh rút tiền đã bị từ chối / hoàn tiền ví
+                  </span>
+                ) : (can('wallet.withdraw') || isOwner || isAdmin) ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleUpdateWithdrawalStatus(payoutModalWd.id, 'REJECTED');
+                        setPayoutModalWd(null);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold transition-all cursor-pointer"
+                    >
+                      Từ Chối & Hoàn Tiền Ví
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleUpdateWithdrawalStatus(payoutModalWd.id, 'COMPLETED');
+                        setPayoutModalWd(null);
+                      }}
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      Xác Nhận Đã Giải Ngân Thành Công
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-500 italic">
+                    Chỉ Quản trị viên mới có quyền phê duyệt/từ chối giải ngân
+                  </span>
+                )}
               </div>
             </div>
           </div>

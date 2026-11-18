@@ -66,7 +66,7 @@ const navSections: NavSection[] = [
     title: 'TỔNG QUAN',
     items: [
       { key: 'Tổng quan (Dashboard)', href: '/dashboard', icon: LayoutDashboard },
-      { key: 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
+      { key: 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3, permission: 'analytics.view' },
     ],
   },
   {
@@ -79,11 +79,11 @@ const navSections: NavSection[] = [
       { key: 'Hashtags & Mẫu CTA', href: '/hashtags', icon: Hash, permission: 'posts.manage' },
       { key: 'Phê duyệt bài viết', href: '/approval', icon: CheckCircle2, permission: 'posts.manage' },
       { key: 'Tạo liên kết UTM', href: '/utm', icon: Link2, permission: 'posts.manage' },
-      { key: 'Thư viện Media (Tệp tin)', href: '/media/library', icon: ImageIcon },
+      { key: 'Thư viện Media (Tệp tin)', href: '/media/library', icon: ImageIcon, permission: 'media.manage' },
       { key: 'Media Studio AI', href: '/media/studio', icon: Film, permission: 'automation.manage' },
       { key: 'Studio Nội dung & Spin', href: '/content-studio', icon: Wand2, permission: 'posts.manage' },
       { key: 'Nội dung Evergreen', href: '/evergreen', icon: Repeat, permission: 'posts.manage' },
-      { key: 'Tải video / media', href: '/downloader', icon: Download },
+      { key: 'Tải video / media', href: '/downloader', icon: Download, permission: 'media.manage' },
     ],
   },
   {
@@ -95,27 +95,27 @@ const navSections: NavSection[] = [
       { key: 'Quản lý Proxy', href: '/proxies', icon: Globe, permission: 'automation.manage' },
       { key: 'Tăng tương tác (Buff)', href: '/buff', icon: Heart, permission: 'automation.manage' },
       { key: 'Phát trực tiếp (Live)', href: '/live', icon: Play, permission: 'automation.manage' },
-      { key: 'Thám tử xu hướng (MXH)', href: '/intelligence/social-search', icon: Search },
-      { key: 'Theo dõi từ khóa (F109)', href: '/intelligence/keywords', icon: Hash, badge: 'F109' },
-      { key: 'Xu hướng bùng nổ (F110)', href: '/intelligence/trending', icon: TrendingUp, badge: 'F110' },
-      { key: 'Cảnh báo vượt ngưỡng (F112)', href: '/intelligence/alerts', icon: Bell, badge: 'F112' },
-      { key: 'Theo dõi đối thủ (Fanpages)', href: '/competitors', icon: Target },
+      { key: 'Thám tử xu hướng (MXH)', href: '/intelligence/social-search', icon: Search, permission: 'intelligence.manage' },
+      { key: 'Theo dõi từ khóa (F109)', href: '/intelligence/keywords', icon: Hash, badge: 'F109', permission: 'intelligence.manage' },
+      { key: 'Xu hướng bùng nổ (F110)', href: '/intelligence/trending', icon: TrendingUp, badge: 'F110', permission: 'intelligence.manage' },
+      { key: 'Cảnh báo vượt ngưỡng (F112)', href: '/intelligence/alerts', icon: Bell, badge: 'F112', permission: 'intelligence.manage' },
+      { key: 'Theo dõi đối thủ (Fanpages)', href: '/competitors', icon: Target, permission: 'intelligence.manage' },
     ],
   },
   {
     title: 'GIAO TIẾP & BÁN HÀNG (CRM)',
     items: [
-      { key: 'Hộp thư hợp nhất', href: '/inbox', icon: MessageSquare },
-      { key: 'Khách hàng tiềm năng (F092)', href: '/crm/leads', icon: UserCheck, badge: 'F092' },
-      { key: 'Hồ sơ khách hàng (F093)', href: '/customers', icon: Users },
-      { key: 'Cơ hội bán hàng (F096)', href: '/deals', icon: Target },
-      { key: 'Kênh bán hàng (F094/F095)', href: '/pipelines', icon: Kanban },
-      { key: 'Hoạt động & Follow-up (F098)', href: '/crm/activities', icon: PhoneCall },
-      { key: 'Trường tùy biến (F099)', href: '/crm/custom-fields', icon: SlidersHorizontal },
-      { key: 'Chấm điểm Lead (F100)', href: '/crm/lead-scoring', icon: Flame },
-      { key: 'Quét trùng & Hợp nhất (F101)', href: '/crm/duplicate-merge', icon: GitMerge },
-      { key: 'Nhúng Form Thu Lead (F102)', href: '/crm/embed-form', icon: Code2 },
-      { key: 'Quản lý công việc (Tasks)', href: '/tasks', icon: CheckSquare },
+      { key: 'Hộp thư hợp nhất', href: '/inbox', icon: MessageSquare, permission: 'crm.manage' },
+      { key: 'Khách hàng tiềm năng (F092)', href: '/crm/leads', icon: UserCheck, badge: 'F092', permission: 'crm.manage' },
+      { key: 'Hồ sơ khách hàng (F093)', href: '/customers', icon: Users, permission: 'crm.manage' },
+      { key: 'Cơ hội bán hàng (F096)', href: '/deals', icon: Target, permission: 'crm.manage' },
+      { key: 'Kênh bán hàng (F094/F095)', href: '/pipelines', icon: Kanban, permission: 'crm.manage' },
+      { key: 'Hoạt động & Follow-up (F098)', href: '/crm/activities', icon: PhoneCall, permission: 'crm.manage' },
+      { key: 'Trường tùy biến (F099)', href: '/crm/custom-fields', icon: SlidersHorizontal, permission: 'crm.manage' },
+      { key: 'Chấm điểm Lead (F100)', href: '/crm/lead-scoring', icon: Flame, permission: 'crm.manage' },
+      { key: 'Quét trùng & Hợp nhất (F101)', href: '/crm/duplicate-merge', icon: GitMerge, permission: 'crm.manage' },
+      { key: 'Nhúng Form Thu Lead (F102)', href: '/crm/embed-form', icon: Code2, permission: 'crm.manage' },
+      { key: 'Quản lý công việc (Tasks)', href: '/tasks', icon: CheckSquare, permission: 'campaigns.manage' },
       { key: 'Chiến dịch (Campaigns)', href: '/campaigns', icon: Rocket, permission: 'campaigns.manage' },
     ],
   },
@@ -164,8 +164,9 @@ export function Sidebar() {
   const { can, isOwner, isAdmin } = useRbac();
 
   const isItemVisible = (item: NavItem) => {
-    if (isOwner || isAdmin) return true;
-    if (!item.permission) return true;
+    if (isOwner) return true;
+    if (item.href === '/dashboard') return true;
+    if (!item.permission) return false;
     return can(item.permission);
   };
 

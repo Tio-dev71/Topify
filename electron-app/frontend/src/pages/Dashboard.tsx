@@ -16,6 +16,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import api, { getApiBaseUrl } from '../lib/axios';
 import { STATUS_CONFIG, PLATFORM_CONFIG } from '../lib/utils';
+import { useRbac } from '../lib/rbac';
 
 interface DashboardStats {
   scheduled: number;
@@ -49,7 +50,8 @@ export default function Dashboard() {
   } catch (e) {
     user = null;
   }
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
+  const { can, isOwner, isAdmin: rbacAdmin } = useRbac();
+  const isAdmin = isOwner || rbacAdmin || user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     async function fetchData() {
@@ -226,37 +228,41 @@ export default function Dashboard() {
       )}
 
       {/* CTA Button */}
-      <Link
-        to="/create"
-        className="block bg-white rounded-2xl shadow-sm border border-gray-100 p-6 group hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gray-900 flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
-              <PlusCircle className="w-6 h-6 text-white" />
+      {can('posts.manage') && (
+        <Link
+          to="/create"
+          className="block bg-white rounded-2xl shadow-sm border border-gray-100 p-6 group hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gray-900 flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+                <PlusCircle className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-[17px] font-semibold">Tạo bài đăng</h3>
+                <p className="text-[13px] text-gray-500">
+                  Quản lý video đăng bài trên tất cả nền tảng
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-[17px] font-semibold">Tạo bài đăng</h3>
-              <p className="text-[13px] text-gray-500">
-                Quản lý video đăng bài trên tất cả nền tảng
-              </p>
-            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 group-hover:text-gray-900 transition-all" />
           </div>
-          <ArrowRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 group-hover:text-gray-900 transition-all" />
-        </div>
-      </Link>
+        </Link>
+      )}
 
       {/* Recent Posts */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[19px] font-semibold">Bài đăng gần đây</h2>
-          <Link
-            to="/posts"
-            className="text-[14px] text-blue-600 hover:underline inline-flex items-center gap-1"
-          >
-            Xem tất cả
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          {can('posts.manage') && (
+            <Link
+              to="/posts"
+              className="text-[14px] text-blue-600 hover:underline inline-flex items-center gap-1"
+            >
+              Xem tất cả
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -278,12 +284,16 @@ export default function Dashboard() {
               <PlayCircle className="w-12 h-12 text-gray-300 mx-auto mb-3 opacity-40" />
               <p className="text-[15px] font-medium text-gray-900">Chưa có bài đăng nào</p>
               <p className="text-[13px] text-gray-500 mt-1">
-                Bắt đầu bằng cách tạo bài đăng đầu tiên của bạn.
+                {can('posts.manage')
+                  ? 'Bắt đầu bằng cách tạo bài đăng đầu tiên của bạn.'
+                  : 'Tài khoản của bạn hiện ở vai trò chỉ xem (Viewer). Vui lòng liên hệ Quản trị viên để được cấp quyền tạo bài.'}
               </p>
-              <Link to="/create" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg inline-flex items-center gap-2 mt-4 text-[14px] py-2 px-4 transition-colors">
-                <PlusCircle className="w-4 h-4" />
-                Tạo bài đăng đầu tiên
-              </Link>
+              {can('posts.manage') && (
+                <Link to="/create" className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg inline-flex items-center gap-2 mt-4 text-[14px] py-2 px-4 transition-colors">
+                  <PlusCircle className="w-4 h-4" />
+                  Tạo bài đăng đầu tiên
+                </Link>
+              )}
             </div>
           ) : (
             <table className="w-full text-left border-collapse">

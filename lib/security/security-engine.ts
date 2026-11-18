@@ -215,11 +215,16 @@ class SecurityEngineStore {
         const raw = fs.readFileSync(this.rbacFilePath, 'utf-8');
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          this.rbacPermissions = parsed;
+          const existingKeys = new Set(parsed.map((p: any) => p.permissionKey));
+          const missing = this.rbacPermissions.filter((p) => !existingKeys.has(p.permissionKey));
+          this.rbacPermissions = [...parsed, ...missing];
+          if (missing.length > 0) {
+            this.saveRbacToDisk();
+          }
+          return;
         }
-      } else {
-        this.saveRbacToDisk();
       }
+      this.saveRbacToDisk();
     } catch (e) {
       console.error('[SECURITY_ENGINE] Failed to load RBAC from disk', e);
     }
@@ -275,6 +280,51 @@ class SecurityEngineStore {
       viewer: false,
     },
     {
+      module: 'Thư Viện Media & Tải Video',
+      featureName: 'Quản lý tài nguyên media & tải video đa kênh',
+      permissionKey: 'media.manage',
+      owner: true,
+      admin: true,
+      editor: true,
+      viewer: false,
+    },
+    {
+      module: 'Thị Trường & Xu Hướng (Intelligence)',
+      featureName: 'Thám tử MXH, theo dõi từ khóa & đối thủ',
+      permissionKey: 'intelligence.manage',
+      owner: true,
+      admin: true,
+      editor: true,
+      viewer: false,
+    },
+    {
+      module: 'Giao Tiếp & Khách Hàng (CRM)',
+      featureName: 'Quản lý Hộp thư, Leads, Khách hàng & Pipeline',
+      permissionKey: 'crm.manage',
+      owner: true,
+      admin: true,
+      editor: true,
+      viewer: false,
+    },
+    {
+      module: 'Chiến Dịch & Nhiệm Vụ (M10, M09)',
+      featureName: 'Tạo, sửa & quản trị chiến dịch và nhiệm vụ',
+      permissionKey: 'campaigns.manage',
+      owner: true,
+      admin: true,
+      editor: true,
+      viewer: false,
+    },
+    {
+      module: 'Báo Cáo & Phân Tích (Analytics)',
+      featureName: 'Xem báo cáo & chỉ số hiệu quả kinh doanh',
+      permissionKey: 'analytics.view',
+      owner: true,
+      admin: true,
+      editor: false,
+      viewer: false,
+    },
+    {
       module: 'Ví Điện Tử & Thu Nhập (M12)',
       featureName: 'Lập lệnh rút tiền & quản lý tài khoản ngân hàng',
       permissionKey: 'wallet.withdraw',
@@ -317,15 +367,6 @@ class SecurityEngineStore {
       owner: true,
       admin: true,
       editor: false,
-      viewer: false,
-    },
-    {
-      module: 'Chiến Dịch & Nhiệm Vụ (M10, M09)',
-      featureName: 'Tạo, sửa & quản trị chiến dịch',
-      permissionKey: 'campaigns.manage',
-      owner: true,
-      admin: true,
-      editor: true,
       viewer: false,
     },
   ];

@@ -62,9 +62,9 @@ export function RbacGuard({
   moduleName?: string;
   children: React.ReactNode;
 }) {
-  const { can, isOwner, isAdmin } = useRbac();
+  const { can, isOwner } = useRbac();
 
-  if (isOwner || isAdmin || can(permission)) {
+  if (isOwner || can(permission)) {
     return <>{children}</>;
   }
 

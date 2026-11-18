@@ -5,7 +5,41 @@ import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
 import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
+import { securityEngineStore } from '@/lib/security/security-engine';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function getAuthUser(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7).trim();
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.id) {
+        return {
+          id: decoded.id,
+          role: decoded.role || 'STAFF',
+          name: decoded.name || 'User',
+          email: decoded.email,
+          workspaceId: decoded.workspaceId || 'default-workspace',
+        };
+      }
+    } catch {}
+  }
+  const session = await auth();
+  if (session?.user?.id) {
+    return {
+      id: session.user.id,
+      role: session.user.role || 'STAFF',
+      name: session.user.name,
+      email: session.user.email,
+      workspaceId: (session.user as any).workspaceId || 'default-workspace',
+    };
+  }
+  return null;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -51,10 +85,11 @@ const createPostSchema = z.object({
 // GET /api/posts - List posts
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await getAuthUser(req);
+    if (!user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const session = { user } as any;
 
     // Auto-check and publish any overdue scheduled posts before listing
     if (process.env.NODE_ENV !== 'test') {
@@ -169,10 +204,18 @@ export async function GET(req: NextRequest) {
 // POST /api/posts - Create post
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await getAuthUser(req);
+    if (!user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    if (user.role && !securityEngineStore.hasPermission(user.role, 'posts.manage')) {
+      return NextResponse.json(
+        { error: 'Tài khoản không có quyền tạo hoặc lên lịch bài viết theo Ma Trận Phân Quyền (RBAC)' },
+        { status: 403 }
+      );
+    }
+    const session = { user } as any;
 
     const body = await req.json();
     const parsed = createPostSchema.safeParse(body);
