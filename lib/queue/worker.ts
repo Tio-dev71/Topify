@@ -2,6 +2,7 @@ import { Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { encryptToken, decryptToken } from '../crypto';
 import { getPublisher } from '../publishers';
 import { scheduleTokenMonitor, scheduleKeywordScraper, enqueuePublish } from './index';
 import { getKeywordInsights, getFacebookPagePosts, getRealTimeNews } from '../rapidapi/client';
@@ -81,18 +82,22 @@ async function processTokenMonitorJob(_job: Job) {
       }
 
       let newAccessToken = acc.accessToken;
+      let newRefreshToken = acc.refreshToken;
       let newExpiresAt = acc.expiresAt;
 
       if (acc.provider === 'META') {
         // Meta long-lived token refresh
-        const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-        const clientSecret = process.env.FACEBOOK_APP_SECRET;
-        if (clientId && clientSecret) {
-          const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${acc.accessToken}`);
+        const clientId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || process.env.META_APP_ID;
+        const clientSecret = process.env.FACEBOOK_APP_SECRET || process.env.META_APP_SECRET;
+        if (clientId && clientSecret && acc.accessToken) {
+          const rawToken = decryptToken(acc.accessToken);
+          const res = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${rawToken}`);
           const data = await res.json();
           if (data.access_token) {
-            newAccessToken = data.access_token;
-            newExpiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
+            newAccessToken = encryptToken(data.access_token);
+            newExpiresAt = data.expires_in
+              ? new Date(Date.now() + data.expires_in * 1000)
+              : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
           }
         }
       } else if (acc.provider === 'TIKTOK') {
@@ -100,6 +105,7 @@ async function processTokenMonitorJob(_job: Job) {
         const clientKey = process.env.TIKTOK_CLIENT_KEY;
         const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
         if (clientKey && clientSecret && acc.refreshToken) {
+          const rawRefresh = decryptToken(acc.refreshToken);
           const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -107,13 +113,16 @@ async function processTokenMonitorJob(_job: Job) {
               client_key: clientKey,
               client_secret: clientSecret,
               grant_type: 'refresh_token',
-              refresh_token: acc.refreshToken,
+              refresh_token: rawRefresh,
             })
           });
           const data = await res.json();
           if (data.access_token) {
-            newAccessToken = data.access_token;
-            newExpiresAt = new Date(Date.now() + data.expires_in * 1000);
+            newAccessToken = encryptToken(data.access_token);
+            if (data.refresh_token) {
+              newRefreshToken = encryptToken(data.refresh_token);
+            }
+            newExpiresAt = new Date(Date.now() + (data.expires_in || 86400) * 1000);
           }
         }
       } else if (acc.provider === 'ZALO') {
@@ -121,6 +130,7 @@ async function processTokenMonitorJob(_job: Job) {
         const appId = process.env.ZALO_APP_ID;
         const secretKey = process.env.ZALO_APP_SECRET;
         if (appId && secretKey && acc.refreshToken) {
+          const rawRefresh = decryptToken(acc.refreshToken);
           const res = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
             method: 'POST',
             headers: {
@@ -130,13 +140,16 @@ async function processTokenMonitorJob(_job: Job) {
             body: new URLSearchParams({
               app_id: appId,
               grant_type: 'refresh_token',
-              refresh_token: acc.refreshToken
+              refresh_token: rawRefresh
             })
           });
           const data = await res.json();
           if (data.access_token) {
-            newAccessToken = data.access_token;
-            newExpiresAt = new Date(Date.now() + parseInt(data.expires_in) * 1000);
+            newAccessToken = encryptToken(data.access_token);
+            if (data.refresh_token) {
+              newRefreshToken = encryptToken(data.refresh_token);
+            }
+            newExpiresAt = new Date(Date.now() + (parseInt(data.expires_in) || 86400) * 1000);
           }
         }
       }
@@ -145,6 +158,7 @@ async function processTokenMonitorJob(_job: Job) {
         where: { id: acc.id },
         data: {
           accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
           expiresAt: newExpiresAt,
           status: 'CONNECTED',
         }

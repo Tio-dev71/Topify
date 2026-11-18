@@ -92,9 +92,12 @@ export interface ReferredUserItem {
   emailMasked: string;
   registeredAt: string;
   plan: 'FREE' | 'STARTER' | 'PRO' | 'ENTERPRISE';
-  status: 'TRIAL' | 'ACTIVE_PAID' | 'EXPIRED';
+  status: 'TRIAL' | 'ACTIVE_PAID' | 'EXPIRED' | 'CANCELLED';
   commissionEarned: number;
 }
+
+export type CommissionStatus = 'PENDING' | 'APPROVED' | 'PAID';
+export type FraudActionTaken = 'FLAGGED' | 'COMMISSION_HELD' | 'SUSPENDED' | 'DISMISSED';
 
 export interface CommissionRuleItem {
   id: string;

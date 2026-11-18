@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { assertQuotaLimit } from '@/lib/workspace/quota';
 
 // Basic email validation regex
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -155,6 +156,17 @@ export async function POST(req: NextRequest) {
         },
       });
     } else {
+      // Quota Enforcement: Check seat limits (F117 & Plan Limits)
+      const quotaCheck = await assertQuotaLimit({
+        workspaceId,
+        userId: session.user.id,
+        feature: 'seats',
+        countToAdd: 1,
+      });
+      if (!quotaCheck.allowed) {
+        return NextResponse.json({ error: quotaCheck.error }, { status: 403 });
+      }
+
       member = await prisma.allowedEmail.create({
         data: {
           email,

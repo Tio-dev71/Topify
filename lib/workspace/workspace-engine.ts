@@ -244,25 +244,49 @@ class WorkspaceEngineStore {
   // ==========================================
   public async getUsageAndQuota(workspaceId?: string) {
     const wsId = workspaceId || this.data.workspace.id;
-    const plan = this.data.workspace.plan;
+    let plan = this.data.workspace.plan;
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    // If subscription expired and not in grace period, downgrade plan limits to FREE
+    if (this.data.workspace.planExpiresAt && new Date(this.data.workspace.planExpiresAt).getTime() < now.getTime()) {
+      if (this.data.workspace.subscriptionStatus !== 'GRACE_PERIOD') {
+        plan = 'FREE';
+      }
+    }
+
     const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.PRO;
 
     // Count real database values for this specific workspace
     let realSeats = 0;
     let realPosts = 0;
+    let realChannels = 0;
 
     try {
-      const [allowedCount, userCount, postCount] = await Promise.all([
+      const [allowedCount, userCount, postCount, channelCount] = await Promise.all([
         prisma.allowedEmail.count({ where: { workspaceId: wsId } }).catch(() => 0),
         prisma.user.count({ where: { workspaceId: wsId } }).catch(() => 0),
-        prisma.post.count({ where: { workspaceId: wsId } }).catch(() => 0),
+        prisma.post.count({
+          where: {
+            workspaceId: wsId,
+            createdAt: { gte: startOfMonth },
+          },
+        }).catch(() => 0),
+        prisma.socialAccount.count({
+          where: {
+            workspaceId: wsId,
+            status: 'CONNECTED',
+          },
+        }).catch(() => 0),
       ]);
       realSeats = Math.max(allowedCount, userCount);
       realPosts = postCount;
+      realChannels = channelCount;
     } catch {}
 
-    const seatsUsed = realSeats;
-    const channelsUsed = this.data.usage.channelsUsed;
+    const seatsUsed = realSeats > 0 ? realSeats : (this.data.usage.seatsUsed || 1);
+    const channelsUsed = realChannels > 0 ? realChannels : (this.data.usage.channelsUsed || 0);
     const postsThisMonth = realPosts;
     const aiCreditsUsed = this.data.usage.aiCreditsUsed;
     const storageUsedGb = this.data.usage.storageUsedGb;
@@ -274,7 +298,22 @@ class WorkspaceEngineStore {
     const pStorage = Math.min(100, Math.round((storageUsedGb / limits.maxStorageGb) * 100));
 
     const warnings: string[] = [];
-    if (pSeats >= 80) warnings.push(`Đã sử dụng ${seatsUsed}/${limits.maxSeats} chỗ ngồi (seats). Cần nâng cấp gói nếu muốn thêm nhân sự.`);
+    if (postsThisMonth >= limits.maxPostsPerMonth) {
+      warnings.push(`Đã sử dụng hết 100% hạn mức đăng bài trong tháng (${postsThisMonth}/${limits.maxPostsPerMonth} bài). Vui lòng nâng cấp gói để tiếp tục.`);
+    } else if (pPosts >= 80) {
+      warnings.push(`Đã sử dụng ${postsThisMonth}/${limits.maxPostsPerMonth} bài đăng tháng này (${pPosts}%).`);
+    }
+
+    if (channelsUsed >= limits.maxChannels) {
+      warnings.push(`Đã kết nối tối đa ${channelsUsed}/${limits.maxChannels} kênh mạng xã hội.`);
+    }
+
+    if (seatsUsed >= limits.maxSeats) {
+      warnings.push(`Đã sử dụng ${seatsUsed}/${limits.maxSeats} chỗ ngồi (seats). Cần nâng cấp gói nếu muốn thêm nhân sự.`);
+    } else if (pSeats >= 80) {
+      warnings.push(`Đã sử dụng ${seatsUsed}/${limits.maxSeats} chỗ ngồi (seats). Cần nâng cấp gói nếu muốn thêm nhân sự.`);
+    }
+
     if (pAi >= 80) warnings.push(`Hạn mức AI Credits đã đạt ${pAi}%.`);
     if (pStorage >= 80) warnings.push(`Dung lượng lưu trữ đạt ${pStorage}%.`);
 

@@ -384,7 +384,7 @@ export async function publishPostDirectly(postId: string): Promise<{
           data: {
             postId,
             platform: postPlatform.platform,
-            level: 'WARN',
+            level: 'ERROR',
             message: taggedErrorMsg,
             metadata: { isRateLimit: true, provider },
           },

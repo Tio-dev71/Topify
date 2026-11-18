@@ -834,40 +834,65 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {socialAccounts.map((account) => (
-                    <div
-                      key={account.id}
-                      onClick={() => setSelectedSocialAccount(account)}
-                      className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center space-x-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
-                          {account.provider.substring(0, 2)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-sm text-gray-900 group-hover:text-purple-600 transition-colors">
-                              {account.accountName || 'Tài khoản liên kết'}
-                            </p>
-                            <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-700">
-                              Đang kết nối
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-0.5">{account.provider}</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedSocialAccount(account);
-                        }}
-                        className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-purple-50 text-gray-700 rounded-lg text-xs font-semibold"
+                  {socialAccounts.map((account) => {
+                    const isExpired = account.status === 'EXPIRED' || (account.expiresAt && new Date(account.expiresAt).getTime() < Date.now());
+                    const daysRemaining = account.expiresAt
+                      ? Math.max(0, Math.ceil((new Date(account.expiresAt).getTime() - Date.now()) / (24 * 3600 * 1000)))
+                      : null;
+                    const isExpiringSoon = !isExpired && daysRemaining !== null && daysRemaining <= 7;
+
+                    return (
+                      <div
+                        key={account.id}
+                        onClick={() => setSelectedSocialAccount(account)}
+                        className="flex items-center justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 hover:border-gray-200 transition-all cursor-pointer group"
                       >
-                        Quản lý
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center space-x-3.5">
+                          <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
+                            {account.provider.substring(0, 2)}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-sm text-gray-900 group-hover:text-purple-600 transition-colors">
+                                {account.accountName || 'Tài khoản liên kết'}
+                              </p>
+                              {isExpired ? (
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                                  ✕ Đã hết hạn token
+                                </span>
+                              ) : isExpiringSoon ? (
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                  ⚡ Sắp hết hạn ({daysRemaining} ngày)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                  ✓ Đang kết nối {daysRemaining ? `(${daysRemaining} ngày)` : ''}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
+                              <span>{account.provider}</span>
+                              {account.expiresAt && (
+                                <span className="text-[11px] text-gray-400">
+                                  • Hạn token: {new Date(account.expiresAt).toLocaleDateString('vi-VN')}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSocialAccount(account);
+                          }}
+                          className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-purple-50 text-gray-700 rounded-lg text-xs font-semibold"
+                        >
+                          Quản lý
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1487,8 +1512,50 @@ export default function Settings() {
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-500">Trạng thái:</span>
-                  <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700">
-                    Đang hoạt động (Connected)
+                  {(() => {
+                    const isExp = selectedSocialAccount.status === 'EXPIRED' || 
+                      (selectedSocialAccount.expiresAt && new Date(selectedSocialAccount.expiresAt).getTime() < Date.now());
+                    const dRem = selectedSocialAccount.expiresAt
+                      ? Math.max(0, Math.ceil((new Date(selectedSocialAccount.expiresAt).getTime() - Date.now()) / (24 * 3600 * 1000)))
+                      : null;
+                    if (isExp) {
+                      return (
+                        <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                          ✕ Đã hết hạn token
+                        </span>
+                      );
+                    }
+                    if (dRem !== null && dRem <= 7) {
+                      return (
+                        <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                          ⚡ Sắp hết hạn ({dRem} ngày)
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                        ✓ Đang hoạt động (Connected)
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500">Thời hạn Access Token:</span>
+                  <span className="font-medium text-gray-800 text-right text-xs">
+                    {selectedSocialAccount.expiresAt ? (
+                      (() => {
+                        const d = new Date(selectedSocialAccount.expiresAt);
+                        const isExp = d.getTime() < Date.now();
+                        const rem = Math.max(0, Math.ceil((d.getTime() - Date.now()) / (24 * 3600 * 1000)));
+                        return (
+                          <span>
+                            {d.toLocaleString('vi-VN')} {isExp ? <span className="text-rose-600 font-bold">(Đã hết hạn)</span> : <span className="text-gray-500">({rem} ngày còn lại)</span>}
+                          </span>
+                        );
+                      })()
+                    ) : (
+                      'Dài hạn (Tự động gia hạn)'
+                    )}
                   </span>
                 </div>
                 {selectedSocialAccount.provider === 'META' && (

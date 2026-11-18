@@ -64,9 +64,11 @@ export async function GET(req?: NextRequest) {
       // Fallback silently if DB/auth is unavailable
     }
 
+    const now = Date.now();
     const tasksFromStore = walletStore.getEarningTasks();
     const enrichedTasks = tasksFromStore.map(t => ({
       ...t,
+      isExpired: new Date(t.expiresAt).getTime() < now,
       isClaimed: t.isClaimed || claimedTaskIds.has(t.id),
     }));
 

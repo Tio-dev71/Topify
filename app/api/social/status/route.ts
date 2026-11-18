@@ -1,18 +1,44 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { getCredentials } from '@/lib/credentials';
+import jwt from 'jsonwebtoken';
 
-// GET /api/social/status — Get connection status for all providers
-export async function GET() {
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function getAuthUser(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    if (session?.user?.id) return session.user;
+  } catch {}
+
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7).trim();
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      if (decoded?.id || decoded?.sub) {
+        return {
+          id: decoded.id || decoded.sub,
+          email: decoded.email,
+          role: decoded.role,
+          workspaceId: decoded.workspaceId,
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// GET /api/social/status — Get connection status for all providers
+export async function GET(req: NextRequest) {
+  try {
+    const user = await getAuthUser(req);
+    if (!user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = session.user as any;
-    const workspaceId = user.workspaceId;
+    const workspaceId = (user as any).workspaceId;
 
     // Get accounts for the workspace OR user
     const socialAccounts = await prisma.socialAccount.findMany({
@@ -42,74 +68,61 @@ export async function GET() {
     });
 
     const connections: any[] = [];
+    const now = Date.now();
 
     for (const account of socialAccounts) {
       const isConnectedStatus = (account.status as string) === 'CONNECTED' || (account.status as string) === 'active';
-      const isExpiredTime = account.expiresAt ? new Date(account.expiresAt).getTime() < Date.now() : false;
+      const isExpiredTime = account.expiresAt ? new Date(account.expiresAt).getTime() < now : false;
+      const daysRemaining = account.expiresAt
+        ? Math.max(0, Math.ceil((new Date(account.expiresAt).getTime() - now) / (24 * 3600 * 1000)))
+        : null;
 
-      if (isConnectedStatus && !isExpiredTime) {
+      let effectiveStatus = account.status as string;
+      if (isExpiredTime) {
+        effectiveStatus = 'EXPIRED';
+      }
+
+      connections.push({
+        id: account.id,
+        provider: account.provider,
+        accountName: account.accountName,
+        pageId: account.pageId,
+        instagramBusinessId: account.instagramBusinessId,
+        youtubeChannelId: account.youtubeChannelId,
+        telegramBotUsername: account.telegramBotUsername,
+        telegramBotToken: account.telegramBotToken ? `${account.telegramBotToken.slice(0, 8)}...` : undefined,
+        zaloOaId: account.zaloOaId,
+        expiresAt: account.expiresAt,
+        daysRemaining,
+        isExpired: isExpiredTime || effectiveStatus === 'EXPIRED',
+        status: effectiveStatus,
+        connected: isConnectedStatus && !isExpiredTime,
+      });
+
+      // Also expose GOOGLE as YOUTUBE if applicable
+      if ((account.provider as string) === 'GOOGLE') {
         connections.push({
           id: account.id,
-          provider: account.provider,
+          provider: 'YOUTUBE',
           accountName: account.accountName,
           pageId: account.pageId,
           instagramBusinessId: account.instagramBusinessId,
           youtubeChannelId: account.youtubeChannelId,
-          telegramBotUsername: account.telegramBotUsername,
-          telegramBotToken: account.telegramBotToken ? `${account.telegramBotToken.slice(0, 8)}...` : undefined,
-          zaloOaId: account.zaloOaId,
           expiresAt: account.expiresAt,
-          status: 'CONNECTED',
-          connected: true,
+          daysRemaining,
+          isExpired: isExpiredTime || effectiveStatus === 'EXPIRED',
+          status: effectiveStatus,
+          connected: isConnectedStatus && !isExpiredTime,
         });
-
-        // Also expose GOOGLE as YOUTUBE if applicable
-        if ((account.provider as string) === 'GOOGLE') {
-          connections.push({
-            id: account.id,
-            provider: 'YOUTUBE',
-            accountName: account.accountName,
-            pageId: account.pageId,
-            instagramBusinessId: account.instagramBusinessId,
-            youtubeChannelId: account.youtubeChannelId,
-            expiresAt: account.expiresAt,
-            status: 'CONNECTED',
-            connected: true,
-          });
-        }
-      } else if (account.refreshToken && ((account.provider as string) === 'GOOGLE' || account.provider === 'YOUTUBE')) {
-        // Attempt on-the-fly token refresh if expired but has refresh token
-        try {
-          const { getValidAccessToken } = await import('@/lib/publishers/googleAuth');
-          await getValidAccessToken(account as any);
-
-          connections.push({
-            id: account.id,
-            provider: 'YOUTUBE',
-            accountName: account.accountName,
-            pageId: account.pageId,
-            instagramBusinessId: account.instagramBusinessId,
-            youtubeChannelId: account.youtubeChannelId,
-            expiresAt: account.expiresAt,
-            status: 'CONNECTED',
-            connected: true,
-          });
-        } catch (err: any) {
-          console.warn(`[social/status] YouTube token refresh failed for ${account.id}:`, err?.message || err);
-          if (account.status !== 'EXPIRED') {
-            await prisma.socialAccount.update({
-              where: { id: account.id },
-              data: { status: 'EXPIRED' }
-            }).catch(() => {});
-          }
-        }
       }
     }
 
-    // Fetch credentials properly using the fallback chain
-    const credentials = await getCredentials(session.user.id);
+    // Fetch credentials
+    let credentials: Record<string, string | undefined> = {};
+    try {
+      credentials = await getCredentials(user.id);
+    } catch {}
 
-    // Check environment variables
     const envStatus: Record<string, boolean> = {
       META_APP_ID: !!credentials.META_APP_ID,
       META_APP_SECRET: !!credentials.META_APP_SECRET,
@@ -119,7 +132,7 @@ export async function GET() {
 
     return NextResponse.json({
       connections,
-      connected: connections.length,
+      connected: connections.filter(c => c.connected).length,
       envStatus,
     });
   } catch (error: any) {

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { encryptToken } from '@/lib/crypto';
 import { getCredentials } from '@/lib/credentials';
+import { assertQuotaLimit } from '@/lib/workspace/quota';
 import { cookies } from 'next/headers';
 
 // GET /api/social/google/callback — Handle Google OAuth callback
@@ -201,6 +202,31 @@ export async function GET(req: NextRequest) {
 
     const encryptedAccessToken = encryptToken(tokenData.access_token);
     const encryptedRefreshToken = tokenData.refresh_token ? encryptToken(tokenData.refresh_token) : null;
+
+    // Check channel quota limit before creating a new social channel (F118)
+    const existingAccount = await prisma.socialAccount.findUnique({
+      where: {
+        userId_provider: {
+          userId: userId,
+          provider: provider as any,
+        },
+      },
+    });
+
+    if (!existingAccount) {
+      const quotaCheck = await assertQuotaLimit({
+        workspaceId,
+        userId,
+        feature: 'channels',
+        countToAdd: 1,
+      });
+      if (!quotaCheck.allowed) {
+        if (isDesktopClient) return renderDesktopError(quotaCheck.error || 'Đã đạt giới hạn số lượng kênh kết nối.');
+        return NextResponse.redirect(
+          new URL(`/dashboard/settings?error=quota_exceeded&detail=${encodeURIComponent(quotaCheck.error || '')}`, baseUrl)
+        );
+      }
+    }
 
     // Save to database with status CONNECTED
     await prisma.socialAccount.upsert({

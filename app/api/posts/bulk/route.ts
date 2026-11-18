@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@/lib/db';
 import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
+import { assertQuotaLimit } from '@/lib/workspace/quota';
 
 // POST /api/posts/bulk — Create multiple posts at once
 export async function POST(req: NextRequest) {
@@ -22,6 +23,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Maximum 50 posts per batch' }, { status: 400 });
     }
 
+    const userWorkspaceId = (session.user as any).workspaceId;
+
+    // Quota Enforcement: Check monthly post limit
+    const quotaCheck = await assertQuotaLimit({
+      workspaceId: userWorkspaceId,
+      userId: session.user.id,
+      feature: 'posts',
+      countToAdd: posts.length,
+    });
+    if (!quotaCheck.allowed) {
+      return NextResponse.json({ error: quotaCheck.error }, { status: 403 });
+    }
+
     const PLATFORM_INFO: Record<string, { provider: string; name: string }> = {
       FACEBOOK_REELS: { provider: 'META', name: 'Facebook' },
       FACEBOOK_POST: { provider: 'META', name: 'Facebook' },
@@ -34,7 +48,6 @@ export async function POST(req: NextRequest) {
       ZALO_ARTICLE: { provider: 'ZALO', name: 'Zalo' },
     };
 
-    const userWorkspaceId = (session.user as any).workspaceId;
     const connectedSocials = (prisma as any).socialAccount?.findMany
       ? await (prisma as any).socialAccount.findMany({
           where: {

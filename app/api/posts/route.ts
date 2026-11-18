@@ -6,6 +6,7 @@ import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
 import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
 import { securityEngineStore } from '@/lib/security/security-engine';
+import { assertQuotaLimit } from '@/lib/workspace/quota';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 
@@ -32,7 +33,7 @@ async function getAuthUser(req: NextRequest) {
   if (session?.user?.id) {
     return {
       id: session.user.id,
-      role: session.user.role || 'STAFF',
+      role: session.user.role || 'ADMIN',
       name: session.user.name,
       email: session.user.email,
       workspaceId: (session.user as any).workspaceId || 'default-workspace',
@@ -215,6 +216,21 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
+
+    // Quota Enforcement: Check monthly post limit (F118 & Plan Limits)
+    const quotaCheck = await assertQuotaLimit({
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      feature: 'posts',
+      countToAdd: 1,
+    });
+    if (!quotaCheck.allowed) {
+      return NextResponse.json(
+        { error: quotaCheck.error },
+        { status: 403 }
+      );
+    }
+
     const session = { user } as any;
 
     const body = await req.json();

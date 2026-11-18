@@ -29,7 +29,10 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const expiresAt = workspace.planExpiresAt ? new Date(workspace.planExpiresAt) : null;
-    const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 3600 * 24)) : 0;
+    const isExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
+    const daysRemaining = (expiresAt && !isExpired)
+      ? Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 3600 * 24)))
+      : 0;
     
     const isGracePeriod = workspace.subscriptionStatus === 'GRACE_PERIOD';
     let graceDaysRemaining = 0;
@@ -37,7 +40,7 @@ export async function GET(req: NextRequest) {
       graceDaysRemaining = Math.max(0, Math.ceil((new Date(workspace.gracePeriodEndsAt).getTime() - now.getTime()) / (1000 * 3600 * 24)));
     }
 
-    let alertLevel: 'NONE' | 'WARNING' | 'URGENT' | 'GRACE' = 'NONE';
+    let alertLevel: 'NONE' | 'WARNING' | 'URGENT' | 'GRACE' | 'EXPIRED' = 'NONE';
     let alertMessage = '';
 
     const planName = PLAN_LIMITS[workspace.plan]?.name || 'Gói dịch vụ';
@@ -46,6 +49,9 @@ export async function GET(req: NextRequest) {
       if (isGracePeriod) {
         alertLevel = 'GRACE';
         alertMessage = `Gói ${planName} đã hết hạn! Bạn đang trong ${graceDaysRemaining} ngày ân hạn trước khi hệ thống chuyển về gói Miễn Phí.`;
+      } else if (isExpired) {
+        alertLevel = 'EXPIRED';
+        alertMessage = `Gói ${planName} đã hết hạn vào ngày ${expiresAt?.toLocaleDateString('vi-VN')}. Vui lòng gia hạn để mở khóa lại các tính năng và hạn mức nâng cao.`;
       } else if (daysRemaining <= 1) {
         alertLevel = 'URGENT';
         alertMessage = `Gói ${planName} của bạn sắp hết hạn trong ngày hôm nay! Vui lòng gia hạn để không bị gián đoạn.`;
