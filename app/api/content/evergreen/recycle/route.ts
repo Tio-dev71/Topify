@@ -5,14 +5,63 @@ import { enqueuePublish, schedulePublish } from '@/lib/queue';
 import { checkAndPublishDuePosts } from '@/lib/queue/publisher-service';
 import { recordAuditLog } from '@/lib/audit-log';
 import { sanitizeUtf8, sanitizeUtf8Nullable } from '@/lib/utils';
+import { assertQuotaLimit } from '@/lib/workspace/quota';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
+
+async function getAuthUser(req: NextRequest) {
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7).trim();
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      const userId = decoded?.sub || decoded?.id;
+      if (userId) {
+        let dbUser = (prisma.user?.findUnique)
+          ? await prisma.user.findUnique({
+              where: { id: userId },
+              select: { id: true, workspaceId: true, role: true, name: true, email: true },
+            }).catch(() => null)
+          : null;
+
+        if (!dbUser && decoded.email && prisma.user?.findUnique) {
+          dbUser = await prisma.user.findUnique({
+            where: { email: decoded.email },
+            select: { id: true, workspaceId: true, role: true, name: true, email: true },
+          }).catch(() => null);
+        }
+
+        return {
+          id: dbUser?.id || userId,
+          role: dbUser?.role || decoded.role || 'STAFF',
+          name: dbUser?.name || decoded.name || 'User',
+          email: dbUser?.email || decoded.email,
+          workspaceId: dbUser?.workspaceId || decoded.workspaceId || 'default-workspace',
+        };
+      }
+    } catch {}
+  }
+  const session = await auth();
+  if (session?.user?.id) {
+    return {
+      id: session.user.id,
+      role: session.user.role || 'ADMIN',
+      name: session.user.name,
+      email: session.user.email,
+      workspaceId: (session.user as any).workspaceId || 'default-workspace',
+    };
+  }
+  return null;
+}
 
 export const dynamic = 'force-dynamic';
 
 // POST /api/content/evergreen/recycle - Recycle / repost an evergreen post
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const user = await getAuthUser(req);
+    if (!user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -40,6 +89,19 @@ export async function POST(req: NextRequest) {
 
     if (!originalPost) {
       return NextResponse.json({ error: 'Original post not found' }, { status: 404 });
+    }
+
+    const workspaceId = originalPost.workspaceId || user.workspaceId;
+
+    // Quota Enforcement: Check monthly post limit
+    const quotaCheck = await assertQuotaLimit({
+      workspaceId,
+      userId: user.id,
+      feature: 'posts',
+      countToAdd: 1,
+    });
+    if (!quotaCheck.allowed) {
+      return NextResponse.json({ error: quotaCheck.error }, { status: 403 });
     }
 
     const targetPlatforms: string[] = Array.isArray(platforms) && platforms.length > 0
@@ -70,8 +132,8 @@ export async function POST(req: NextRequest) {
         hashtags: originalPost.hashtags,
         videoAssetId: originalPost.videoAssetId,
         postType: originalPost.postType,
-        createdById: session.user.id,
-        workspaceId: originalPost.workspaceId || (session.user as any).workspaceId || null,
+        createdById: user.id,
+        workspaceId,
         status: postStatus,
         scheduledAt: scheduledDate,
         originalPostId: originalPost.id,

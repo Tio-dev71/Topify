@@ -1,20 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { PLAN_LIMITS } from '@/lib/workspace/quota';
+import { auth } from '@/lib/auth';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const workspaceIdParam = searchParams.get('workspaceId');
 
+    let userWorkspaceId: string | null = null;
+    const authHeader = req.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.substring(7).trim();
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        userWorkspaceId = decoded.workspaceId;
+        const uid = decoded.sub || decoded.id;
+        if (!userWorkspaceId && uid && prisma.user?.findUnique) {
+          const u = await prisma.user.findUnique({ where: { id: uid }, select: { workspaceId: true } });
+          if (u?.workspaceId) userWorkspaceId = u.workspaceId;
+        }
+      } catch {}
+    }
+    if (!userWorkspaceId) {
+      const session = await auth().catch(() => null);
+      userWorkspaceId = (session?.user as any)?.workspaceId;
+    }
+
+    const targetWsId = workspaceIdParam || userWorkspaceId;
+
     let workspace = null;
-    if (workspaceIdParam) {
+    if (targetWsId && prisma.workspace?.findUnique) {
       workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceIdParam },
+        where: { id: targetWsId },
       });
     }
 
-    if (!workspace) {
+    if (!workspace && prisma.workspace?.findFirst) {
       workspace = await prisma.workspace.findFirst();
     }
 

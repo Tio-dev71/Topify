@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/db';
 import { encryptToken } from '@/lib/crypto';
 import { auth } from '@/lib/auth';
+import { assertQuotaLimit } from '@/lib/workspace/quota';
 
 const JWT_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'ToolAutoTop123456789!@#LongSecretString123';
 
@@ -192,6 +193,25 @@ export async function GET(req: NextRequest) {
       }
     } catch (e) {
       console.warn('Failed to fetch TikTok user info:', e);
+    }
+
+    // Check channel quota limit before creating a new social channel (F118)
+    const existingChannel = await prisma.socialAccount.findFirst({
+      where: { userId, provider: 'TIKTOK' },
+    });
+    if (!existingChannel || existingChannel.status !== 'CONNECTED') {
+      const quotaCheck = await assertQuotaLimit({
+        workspaceId,
+        userId,
+        feature: 'channels',
+        countToAdd: 1,
+      });
+      if (!quotaCheck.allowed) {
+        if (isDesktopClient) return renderDesktopHtml('Đạt Giới Hạn Kênh Kết Nối', true, quotaCheck.error);
+        return NextResponse.redirect(
+          new URL(`/dashboard/settings?error=quota_exceeded&detail=${encodeURIComponent(quotaCheck.error || '')}`, req.url)
+        );
+      }
     }
 
     // Save or update SocialAccount

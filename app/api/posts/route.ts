@@ -18,13 +18,28 @@ async function getAuthUser(req: NextRequest) {
     try {
       const token = authHeader.substring(7).trim();
       const decoded = jwt.verify(token, JWT_SECRET) as any;
-      if (decoded?.id) {
+      const userId = decoded?.sub || decoded?.id;
+      if (userId) {
+        let dbUser = (prisma.user?.findUnique)
+          ? await prisma.user.findUnique({
+              where: { id: userId },
+              select: { id: true, workspaceId: true, role: true, name: true, email: true },
+            }).catch(() => null)
+          : null;
+
+        if (!dbUser && decoded.email && prisma.user?.findUnique) {
+          dbUser = await prisma.user.findUnique({
+            where: { email: decoded.email },
+            select: { id: true, workspaceId: true, role: true, name: true, email: true },
+          }).catch(() => null);
+        }
+
         return {
-          id: decoded.id,
-          role: decoded.role || 'STAFF',
-          name: decoded.name || 'User',
-          email: decoded.email,
-          workspaceId: decoded.workspaceId || 'default-workspace',
+          id: dbUser?.id || userId,
+          role: dbUser?.role || decoded.role || 'STAFF',
+          name: dbUser?.name || decoded.name || 'User',
+          email: dbUser?.email || decoded.email,
+          workspaceId: dbUser?.workspaceId || decoded.workspaceId || 'default-workspace',
         };
       }
     } catch {}
