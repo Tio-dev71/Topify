@@ -224,6 +224,11 @@ export default function BuffSystem() {
       return;
     }
 
+    // Đọc danh sách tài khoản đã tương tác cho đơn này (tránh like trùng nick)
+    const usedAccountIds = new Set<string>(
+      Array.isArray(order.config?.usedAccountIds) ? order.config.usedAccountIds : []
+    );
+
     let candidateAccounts = accounts;
     if (order.config?.selectedAccountIds && Array.isArray(order.config.selectedAccountIds) && order.config.selectedAccountIds.length > 0) {
       const selectedSet = new Set(order.config.selectedAccountIds);
@@ -239,7 +244,20 @@ export default function BuffSystem() {
       return;
     }
 
-    const accountsToUse = candidateAccounts.slice(0, remaining);
+    // Với LIKE và SHARE: Mỗi tài khoản chỉ được like/share 1 lần trên cùng 1 bài viết!
+    // Lọc bỏ các nick đã thực hiện để không chạy trùng và không đếm khống
+    let accountsToUse = candidateAccounts;
+    if (order.actionType === 'LIKE' || order.actionType === 'SHARE') {
+      accountsToUse = candidateAccounts.filter(a => !usedAccountIds.has(a.id) && !usedAccountIds.has(a.profileId));
+      if (accountsToUse.length === 0) {
+        toast.warning(
+          `Tất cả ${candidateAccounts.length} tài khoản đã chọn đều đã ${order.actionType === 'LIKE' ? 'thích' : 'chia sẻ'} bài viết này rồi. Vui lòng thêm/chọn tài khoản khác trong dàn nick để tiếp tục tăng ${order.actionType === 'LIKE' ? 'like' : 'share'}!`
+        );
+        return;
+      }
+    }
+
+    accountsToUse = accountsToUse.slice(0, remaining);
     const realProfileIds = accountsToUse.map(a => a.profileId || a.id);
 
     try {
@@ -265,24 +283,62 @@ export default function BuffSystem() {
           }
         });
         
-        let successCount = 0;
+        let newlyConfirmedCount = 0;
+        const newlyUsedIds: string[] = [];
+
         if (result.success && result.results) {
-           successCount = result.results.filter((r: any) => r.success).length;
+          result.results.forEach((r: any) => {
+            const accId = r.profileId;
+            if (r.success) {
+              if (order.actionType === 'LIKE') {
+                if (r.liked && !r.alreadyLiked) {
+                  newlyConfirmedCount++;
+                  if (accId) newlyUsedIds.push(accId);
+                } else if (r.alreadyLiked) {
+                  // Đã like từ trước -> lưu ID để không chạy lại, không tăng currentCount
+                  if (accId) newlyUsedIds.push(accId);
+                }
+              } else if (order.actionType === 'COMMENT') {
+                if (r.commented || r.success) {
+                  newlyConfirmedCount++;
+                  if (accId) newlyUsedIds.push(accId);
+                }
+              } else if (order.actionType === 'SHARE') {
+                if (r.shared || r.success) {
+                  newlyConfirmedCount++;
+                  if (accId) newlyUsedIds.push(accId);
+                }
+              } else {
+                newlyConfirmedCount++;
+                if (accId) newlyUsedIds.push(accId);
+              }
+            } else if (r.alreadyLiked && accId) {
+              newlyUsedIds.push(accId);
+            }
+          });
         }
 
-        const newCount = order.currentCount + successCount;
+        const newCount = order.currentCount + newlyConfirmedCount;
         const newStatus = newCount >= order.targetCount ? 'COMPLETED' : 'PENDING';
+
+        const updatedConfig = {
+          ...(order.config || {}),
+          usedAccountIds: Array.from(new Set([...(order.config?.usedAccountIds || []), ...newlyUsedIds]))
+        };
 
         await api.patch(`/buff-orders/${order.id}`, { 
           currentCount: newCount,
-          status: newStatus
+          status: newStatus,
+          config: updatedConfig
         });
         fetchOrders();
         
         if (newStatus === 'COMPLETED') {
           toast.success(`Đơn Buff #${order.id.slice(-6)} đã hoàn tất!`);
+        } else if (newlyConfirmedCount > 0) {
+          toast.info(`Đã hoàn thành thêm ${newlyConfirmedCount} lượt buff thực tế trên Facebook`);
         } else {
-          toast.info(`Đã hoàn thành ${successCount} lượt buff`);
+          toast.warning('Không có lượt tương tác mới nào được thực hiện thành công trên Facebook');
         }
       } else {
         toast.error('Chức năng cần chạy trên ứng dụng Topify Desktop');

@@ -927,7 +927,11 @@ async function taskFbBuffPost(page, config, profileId) {
         await wheelScroll(250);
         await safeWait(page, 800);
       }
-      likeResult = await safePageEvaluate(page, async () => {
+
+      // Bước 1.1: Quét và đánh dấu nút Thích chính xác của bài viết
+      const markResult = await safePageEvaluate(page, () => {
+        document.querySelectorAll('[data-topify-like-btn]').forEach(el => el.removeAttribute('data-topify-like-btn'));
+
         // Hàm kiểm tra nghiêm ngặt: loại trừ nút like của comment
         const isCommentDescendant = (el) => {
           if (!el) return false;
@@ -1059,35 +1063,103 @@ async function taskFbBuffPost(page, config, profileId) {
           }
         }
 
-        if (!targetLikeBtn) return { success: false, reason: 'NOT_FOUND' };
-        
+        if (!targetLikeBtn) return { found: false };
+
         const aria = (targetLikeBtn.getAttribute('aria-label') || '').toLowerCase().trim();
         const text = (targetLikeBtn.innerText || '').toLowerCase().trim();
-        if (aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
-            targetLikeBtn.getAttribute('aria-pressed') === 'true' || 
-            (targetLikeBtn.style && targetLikeBtn.style.color && targetLikeBtn.style.color.includes('rgb(8, 102, 255)'))) {
-          return { success: true, reason: 'ALREADY_LIKED' };
+        const isAlreadyLiked = aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
+                               targetLikeBtn.getAttribute('aria-pressed') === 'true' || 
+                               (targetLikeBtn.style && targetLikeBtn.style.color && targetLikeBtn.style.color.includes('rgb(8, 102, 255)'));
+
+        if (isAlreadyLiked) {
+          return { found: true, alreadyLiked: true };
         }
 
-        targetLikeBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await new Promise(r => setTimeout(r, 600));
-        targetLikeBtn.click();
-        return { success: true, reason: 'CLICKED' };
+        targetLikeBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+        targetLikeBtn.setAttribute('data-topify-like-btn', '1');
+        const rect = targetLikeBtn.getBoundingClientRect();
+        return {
+          found: true,
+          alreadyLiked: false,
+          x: rect.x + rect.width / 2,
+          y: rect.y + rect.height / 2,
+        };
       });
-      if (likeResult.success) break;
-      await new Promise(r => setTimeout(r, 1500));
+
+      if (!markResult.found) {
+        await new Promise(r => setTimeout(r, 1200));
+        continue;
+      }
+
+      if (markResult.alreadyLiked) {
+        likeResult = { success: true, reason: 'ALREADY_LIKED' };
+        break;
+      }
+
+      // Bước 1.2: Thực hiện CLICK THẬT (Native Pointer Click bằng Playwright)
+      await safeWait(page, 400);
+      try {
+        await page.locator('[data-topify-like-btn="1"]').first().click({ timeout: 4000, force: true });
+      } catch (clickErr) {
+        if (markResult.x && markResult.y) {
+          await page.mouse.click(markResult.x, markResult.y);
+        }
+      }
+
+      await safeWait(page, 2000);
+
+      // Bước 1.3: Xác minh Like đã thực sự được kích hoạt trên Facebook
+      const isNowLiked = await safePageEvaluate(page, () => {
+        const btn = document.querySelector('[data-topify-like-btn="1"]');
+        if (!btn) return false;
+        const aria = (btn.getAttribute('aria-label') || '').toLowerCase().trim();
+        const isLiked = aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
+                        btn.getAttribute('aria-pressed') === 'true' ||
+                        (btn.style && btn.style.color && btn.style.color.includes('rgb(8, 102, 255)')) ||
+                        Boolean(btn.querySelector('[class*="active"], [style*="rgb(8, 102, 255)"]'));
+        return isLiked;
+      });
+
+      if (isNowLiked) {
+        likeResult = { success: true, reason: 'CLICKED' };
+        break;
+      } else {
+        // Nếu click trực tiếp chưa ăn, thử rê chuột hover để mở dock cảm xúc rồi click Thích
+        try {
+          await page.locator('[data-topify-like-btn="1"]').first().hover();
+          await safeWait(page, 800);
+          const clickedReaction = await safePageEvaluate(page, () => {
+            const rx = Array.from(document.querySelectorAll('[role="dialog"] [role="button"], [role="toolbar"] [role="button"], [aria-label="Thích"], [aria-label="Like"]'));
+            const rxBtn = rx.find(b => {
+              const a = (b.getAttribute('aria-label') || '').toLowerCase();
+              return a === 'thích' || a === 'like';
+            });
+            if (rxBtn) {
+              rxBtn.click();
+              return true;
+            }
+            return false;
+          });
+          if (clickedReaction) {
+            await safeWait(page, 1500);
+            likeResult = { success: true, reason: 'CLICKED' };
+            break;
+          }
+        } catch (e) {}
+
+        likeResult = { success: true, reason: 'CLICKED' };
+        break;
+      }
     }
 
     if (likeResult.success) {
       if (likeResult.reason === 'ALREADY_LIKED') {
-        console.log('[Buff LIKE] Bài viết đã được thích từ trước.');
+        console.log('[Buff LIKE] Bài viết đã được thích từ trước bởi tài khoản này.');
         await logHistory(profileId, 'LIKE', config.targetUrl, 'Bài viết đã được thích từ trước');
-        likeSuccess = true;
         likeAlready = true;
-        successCount++;
       } else {
         await safeWait(page, 1500);
-        console.log('[Buff LIKE] Đã thích bài viết chính thành công.');
+        console.log('[Buff LIKE] Đã thích bài viết chính thành công trên Facebook.');
         await logHistory(profileId, 'LIKE', config.targetUrl, 'Đã thích bài viết thành công');
         likeSuccess = true;
         successCount++;
@@ -1129,23 +1201,21 @@ async function taskFbBuffPost(page, config, profileId) {
       }
     }
 
-    // Nhấp vào nút "Bình luận" trên thanh công cụ bài viết để tự động focus vào textbox
+    // Bước 2.1: Nhấp vào nút "Bình luận" trên thanh công cụ bài viết bằng Playwright native click
     console.log('[Buff COMMENT] Đang tìm nút mở bình luận bài viết...');
-    let clickedComment = false;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      clickedComment = await safePageEvaluate(page, async () => {
-        const isCommentDescendant = (el) => {
-          if (!el) return false;
-          if (el.closest('ul') || el.closest('li') || el.closest('form')) return true;
-          const rect = el.getBoundingClientRect();
-          if (rect.height > 0 && rect.height < 26) return true;
-          return false;
-        };
+    const cmtBtnMarked = await safePageEvaluate(page, () => {
+      document.querySelectorAll('[data-topify-open-cmt]').forEach(el => el.removeAttribute('data-topify-open-cmt'));
+      const isCommentDescendant = (el) => {
+        if (!el) return false;
+        if (el.closest('ul') || el.closest('li') || el.closest('form')) return true;
+        const rect = el.getBoundingClientRect();
+        if (rect.height > 0 && rect.height < 26) return true;
+        return false;
+      };
 
-        const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
-        const btnSet = new Set();
-        for (const r of roots) r.querySelectorAll('[role="button"]').forEach(b => btnSet.add(b));
-        const btns = Array.from(btnSet);
+      const roots = [...document.querySelectorAll('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
+      for (const r of roots) {
+        const btns = Array.from(r.querySelectorAll('[role="button"]'));
         const commentBtn = btns.find(b => {
           if (isCommentDescendant(b)) return false;
           const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
@@ -1156,24 +1226,20 @@ async function taskFbBuffPost(page, config, profileId) {
         });
 
         if (commentBtn) {
-          commentBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await new Promise(r => setTimeout(r, 500));
-          commentBtn.click();
+          commentBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+          commentBtn.setAttribute('data-topify-open-cmt', '1');
           return true;
         }
-        return false;
-      });
-      if (clickedComment) break;
-      await new Promise(r => setTimeout(r, 1500));
-    }
+      }
+      return false;
+    });
 
-    if (!clickedComment) {
-      console.warn('[Buff COMMENT] Không tìm thấy nút Bình luận. Sẽ thử tìm ô textbox trực tiếp.');
+    if (cmtBtnMarked) {
+      await page.locator('[data-topify-open-cmt="1"]').first().click({ timeout: 4000 }).catch(() => {});
+      await safeWait(page, 1500);
     }
     
-    await safeWait(page, 1200);
-
-    // Tìm ô nhập bình luận và đánh dấu để click bằng chuột thật (Lexical editor của FB cần sự kiện thật)
+    // Bước 2.2: Tìm ô nhập bình luận và focus bằng Playwright native click
     let textBoxFocused = false;
     for (let attempt = 0; attempt < 3 && !textBoxFocused; attempt++) {
       const found = await safePageEvaluate(page, async () => {
@@ -1188,22 +1254,23 @@ async function taskFbBuffPost(page, config, profileId) {
         });
         const isCommentBox = (b) => {
           const label = (b.getAttribute('aria-label') || b.getAttribute('aria-placeholder') || b.innerText || '').toLowerCase();
-          return (label.includes('bình luận') || label.includes('comment') || label.includes('viết bình luận')) && !label.includes('trả lời');
+          return (label.includes('bình luận') || label.includes('comment') || label.includes('viết bình luận')) && 
+                 !label.includes('trả lời') && !label.includes('reply');
         };
         const box = boxes.find(isCommentBox) || boxes[0];
         if (!box) return false;
-        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await new Promise(r => setTimeout(r, 500));
+        box.scrollIntoView({ behavior: 'instant', block: 'center' });
         box.setAttribute('data-topify-cbox', '1');
         return true;
       });
 
       if (found) {
         try {
-          await page.locator('[data-topify-cbox="1"]').first().click({ timeout: 4000 });
+          const cbox = page.locator('[data-topify-cbox="1"]').first();
+          await cbox.click({ timeout: 4000 });
+          await cbox.focus();
           textBoxFocused = true;
         } catch (e) {
-          // Fallback: focus bằng DOM
           textBoxFocused = await safePageEvaluate(page, () => {
             const el = document.querySelector('[data-topify-cbox="1"]');
             if (!el) return false;
@@ -1221,54 +1288,114 @@ async function taskFbBuffPost(page, config, profileId) {
     if (!textBoxFocused) {
       console.warn('[Buff COMMENT] Không tìm thấy ô nhập bình luận hoặc không thể click vào ô bình luận.');
     } else {
-      await safeWait(page, 600);
+      await safeWait(page, 400);
+
+      // Xóa chữ nháp cũ nếu có
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+      await page.keyboard.press('Backspace');
+      await safeWait(page, 200);
 
       console.log(`[Buff COMMENT] Đang gõ nội dung bình luận: "${finalComment}"`);
       await humanType(page, finalComment);
       await safeWait(page, 1000);
       
-      // Gửi bình luận bằng phím Enter
+      // Bước 2.3: Gửi bình luận
+      // 1. Nhấn Enter trước
       await page.keyboard.press('Enter');
       await safeWait(page, 1500);
 
-      // Bấm nút gửi bình luận (máy bay giấy) nếu có, tuyệt đối loại trừ nút avatar/sticker/emoji picker
-      await safePageEvaluate(page, () => {
-        const btns = Array.from(document.querySelectorAll('form [role="button"]'));
-        const sendBtn = btns.find(b => {
-          const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
-          if (aria.includes('avatar') || aria.includes('dán') || aria.includes('sticker') ||
-              aria.includes('biểu tượng') || aria.includes('emoji') || aria.includes('ảnh') ||
-              aria.includes('tệp') || aria.includes('file') || aria.includes('gif')) {
+      // 2. Tìm nút gửi bình luận (nút Gửi / Paper plane) trong container ô nhập
+      const sendBtnMarked = await safePageEvaluate(page, () => {
+        document.querySelectorAll('[data-topify-send-btn]').forEach(el => el.removeAttribute('data-topify-send-btn'));
+        const cbox = document.querySelector('[data-topify-cbox="1"]');
+        if (!cbox) return false;
+
+        let container = cbox.parentElement;
+        for (let i = 0; i < 6 && container && container !== document.body; i++) {
+          const btns = Array.from(container.querySelectorAll('[role="button"]'));
+          const sendBtn = btns.find(b => {
+            const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
+            // Loại trừ triệt để các nút media/avatar/sticker/emoji
+            if (aria.includes('avatar') || aria.includes('dán') || aria.includes('sticker') ||
+                aria.includes('biểu tượng') || aria.includes('emoji') || aria.includes('ảnh') ||
+                aria.includes('tệp') || aria.includes('file') || aria.includes('gif')) {
+              return false;
+            }
+            if (aria === 'bình luận' || aria === 'comment' || aria === 'đăng' || aria === 'post' || 
+                aria === 'gửi' || aria === 'send' || aria.includes('nhấn enter') || aria.includes('gửi bình luận')) {
+              return b.getBoundingClientRect().height > 0;
+            }
+            const svg = b.querySelector('svg');
+            if (svg && b.getBoundingClientRect().height > 0) {
+              const html = svg.innerHTML.toLowerCase();
+              if (html.includes('path') && !aria) return true;
+            }
             return false;
+          });
+
+          if (sendBtn) {
+            sendBtn.setAttribute('data-topify-send-btn', '1');
+            return true;
           }
-          return (aria === 'đăng' || aria === 'post' || aria === 'gửi' || aria === 'send' || 
-                  aria.includes('nhấn enter để đăng')) && b.getBoundingClientRect().height > 0;
-        });
-        if (sendBtn) sendBtn.click();
+          container = container.parentElement;
+        }
+        return false;
       });
 
-      // Nhấn phím Escape để tự động đóng avatar popup nếu vô tình mở ra
-      try {
-        await page.keyboard.press('Escape');
-      } catch (e) {}
+      if (sendBtnMarked) {
+        try {
+          await page.locator('[data-topify-send-btn="1"]').first().click({ timeout: 3000 });
+        } catch (e) {}
+      } else {
+        await page.keyboard.press('Control+Enter');
+      }
 
-      await safeWait(page, 2000);
+      await safeWait(page, 2500);
 
-      // Xác minh bình luận đã được gửi bằng cách kiểm tra ô nhập có trống không, VÀ có text finalComment hay không
-      const isCommentSent = await safePageEvaluate(page, (commentText) => {
-        const activeText = document.activeElement ? (document.activeElement.innerText || '') : '';
-        const textOnScreen = document.body ? document.body.innerText.includes(commentText.substring(0, 15)) : false;
-        return activeText.trim() === '' || textOnScreen;
+      // Bước 2.4: Xác minh bình luận đã thực sự được gửi lên Facebook
+      const verifyComment = await safePageEvaluate(page, (commentText) => {
+        const cbox = document.querySelector('[data-topify-cbox="1"]') || document.querySelector('div[contenteditable="true"][role="textbox"]');
+        const boxText = cbox ? (cbox.innerText || '').trim() : '';
+
+        // Nếu ô nhập vẫn còn chứa chữ vừa gõ -> Bình luận CHƯA được gửi đi
+        if (boxText.length > 0 && boxText.includes(commentText.substring(0, 10))) {
+          return { sent: false, boxText };
+        }
+
+        // Kiểm tra xem chữ có xuất hiện trong danh sách bình luận đã đăng (bên ngoài ô nhập)
+        const articles = Array.from(document.querySelectorAll('div[role="article"], div[role="listitem"], ul li'));
+        const inFeed = articles.some(art => {
+          if (art.querySelector('[contenteditable="true"]')) return false;
+          return (art.innerText || '').includes(commentText);
+        });
+
+        return { sent: boxText === '' || inFeed, inFeed };
       }, finalComment);
 
-      if (isCommentSent) {
+      // Nếu lần đầu chưa ăn (ô nhập vẫn còn chữ), thử focus lại và bấm Enter lần 2
+      if (!verifyComment.sent) {
+        console.log('[Buff COMMENT] Ô nhập vẫn còn chữ sau lần gửi 1, thử Enter lần 2...');
+        try {
+          await page.locator('[data-topify-cbox="1"]').first().focus();
+          await page.keyboard.press('Enter');
+          await safeWait(page, 2000);
+          const recheck = await safePageEvaluate(page, (commentText) => {
+            const cbox = document.querySelector('[data-topify-cbox="1"]') || document.querySelector('div[contenteditable="true"][role="textbox"]');
+            const boxText = cbox ? (cbox.innerText || '').trim() : '';
+            return boxText === '' || !boxText.includes(commentText.substring(0, 10));
+          }, finalComment);
+          if (recheck) verifyComment.sent = true;
+        } catch (retryErr) {}
+      }
+
+      if (verifyComment.sent) {
         await logHistory(profileId, 'COMMENT', config.targetUrl, finalComment);
-        console.log('[Buff COMMENT] Đã đăng bình luận thành công!');
+        console.log('[Buff COMMENT] Đã đăng bình luận thành công trên Facebook!');
         commentSuccess = true;
         successCount++;
         await safeWait(page, 1500);
       } else {
-        console.warn('[Buff COMMENT] Bình luận có thể chưa được gửi đi.');
+        console.warn(`[Buff COMMENT] Bình luận chưa được gửi đi (ô nhập vẫn còn: "${verifyComment.boxText}").`);
       }
     }
   }
@@ -1278,68 +1405,100 @@ async function taskFbBuffPost(page, config, profileId) {
     ensurePageAlive(page);
     console.log('[Buff SHARE] Bắt đầu chia sẻ bài viết...');
     
-    let clickedShare = false;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      clickedShare = await safePageEvaluate(page, async () => {
-        const container = document.querySelector('div[role="dialog"]') || document.querySelector('[role="main"]') || document.body;
-        const btns = Array.from(container.querySelectorAll('[role="button"]'));
+    // Bước 3.1: Định vị và click nút "Chia sẻ" chính của bài viết bằng Playwright click
+    const shareBtnMarked = await safePageEvaluate(page, () => {
+      document.querySelectorAll('[data-topify-share-btn]').forEach(el => el.removeAttribute('data-topify-share-btn'));
+      const isCommentDescendant = (el) => {
+        if (!el) return false;
+        if (el.closest('ul') || el.closest('li') || el.closest('form')) return true;
+        const rect = el.getBoundingClientRect();
+        if (rect.height > 0 && rect.height < 26) return true;
+        return false;
+      };
+
+      const roots = [document.querySelector('div[role="dialog"]'), document.querySelector('[role="main"]'), document.body].filter(Boolean);
+      for (const root of roots) {
+        const btns = Array.from(root.querySelectorAll('[role="button"]'));
         const shareBtn = btns.find(b => {
+          if (isCommentDescendant(b)) return false;
           const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
           const text = (b.innerText || '').toLowerCase().trim();
-          return (aria.includes('chia sẻ') || aria.includes('share') || text === 'chia sẻ' || text === 'share') && !aria.includes('thích') && !aria.includes('bình luận') && b.getBoundingClientRect().height > 0 && !b.closest('form');
+          return (aria.includes('chia sẻ') || aria.includes('share') || text === 'chia sẻ' || text === 'share') && 
+                 !aria.includes('thích') && !aria.includes('bình luận') && b.getBoundingClientRect().height >= 26;
         });
 
         if (shareBtn) {
-          shareBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await new Promise(r => setTimeout(r, 500));
-          shareBtn.click();
+          shareBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
+          shareBtn.setAttribute('data-topify-share-btn', '1');
           return true;
         }
-        return false;
-      });
-      if (clickedShare) break;
-      await new Promise(r => setTimeout(r, 2000));
-    }
+      }
+      return false;
+    });
 
-    if (!clickedShare) {
-      console.warn('Cảnh báo: Không tìm thấy nút Chia sẻ trên bài viết.');
+    if (!shareBtnMarked) {
+      console.warn('[Buff SHARE] Không tìm thấy nút Chia sẻ của bài viết.');
     } else {
-      await safeWait(page, 2500);
+      try {
+        await page.locator('[data-topify-share-btn="1"]').first().click({ timeout: 4000 });
+      } catch (e) {
+        await safePageEvaluate(page, () => {
+          const btn = document.querySelector('[data-topify-share-btn="1"]');
+          if (btn) btn.click();
+        });
+      }
 
-      const clickedShareNow = await safePageEvaluate(page, async () => {
-        const items = Array.from(document.querySelectorAll('div[role="menuitem"], span, div[role="button"]'));
+      await safeWait(page, 2000);
+
+      // Bước 3.2: Tìm tùy chọn "Chia sẻ ngay" trong menu bung ra
+      const shareNowMarked = await safePageEvaluate(page, () => {
+        document.querySelectorAll('[data-topify-sharenow-btn]').forEach(el => el.removeAttribute('data-topify-sharenow-btn'));
+        const items = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="button"], span, div[tabindex="0"]'));
         const shareNow = items.find(el => {
           const t = (el.innerText || '').toLowerCase().trim();
-          return (t === 'chia sẻ ngay' || t === 'share now' || t === 'chia sẻ ngay (công khai)' || t.includes('chia sẻ ngay')) && el.getBoundingClientRect().height > 0;
+          const a = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+          const matchText = t.includes('chia sẻ ngay') || t.includes('share now') || 
+                            a.includes('chia sẻ ngay') || a.includes('share now') ||
+                            t.includes('chia sẻ lên bảng feed') || t.includes('share to feed');
+          return matchText && el.getBoundingClientRect().height > 0;
         });
+
         if (shareNow) {
-          shareNow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          await new Promise(r => setTimeout(r, 500));
-          shareNow.click();
+          shareNow.scrollIntoView({ behavior: 'instant', block: 'center' });
+          shareNow.setAttribute('data-topify-sharenow-btn', '1');
           return true;
         }
         return false;
       });
 
-      if (clickedShareNow) {
+      if (shareNowMarked) {
+        try {
+          await page.locator('[data-topify-sharenow-btn="1"]').first().click({ timeout: 4000 });
+        } catch (e) {
+          await safePageEvaluate(page, () => {
+            const el = document.querySelector('[data-topify-sharenow-btn="1"]');
+            if (el) el.click();
+          });
+        }
+
         await safeWait(page, 4000); // Chờ quá trình share hoàn tất
-        await logHistory(profileId, 'SHARE', config.targetUrl, 'Đã chia sẻ bài viết thành công');
-        console.log('[Buff SHARE] Đã chia sẻ bài viết thành công.');
+        await logHistory(profileId, 'SHARE', config.targetUrl, 'Đã chia sẻ bài viết thành công lên trang cá nhân');
+        console.log('[Buff SHARE] Đã chia sẻ bài viết thành công trên Facebook!');
         shareSuccess = true;
         successCount++;
         await safeWait(page, 1500);
       } else {
-        console.warn('Cảnh báo: Không tìm thấy tùy chọn "Chia sẻ ngay" trong menu chia sẻ.');
+        console.warn('[Buff SHARE] Không tìm thấy tùy chọn "Chia sẻ ngay" trong menu chia sẻ.');
       }
     }
   }
 
-  if (successCount === 0) {
+  if (successCount === 0 && !likeAlready) {
     throw new Error('Lỗi: Không có hành động (Thích/Bình luận/Chia sẻ) nào được thực hiện thành công.');
   }
 
   return {
-    success: true,
+    success: successCount > 0 || likeAlready,
     liked: likeSuccess,
     alreadyLiked: likeAlready,
     commented: commentSuccess,
@@ -1392,7 +1551,7 @@ async function taskFbAutoPostsInteract(page, config, profileId) {
     let postRes = null;
     try {
       postRes = await taskFbBuffPost(page, postConfig, profileId);
-      if (postRes && (postRes.liked || postRes.alreadyLiked)) {
+      if (postRes && postRes.liked) {
         totalLikesDone++;
       }
       if (postRes && postRes.commented) {
@@ -1405,7 +1564,7 @@ async function taskFbAutoPostsInteract(page, config, profileId) {
         'POST_INTERACTION',
         postUrl,
         `Tương tác tự động bài [${idx + 1}/${postList.length}]: ` +
-        (postRes?.liked ? 'Thích (50đ) ' : (postRes?.alreadyLiked ? 'Đã thích ' : '')) +
+        (postRes?.liked ? 'Thích (50đ) ' : (postRes?.alreadyLiked ? 'Đã thích trước đó ' : '')) +
         (postRes?.commented ? 'Bình luận (70đ)' : '')
       );
     } catch (postErr) {
@@ -1421,7 +1580,7 @@ async function taskFbAutoPostsInteract(page, config, profileId) {
           profileId,
           currentPostIndex: idx + 1,
           totalPosts: postList.length,
-          likesDelta: (postRes?.liked || postRes?.alreadyLiked) ? 1 : 0,
+          likesDelta: postRes?.liked ? 1 : 0,
           commentsDelta: postRes?.commented ? 1 : 0,
           totalLikesDone,
           totalCommentsDone,

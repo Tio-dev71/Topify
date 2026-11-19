@@ -526,9 +526,19 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
       case 'fb_farm_reels':
         await taskFbFarmReels(page, config, safeProfileId);
         break;
-      case 'fb_buff_post':
-        await taskFbBuffPost(page, config, safeProfileId);
-        break;
+      case 'fb_buff_post': {
+        const buffRes = await taskFbBuffPost(page, config, safeProfileId);
+        console.log(`[Automation] Hoàn thành fb_buff_post cho ${safeProfileId}:`, buffRes);
+        return {
+          success: Boolean(buffRes?.success),
+          profileId: safeProfileId,
+          message: buffRes?.alreadyLiked ? 'Bài viết đã được thích từ trước' : 'Hoạt động thành công',
+          liked: Boolean(buffRes?.liked),
+          alreadyLiked: Boolean(buffRes?.alreadyLiked),
+          commented: Boolean(buffRes?.commented),
+          shared: Boolean(buffRes?.shared),
+        };
+      }
       case 'fb_auto_posts_interact': {
         const interactRes = await taskFbAutoPostsInteract(page, config, safeProfileId);
         console.log(`[Automation] Hoàn thành fb_auto_posts_interact cho ${safeProfileId}:`, interactRes);
