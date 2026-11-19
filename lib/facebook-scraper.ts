@@ -417,14 +417,29 @@ export async function scrapeFacebookWithPlaywright(
 
       for (const item of articles) {
         const cleanLink = cleanFacebookPostUrl(item.mainLink, targetUrl);
-        const postKey = cleanLink || item.content.slice(0, 60);
+        const isPostLink = cleanLink &&
+                           cleanLink !== targetUrl &&
+                           (cleanLink.includes('/posts/') ||
+                            cleanLink.includes('/photos/') ||
+                            cleanLink.includes('/videos/') ||
+                            cleanLink.includes('/reel/') ||
+                            cleanLink.includes('/reels/') ||
+                            cleanLink.includes('permalink.php') ||
+                            cleanLink.includes('story_fbid'));
+
+        if (!isPostLink) {
+          // Bỏ qua các mục không có link bài viết riêng biệt để tránh rơi về URL fanpage gốc
+          continue;
+        }
+
+        const postKey = cleanLink;
 
         if (postKey && !seenKeys.has(postKey)) {
           seenKeys.add(postKey);
 
           // Extract ID from link or fallback
           let postId = '';
-          const matchId = cleanLink.match(/\/(posts|photos|videos)\/([^/?#]+)/i);
+          const matchId = cleanLink.match(/\/(posts|photos|videos|reel|reels)\/([^/?#]+)/i);
           if (matchId) {
             postId = matchId[2];
           } else {

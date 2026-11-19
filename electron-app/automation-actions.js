@@ -932,54 +932,20 @@ async function taskFbBuffPost(page, config, profileId) {
       const markResult = await safePageEvaluate(page, () => {
         document.querySelectorAll('[data-topify-like-btn]').forEach(el => el.removeAttribute('data-topify-like-btn'));
 
-        // Hàm kiểm tra nghiêm ngặt: loại trừ nút like của comment
+        // Hàm kiểm tra chuẩn xác: loại trừ nút like nhỏ của bình luận
         const isCommentDescendant = (el) => {
           if (!el) return false;
           if (el.closest('ul') || el.closest('li') || el.closest('form')) return true;
-
-          // Kiểm tra xem container liền kề có "Phản hồi" / "Reply" không
-          const p = el.parentElement;
-          if (p) {
-            const pText = (p.innerText || '').toLowerCase();
-            if ((pText.includes('phản hồi') || pText.includes('reply')) &&
-                (pText.includes('thích') || pText.includes('like'))) {
-              return true;
-            }
-            const gp = p.parentElement;
-            if (gp) {
-              const gpText = (gp.innerText || '').toLowerCase();
-              if ((gpText.includes('phản hồi') || gpText.includes('reply')) &&
-                  (gpText.includes('thích') || gpText.includes('like'))) {
-                return true;
-              }
-            }
-          }
-
-          // Kiểm tra div role="article" nếu là bình luận
-          const article = el.closest('div[role="article"]');
-          if (article) {
-            const artAria = (article.getAttribute('aria-label') || '').toLowerCase();
-            if (artAria.includes('bình luận') || artAria.includes('comment') || artAria.includes('của')) {
+          const commentArt = el.closest('div[role="article"]');
+          if (commentArt) {
+            const artAria = (commentArt.getAttribute('aria-label') || '').toLowerCase();
+            if (artAria.includes('bình luận') || artAria.includes('comment') || artAria.includes('của ') || artAria.includes('by ')) {
               return true;
             }
           }
-
-          // Kiểm tra aria-label của phần tử hoặc cha
-          let curr = el;
-          for (let d = 0; d < 6 && curr && curr !== document.body; d++) {
-            const aria = (curr.getAttribute('aria-label') || '').toLowerCase();
-            if (aria.includes('bình luận của') || aria.includes('comment by') ||
-                aria.includes('thích bình luận') || aria.includes('like comment') ||
-                aria.includes('react to comment')) {
-              return true;
-            }
-            curr = curr.parentElement;
-          }
-
-          // Nút thích comment luôn là text link nhỏ (chiều cao < 26px)
+          // Nút Like của comment là text link nhỏ (chiều cao < 28px hoặc chiều ngang < 50px)
           const rect = el.getBoundingClientRect();
-          if (rect.height > 0 && rect.height < 26) return true;
-
+          if (rect.height < 28 || rect.width < 50) return true;
           return false;
         };
 
@@ -991,76 +957,24 @@ async function taskFbBuffPost(page, config, profileId) {
 
         let targetLikeBtn = null;
 
-        // CHIẾN LƯỢC 1: Tìm Toolbar thao tác chính của bài viết (chứa Thích + Bình luận hoặc Chia sẻ)
         for (const root of roots) {
           if (targetLikeBtn) break;
-          const candidateContainers = Array.from(root.querySelectorAll('div'));
-          for (const c of candidateContainers) {
-            if (isCommentDescendant(c)) continue;
-            const btns = Array.from(c.querySelectorAll('[role="button"]'));
-            if (btns.length >= 2 && btns.length <= 6) {
-              let likeBtnCandidate = null;
-              let hasCommentOrShare = false;
+          const btns = Array.from(root.querySelectorAll('[role="button"]'));
+          targetLikeBtn = btns.find(b => {
+            if (isCommentDescendant(b)) return false;
+            const text = (b.innerText || '').toLowerCase().trim();
+            const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
 
-              for (const b of btns) {
-                if (isCommentDescendant(b)) continue;
-                const rect = b.getBoundingClientRect();
-                if (rect.height < 26) continue;
+            const isLikeText = text === 'thích' || text === 'like' || text.startsWith('thích') || text.startsWith('like');
+            const isLikeAria = aria === 'thích' || aria === 'like' || 
+                               aria.includes('bày tỏ cảm xúc') || aria.includes('react') ||
+                               aria.includes('gỡ bày tỏ cảm xúc') || aria.includes('bỏ thích') || aria.includes('unlike') ||
+                               aria.startsWith('thích') || aria.startsWith('like');
 
-                const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
-                const text = (b.innerText || '').toLowerCase().trim();
-
-                const isLike = aria === 'thích' || aria === 'like' ||
-                               aria === 'bày tỏ cảm xúc' || aria === 'react' ||
-                               aria === 'gỡ bày tỏ cảm xúc' || aria === 'bỏ thích' || aria === 'unlike' ||
-                               aria.startsWith('thích') || text === 'thích' || text === 'like';
-
-                const isComment = aria.includes('bình luận') || aria.includes('comment') ||
-                                  text === 'bình luận' || text === 'comment';
-
-                const isShare = aria.includes('chia sẻ') || aria.includes('share') ||
-                                text === 'chia sẻ' || text === 'share';
-
-                if (isLike && !isComment && !isShare) {
-                  likeBtnCandidate = b;
-                }
-                if (isComment || isShare) {
-                  hasCommentOrShare = true;
-                }
-              }
-
-              if (likeBtnCandidate && hasCommentOrShare) {
-                targetLikeBtn = likeBtnCandidate;
-                break;
-              }
-            }
-          }
-        }
-
-        // CHIẾN LƯỢC 2: Quét các nút role="button" chiều cao chuẩn >= 28px, loại trừ comment
-        if (!targetLikeBtn) {
-          for (const root of roots) {
-            if (targetLikeBtn) break;
-            const btns = Array.from(root.querySelectorAll('[role="button"]'));
-            for (const b of btns) {
-              if (isCommentDescendant(b)) continue;
-              const rect = b.getBoundingClientRect();
-              if (rect.height < 28) continue;
-
-              const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
-              const text = (b.innerText || '').toLowerCase().trim();
-
-              const isLike = aria === 'thích' || aria === 'like' ||
-                             aria === 'bày tỏ cảm xúc' || aria === 'react' ||
-                             aria === 'gỡ bày tỏ cảm xúc' || aria === 'bỏ thích' || aria === 'unlike' ||
-                             (text === 'thích' || text === 'like');
-
-              if (isLike && !aria.includes('bình luận') && !aria.includes('chia sẻ') && !aria.includes('nhắn tin')) {
-                targetLikeBtn = b;
-                break;
-              }
-            }
-          }
+            return (isLikeText || isLikeAria) && 
+                   !aria.includes('chia sẻ') && !aria.includes('share') && !text.includes('chia sẻ') &&
+                   !aria.includes('bình luận') && !aria.includes('comment') && !text.includes('bình luận');
+          });
         }
 
         if (!targetLikeBtn) return { found: false };
@@ -1069,7 +983,8 @@ async function taskFbBuffPost(page, config, profileId) {
         const text = (targetLikeBtn.innerText || '').toLowerCase().trim();
         const isAlreadyLiked = aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
                                targetLikeBtn.getAttribute('aria-pressed') === 'true' || 
-                               (targetLikeBtn.style && targetLikeBtn.style.color && targetLikeBtn.style.color.includes('rgb(8, 102, 255)'));
+                               (targetLikeBtn.style && targetLikeBtn.style.color && targetLikeBtn.style.color.includes('rgb(8, 102, 255)')) ||
+                               Boolean(targetLikeBtn.querySelector('[class*="active"], [style*="rgb(8, 102, 255)"], [class*="x14ctfv"]'));
 
         if (isAlreadyLiked) {
           return { found: true, alreadyLiked: true };
@@ -1106,30 +1021,30 @@ async function taskFbBuffPost(page, config, profileId) {
         }
       }
 
-      await safeWait(page, 2000);
+      await safeWait(page, 1500);
 
       // Bước 1.3: Xác minh Like đã thực sự được kích hoạt trên Facebook
       const isNowLiked = await safePageEvaluate(page, () => {
         const btn = document.querySelector('[data-topify-like-btn="1"]');
         if (!btn) return false;
         const aria = (btn.getAttribute('aria-label') || '').toLowerCase().trim();
-        const isLiked = aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
-                        btn.getAttribute('aria-pressed') === 'true' ||
-                        (btn.style && btn.style.color && btn.style.color.includes('rgb(8, 102, 255)')) ||
-                        Boolean(btn.querySelector('[class*="active"], [style*="rgb(8, 102, 255)"]'));
-        return isLiked;
+        const text = (btn.innerText || '').toLowerCase().trim();
+        return aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
+               btn.getAttribute('aria-pressed') === 'true' ||
+               (btn.style && btn.style.color && btn.style.color.includes('rgb(8, 102, 255)')) ||
+               Boolean(btn.querySelector('[class*="active"], [style*="rgb(8, 102, 255)"], [class*="x14ctfv"]'));
       });
 
       if (isNowLiked) {
         likeResult = { success: true, reason: 'CLICKED' };
         break;
       } else {
-        // Nếu click trực tiếp chưa ăn, thử rê chuột hover để mở dock cảm xúc rồi click Thích
+        // Nếu click trực tiếp chưa đổi màu, hover mở reaction dock rồi click Thích
         try {
           await page.locator('[data-topify-like-btn="1"]').first().hover();
-          await safeWait(page, 800);
+          await safeWait(page, 700);
           const clickedReaction = await safePageEvaluate(page, () => {
-            const rx = Array.from(document.querySelectorAll('[role="dialog"] [role="button"], [role="toolbar"] [role="button"], [aria-label="Thích"], [aria-label="Like"]'));
+            const rx = Array.from(document.querySelectorAll('[role="dialog"] [role="button"], [role="toolbar"] [role="button"], div[role="region"] [role="button"]'));
             const rxBtn = rx.find(b => {
               const a = (b.getAttribute('aria-label') || '').toLowerCase();
               return a === 'thích' || a === 'like';
@@ -1142,8 +1057,6 @@ async function taskFbBuffPost(page, config, profileId) {
           });
           if (clickedReaction) {
             await safeWait(page, 1500);
-            likeResult = { success: true, reason: 'CLICKED' };
-            break;
           }
         } catch (e) {}
 
@@ -1299,12 +1212,7 @@ async function taskFbBuffPost(page, config, profileId) {
       await humanType(page, finalComment);
       await safeWait(page, 1000);
       
-      // Bước 2.3: Gửi bình luận
-      // 1. Nhấn Enter trước
-      await page.keyboard.press('Enter');
-      await safeWait(page, 1500);
-
-      // 2. Tìm nút gửi bình luận (nút Gửi / Paper plane) trong container ô nhập
+      // Bước 2.3: Gửi bình luận DUY NHẤT 1 LẦN (Nút gửi riêng HOẶC phím Enter, tuyệt đối không gửi đúp)
       const sendBtnMarked = await safePageEvaluate(page, () => {
         document.querySelectorAll('[data-topify-send-btn]').forEach(el => el.removeAttribute('data-topify-send-btn'));
         const cbox = document.querySelector('[data-topify-cbox="1"]');
@@ -1315,7 +1223,6 @@ async function taskFbBuffPost(page, config, profileId) {
           const btns = Array.from(container.querySelectorAll('[role="button"]'));
           const sendBtn = btns.find(b => {
             const aria = (b.getAttribute('aria-label') || '').toLowerCase().trim();
-            // Loại trừ triệt để các nút media/avatar/sticker/emoji
             if (aria.includes('avatar') || aria.includes('dán') || aria.includes('sticker') ||
                 aria.includes('biểu tượng') || aria.includes('emoji') || aria.includes('ảnh') ||
                 aria.includes('tệp') || aria.includes('file') || aria.includes('gif')) {
@@ -1345,48 +1252,32 @@ async function taskFbBuffPost(page, config, profileId) {
       if (sendBtnMarked) {
         try {
           await page.locator('[data-topify-send-btn="1"]').first().click({ timeout: 3000 });
-        } catch (e) {}
+        } catch (e) {
+          await page.keyboard.press('Enter');
+        }
       } else {
-        await page.keyboard.press('Control+Enter');
+        await page.keyboard.press('Enter');
       }
 
       await safeWait(page, 2500);
 
-      // Bước 2.4: Xác minh bình luận đã thực sự được gửi lên Facebook
+      // Bước 2.4: Xác minh bình luận đã gửi
       const verifyComment = await safePageEvaluate(page, (commentText) => {
         const cbox = document.querySelector('[data-topify-cbox="1"]') || document.querySelector('div[contenteditable="true"][role="textbox"]');
         const boxText = cbox ? (cbox.innerText || '').trim() : '';
 
-        // Nếu ô nhập vẫn còn chứa chữ vừa gõ -> Bình luận CHƯA được gửi đi
-        if (boxText.length > 0 && boxText.includes(commentText.substring(0, 10))) {
-          return { sent: false, boxText };
-        }
+        // Nếu ô nhập rỗng hoặc đã không còn chứa chữ vừa gõ -> ĐÃ GỬI THÀNH CÔNG
+        const boxCleared = boxText === '' || !boxText.includes(commentText.substring(0, 10));
 
-        // Kiểm tra xem chữ có xuất hiện trong danh sách bình luận đã đăng (bên ngoài ô nhập)
+        // Kiểm tra xem chữ có xuất hiện trong danh sách bình luận đã đăng
         const articles = Array.from(document.querySelectorAll('div[role="article"], div[role="listitem"], ul li'));
         const inFeed = articles.some(art => {
           if (art.querySelector('[contenteditable="true"]')) return false;
           return (art.innerText || '').includes(commentText);
         });
 
-        return { sent: boxText === '' || inFeed, inFeed };
+        return { sent: boxCleared || inFeed, boxText };
       }, finalComment);
-
-      // Nếu lần đầu chưa ăn (ô nhập vẫn còn chữ), thử focus lại và bấm Enter lần 2
-      if (!verifyComment.sent) {
-        console.log('[Buff COMMENT] Ô nhập vẫn còn chữ sau lần gửi 1, thử Enter lần 2...');
-        try {
-          await page.locator('[data-topify-cbox="1"]').first().focus();
-          await page.keyboard.press('Enter');
-          await safeWait(page, 2000);
-          const recheck = await safePageEvaluate(page, (commentText) => {
-            const cbox = document.querySelector('[data-topify-cbox="1"]') || document.querySelector('div[contenteditable="true"][role="textbox"]');
-            const boxText = cbox ? (cbox.innerText || '').trim() : '';
-            return boxText === '' || !boxText.includes(commentText.substring(0, 10));
-          }, finalComment);
-          if (recheck) verifyComment.sent = true;
-        } catch (retryErr) {}
-      }
 
       if (verifyComment.sent) {
         await logHistory(profileId, 'COMMENT', config.targetUrl, finalComment);
@@ -1520,6 +1411,34 @@ async function taskFbAutoPostsInteract(page, config, profileId) {
   } else if (config.targetUrl) {
     postList = [{ url: config.targetUrl }];
   }
+
+  // Lọc trùng lặp bài viết và loại bỏ link trang chủ nếu đã có link bài viết cụ thể
+  const isPostSpecificUrl = (u) => {
+    const s = String(u || '').toLowerCase();
+    return s.includes('/posts/') || s.includes('/photos/') || s.includes('/videos/') ||
+           s.includes('/reel/') || s.includes('/reels/') || s.includes('story_fbid') || s.includes('permalink.php');
+  };
+
+  const hasSpecificPosts = postList.some(p => isPostSpecificUrl(p.url || p));
+  const seenUrls = new Set();
+  const filteredPosts = [];
+
+  for (const p of postList) {
+    const rawUrl = p.url || p;
+    if (!rawUrl) continue;
+    const cleanUrl = String(rawUrl).split('?')[0].replace(/\/+$/, '');
+    if (seenUrls.has(cleanUrl)) continue;
+
+    // Nếu trong danh sách đã có link bài viết cụ thể, bỏ qua link trang chủ chung để tránh tương tác lặp lại bài đầu trang
+    if (hasSpecificPosts && !isPostSpecificUrl(cleanUrl)) {
+      console.log(`[AutoPostsInteract] Bỏ qua link trang chủ chung để tránh trùng bài: ${rawUrl}`);
+      continue;
+    }
+
+    seenUrls.add(cleanUrl);
+    filteredPosts.push(p);
+  }
+  postList = filteredPosts;
 
   if (postList.length === 0) {
     throw new Error('Không có bài viết nào được cung cấp để chạy tự động.');

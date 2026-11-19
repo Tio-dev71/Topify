@@ -193,8 +193,32 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Vui lòng chọn ít nhất 1 bài viết để chạy tự động.' }, { status: 400 });
       }
 
-      const totalLikesTarget = posts.length * Number(likesPerPost || 0);
-      const totalCommentsTarget = posts.length * Number(commentsPerPost || 0);
+      // Lọc bỏ bài viết trùng lặp URL và URL trang chủ chung
+      const seenPostUrls = new Set<string>();
+      const validPosts: any[] = [];
+      const hasSpecific = posts.some((p: any) => {
+        const u = String(p.url || '').toLowerCase();
+        return u.includes('/posts/') || u.includes('/photos/') || u.includes('/videos/') || u.includes('/reel/') || u.includes('story_fbid');
+      });
+
+      for (const p of posts) {
+        const u = String(p.url || '').trim();
+        if (!u) continue;
+        const clean = u.split('?')[0].replace(/\/+$/, '');
+        if (seenPostUrls.has(clean)) continue;
+        if (hasSpecific && targetUrl && clean === targetUrl.split('?')[0].replace(/\/+$/, '')) {
+          continue;
+        }
+        seenPostUrls.add(clean);
+        validPosts.push(p);
+      }
+
+      if (validPosts.length === 0) {
+        return NextResponse.json({ error: 'Không tìm thấy liên kết bài viết hợp lệ nào.' }, { status: 400 });
+      }
+
+      const totalLikesTarget = validPosts.length * Number(likesPerPost || 0);
+      const totalCommentsTarget = validPosts.length * Number(commentsPerPost || 0);
 
       if (totalLikesTarget === 0 && totalCommentsTarget === 0) {
         return NextResponse.json({ error: 'Cần đặt số Like hoặc Comment lớn hơn 0.' }, { status: 400 });
@@ -204,12 +228,12 @@ export async function POST(req: NextRequest) {
       const billing = calculateBilling(totalLikesTarget, totalCommentsTarget);
 
       const userWorkspaceId = (session.user as any).workspaceId;
-      const taskName = name?.trim() || `Auto Like (${likesPerPost}) & Comment (${commentsPerPost}) cho ${posts.length} bài viết mới`;
+      const taskName = name?.trim() || `Auto Like (${likesPerPost}) & Comment (${commentsPerPost}) cho ${validPosts.length} bài viết mới`;
 
       const taskConfig = {
-        targetUrl: targetUrl || posts[0]?.url,
-        postsCount: posts.length,
-        posts: posts.map((p: any) => ({
+        targetUrl: targetUrl || validPosts[0]?.url,
+        postsCount: validPosts.length,
+        posts: validPosts.map((p: any) => ({
           id: p.id,
           url: p.url,
           title: (p.content || '').substring(0, 100),
