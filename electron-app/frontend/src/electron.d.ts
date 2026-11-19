@@ -39,6 +39,7 @@ declare global {
       onDownloadProgress?: (callback: (data: DownloadProgressEvent) => void) => () => void;
       postFacebookGroup?: (options: any) => Promise<{ success: boolean; error?: string; results?: any[] }>;
       onAutoPostStatus?: (callback: (data: any) => void) => () => void;
+      onAutomationProgress?: (callback: (data: any) => void) => () => void;
     };
   }
 }

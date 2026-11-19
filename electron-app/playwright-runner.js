@@ -613,7 +613,7 @@ async function syncCookiesToApi(browser, accountId) {
     const cookies = await browser.cookies('https://www.facebook.com');
     const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
     if (cookieStr) {
-      const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
+      const apiUrl = process.env.API_URL || 'https://topify.vn/api';
       await fetch(`${apiUrl}/facebook-accounts/login`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

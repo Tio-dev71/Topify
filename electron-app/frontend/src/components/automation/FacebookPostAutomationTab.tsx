@@ -113,6 +113,48 @@ export function FacebookPostAutomationTab() {
     fetchTrackedPages();
   }, []);
 
+  // Realtime IPC listener for Electron automation progress
+  useEffect(() => {
+    // @ts-ignore
+    if (!window.electron?.onAutomationProgress) return;
+
+    // @ts-ignore
+    const unsubscribe = window.electron.onAutomationProgress((data: any) => {
+      if (!data) return;
+      if (runningTaskId && data.taskId && data.taskId !== runningTaskId) return;
+
+      const newPostIndex = data.currentPostIndex ?? 0;
+      const newExecutedLikes = data.executedLikes ?? 0;
+      const newExecutedComments = data.executedComments ?? 0;
+
+      setExecutingProgress(prev => ({
+        currentPostIndex: newPostIndex,
+        executedLikes: newExecutedLikes,
+        executedComments: newExecutedComments,
+        totalLikesTarget: prev.totalLikesTarget,
+        totalCommentsTarget: prev.totalCommentsTarget,
+      }));
+
+      // Đồng bộ tiến độ và tính cước thực tế tức thì lên Server DB
+      if (data.taskId) {
+        api.post('/automation/facebook-posts', {
+          action: 'update_progress',
+          taskId: data.taskId,
+          currentPostIndex: newPostIndex,
+          executedLikes: newExecutedLikes,
+          executedComments: newExecutedComments,
+          status: 'RUNNING',
+        }).then(() => {
+          fetchTasksAndStats();
+        }).catch(() => {});
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [runningTaskId]);
+
   const fetchTrackedPages = async () => {
     try {
       const res = await api.get('/competitors');
@@ -318,6 +360,7 @@ export function FacebookPostAutomationTab() {
           profileIds: realProfileIds,
           accounts: candidateAccounts,
           config: {
+            taskId: newTask.id,
             posts: postsToRun,
             buffActionType: 'BOTH',
             likesPerPost,
@@ -327,20 +370,25 @@ export function FacebookPostAutomationTab() {
             delaySeconds,
           },
         }).then(async (runnerRes: any) => {
+          const finalLikes = runnerRes?.totalLikesExecuted !== undefined ? runnerRes.totalLikesExecuted : executingProgress.executedLikes;
+          const finalComments = runnerRes?.totalCommentsExecuted !== undefined ? runnerRes.totalCommentsExecuted : executingProgress.executedComments;
+
           if (runnerRes?.success) {
             toast.success('Tác vụ tự động Facebook đã hoàn thành xuất sắc!');
             await api.post('/automation/facebook-posts', {
               action: 'update_progress',
               taskId: newTask.id,
-              executedLikes: plannedLikes,
-              executedComments: plannedComments,
+              executedLikes: finalLikes,
+              executedComments: finalComments,
               status: 'COMPLETED',
             });
           } else {
-            toast.warning('Tác vụ kết thúc với trạng thái: ' + (runnerRes?.error || 'Hoàn tất một phần'));
+            toast.warning('Tác vụ kết thúc: ' + (runnerRes?.error || 'Hoàn tất một phần'));
             await api.post('/automation/facebook-posts', {
               action: 'update_progress',
               taskId: newTask.id,
+              executedLikes: finalLikes,
+              executedComments: finalComments,
               status: 'IDLE',
             });
           }
@@ -420,6 +468,8 @@ export function FacebookPostAutomationTab() {
       await api.post('/automation/facebook-posts', {
         action: 'update_progress',
         taskId: runningTaskId,
+        executedLikes: executingProgress.executedLikes,
+        executedComments: executingProgress.executedComments,
         status: 'IDLE',
       });
       setRunningTaskId(null);

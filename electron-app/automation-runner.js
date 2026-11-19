@@ -107,7 +107,7 @@ async function safeWait(page, ms) {
 
 async function logHistory(profileId, actionType, link, message) {
   try {
-    const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
+    const apiUrl = process.env.API_URL || 'https://topify.vn/api';
     await fetch(`${apiUrl}/automation-logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -529,9 +529,18 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
       case 'fb_buff_post':
         await taskFbBuffPost(page, config, safeProfileId);
         break;
-      case 'fb_auto_posts_interact':
-        await taskFbAutoPostsInteract(page, config, safeProfileId);
-        break;
+      case 'fb_auto_posts_interact': {
+        const interactRes = await taskFbAutoPostsInteract(page, config, safeProfileId);
+        console.log(`[Automation] Hoàn thành fb_auto_posts_interact cho ${safeProfileId}:`, interactRes);
+        return {
+          success: true,
+          profileId: safeProfileId,
+          message: 'Hoạt động thành công',
+          totalLikesDone: interactRes?.totalLikesDone || 0,
+          totalCommentsDone: interactRes?.totalCommentsDone || 0,
+          totalCost: interactRes?.totalCost || 0,
+        };
+      }
       case 'fb_auto_interact':
         await taskFbAutoInteract(page, config, safeProfileId);
         break;
@@ -584,7 +593,7 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
 }
 
 async function startAutomationTask(taskData) {
-  const { taskId, actionType, profileIds, accounts, config } = taskData;
+  const { taskId, actionType, profileIds, accounts, config, onProgress } = taskData;
   console.log(`[Automation] Starting Task ${taskId} with ${profileIds ? profileIds.length : 0} profiles`);
   
   if (!profileIds || profileIds.length === 0) {
@@ -594,6 +603,29 @@ async function startAutomationTask(taskData) {
   stopFlags.delete(taskId);
   runningTasks.add(taskId);
   taskProfileMap.set(taskId, new Set(profileIds));
+
+  let globalLikesDone = 0;
+  let globalCommentsDone = 0;
+
+  const handleTaskProgress = (prog) => {
+    if (prog.likesDelta) globalLikesDone += prog.likesDelta;
+    if (prog.commentsDelta) globalCommentsDone += prog.commentsDelta;
+
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress({
+          taskId,
+          currentPostIndex: prog.currentPostIndex,
+          totalPosts: prog.totalPosts,
+          executedLikes: globalLikesDone,
+          executedComments: globalCommentsDone,
+          profileId: prog.profileId,
+        });
+      } catch (err) {
+        console.warn('[Automation] Error invoking onProgress:', err.message);
+      }
+    }
+  };
 
   try {
     const results = [];
@@ -614,7 +646,7 @@ async function startAutomationTask(taskData) {
       if (!apiAccountsLoaded) {
         apiAccountsLoaded = true;
         try {
-          const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
+          const apiUrl = process.env.API_URL || 'https://topify.vn/api';
           const res = await fetch(`${apiUrl}/facebook-accounts`);
           if (res.ok) {
             const apiAccounts = await res.json();
@@ -647,7 +679,12 @@ async function startAutomationTask(taskData) {
           return { success: false, profileId, error: 'Task stopped by user' };
         }
         const accData = await getAccount(profileId);
-        const profileConfig = { ...config, checkStop: () => stopFlags.has(taskId) };
+        const profileConfig = {
+          ...config,
+          taskId,
+          checkStop: () => stopFlags.has(taskId),
+          onProgress: handleTaskProgress,
+        };
         return await runAutomationStub(profileId, actionType, profileConfig, accData);
       });
 
@@ -660,7 +697,15 @@ async function startAutomationTask(taskData) {
       }
     }
 
-    return { success: true, results };
+    const totalLikesExecuted = results.reduce((sum, r) => sum + (r.totalLikesDone || 0), 0);
+    const totalCommentsExecuted = results.reduce((sum, r) => sum + (r.totalCommentsDone || 0), 0);
+
+    return {
+      success: true,
+      results,
+      totalLikesExecuted: Math.max(totalLikesExecuted, globalLikesDone),
+      totalCommentsExecuted: Math.max(totalCommentsExecuted, globalCommentsDone),
+    };
   } finally {
     runningTasks.delete(taskId);
     taskProfileMap.delete(taskId);

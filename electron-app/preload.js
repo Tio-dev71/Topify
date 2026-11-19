@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('autopost-status', listener);
     return () => ipcRenderer.removeListener('autopost-status', listener);
   },
+  onAutomationProgress: (callback) => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('automation-progress', listener);
+    return () => ipcRenderer.removeListener('automation-progress', listener);
+  },
   onDeepLink: (callback) => {
     const listener = (_event, value) => callback(value);
     ipcRenderer.on('deep-link', listener);

@@ -287,7 +287,16 @@ ipcMain.handle('run-facebook-login', async (event, accountData) => {
 ipcMain.handle('start-automation-task', async (event, taskData) => {
   try {
     console.log('[Electron IPC] Bắt đầu chạy Tự động hoá cho Task:', taskData.taskId);
-    const result = await startAutomationTask(taskData);
+    const onProgress = (data) => {
+      try {
+        if (event.sender && !event.sender.isDestroyed()) {
+          event.sender.send('automation-progress', data);
+        }
+      } catch (e) {
+        console.warn('[Electron IPC] Lỗi gửi automation-progress:', e.message);
+      }
+    };
+    const result = await startAutomationTask({ ...taskData, onProgress });
     return result;
   } catch (error) {
     console.error('[Electron IPC] Lỗi automation:', error.message);
