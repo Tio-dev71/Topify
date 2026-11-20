@@ -192,7 +192,26 @@ export class AutomationEngine {
           if (config.useAiComment && !apiKey && !deepseekKey) console.log('[AI DEBUG] Missing GEMINI_API_KEY or DEEPSEEK_API_KEY in .env or settings');
           if (config.useAiComment && (!postText || postText.trim().length <= 10)) console.log('[AI DEBUG] postText is too short or empty: ' + postText);
 
-          if (config.useAiComment && (apiKey || deepseekKey) && postText && postText.trim().length > 10) {
+          if (config.useAiComment && postText && postText.trim().length > 5) {
+            try {
+              const apiUrl = (process.env.API_URL || 'https://topify.vn/api').replace(/\/+$/, '');
+              const sRes = await fetch(`${apiUrl}/ai/generate-comment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ postText }),
+                signal: AbortSignal.timeout(10000)
+              });
+              if (sRes.ok) {
+                const sData = await sRes.json();
+                if (sData?.success && sData?.comment) {
+                  finalComment = sData.comment;
+                  console.log('[AI Comment 9Router Engine] ' + finalComment);
+                }
+              }
+            } catch (sErr) {}
+          }
+
+          if (config.useAiComment && !finalComment && (apiKey || deepseekKey) && postText && postText.trim().length > 10) {
             console.log('Generating AI comment for: ' + postText.substring(0, 30).replace(/\n/g, ' ') + '...');
             
             const prompt = `You are a normal Facebook user. Write a short, natural, friendly comment in Vietnamese for this post: "${postText}". Only return the comment text. Do not use quotes or hashtags.`;
@@ -690,7 +709,26 @@ export class AutomationEngine {
            if (dsSetting && dsSetting.value) deepseekKey = dsSetting.value;
         } catch(e) {}
 
-        if (config.useAiComment && (apiKey || deepseekKey) && postText && postText.trim().length > 10) {
+        if (config.useAiComment && postText && postText.trim().length > 5) {
+          try {
+            const apiUrl = (process.env.API_URL || 'https://topify.vn/api').replace(/\/+$/, '');
+            const sRes = await fetch(`${apiUrl}/ai/generate-comment`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ postText }),
+              signal: AbortSignal.timeout(10000)
+            });
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (sData?.success && sData?.comment) {
+                finalComment = sData.comment;
+                console.log('[AI Comment 9Router Engine] ' + finalComment);
+              }
+            }
+          } catch (sErr) {}
+        }
+
+        if (config.useAiComment && !finalComment && (apiKey || deepseekKey) && postText && postText.trim().length > 10) {
           const prompt = `You are a normal Facebook user. Write a short, natural, friendly comment in Vietnamese for this post: "${postText}". Only return the comment text. Do not use quotes or hashtags.`;
           
           if (deepseekKey) {

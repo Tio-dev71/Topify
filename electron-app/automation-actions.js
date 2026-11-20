@@ -79,8 +79,44 @@ function isSinglePostUrl(url) {
          lower.includes('/story.php');
 }
 
-// AI Comment Generator
+// AI Comment Generator (Priority: Server 9Router AI Gateway -> Local API Keys -> Fallback)
 async function generateAIComment(postContent, aiSettings = {}) {
+  if (!postContent || postContent.trim().length === 0) return null;
+
+  // 1. Ưu tiên hàng đầu: Gọi Cổng AI 9Router trên Server Topify (Không yêu cầu client cài key)
+  try {
+    const rawApiUrl = aiSettings.API_URL || process.env.API_URL || 'https://topify.vn/api';
+    const apiUrl = rawApiUrl.replace(/\/+$/, '');
+    console.log(`[AI Comment] Đang gửi bài viết lên 9Router server (${apiUrl}/ai/generate-comment)...`);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    const res = await fetch(`${apiUrl}/ai/generate-comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postText: postContent,
+        tone: 'natural'
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && data.comment) {
+        console.log(`[AI Comment 9Router] Thành công (${data.modelUsed || '9router'}): "${data.comment}"`);
+        return data.comment;
+      }
+    } else {
+      console.warn(`[AI Comment 9Router] Server trả HTTP ${res.status}`);
+    }
+  } catch (serverErr) {
+    console.warn('[AI Comment 9Router] Không kết nối được server AI:', serverErr.message);
+  }
+
+  // 2. Dự phòng: Nếu có cài đặt API key cá nhân cục bộ trong Settings
   const modelType = aiSettings.AI_MODEL || 'gemini-1.5-flash';
   const prompt = `Bạn là một người dùng Facebook bình thường, thân thiện và lịch sự.
 Hãy viết 1 câu bình luận NGẮN GỌN (dưới 15 chữ), tự nhiên, khen ngợi hoặc đồng tình với nội dung bài viết sau đây.
@@ -92,74 +128,71 @@ Nội dung bài viết: "${postContent}"`;
   try {
     if (modelType.startsWith('gemini')) {
       const geminiKey = aiSettings.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-      if (!geminiKey) throw new Error('Thiếu GEMINI_API_KEY');
-      
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelType}:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 60 }
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-          return data.candidates[0].content.parts[0].text.trim().replace(/^["']|["']$/g, '');
+      if (geminiKey) {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelType}:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 60 }
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.candidates && data.candidates[0].content.parts[0].text) {
+            return data.candidates[0].content.parts[0].text.trim().replace(/^["']|["']$/g, '');
+          }
         }
-      } else {
-        const err = await res.text();
-        console.log(`[AI Comment Error] gemini: HTTP ${res.status} - ${err}`);
       }
     } else if (modelType.startsWith('deepseek')) {
       const deepseekKey = aiSettings.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY;
-      if (!deepseekKey) throw new Error('Thiếu DEEPSEEK_API_KEY');
-
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepseekKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 60
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-          return data.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
+      if (deepseekKey) {
+        const res = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${deepseekKey}`
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 60
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            return data.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
+          }
         }
       }
     } else if (modelType.startsWith('gpt')) {
       const openaiKey = aiSettings.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-      if (!openaiKey) throw new Error('Thiếu OPENAI_API_KEY');
-
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openaiKey}`
-        },
-        body: JSON.stringify({
-          model: modelType,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 60
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-          return data.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
+      if (openaiKey) {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiKey}`
+          },
+          body: JSON.stringify({
+            model: modelType,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 60
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            return data.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
+          }
         }
       }
     }
   } catch (error) {
-    console.log(`[AI Comment Error] ${modelType}:`, error.message);
+    console.log(`[AI Comment Fallback Error] ${modelType}:`, error.message);
   }
   return null;
 }

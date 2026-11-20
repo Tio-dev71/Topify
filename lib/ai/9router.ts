@@ -104,7 +104,7 @@ export function cleanJsonOutput(text: string): string {
   return cleaned.trim();
 }
 
-const DEFAULT_MODEL = process.env.NINE_ROUTER_MODEL?.trim() || 'mainTop';
+const DEFAULT_MODEL = process.env.NINE_ROUTER_MODEL?.trim() || 'ag/gemini-3-flash';
 
 // =========================================================================
 // =========================================================================
@@ -1384,6 +1384,101 @@ function buildSrtString(cues: SubtitleCue[]): string {
     srt += `${i + 1}\n${formatTimeSrt(c.startSeconds)} --> ${formatTimeSrt(c.endSeconds)}\n${c.text}\n\n`;
   });
   return srt;
+}
+
+// =========================================================================
+// SOCIAL FACEBOOK COMMENT GENERATOR (9ROUTER AI GATEWAY)
+// =========================================================================
+
+export interface SocialCommentResult {
+  comment: string;
+  isAiGenerated: boolean;
+  modelUsed?: string;
+}
+
+export async function generateSocialComment(params: {
+  postText: string;
+  tone?: string;
+  customPrompt?: string;
+}): Promise<SocialCommentResult> {
+  const { postText, tone = 'natural', customPrompt } = params;
+
+  if (!postText || postText.trim().length === 0) {
+    return {
+      comment: 'Thả tim cho bài viết ạ ❤️',
+      isAiGenerated: false,
+    };
+  }
+
+  if (isNineRouterConfigured()) {
+    try {
+      const client = getNineRouterClient();
+      if (client) {
+        const prompt = customPrompt || `Bạn là một người dùng mạng xã hội Facebook bình thường, trẻ trung, tự nhiên và thân thiện.
+Hãy viết ĐÚNG 1 CÂU bình luận ngắn gọn (dưới 15 chữ), cực kỳ tự nhiên và bám sát vào nội dung bài viết sau đây.
+Tùy vào nội dung bài viết (vui nhộn, hài hước, tin tức, du lịch, hay bán hàng...) mà dùng giọng điệu phù hợp (${tone}). Có thể kèm 1 icon/emoji tự nhiên.
+Tuyệt đối không dùng hashtag, không viết hoa toàn bộ, không mở ngoặc kép, không giải thích. Chỉ trả về duy nhất nội dung câu bình luận.
+
+Nội dung bài viết: "${postText.substring(0, 1000)}"`;
+
+        const candidateModels = [
+          process.env.NINE_ROUTER_MODEL?.trim() || 'ag/gemini-3-flash',
+          'ag/gemini-3-flash',
+          'ag/claude-sonnet-4-6',
+        ].filter(Boolean);
+
+        for (const modelToTry of candidateModels) {
+          try {
+            const completion = await client.chat.completions.create({
+              model: modelToTry,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.8,
+              max_tokens: 60,
+              stream: false,
+            });
+
+            const rawReply = completion.choices[0]?.message?.content?.trim() || '';
+            const cleaned = rawReply
+              .replace(/^["'“”«»]+|["'“”«»]+$/g, '')
+              .replace(/^\*\*|\*\*$/g, '')
+              .trim();
+
+            if (cleaned && cleaned.length > 0 && cleaned.length < 150) {
+              return {
+                comment: cleaned,
+                isAiGenerated: true,
+                modelUsed: modelToTry,
+              };
+            }
+          } catch (modelErr: any) {
+            console.warn(`[9router] generateSocialComment failed with ${modelToTry}:`, modelErr?.message || modelErr);
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('[9router] generateSocialComment gateway error:', e?.message || e);
+    }
+  }
+
+  // Smart Heuristic Fallback based on keywords in postText
+  const lower = postText.toLowerCase();
+  let fallbackComment = 'Thả tim cho bài viết ạ ❤️';
+  if (lower.includes('chúc mừng') || lower.includes('sinh nhật') || lower.includes('kỷ niệm')) {
+    fallbackComment = 'Chúc mừng nhé ạ! 🎉';
+  } else if (lower.includes('phú quốc') || lower.includes('du lịch') || lower.includes('biển') || lower.includes('resort')) {
+    fallbackComment = 'Phú Quốc đẹp mê luôn, muốn đi quá 😍';
+  } else if (lower.includes('giảm giá') || lower.includes('khuyến mãi') || lower.includes('sale') || lower.includes('ưu đãi')) {
+    fallbackComment = 'Deal xịn quá ad ơi, inbox mình với nha!';
+  } else if (lower.includes('cười') || lower.includes('=)))') || lower.includes('haha') || lower.includes('hài')) {
+    fallbackComment = 'Haha hài xỉu luôn á trời 😂';
+  } else if (lower.includes('đẹp') || lower.includes('xinh') || lower.includes('ảnh')) {
+    fallbackComment = 'Góc chụp đẹp xuất sắc luôn nè ✨';
+  }
+
+  return {
+    comment: fallbackComment,
+    isAiGenerated: false,
+  };
 }
 
 

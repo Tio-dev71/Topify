@@ -80,7 +80,7 @@ export function FacebookPostAutomationTab() {
   const [commentsPerPost, setCommentsPerPost] = useState(10);
   const [useAiComment, setUseAiComment] = useState(true);
   const [commentsStr, setCommentsStr] = useState(
-    'Bài viết rất hay và ý nghĩa, cảm ơn ad đã chia sẻ!\nNội dung bổ ích quá, hóng các bài tiếp theo ạ\nChuẩn luôn ad ơi, thả tim cho bài viết\nThông tin cực kỳ kịp thời và chính xác\nQuan tâm ạ, page tư vấn thêm giúp mình với'
+    'Thả tim cho bài viết ạ ❤️\nHay quá ad ơi 👍\nTuyệt vời luôn nè\nỦng hộ page nhiệt tình!\nHóng các bài viết tiếp theo ạ'
   );
   const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
   const [delaySeconds, setDelaySeconds] = useState(5);
@@ -972,7 +972,7 @@ export function FacebookPostAutomationTab() {
                   <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl text-[11px] text-purple-800 flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                     <span>
-                      Topify AI sẽ tự động đọc nội dung từng bài viết đã quét và sinh bình luận tự nhiên, đa dạng, không trùng lặp, tối ưu an toàn tuyệt đối cho tài khoản.
+                      Topify AI (Cổng 9Router máy chủ) sẽ tự động đọc nội dung bài viết và sinh bình luận thông minh, tự nhiên theo đúng ngữ cảnh bài đăng.
                     </span>
                   </div>
                 )}
