@@ -639,7 +639,20 @@ async function startAutomationTask(taskData) {
 
   try {
     const results = [];
-    const concurrency = 3; // Giới hạn số trình duyệt mở cùng lúc để tránh treo máy
+    
+    // Hỗ trợ chọn ngẫu nhiên tài khoản từ pool nick để tránh trùng lặp
+    let activeProfiles = [...profileIds];
+    if (config?.randomAccounts && Number(config?.accountsPerRun) > 0 && Number(config.accountsPerRun) < activeProfiles.length) {
+      for (let i = activeProfiles.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [activeProfiles[i], activeProfiles[j]] = [activeProfiles[j], activeProfiles[i]];
+      }
+      activeProfiles = activeProfiles.slice(0, Number(config.accountsPerRun));
+      console.log(`[Automation] Đã chọn ngẫu nhiên ${activeProfiles.length} tài khoản từ pool ${profileIds.length} nick.`);
+    }
+
+    // Giới hạn số trình duyệt mở cùng lúc để tránh treo máy (mặc định 3 hoặc theo cấu hình ví dụ 5)
+    const concurrency = Number(config?.concurrency) > 0 ? Number(config.concurrency) : 3;
     
     const accountMap = new Map();
     if (Array.isArray(accounts)) {
@@ -675,14 +688,16 @@ async function startAutomationTask(taskData) {
       return accountMap.get(pId) || null;
     };
 
-    for (let i = 0; i < profileIds.length; i += concurrency) {
+    const totalBatches = Math.ceil(activeProfiles.length / concurrency);
+    for (let i = 0; i < activeProfiles.length; i += concurrency) {
       if (stopFlags.has(taskId)) {
         console.log(`[Automation] Task ${taskId} was stopped.`);
         break;
       }
       
-      const chunk = profileIds.slice(i, i + concurrency);
-      console.log(`[Automation] Running batch ${Math.floor(i / concurrency) + 1} (${chunk.length} profiles)`);
+      const chunk = activeProfiles.slice(i, i + concurrency);
+      const currentBatch = Math.floor(i / concurrency) + 1;
+      console.log(`[Automation] Chạy Batch ${currentBatch}/${totalBatches} (${chunk.length} tài khoản)...`);
       
       const promises = chunk.map(async (profileId) => {
         if (stopFlags.has(taskId)) {
@@ -692,6 +707,8 @@ async function startAutomationTask(taskData) {
         const profileConfig = {
           ...config,
           taskId,
+          currentBatch,
+          totalBatches,
           checkStop: () => stopFlags.has(taskId),
           onProgress: handleTaskProgress,
         };
@@ -701,8 +718,8 @@ async function startAutomationTask(taskData) {
       const chunkResults = await Promise.all(promises);
       results.push(...chunkResults);
       
-      // Đợi một chút giữa các batch để giảm tải CPU
-      if (i + concurrency < profileIds.length) {
+      // Đợi 3 giây giữa các batch để giải phóng RAM & hạ nhiệt CPU trước khi mở batch tiếp theo
+      if (i + concurrency < activeProfiles.length) {
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }

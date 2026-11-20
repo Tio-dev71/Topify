@@ -94,6 +94,47 @@ export async function GET(req: NextRequest) {
       },
     }).catch(() => []);
 
+    // Lấy danh sách Lịch Tự Động Quét Đa Page (Multi-Page Schedules)
+    const rawSchedules = await prisma.automationTask.findMany({
+      where: {
+        type: 'fb_page_schedule',
+        ...(userWorkspaceId ? {
+          OR: [
+            { workspaceId: userWorkspaceId },
+            { workspaceId: null },
+          ]
+        } : {})
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const schedules = rawSchedules.map(s => {
+      const cfg = (s.config as any) || {};
+      return {
+        id: s.id,
+        name: s.name,
+        pageUrl: cfg.pageUrl || '',
+        pageName: cfg.pageName || s.name,
+        intervalMinutes: Number(cfg.intervalMinutes) || 15,
+        accountsPerRun: Number(cfg.accountsPerRun) || 20,
+        concurrency: Number(cfg.concurrency) || 5,
+        randomAccounts: Boolean(cfg.randomAccounts ?? true),
+        useAiComment: Boolean(cfg.useAiComment ?? true),
+        likesPerPost: Number(cfg.likesPerPost) || 1,
+        commentsPerPost: Number(cfg.commentsPerPost) || 1,
+        comments: cfg.comments || [],
+        isActive: Boolean(cfg.isActive ?? true),
+        lastRunAt: cfg.lastRunAt || null,
+        nextRunAt: cfg.nextRunAt || null,
+        lastScannedPostUrl: cfg.lastScannedPostUrl || null,
+        interactedPostUrls: Array.isArray(cfg.interactedPostUrls) ? cfg.interactedPostUrls : [],
+        status: s.status || 'IDLE',
+        statusMessage: cfg.statusMessage || '',
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      };
+    });
+
     return NextResponse.json({
       success: true,
       pricing: {
@@ -104,6 +145,7 @@ export async function GET(req: NextRequest) {
       },
       stats: {
         tasksCount: tasks.length,
+        schedulesCount: schedules.length,
         totalPostsScanned,
         totalPlannedLikes,
         totalPlannedComments,
@@ -113,6 +155,7 @@ export async function GET(req: NextRequest) {
         formattedTotalCost: `${totalExecutedCost.toLocaleString('vi-VN')} đ`,
       },
       tasks,
+      schedules,
       recentPosts: recentDbPosts,
     });
   } catch (error: any) {
@@ -449,6 +492,224 @@ export async function POST(req: NextRequest) {
         message: `Thanh toán thành công ${payAmount.toLocaleString('vi-VN')} đ qua Ví Topify!`,
         newBalance: updatedWallet.balance,
         transaction,
+      });
+    }
+
+    // ========================================================
+    // ACTION 5: SAVE SCHEDULE (CREATE / EDIT MULTI-PAGE SCHEDULE)
+    // ========================================================
+    if (action === 'save_schedule') {
+      const {
+        id,
+        pageUrl,
+        pageName,
+        intervalMinutes = 15,
+        accountsPerRun = 20,
+        concurrency = 5,
+        randomAccounts = true,
+        useAiComment = true,
+        likesPerPost = 1,
+        commentsPerPost = 1,
+        comments = [],
+        isActive = true,
+      } = body;
+
+      const cleanUrl = String(pageUrl || '').trim();
+      if (!cleanUrl) {
+        return NextResponse.json({ error: 'Vui lòng cung cấp link Fanpage/Group để lên lịch quét.' }, { status: 400 });
+      }
+
+      const safeInterval = Math.max(1, Number(intervalMinutes) || 15);
+      const safeAccCount = Math.max(1, Number(accountsPerRun) || 20);
+      const safeConcurrency = Math.max(1, Number(concurrency) || 5);
+      const name = String(pageName || '').trim() || cleanUrl.replace(/^https?:\/\/(www\.)?facebook\.com\/?/, '').replace(/\/+$/, '') || 'Lịch Fanpage';
+
+      const userWorkspaceId = (session.user as any).workspaceId;
+
+      if (id) {
+        // Cập nhật cấu hình lịch hiện có
+        const existing = await prisma.automationTask.findUnique({ where: { id } });
+        if (!existing) {
+          return NextResponse.json({ error: 'Không tìm thấy cấu hình lịch cần sửa.' }, { status: 404 });
+        }
+
+        const oldCfg: any = existing.config || {};
+        const updatedCfg = {
+          ...oldCfg,
+          pageUrl: cleanUrl,
+          pageName: name,
+          intervalMinutes: safeInterval,
+          accountsPerRun: safeAccCount,
+          concurrency: safeConcurrency,
+          randomAccounts: Boolean(randomAccounts),
+          useAiComment: Boolean(useAiComment),
+          likesPerPost: Math.max(0, Number(likesPerPost) || 1),
+          commentsPerPost: Math.max(0, Number(commentsPerPost) || 1),
+          comments: Array.isArray(comments) && comments.length > 0 ? comments : (oldCfg.comments || []),
+          isActive: Boolean(isActive),
+        };
+
+        const updated = await prisma.automationTask.update({
+          where: { id },
+          data: {
+            name: `Lịch Quét: ${name} (mỗi ${safeInterval}p)`,
+            config: updatedCfg,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: 'Cập nhật lịch quét Fanpage thành công!',
+          schedule: updated,
+        });
+      } else {
+        // Tạo mới cấu hình lịch
+        const newConfig = {
+          pageUrl: cleanUrl,
+          pageName: name,
+          intervalMinutes: safeInterval,
+          accountsPerRun: safeAccCount,
+          concurrency: safeConcurrency,
+          randomAccounts: Boolean(randomAccounts),
+          useAiComment: Boolean(useAiComment),
+          likesPerPost: Math.max(0, Number(likesPerPost) || 1),
+          commentsPerPost: Math.max(0, Number(commentsPerPost) || 1),
+          comments: Array.isArray(comments) && comments.length > 0 ? comments : [
+            'Bài viết rất hay và ý nghĩa!',
+            'Thông tin cực kỳ kịp thời và chính xác',
+            'Nội dung bổ ích quá, hóng các bài tiếp theo ạ',
+            'Chuẩn luôn ad ơi, thả tim cho bài viết',
+            'Cảm ơn page đã chia sẻ!',
+          ],
+          isActive: Boolean(isActive),
+          lastRunAt: null,
+          nextRunAt: new Date(Date.now() + 5000).toISOString(), // Lần đầu quét ngay sau 5 giây
+          lastScannedPostUrl: null,
+          interactedPostUrls: [],
+          statusMessage: 'Sẵn sàng kích hoạt đợt quét đầu tiên',
+        };
+
+        const newTask = await prisma.automationTask.create({
+          data: {
+            name: `Lịch Quét: ${name} (mỗi ${safeInterval}p)`,
+            type: 'fb_page_schedule',
+            config: newConfig,
+            profileIds: [],
+            status: 'IDLE',
+            workspaceId: userWorkspaceId || null,
+            userId: session.user.id || null,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: 'Đã thêm mới lịch quét Fanpage vào hệ thống!',
+          schedule: newTask,
+        });
+      }
+    }
+
+    // ========================================================
+    // ACTION 6: TOGGLE SCHEDULE ACTIVE/PAUSE
+    // ========================================================
+    if (action === 'toggle_schedule') {
+      const { id, isActive } = body;
+      if (!id) {
+        return NextResponse.json({ error: 'Thiếu schedule ID.' }, { status: 400 });
+      }
+
+      const existing = await prisma.automationTask.findUnique({ where: { id } });
+      if (!existing) {
+        return NextResponse.json({ error: 'Không tìm thấy lịch.' }, { status: 404 });
+      }
+
+      const oldCfg: any = existing.config || {};
+      const newActive = Boolean(isActive);
+      const updatedCfg = {
+        ...oldCfg,
+        isActive: newActive,
+        nextRunAt: newActive ? (oldCfg.nextRunAt || new Date().toISOString()) : oldCfg.nextRunAt,
+        statusMessage: newActive ? 'Đã bật lịch tự động' : 'Tạm dừng lịch',
+      };
+
+      const updated = await prisma.automationTask.update({
+        where: { id },
+        data: {
+          config: updatedCfg,
+          status: newActive ? (existing.status === 'PAUSED' ? 'IDLE' : existing.status) : 'PAUSED',
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: newActive ? 'Đã kích hoạt lại lịch quét Fanpage' : 'Đã tạm dừng lịch quét Fanpage',
+        schedule: updated,
+      });
+    }
+
+    // ========================================================
+    // ACTION 7: UPDATE SCHEDULE PROGRESS / TIMING AFTER EXECUTION
+    // ========================================================
+    if (action === 'update_schedule_progress') {
+      const {
+        id,
+        lastRunAt,
+        nextRunAt,
+        lastScannedPostUrl,
+        interactedPostUrls,
+        status,
+        statusMessage,
+      } = body;
+
+      if (!id) {
+        return NextResponse.json({ error: 'Thiếu schedule ID.' }, { status: 400 });
+      }
+
+      const existing = await prisma.automationTask.findUnique({ where: { id } });
+      if (!existing) {
+        return NextResponse.json({ error: 'Không tìm thấy lịch.' }, { status: 404 });
+      }
+
+      const oldCfg: any = existing.config || {};
+      const updatedCfg = {
+        ...oldCfg,
+        lastRunAt: lastRunAt !== undefined ? lastRunAt : oldCfg.lastRunAt,
+        nextRunAt: nextRunAt !== undefined ? nextRunAt : oldCfg.nextRunAt,
+        lastScannedPostUrl: lastScannedPostUrl !== undefined ? lastScannedPostUrl : oldCfg.lastScannedPostUrl,
+        interactedPostUrls: Array.isArray(interactedPostUrls) ? interactedPostUrls : oldCfg.interactedPostUrls || [],
+        statusMessage: statusMessage !== undefined ? statusMessage : oldCfg.statusMessage,
+      };
+
+      const updated = await prisma.automationTask.update({
+        where: { id },
+        data: {
+          config: updatedCfg,
+          status: status || existing.status,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        schedule: updated,
+      });
+    }
+
+    // ========================================================
+    // ACTION 8: DELETE SCHEDULE
+    // ========================================================
+    if (action === 'delete_schedule') {
+      const { id } = body;
+      if (!id) {
+        return NextResponse.json({ error: 'Thiếu schedule ID.' }, { status: 400 });
+      }
+
+      await prisma.automationTask.delete({
+        where: { id },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Đã xóa lịch quét Fanpage thành công',
       });
     }
 
