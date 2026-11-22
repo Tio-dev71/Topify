@@ -871,20 +871,38 @@ async function taskFbBuffPost(page, config, profileId) {
     throw new Error(`Phiên Facebook bị gián đoạn hoặc bị đăng xuất khi mở bài viết: ${config.targetUrl}`);
   }
 
-  // Kiểm tra bài viết có hiển thị được không
+  // Kiểm tra nếu bài viết bị đè bởi modal "See more on Facebook" (chưa đăng nhập) hoặc bài viết không khả dụng
   const pageCheck = await safePageEvaluate(page, () => {
     const text = document.body ? document.body.innerText : '';
+    if (text.includes('See more on Facebook') || text.includes('Xem thêm trên Facebook')) {
+      return { unavailable: true, reason: 'Tài khoản chưa đăng nhập hoặc bị đăng xuất (Hiển thị hộp thoại "See more on Facebook")' };
+    }
     if (text.includes('Bạn hiện không xem được nội dung này') || text.includes('This content isn\'t available right now')) {
       return { unavailable: true, reason: 'Nội dung bài viết không công khai hoặc đã bị gỡ' };
     }
     if (text.includes('Khám phá những điều bạn yêu thích') || text.includes('Explore the things you love') || text.includes('Nhập mật khẩu')) {
-      return { unavailable: true, reason: 'Tài khoản chưa đăng nhập vào Facebook' };
+      return { unavailable: true, reason: 'Tài khoản chưa đăng nhập vào Facebook (Màn hình khóa đăng nhập)' };
+    }
+    const passInput = document.querySelector('input[type="password"], input[name="pass"], #pass');
+    if (passInput && passInput.getBoundingClientRect().height > 0) {
+      return { unavailable: true, reason: 'Trình duyệt đang hiển thị form đăng nhập' };
     }
     return { unavailable: false };
   });
 
   if (pageCheck.unavailable) {
     throw new Error(`[BuffPost] ${pageCheck.reason}: ${config.targetUrl}`);
+  }
+
+  // Kiểm tra cookie c_user có tồn tại trong context không
+  try {
+    const cookies = await page.context().cookies('https://www.facebook.com');
+    const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
+    if (!hasCUser) {
+      throw new Error(`[BuffPost] Tài khoản bị mất phiên đăng nhập Facebook (Không tìm thấy cookie c_user) khi mở bài viết: ${config.targetUrl}`);
+    }
+  } catch (cErr) {
+    if (cErr.message && cErr.message.includes('[BuffPost]')) throw cErr;
   }
 
   // Pause videos to prevent auto-scrolling to next Reel
@@ -1093,8 +1111,23 @@ async function taskFbBuffPost(page, config, profileId) {
           }
         } catch (e) {}
 
-        likeResult = { success: true, reason: 'CLICKED' };
-        break;
+        // Xác minh lại sau khi hover/click dock reaction
+        const isNowLikedAfterDock = await safePageEvaluate(page, () => {
+          const btn = document.querySelector('[data-topify-like-btn="1"]');
+          if (!btn) return false;
+          const aria = (btn.getAttribute('aria-label') || '').toLowerCase().trim();
+          return aria.includes('gỡ') || aria.includes('bỏ') || aria.includes('remove') || aria.includes('unlike') ||
+                 btn.getAttribute('aria-pressed') === 'true' ||
+                 (btn.style && btn.style.color && btn.style.color.includes('rgb(8, 102, 255)')) ||
+                 Boolean(btn.querySelector('[class*="active"], [style*="rgb(8, 102, 255)"], [class*="x14ctfv"]'));
+        });
+
+        if (isNowLikedAfterDock) {
+          likeResult = { success: true, reason: 'CLICKED' };
+          break;
+        } else {
+          console.log(`[Buff LIKE] Lần thử ${attempt + 1}/4: Chưa xác nhận được trạng thái Like trên Facebook.`);
+        }
       }
     }
 

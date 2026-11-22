@@ -525,6 +525,12 @@ async function checkAndSolveFunCaptcha(page) {
 
 async function dismissFacebookPopups(page) {
   try {
+    // Đóng popup Avatar hoặc tooltip nhỏ che màn hình nếu có
+    const avatarTooltip = page.locator('text="Make your avatar", text="Make your own sticker pack", text="Tạo avatar"').first();
+    if (await avatarTooltip.isVisible({ timeout: 500 }).catch(() => false)) {
+      await page.keyboard.press('Escape').catch(() => {});
+    }
+
     const dismissSelectors = [
       'div[role="button"]:has-text("Dismiss")',
       'div[role="button"]:has-text("Bỏ qua")',
@@ -535,13 +541,14 @@ async function dismissFacebookPopups(page) {
       'div[aria-label="Đóng"]',
       'div[aria-label="Close"]',
       'div[role="button"]:has-text("Lúc khác")',
-      'div[role="button"]:has-text("Not now")'
+      'div[role="button"]:has-text("Not now")',
+      'div[aria-label="Close"][role="button"]'
     ];
     for (const sel of dismissSelectors) {
       const el = page.locator(sel).first();
-      if (await el.isVisible({ timeout: 1000 }).catch(() => false)) {
+      if (await el.isVisible({ timeout: 800 }).catch(() => false)) {
         await el.click({ force: true });
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(500);
       }
     }
   } catch (e) { }
@@ -577,9 +584,17 @@ async function checkFacebookLoggedIn(browser, page) {
       if (
         pageText.includes('Khám phá những điều bạn yêu thích') ||
         pageText.includes('Explore the things you love') ||
-        pageText.includes('Nhập mật khẩu')
+        pageText.includes('Nhập mật khẩu') ||
+        pageText.includes('See more on Facebook') ||
+        pageText.includes('Xem thêm trên Facebook')
       ) {
         return { loggedIn: false, reason: 'caa_lock_screen' };
+      }
+
+      // Kiểm tra nếu modal đăng nhập hoặc See more on Facebook đang đè lên trang
+      const loginModal = document.querySelector('form[action*="/login"], div[role="dialog"] input[name="email"], div[role="dialog"] input[name="pass"]');
+      if (loginModal && loginModal.getBoundingClientRect().height > 0) {
+        return { loggedIn: false, reason: 'login_modal_visible' };
       }
 
       // 2. Kiểm tra dấu hiệu đã đăng nhập thành công vào trang cá nhân / bảng tin
@@ -605,6 +620,21 @@ async function checkFacebookLoggedIn(browser, page) {
   } catch (e) {
     return false;
   }
+}
+
+async function updateAccountStatus(accountId, status) {
+  if (!accountId) return;
+  try {
+    const apiUrl = process.env.API_URL || 'https://topify.vn/api';
+    await fetch(`${apiUrl}/facebook-accounts/login`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: accountId,
+        status: status || 'DEAD'
+      })
+    }).catch(() => { });
+  } catch (e) { }
 }
 
 async function syncCookiesToApi(browser, accountId) {
@@ -1262,6 +1292,7 @@ module.exports = {
   cleanStaleLockFiles,
   dismissFacebookPopups,
   checkFacebookLoggedIn,
-  syncCookiesToApi
+  syncCookiesToApi,
+  updateAccountStatus
 };
 
