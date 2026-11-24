@@ -13,8 +13,7 @@ const {
   cleanStaleLockFiles,
   dismissFacebookPopups,
   checkFacebookLoggedIn,
-  syncCookiesToApi,
-  updateAccountStatus
+  syncCookiesToApi
 } = require('./playwright-runner');
 const { getOrCreateDeviceProfile, injectDeviceFingerprint } = require('./device-fingerprint');
 
@@ -180,43 +179,18 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
     return true;
   }
 
-  // Bước 4: Xử lý màn hình lưu tài khoản (CAA / Remembered Profile có nút "Continue" / "Tiếp tục" như trong ảnh)
-  const continueBtn = page.locator(
-    'div[role="button"]:has-text("Continue"), ' +
-    'div[role="button"]:has-text("Tiếp tục"), ' +
-    'button:has-text("Continue"), ' +
-    'button:has-text("Tiếp tục"), ' +
-    'div[aria-label*="Continue"], ' +
-    'div[aria-label*="Tiếp tục"], ' +
-    'a:has-text("Continue"), ' +
-    'a:has-text("Tiếp tục")'
-  ).first();
-
-  if (await continueBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-    console.log(`[Automation] Phát hiện tài khoản đã lưu (Quỳnh Hạ / CAA Screen), bấm "Tiếp tục" cho ${profileId}...`);
-    await continueBtn.click({ force: true });
-    await safeWait(page, 3000);
-
-    // Kiểm tra nếu bấm Tiếp tục đã vào thẳng trang cá nhân / bảng tin
-    if (await checkFacebookLoggedIn(browser, page)) {
-      console.log(`[Automation] Đăng nhập thành công ngay sau nút Continue cho profile ${profileId}!`);
-      await syncCookiesToApi(browser, accountData?.id);
-      return true;
-    }
-  }
-
-  // Bước 5: Nếu chưa đăng nhập, chạy kịch bản Auto-login bằng UID + Password + 2FA
+  // Bước 4: Nếu chưa đăng nhập, chạy kịch bản Auto-login bằng UID + Password + 2FA
   const uid = accountData?.uid;
   const password = accountData?.password;
 
   if (!uid || !password) {
-    await updateAccountStatus(accountData?.id, 'DEAD');
     throw new Error(`Profile ${profileId} chưa đăng nhập và không có thông tin UID/Mật khẩu để tự động đăng nhập.`);
   }
 
   console.log(`[Automation] Profile ${profileId} chưa có phiên đăng nhập hợp lệ. Bắt đầu Auto-login với UID: ${uid}...`);
 
-  // 1. Kiểm tra nếu hộp thoại mật khẩu đã mở sẵn trên màn hình (sau khi bấm Continue hoặc lưu sẵn)
+  // Xử lý form đăng nhập hoặc CAA Remembered Profile
+  // 1. Kiểm tra nếu hộp thoại mật khẩu đã mở sẵn trên màn hình
   const passInputDirect = page.locator('input[type="password"], input[name="pass"], #pass').first();
   const isDirectPassVisible = await passInputDirect.isVisible({ timeout: 2000 }).catch(() => false);
 
@@ -236,9 +210,9 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
         'div[aria-label*="trang cá nhân khác"]'
       ).first();
 
-      if (await otherProfileBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (await otherProfileBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
         console.log(`[Automation] Nhấp "Dùng trang cá nhân khác" cho profile ${profileId}...`);
-        await otherProfileBtn.click({ force: true });
+        await otherProfileBtn.click();
         await page.waitForSelector('input[name="email"], #email, input[type="password"], input[name="pass"]', { timeout: 7000 }).catch(() => {});
         hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
       }
@@ -251,17 +225,33 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
       const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
       await passInput.fill(password);
     } else {
-      await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await safeWait(page, 2000);
-      emailInput = page.locator('input[name="email"], #email').first();
-      if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await emailInput.fill(uid);
-        await safeWait(page, 300);
+      const continueBtn = page.locator(
+        'div[role="button"]:has-text("Continue"), ' +
+        'div[role="button"]:has-text("Tiếp tục"), ' +
+        'button:has-text("Continue"), ' +
+        'button:has-text("Tiếp tục"), ' +
+        'div[aria-label*="Continue"], ' +
+        'div[aria-label*="Tiếp tục"]'
+      ).first();
+
+      if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+        console.log(`[Automation] Nhấp "Tiếp tục" cho tài khoản đã lưu ${profileId}...`);
+        await continueBtn.click();
+        await page.waitForSelector('input[type="password"], input[name="pass"], #pass', { timeout: 7000 }).catch(() => {});
         const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
         await passInput.fill(password);
       } else {
-        await updateAccountStatus(accountData?.id, 'DEAD');
-        throw new Error(`Không tìm thấy form đăng nhập Facebook cho profile ${profileId}`);
+        await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await safeWait(page, 2000);
+        emailInput = page.locator('input[name="email"], #email').first();
+        if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
+          await emailInput.fill(uid);
+          await safeWait(page, 300);
+          const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
+          await passInput.fill(password);
+        } else {
+          throw new Error(`Không tìm thấy form đăng nhập Facebook cho profile ${profileId}`);
+        }
       }
     }
   }
@@ -288,58 +278,36 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
     await page.keyboard.press('Enter');
   }
 
-  console.log(`[Automation] Đã bấm đăng nhập cho UID ${uid}, đang chờ phản hồi từ Facebook...`);
+  await safeWait(page, 4000);
 
-  // Chờ Facebook xử lý đăng nhập (tối đa 15 giây, kiểm tra tuần tự để không ngắt quãng giữa chừng)
-  const pollStart = Date.now();
-  while (Date.now() - pollStart < 15000) {
-    await safeWait(page, 1500);
+  // Kiểm tra lỗi đăng nhập
+  const loginError = await safePageEvaluate(page, () => {
+    // Only check for login errors if we are still on the login page or a login failure page
+    const url = window.location.href;
+    if (!url.includes('login') && !url.includes('recover')) return false;
 
-    // Kiểm tra nếu đã vào được bảng tin / trang cá nhân
-    if (await checkFacebookLoggedIn(browser, page)) {
-      break;
-    }
-
-    // Kiểm tra nếu chuyển hướng sang trang 2FA hoặc Checkpoint
-    const currentU = page.url();
-    const pageBodyText = await safePageEvaluate(page, () => document.body ? document.body.innerText : '').catch(() => '');
-    if (
-      currentU.includes('two_step') ||
-      currentU.includes('two_factor') ||
-      currentU.includes('checkpoint') ||
-      pageBodyText.includes('two-factor') ||
-      pageBodyText.includes('xác thực hai yếu tố') ||
-      pageBodyText.includes('xác thực 2 yếu tố') ||
-      pageBodyText.includes('nhập mã')
-    ) {
-      break;
-    }
-
-    // Kiểm tra lỗi sai mật khẩu / tài khoản
-    const loginError = await safePageEvaluate(page, () => {
-      const errorContainers = document.querySelectorAll('#error_box, ._9ay7, ._4rbf, [role="alert"]');
-      for (const el of errorContainers) {
-        const text = (el.innerText || '').toLowerCase().trim();
-        if (text.includes('không kết nối với tài khoản nào') || 
-            text.includes('không chính xác') ||
-            text.includes('the password that you') ||
-            text.includes('find your account') ||
-            text.includes('sai mật khẩu') ||
-            text.includes('mật khẩu không đúng')) {
-          return text;
-        }
+    // Check specific error containers on the login page
+    const errorContainers = document.querySelectorAll('#error_box, ._9ay7, ._4rbf, [role="alert"]');
+    for (const el of errorContainers) {
+      const text = el.innerText.toLowerCase();
+      if (text.includes('không kết nối với tài khoản nào') || 
+          text.includes('không chính xác') ||
+          text.includes('the password that you') ||
+          text.includes('find your account') ||
+          text.includes('sai mật khẩu') ||
+          text.includes('mật khẩu không đúng')) {
+        return true;
       }
-      return null;
-    }).catch(() => null);
-
-    if (loginError) {
-      await updateAccountStatus(accountData?.id, 'DEAD');
-      throw new Error(`Sai tài khoản hoặc mật khẩu cho UID ${uid}: ${loginError}`);
     }
+    return false;
+  });
+
+  if (loginError) {
+    throw new Error(`Sai tài khoản hoặc mật khẩu cho UID ${uid}`);
   }
 
   // Xử lý 2FA nếu có yêu cầu
-  const pageText = await safePageEvaluate(page, () => document.body ? document.body.innerText : '').catch(() => '');
+  const pageText = await safePageEvaluate(page, () => document.body ? document.body.innerText : '');
   const isTwoFactor = page.url().includes('two_step_verification') ||
                       page.url().includes('two_factor') ||
                       page.url().includes('checkpoint') ||
@@ -352,7 +320,6 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
 
   if (isTwoFactor) {
     if (!accountData.twoFactorCode) {
-      await updateAccountStatus(accountData?.id, 'CHECKPOINT');
       throw new Error(`Tài khoản ${uid} yêu cầu mã 2FA nhưng chưa cấu hình 2FA Secret Key.`);
     }
 
@@ -410,16 +377,12 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
   await dismissFacebookPopups(page);
   await safeWait(page, 2000);
 
-  // Xác nhận lại lần cuối (BẮT BUỘC PHẢI THÀNH CÔNG, TUYỆT ĐỐI KHÔNG BỎ QUA NẾU CHƯA ĐĂNG NHẬP ĐƯỢC)
+  // Xác nhận lại lần cuối
   const finalCheck = await checkFacebookLoggedIn(browser, page);
   if (!finalCheck) {
-    const currentU = page.url();
-    if (currentU.includes('checkpoint') && !currentU.includes('checkpoint/601051028565049')) {
-      await updateAccountStatus(accountData?.id, 'CHECKPOINT');
+    if (page.url().includes('checkpoint') && !page.url().includes('checkpoint/601051028565049')) {
       throw new Error(`Tài khoản ${uid} bị Checkpoint bởi Facebook.`);
     }
-    await updateAccountStatus(accountData?.id, 'DEAD');
-    throw new Error(`Tài khoản ${uid} chưa thể đăng nhập vào Facebook (Phiên đăng nhập không được thiết lập / Cookie hết hạn / Bị chặn đăng nhập).`);
   }
 
   console.log(`[Automation] Auto-login thành công cho ${profileId}! Đồng bộ cookie phiên mới...`);
@@ -447,9 +410,7 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
         args: [
           '--disable-notifications',
           '--disable-save-password-bubble',
-          '--disable-features=PasswordManager,CredentialManagementAPI,AutofillServerCommunication',
-          '--password-store=basic',
-          '--disable-password-manager-reauthentication',
+          '--disable-features=PasswordManager,CredentialManagementAPI',
           '--start-maximized',
           '--disable-blink-features=AutomationControlled',
           '--disable-infobars',
