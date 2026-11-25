@@ -76,7 +76,7 @@ export function getNineRouterClient(): OpenAI | null {
   return new OpenAI({
     apiKey,
     baseURL,
-    timeout: 3000,
+    timeout: 15000,
     maxRetries: 0,
     dangerouslyAllowBrowser: true,
   });
@@ -1414,18 +1414,21 @@ export async function generateSocialComment(params: {
     try {
       const client = getNineRouterClient();
       if (client) {
-        const prompt = customPrompt || `Bạn là một người dùng mạng xã hội Facebook bình thường, trẻ trung, tự nhiên và thân thiện.
-Hãy viết ĐÚNG 1 CÂU bình luận ngắn gọn (dưới 15 chữ), cực kỳ tự nhiên và bám sát vào nội dung bài viết sau đây.
-Tùy vào nội dung bài viết (vui nhộn, hài hước, tin tức, du lịch, hay bán hàng...) mà dùng giọng điệu phù hợp (${tone}). Có thể kèm 1 icon/emoji tự nhiên.
-Tuyệt đối không dùng hashtag, không viết hoa toàn bộ, không mở ngoặc kép, không giải thích. Chỉ trả về duy nhất nội dung câu bình luận.
+        const prompt = customPrompt || `Bạn là một người dùng mạng xã hội Facebook bình thường, lịch sự và tự nhiên.
+Hãy viết ĐÚNG 1 CÂU bình luận ngắn gọn (dưới 15 chữ), tự nhiên và BÁM SÁT ĐÚNG NỘI DUNG bài viết dưới đây.
+Quy tắc bắt buộc:
+- Nếu bài viết là tin tức thời sự, y tế, kinh tế, xã hội: bình luận nghiêm túc, đúng chủ đề bài viết (VD đồng tình, bày tỏ suy nghĩ về vấn đề nêu trong bài).
+- TUYỆT ĐỐI KHÔNG tự bịa chi tiết không có trong bài viết (không tự nhắc đến thú cưng/mèo, game, ảnh cũ, hay hỏi mua bán/xin giá nếu bài viết không bán hàng).
+- Tùy ngữ cảnh bài viết mà dùng giọng điệu phù hợp (${tone}), có thể kèm tối đa 1 emoji tự nhiên.
+- Không dùng hashtag, không viết hoa toàn bộ, không mở ngoặc kép, không giải thích. Chỉ trả về duy nhất 1 câu bình luận.
 
 Nội dung bài viết: "${postText.substring(0, 1000)}"`;
 
-        const candidateModels = [
+        const candidateModels = Array.from(new Set([
           process.env.NINE_ROUTER_MODEL?.trim() || 'ag/gemini-3-flash',
           'ag/gemini-3-flash',
           'ag/claude-sonnet-4-6',
-        ].filter(Boolean);
+        ].filter(Boolean)));
 
         for (const modelToTry of candidateModels) {
           try {

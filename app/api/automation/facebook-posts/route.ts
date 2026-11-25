@@ -9,6 +9,14 @@ import { scrapeFacebookPostsUnified } from '@/lib/facebook-scraper';
 export const LIKE_UNIT_PRICE = 50; // 50 VNĐ / like
 export const COMMENT_UNIT_PRICE = 70; // 70 VNĐ / comment
 
+function normalizeTaskStatus(status?: string): 'IDLE' | 'RUNNING' | 'DONE' | 'FAILED' {
+  const s = String(status || '').toUpperCase().trim();
+  if (s === 'DONE' || s === 'COMPLETED') return 'DONE';
+  if (s === 'RUNNING') return 'RUNNING';
+  if (s === 'FAILED') return 'FAILED';
+  return 'IDLE';
+}
+
 export function calculateBilling(likesCount: number, commentsCount: number) {
   const safeLikes = Math.max(0, Number(likesCount) || 0);
   const safeComments = Math.max(0, Number(commentsCount) || 0);
@@ -128,7 +136,7 @@ export async function GET(req: NextRequest) {
         nextRunAt: cfg.nextRunAt || null,
         lastScannedPostUrl: cfg.lastScannedPostUrl || null,
         interactedPostUrls: Array.isArray(cfg.interactedPostUrls) ? cfg.interactedPostUrls : [],
-        status: s.status || 'IDLE',
+        status: !Boolean(cfg.isActive ?? true) ? 'PAUSED' : (cfg.scheduleStatus || s.status || 'IDLE'),
         statusMessage: cfg.statusMessage || '',
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
@@ -386,7 +394,7 @@ export async function POST(req: NextRequest) {
         where: { id: taskId },
         data: {
           config: updatedConfig,
-          status: status || existingTask.status,
+          status: status ? normalizeTaskStatus(status) : existingTask.status,
         },
       });
 
@@ -625,9 +633,11 @@ export async function POST(req: NextRequest) {
 
       const oldCfg: any = existing.config || {};
       const newActive = Boolean(isActive);
+      const nextScheduleStatus = newActive ? (oldCfg.scheduleStatus === 'PAUSED' ? 'IDLE' : (oldCfg.scheduleStatus || 'IDLE')) : 'PAUSED';
       const updatedCfg = {
         ...oldCfg,
         isActive: newActive,
+        scheduleStatus: nextScheduleStatus,
         nextRunAt: newActive ? (oldCfg.nextRunAt || new Date().toISOString()) : oldCfg.nextRunAt,
         statusMessage: newActive ? 'Đã bật lịch tự động' : 'Tạm dừng lịch',
       };
@@ -636,7 +646,7 @@ export async function POST(req: NextRequest) {
         where: { id },
         data: {
           config: updatedCfg,
-          status: newActive ? (existing.status === 'PAUSED' ? 'IDLE' : existing.status) : 'PAUSED',
+          status: normalizeTaskStatus(nextScheduleStatus),
         },
       });
 
@@ -677,6 +687,7 @@ export async function POST(req: NextRequest) {
         nextRunAt: nextRunAt !== undefined ? nextRunAt : oldCfg.nextRunAt,
         lastScannedPostUrl: lastScannedPostUrl !== undefined ? lastScannedPostUrl : oldCfg.lastScannedPostUrl,
         interactedPostUrls: Array.isArray(interactedPostUrls) ? interactedPostUrls : oldCfg.interactedPostUrls || [],
+        scheduleStatus: status !== undefined ? status : oldCfg.scheduleStatus,
         statusMessage: statusMessage !== undefined ? statusMessage : oldCfg.statusMessage,
       };
 
@@ -684,7 +695,7 @@ export async function POST(req: NextRequest) {
         where: { id },
         data: {
           config: updatedCfg,
-          status: status || existing.status,
+          status: status ? normalizeTaskStatus(status) : existing.status,
         },
       });
 

@@ -343,14 +343,23 @@ export function FacebookPostAutomationTab() {
         return;
       }
 
-      // 2. Kiểm tra deduplication bài viết đã tương tác
-      const targetPost = newestPosts[0];
-      const cleanUrl = (u: string) => String(u || '').split('?')[0].replace(/\/+$/, '');
-      const alreadyInteracted = (sched.interactedPostUrls || []).some(
-        u => cleanUrl(u) === cleanUrl(targetPost.url)
-      );
+      // 2. Kiểm tra deduplication bài viết đã tương tác (ưu tiên tìm bài mới nhất chưa từng chạy)
+      const normalizeDedupeUrl = (rawU: string) => {
+        try {
+          const parsed = new URL(String(rawU || ''));
+          const fbid = parsed.searchParams.get('story_fbid') || parsed.searchParams.get('fbid');
+          const idParam = parsed.searchParams.get('id');
+          if (fbid) return `${parsed.origin}${parsed.pathname}?fbid=${fbid}${idParam ? `&id=${idParam}` : ''}`.toLowerCase();
+          return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '').toLowerCase();
+        } catch {
+          return String(rawU || '').split('?')[0].replace(/\/+$/, '').toLowerCase();
+        }
+      };
 
-      if (alreadyInteracted) {
+      const interactedSet = new Set((sched.interactedPostUrls || []).map(normalizeDedupeUrl));
+      const targetPost = newestPosts.find(p => !interactedSet.has(normalizeDedupeUrl(p.url)));
+
+      if (!targetPost) {
         // Fanpage chưa có bài viết mới kể từ đợt trước
         const finishTime = Date.now();
         const nextRun = new Date(finishTime + sched.intervalMinutes * 60 * 1000).toISOString();
@@ -365,17 +374,18 @@ export function FacebookPostAutomationTab() {
         return;
       }
 
-      // 3. Có bài mới chưa tương tác! Lấy pool tài khoản
+      // 3. Có bài mới chưa tương tác! Lấy pool tài khoản LIVE
       const liveAccounts = accounts.filter(a => a.status === 'LIVE' || a.status === 'ACTIVE');
-      const pool = liveAccounts.length > 0 ? liveAccounts : accounts;
+      const pool = liveAccounts;
 
       if (pool.length === 0) {
-        toast.warning(`[${sched.pageName}] Không có nick Facebook nào sẵn sàng.`);
+        toast.warning(`[${sched.pageName}] Không có nick Facebook LIVE nào sẵn sàng.`);
         await api.post('/automation/facebook-posts', {
           action: 'update_schedule_progress',
           id: sched.id,
+          nextRunAt: new Date(Date.now() + sched.intervalMinutes * 60 * 1000).toISOString(),
           status: 'PAUSED',
-          statusMessage: 'Thiếu tài khoản Facebook để thực hiện',
+          statusMessage: 'Thiếu tài khoản Facebook LIVE để thực hiện',
         });
         fetchTasksAndStats();
         return;
@@ -409,6 +419,13 @@ export function FacebookPostAutomationTab() {
 
       if (!startRes.data?.success) {
         toast.error(startRes.data?.error || 'Lỗi khởi tạo tác vụ');
+        await api.post('/automation/facebook-posts', {
+          action: 'update_schedule_progress',
+          id: sched.id,
+          nextRunAt: new Date(Date.now() + sched.intervalMinutes * 60 * 1000).toISOString(),
+          status: 'IDLE',
+          statusMessage: startRes.data?.error || 'Lỗi khởi tạo tác vụ',
+        }).catch(() => {});
         return;
       }
 
@@ -425,6 +442,8 @@ export function FacebookPostAutomationTab() {
       fetchTasksAndStats();
 
       // 5. Chạy qua Electron Runner (hoặc mô phỏng web)
+      let finalLikes = 0;
+      let finalComments = 0;
       // @ts-ignore
       if (window.electron && window.electron.startAutomationTask) {
         const realProfileIds = selectedAccs.map(a => a.profileId || a.id);
@@ -449,29 +468,31 @@ export function FacebookPostAutomationTab() {
           },
         });
 
-        const finalLikes = runnerRes?.totalLikesExecuted || (selectedAccs.length * sched.likesPerPost);
-        const finalComments = runnerRes?.totalCommentsExecuted || (selectedAccs.length * sched.commentsPerPost);
+        finalLikes = runnerRes?.totalLikesExecuted ?? 0;
+        finalComments = runnerRes?.totalCommentsExecuted ?? 0;
 
         await api.post('/automation/facebook-posts', {
           action: 'update_progress',
           taskId: newTask.id,
           executedLikes: finalLikes,
           executedComments: finalComments,
-          status: 'COMPLETED',
-        });
+          status: 'DONE',
+        }).catch(() => {});
       } else {
         // Mô phỏng 5 giây nếu chạy trên Web Dashboard
         await new Promise(r => setTimeout(r, 5000));
+        finalLikes = selectedAccs.length * sched.likesPerPost;
+        finalComments = selectedAccs.length * sched.commentsPerPost;
         await api.post('/automation/facebook-posts', {
           action: 'update_progress',
           taskId: newTask.id,
-          executedLikes: selectedAccs.length * sched.likesPerPost,
-          executedComments: selectedAccs.length * sched.commentsPerPost,
-          status: 'COMPLETED',
-        });
+          executedLikes: finalLikes,
+          executedComments: finalComments,
+          status: 'DONE',
+        }).catch(() => {});
       }
 
-      // 6. XONG HẾT TOÀN BỘ ACCOUNTS: Tính set thời gian chu kỳ tiếp theo!
+      // 6. XONG HẾT TOÀN BỘ ACCOUNTS: Tính set thời gian chu kỳ tiếp theo và đánh dấu bài đã chạy!
       const finishTime = Date.now();
       const nextRunTime = new Date(finishTime + sched.intervalMinutes * 60 * 1000).toISOString();
       const updatedInteracted = Array.from(new Set([...(sched.interactedPostUrls || []), targetPost.url]));
@@ -484,13 +505,22 @@ export function FacebookPostAutomationTab() {
         lastScannedPostUrl: targetPost.url,
         interactedPostUrls: updatedInteracted,
         status: 'IDLE',
-        statusMessage: `Hoàn tất tương tác thành công! Chu kỳ tiếp theo sau ${sched.intervalMinutes} phút.`,
+        statusMessage: `Hoàn tất (${finalLikes} Like, ${finalComments} Cmt). Chu kỳ tiếp theo sau ${sched.intervalMinutes} phút.`,
       });
 
-      toast.success(`[${sched.pageName}] Đã hoàn thành đợt tương tác! Hẹn chu kỳ tiếp theo sau ${sched.intervalMinutes} phút.`);
+      toast.success(`[${sched.pageName}] Đã hoàn thành đợt tương tác (${finalLikes} Like, ${finalComments} Cmt)! Hẹn chu kỳ tiếp theo sau ${sched.intervalMinutes} phút.`);
     } catch (err: any) {
       console.error('Lỗi khi chạy lịch tự động:', err);
       toast.error(`[${sched.pageName}] Lỗi: ${err.message || 'Thất bại'}`);
+      // Đảm bảo đặt lại nextRunAt để không bị chạy lặp vô tận mỗi 1 giây khi gặp lỗi
+      const fallbackNext = new Date(Date.now() + sched.intervalMinutes * 60 * 1000).toISOString();
+      await api.post('/automation/facebook-posts', {
+        action: 'update_schedule_progress',
+        id: sched.id,
+        nextRunAt: fallbackNext,
+        status: 'IDLE',
+        statusMessage: `Tạm dừng do lỗi (${err.message || 'Thất bại'}). Thử lại sau ${sched.intervalMinutes} phút.`,
+      }).catch(() => {});
     } finally {
       isEngineProcessingRef.current = false;
       setActiveRunningScheduleId(null);
@@ -800,7 +830,7 @@ export function FacebookPostAutomationTab() {
               taskId: newTask.id,
               executedLikes: finalLikes,
               executedComments: finalComments,
-              status: 'COMPLETED',
+              status: 'DONE',
             });
           } else {
             toast.warning('Tác vụ kết thúc: ' + (runnerRes?.error || 'Hoàn tất một phần'));
@@ -1621,8 +1651,8 @@ export function FacebookPostAutomationTab() {
                   const cfg = t.config || {};
                   const billing = cfg.billing || {};
                   const postsCount = Array.isArray(cfg.posts) ? cfg.posts.length : (cfg.postsCount || 1);
-                  const execLikes = billing.executedLikes !== undefined ? billing.executedLikes : (t.status === 'COMPLETED' ? billing.likesCount || 0 : 0);
-                  const execComments = billing.executedComments !== undefined ? billing.executedComments : (t.status === 'COMPLETED' ? billing.commentsCount || 0 : 0);
+                  const execLikes = billing.executedLikes !== undefined ? billing.executedLikes : ((t.status === 'DONE' || t.status === 'COMPLETED') ? billing.likesCount || 0 : 0);
+                  const execComments = billing.executedComments !== undefined ? billing.executedComments : ((t.status === 'DONE' || t.status === 'COMPLETED') ? billing.commentsCount || 0 : 0);
                   const totalCost = (execLikes * LIKE_UNIT_PRICE) + (execComments * COMMENT_UNIT_PRICE);
                   const isPaid = Boolean(billing.isPaid);
 
@@ -1674,7 +1704,7 @@ export function FacebookPostAutomationTab() {
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             t.status === 'RUNNING'
                               ? 'bg-blue-100 text-blue-700 animate-pulse'
-                              : t.status === 'COMPLETED'
+                              : (t.status === 'DONE' || t.status === 'COMPLETED')
                               ? 'bg-emerald-100 text-emerald-700'
                               : 'bg-gray-100 text-gray-600'
                           }`}

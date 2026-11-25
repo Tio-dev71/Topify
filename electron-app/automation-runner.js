@@ -198,10 +198,34 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
     console.log(`[Automation] Phát hiện hộp thoại mật khẩu cho tài khoản đã lưu ${uid}, đang nhập mật khẩu...`);
     await passInputDirect.fill(password);
   } else {
-    let emailInput = page.locator('input[name="email"], #email').first();
+    let emailInput = page.locator('input[name="email"], #email, input[autocomplete="username"], input[type="text"]').first();
     let hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
 
+    // Ưu tiên kiểm tra nút "Continue / Tiếp tục" ở màn hình nhớ tài khoản (CAA) trước
     if (!hasEmail) {
+      const continueBtn = page.locator(
+        'div[role="button"]:has-text("Continue"), ' +
+        'div[role="button"]:has-text("Tiếp tục"), ' +
+        'button:has-text("Continue"), ' +
+        'button:has-text("Tiếp tục"), ' +
+        'div[aria-label*="Continue"], ' +
+        'div[aria-label*="Tiếp tục"]'
+      ).first();
+
+      if (await continueBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        console.log(`[Automation] Phát hiện màn hình tài khoản đã lưu, nhấp "Tiếp tục" cho ${profileId}...`);
+        await continueBtn.click({ force: true });
+        await safeWait(page, 3000);
+        if (await checkFacebookLoggedIn(browser, page)) {
+          console.log(`[Automation] Đăng nhập thành công sau khi bấm Continue cho ${profileId}!`);
+          await syncCookiesToApi(browser, accountData?.id);
+          return true;
+        }
+        hasEmail = await emailInput.isVisible({ timeout: 2000 }).catch(() => false);
+      }
+    }
+
+    if (!hasEmail && !(await passInputDirect.isVisible({ timeout: 1000 }).catch(() => false))) {
       const otherProfileBtn = page.locator(
         'div[role="button"]:has-text("Use another profile"), ' +
         'div[role="button"]:has-text("Dùng trang cá nhân khác"), ' +
@@ -210,10 +234,10 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
         'div[aria-label*="trang cá nhân khác"]'
       ).first();
 
-      if (await otherProfileBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+      if (await otherProfileBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         console.log(`[Automation] Nhấp "Dùng trang cá nhân khác" cho profile ${profileId}...`);
         await otherProfileBtn.click();
-        await page.waitForSelector('input[name="email"], #email, input[type="password"], input[name="pass"]', { timeout: 7000 }).catch(() => {});
+        await page.waitForSelector('input[name="email"], #email, input[autocomplete="username"], input[type="password"], input[name="pass"]', { timeout: 8000 }).catch(() => {});
         hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
       }
     }
@@ -224,34 +248,32 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
       await safeWait(page, 300);
       const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
       await passInput.fill(password);
+    } else if (await passInputDirect.isVisible({ timeout: 1500 }).catch(() => false)) {
+      console.log(`[Automation] Điền mật khẩu vào form đã nhớ UID cho ${uid}...`);
+      await passInputDirect.fill(password);
     } else {
-      const continueBtn = page.locator(
-        'div[role="button"]:has-text("Continue"), ' +
-        'div[role="button"]:has-text("Tiếp tục"), ' +
-        'button:has-text("Continue"), ' +
-        'button:has-text("Tiếp tục"), ' +
-        'div[aria-label*="Continue"], ' +
-        'div[aria-label*="Tiếp tục"]'
-      ).first();
+      await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForSelector('input[name="email"], #email, input[autocomplete="username"], input[type="password"], input[name="pass"]', { timeout: 10000 }).catch(() => {});
+      await safeWait(page, 1500);
 
-      if (await continueBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
-        console.log(`[Automation] Nhấp "Tiếp tục" cho tài khoản đã lưu ${profileId}...`);
-        await continueBtn.click();
-        await page.waitForSelector('input[type="password"], input[name="pass"], #pass', { timeout: 7000 }).catch(() => {});
+      if (await checkFacebookLoggedIn(browser, page)) {
+        console.log(`[Automation] Đã tự động đăng nhập khi mở /login cho ${profileId}!`);
+        await syncCookiesToApi(browser, accountData?.id);
+        return true;
+      }
+
+      emailInput = page.locator('input[name="email"], #email, input[autocomplete="username"]').first();
+      if (await emailInput.isVisible({ timeout: 4000 }).catch(() => false)) {
+        await emailInput.fill(uid);
+        await safeWait(page, 300);
         const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
         await passInput.fill(password);
+      } else if (await passInputDirect.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await passInputDirect.fill(password);
+      } else if (page.url().includes('checkpoint')) {
+        throw new Error(`Tài khoản ${uid} đang bị Checkpoint trên Facebook.`);
       } else {
-        await page.goto('https://www.facebook.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await safeWait(page, 2000);
-        emailInput = page.locator('input[name="email"], #email').first();
-        if (await emailInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-          await emailInput.fill(uid);
-          await safeWait(page, 300);
-          const passInput = page.locator('input[type="password"], input[name="pass"], #pass').first();
-          await passInput.fill(password);
-        } else {
-          throw new Error(`Không tìm thấy form đăng nhập Facebook cho profile ${profileId}`);
-        }
+        throw new Error(`Không tìm thấy form đăng nhập Facebook cho profile ${profileId} (URL: ${page.url()})`);
       }
     }
   }

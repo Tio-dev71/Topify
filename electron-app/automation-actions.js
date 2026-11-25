@@ -1,7 +1,62 @@
 const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const dotenv = require('dotenv');
 
 dotenv.config({ path: '../.env' }); // load .env from root
+
+// Lưu lịch sử profile nào đã bình luận bài viết nào để chống spam nhiều lần cùng 1 bài
+const COMMENT_HISTORY_FILE = path.join(os.homedir(), '.autopost', 'commented_posts.json');
+
+function normalizePostKeyForHistory(rawUrl) {
+  if (!rawUrl) return '';
+  try {
+    const parsed = new URL(String(rawUrl));
+    const fbid = parsed.searchParams.get('story_fbid') || parsed.searchParams.get('fbid');
+    const idParam = parsed.searchParams.get('id');
+    if (fbid) return `${parsed.origin}${parsed.pathname}?fbid=${fbid}${idParam ? `&id=${idParam}` : ''}`.toLowerCase();
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '').toLowerCase();
+  } catch {
+    return String(rawUrl).split('?')[0].replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+function loadCommentHistory() {
+  try {
+    if (fs.existsSync(COMMENT_HISTORY_FILE)) {
+      const raw = fs.readFileSync(COMMENT_HISTORY_FILE, 'utf8');
+      return JSON.parse(raw) || {};
+    }
+  } catch (e) {}
+  return {};
+}
+
+function hasProfileCommented(profileId, postUrl) {
+  if (!profileId || !postUrl) return false;
+  const key = `${profileId}::${normalizePostKeyForHistory(postUrl)}`;
+  const history = loadCommentHistory();
+  return Boolean(history[key]);
+}
+
+function markProfileCommented(profileId, postUrl) {
+  if (!profileId || !postUrl) return;
+  try {
+    const dir = path.dirname(COMMENT_HISTORY_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const history = loadCommentHistory();
+    const key = `${profileId}::${normalizePostKeyForHistory(postUrl)}`;
+    history[key] = Date.now();
+    // Giữ tối đa 2000 bản ghi gần nhất
+    const entries = Object.entries(history);
+    if (entries.length > 2000) {
+      entries.sort((a, b) => b[1] - a[1]);
+      const trimmed = Object.fromEntries(entries.slice(0, 1500));
+      fs.writeFileSync(COMMENT_HISTORY_FILE, JSON.stringify(trimmed), 'utf8');
+    } else {
+      fs.writeFileSync(COMMENT_HISTORY_FILE, JSON.stringify(history), 'utf8');
+    }
+  } catch (e) {}
+}
 
 
 async function safePageEvaluate(page, fn, ...args) {
@@ -90,7 +145,7 @@ async function generateAIComment(postContent, aiSettings = {}) {
     console.log(`[AI Comment] Đang gửi bài viết lên 9Router server (${apiUrl}/ai/generate-comment)...`);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 18000);
 
     const res = await fetch(`${apiUrl}/ai/generate-comment`, {
       method: 'POST',
@@ -946,6 +1001,7 @@ async function taskFbBuffPost(page, config, profileId) {
   let likeSuccess = false;
   let likeAlready = false;
   let commentSuccess = false;
+  let commentAlready = false;
   let shareSuccess = false;
 
   // ===================== 1. XỬ LÝ THÍCH BÀI VIẾT (LIKE) =====================
@@ -1118,34 +1174,117 @@ async function taskFbBuffPost(page, config, profileId) {
   // ===================== 2. XỬ LÝ BÌNH LUẬN BÀI VIẾT (COMMENT) =====================
   if (shouldComment) {
     ensurePageAlive(page);
-    console.log('[Buff COMMENT] Bắt đầu bình luận bài viết...');
+    console.log('[Buff COMMENT] Bắt đầu kiểm tra & bình luận bài viết...');
 
-    // Lấy nội dung bài viết để AI comment nếu cần
-    let postText = '';
-    if (config.useAiComment) {
-      try {
-        postText = await safePageEvaluate(page, () => {
-          const msg = document.querySelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"]');
-          if (msg) return msg.innerText;
-          const main = document.querySelector('[role="main"]');
-          return main ? main.innerText.substring(0, 500) : '';
-        });
-      } catch (e) {}
-    }
+    // Chống spam lặp lại: Kiểm tra xem profile này đã bình luận bài viết này chưa
+    if (hasProfileCommented(profileId, config.targetUrl)) {
+      console.log(`[Buff COMMENT] Profile ${profileId} đã bình luận bài này trước đó (${config.targetUrl}). Bỏ qua để tránh spam.`);
+      commentAlready = true;
+    } else {
+      // Kiểm tra trực tiếp trên DOM xem tên tài khoản hiện tại đã bình luận trong bài viết chưa
+      const alreadyCommentedOnDom = await safePageEvaluate(page, () => {
+        const box = document.querySelector('div[contenteditable="true"][role="textbox"]');
+        const label = box ? (box.getAttribute('aria-label') || box.getAttribute('aria-placeholder') || '') : '';
+        let myName = '';
+        const viMatch = label.match(/Bình luận dưới tên\s+(.+)/i);
+        const enMatch = label.match(/Comment as\s+(.+)/i);
+        if (viMatch && viMatch[1]) myName = viMatch[1].replace(/\.\.\.$/, '').trim();
+        else if (enMatch && enMatch[1]) myName = enMatch[1].replace(/\.\.\.$/, '').trim();
+        if (!myName || myName.length < 2) return false;
 
-    let finalComment = (config.comments && config.comments.length > 0)
-      ? config.comments[Math.floor(Math.random() * config.comments.length)]
-      : 'Bài viết rất hay và ý nghĩa ạ!';
+        const commentArticles = Array.from(document.querySelectorAll('div[role="article"], ul li'));
+        for (const art of commentArticles) {
+          if (art.querySelector('[contenteditable="true"]')) continue;
+          const artLabel = (art.getAttribute('aria-label') || '').toLowerCase();
+          if (artLabel.includes('bình luận') || artLabel.includes('comment')) {
+            if (artLabel.includes(myName.toLowerCase())) return myName;
+            const authorLinks = Array.from(art.querySelectorAll('a[role="link"] span, a span'));
+            if (authorLinks.some(s => (s.innerText || '').trim().toLowerCase() === myName.toLowerCase())) {
+              return myName;
+            }
+          }
+        }
+        return false;
+      }).catch(() => false);
 
-    if (config.useAiComment && postText && postText.trim().length > 10) {
-      try {
-        console.log('[Buff COMMENT] Đang sinh bình luận AI...');
-        const aiText = await generateAIComment(postText, config.aiSettings || {});
-        if (aiText) finalComment = aiText;
-      } catch (aiErr) {
-        console.warn('[Buff COMMENT] Sinh AI comment thất bại, dùng fallback:', aiErr.message);
-      }
-    }
+      if (alreadyCommentedOnDom) {
+        console.log(`[Buff COMMENT] Phát hiện nick "${alreadyCommentedOnDom}" đã bình luận bài viết này trên Facebook. Bỏ qua & đánh dấu lịch sử.`);
+        markProfileCommented(profileId, config.targetUrl);
+        commentAlready = true;
+      } else {
+        // Lấy nội dung bài viết để AI comment (hỗ trợ cả bài nền màu, bài tin tức, bài trong dialog)
+        let postText = '';
+        if (config.useAiComment) {
+          try {
+            postText = await safePageEvaluate(page, () => {
+              const dialog = document.querySelector('div[role="dialog"]');
+              const mainArticle = dialog || document.querySelector('[role="main"] div[role="article"]') || document.querySelector('[role="main"]');
+              if (!mainArticle) return '';
+
+              // 1. Selector tiêu chuẩn của bài viết Facebook
+              const standardMsg = mainArticle.querySelector('div[data-ad-preview="message"], div[data-ad-comet-preview="message"], div[data-ad-rendering-role="story_message"]');
+              if (standardMsg && standardMsg.innerText && standardMsg.innerText.trim().length >= 10) {
+                return standardMsg.innerText.trim();
+              }
+
+              // 2. Bài viết nền màu (colored status background) hoặc blockquote/text lớn nằm phía trên phần bình luận
+              const uiSkipWords = new Set(['thích', 'bình luận', 'chia sẻ', 'like', 'comment', 'share', 'theo dõi', 'đang theo dõi', 'follow', 'following', 'xem thêm', 'see more', 'ẩn bớt', 'trả lời', 'reply']);
+              const candidates = [];
+              const textNodes = mainArticle.querySelectorAll('div[dir="auto"], span[dir="auto"], blockquote');
+              for (const el of textNodes) {
+                // Bỏ qua chữ nằm trong comment (ul, li, form) hoặc nút bấm
+                if (el.closest('ul') || el.closest('li') || el.closest('form') || el.closest('[role="button"]')) continue;
+                const art = el.closest('div[role="article"]');
+                if (art) {
+                  const artAria = (art.getAttribute('aria-label') || '').toLowerCase();
+                  if (artAria.includes('bình luận') || artAria.includes('comment')) continue;
+                }
+                const txt = (el.innerText || '').trim();
+                if (txt.length < 15 || txt.length > 1500) continue;
+                const lower = txt.toLowerCase();
+                if (uiSkipWords.has(lower)) continue;
+                // Loại trừ chuỗi thời gian hoặc danh sách người like
+                if (/^\d+\s*(giờ|phút|ngày|tuần|tháng|h|m|d)$/i.test(txt)) continue;
+                if (lower.includes('bạn đang nghĩ gì') || lower.includes('what\'s on your mind')) continue;
+                candidates.push(txt);
+              }
+              if (candidates.length > 0) {
+                // Lấy đoạn nội dung dài và đầy đủ nhất
+                candidates.sort((a, b) => b.length - a.length);
+                return candidates[0];
+              }
+              return '';
+            });
+          } catch (e) {}
+
+          // Nếu DOM không bóc tách được chữ sạch hoặc quá ngắn -> ưu tiên dùng config.postContent đã quét từ API
+          const isGarbage = !postText || postText.trim().length < 15 ||
+            postText.includes('Bảng tin') || postText.includes('Marketplace') || postText.includes('Tạo bài viết');
+          if (isGarbage && config.postContent && String(config.postContent).trim().length >= 10) {
+            postText = String(config.postContent).trim();
+          } else if (isGarbage) {
+            postText = '';
+          }
+          if (postText) {
+            console.log(`[Buff COMMENT] Nội dung bài viết trích xuất cho AI: "${postText.substring(0, 120).replace(/\n/g, ' ')}"`);
+          }
+        }
+
+        let finalComment = (config.comments && config.comments.length > 0)
+          ? config.comments[Math.floor(Math.random() * config.comments.length)]
+          : 'Bài viết rất hay và ý nghĩa ạ!';
+
+        if (config.useAiComment && postText && postText.trim().length >= 10) {
+          try {
+            console.log('[Buff COMMENT] Đang sinh bình luận AI...');
+            const aiText = await generateAIComment(postText, config.aiSettings || {});
+            if (aiText) finalComment = aiText;
+          } catch (aiErr) {
+            console.warn('[Buff COMMENT] Sinh AI comment thất bại, dùng fallback:', aiErr.message);
+          }
+        } else if (config.useAiComment) {
+          console.log('[Buff COMMENT] Không trích xuất được văn bản bài viết rõ ràng, sử dụng câu bình luận mẫu an toàn.');
+        }
 
     // Bước 2.1: Nhấp vào nút "Bình luận" trên thanh công cụ bài viết bằng Playwright native click
     console.log('[Buff COMMENT] Đang tìm nút mở bình luận bài viết...');
@@ -1312,15 +1451,18 @@ async function taskFbBuffPost(page, config, profileId) {
         return { sent: boxCleared || inFeed, boxText };
       }, finalComment);
 
-      if (verifyComment.sent) {
-        await logHistory(profileId, 'COMMENT', config.targetUrl, finalComment);
-        console.log('[Buff COMMENT] Đã đăng bình luận thành công trên Facebook!');
-        commentSuccess = true;
-        successCount++;
-        await safeWait(page, 1500);
-      } else {
-        console.warn(`[Buff COMMENT] Bình luận chưa được gửi đi (ô nhập vẫn còn: "${verifyComment.boxText}").`);
+        if (verifyComment.sent) {
+          markProfileCommented(profileId, config.targetUrl);
+          await logHistory(profileId, 'COMMENT', config.targetUrl, finalComment);
+          console.log('[Buff COMMENT] Đã đăng bình luận thành công trên Facebook!');
+          commentSuccess = true;
+          successCount++;
+          await safeWait(page, 1500);
+        } else {
+          console.warn(`[Buff COMMENT] Bình luận chưa được gửi đi (ô nhập vẫn còn: "${verifyComment.boxText}").`);
+        }
       }
+    }
     }
   }
 
@@ -1417,15 +1559,16 @@ async function taskFbBuffPost(page, config, profileId) {
     }
   }
 
-  if (successCount === 0 && !likeAlready) {
+  if (successCount === 0 && !likeAlready && !commentAlready) {
     throw new Error('Lỗi: Không có hành động (Thích/Bình luận/Chia sẻ) nào được thực hiện thành công.');
   }
 
   return {
-    success: successCount > 0 || likeAlready,
+    success: successCount > 0 || likeAlready || commentAlready,
     liked: likeSuccess,
     alreadyLiked: likeAlready,
     commented: commentSuccess,
+    alreadyCommented: commentAlready,
     shared: shareSuccess,
   };
 }
@@ -1495,6 +1638,7 @@ async function taskFbAutoPostsInteract(page, config, profileId) {
     const postConfig = {
       ...config,
       targetUrl: postUrl,
+      postContent: currentPost.content || currentPost.title || '',
       buffActionType: config.buffActionType || 'BOTH',
       useAiComment: config.useAiComment,
       comments: config.comments,
