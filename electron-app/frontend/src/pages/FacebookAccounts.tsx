@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Shield, AlertCircle, CheckCircle2, Play, Users, Key, X, Globe, Square, ExternalLink, Eye, Edit2, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import * as OTPAuth from 'otpauth';
-import api from '../lib/axios';
+import api, { getElectronAuthContext } from '../lib/axios';
 
 interface FbAccount {
   id: string;
@@ -175,7 +175,10 @@ export default function FacebookAccounts() {
       // @ts-ignore
       if (typeof window !== 'undefined' && window.electron && window.electron.isDesktopApp) {
         // @ts-ignore
-        const result = await window.electron.runFacebookLogin(accountData);
+        const result = await window.electron.runFacebookLogin({
+          ...accountData,
+          ...getElectronAuthContext(),
+        });
         if (result.success) {
           await api.patch('/facebook-accounts/login', {
             id,

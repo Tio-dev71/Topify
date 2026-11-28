@@ -19,7 +19,7 @@ import {
   Sparkles,
   ArrowRight
 } from 'lucide-react';
-import api from '../lib/axios';
+import api, { getElectronAuthContext } from '../lib/axios';
 import { toast } from 'sonner';
 
 interface BuffOrder {
@@ -273,6 +273,7 @@ export default function BuffSystem() {
           actionType: 'fb_buff_post',
           profileIds: realProfileIds,
           accounts: accountsToUse,
+          ...getElectronAuthContext(),
           config: {
             targetUrl: order.url,
             buffActionType: order.actionType,

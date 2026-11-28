@@ -15,7 +15,7 @@ import {
   X,
   Square
 } from 'lucide-react';
-import api from '../../lib/axios';
+import api, { getElectronAuthContext } from '../../lib/axios';
 import { toast } from 'sonner';
 
 interface AutomationTask {
@@ -271,6 +271,7 @@ export function SocialInteractTab() {
           actionType: task.type,
           profileIds: realProfileIds,
           accounts: selectedAccountsList,
+          ...getElectronAuthContext(),
           config: {
             ...task.config,
             aiSettings: globalSettings

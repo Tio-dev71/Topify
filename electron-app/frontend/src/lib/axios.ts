@@ -79,4 +79,16 @@ export const getMediaUrl = (url?: string | null): string => {
   return fullUrl;
 };
 
+export const getElectronAuthContext = () => {
+  const authToken = localStorage.getItem('topify_token') || undefined;
+  let workspaceId: string | undefined;
+  try {
+    const uStr = localStorage.getItem('topify_user') || localStorage.getItem('user');
+    if (uStr) {
+      workspaceId = JSON.parse(uStr)?.workspaceId || undefined;
+    }
+  } catch {}
+  return { authToken, workspaceId };
+};
+
 export default api;

@@ -117,7 +117,19 @@ function parseProxy(proxyStr) {
   return null;
 }
 
-async function prepareProxyForBrowser(proxyString) {
+function getStickyProxySlotUser(profileKey) {
+  if (!profileKey) return null;
+  let hash = 0;
+  const str = String(profileKey);
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const slot = (Math.abs(hash) % 20) + 1;
+  return `p${String(slot).padStart(2, '0')}`;
+}
+
+async function prepareProxyForBrowser(proxyString, profileKey = null) {
   if (!proxyString) return { proxyOptions: null, cleanup: null };
   const trimmed = String(proxyString).trim();
   if (!trimmed) return { proxyOptions: null, cleanup: null };
@@ -125,16 +137,28 @@ async function prepareProxyForBrowser(proxyString) {
   const parsed = parseProxy(trimmed);
   if (!parsed) return { proxyOptions: null, cleanup: null };
 
+  // Distribute accounts sharing the HAProxy 157.66.100.35:56789 pool onto dedicated sticky slots p01..p20
+  let effectiveUsername = parsed.username;
+  if (
+    profileKey &&
+    parsed.server.includes('157.66.100.35:56789') &&
+    parsed.username === 'admin' &&
+    parsed.password
+  ) {
+    const slotUser = getStickyProxySlotUser(profileKey);
+    if (slotUser) {
+      effectiveUsername = slotUser;
+    }
+  }
+
   // If proxy has username & password, create an anonymized local tunnel with proxy-chain
   // This avoids Chromium's known TLS/HTTPS handshake drops with authenticated proxies
-  if (parsed.username && parsed.password) {
+  if (effectiveUsername && parsed.password) {
     try {
-      let fullUrl = trimmed;
-      if (!fullUrl.includes('://')) {
-        fullUrl = `http://${encodeURIComponent(parsed.username)}:${encodeURIComponent(parsed.password)}@${parsed.server.replace(/^https?:\/\//, '')}`;
-      }
+      const serverUrl = new URL(parsed.server);
+      const fullUrl = `${serverUrl.protocol}//${encodeURIComponent(effectiveUsername)}:${encodeURIComponent(parsed.password)}@${serverUrl.host}`;
       const anonymizedUrl = await anonymizeProxy(fullUrl);
-      console.log(`[Proxy] Anonymized proxy tunnel created: ${anonymizedUrl} for ${parsed.server}`);
+      console.log(`[Proxy] Anonymized proxy tunnel created: ${anonymizedUrl} for ${parsed.server} (user: ${effectiveUsername})`);
       return {
         proxyOptions: { server: anonymizedUrl },
         cleanup: async () => {
@@ -149,8 +173,8 @@ async function prepareProxyForBrowser(proxyString) {
   }
 
   const proxyOptions = { server: parsed.server };
-  if (parsed.username && parsed.password) {
-    proxyOptions.username = parsed.username;
+  if (effectiveUsername && parsed.password) {
+    proxyOptions.username = effectiveUsername;
     proxyOptions.password = parsed.password;
   }
   return { proxyOptions, cleanup: null };
@@ -557,6 +581,10 @@ async function checkFacebookLoggedIn(browser, page) {
       currentUrl.includes('stype=lo');
     if (isLoginOrCheckpoint) return false;
 
+    const cookies = await browser.cookies('https://www.facebook.com').catch(() => []);
+    const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
+    if (!hasCUser) return false;
+
     const domStatus = await safePageEvaluate(page, () => {
       // 1. Kiểm tra nếu có trường mật khẩu hoặc form đăng nhập đang hiển thị (kể cả modal lưu tài khoản)
       const passInputs = Array.from(document.querySelectorAll('input[type="password"], input[name="pass"], #pass'));
@@ -573,20 +601,21 @@ async function checkFacebookLoggedIn(browser, page) {
       });
       if (hasVisibleEmailInput) return { loggedIn: false, reason: 'has_email_input' };
 
-      const pageText = document.body ? document.body.innerText : '';
-      if (
-        pageText.includes('Khám phá những điều bạn yêu thích') ||
-        pageText.includes('Explore the things you love') ||
-        pageText.includes('Nhập mật khẩu')
-      ) {
-        return { loggedIn: false, reason: 'caa_lock_screen' };
-      }
-
       // 2. Kiểm tra dấu hiệu đã đăng nhập thành công vào trang cá nhân / bảng tin
       const hasFeedOrMain = !!document.querySelector('div[role="feed"], div[role="main"], div[aria-label*="Bạn đang nghĩ gì"], div[aria-label*="What\'s on your mind"]');
       const hasAccountMenu = !!document.querySelector('div[aria-label="Account"], div[aria-label="Tài khoản"], svg[aria-label="Your profile"], svg[aria-label*="Trang cá nhân"]');
       const hasSearch = !!document.querySelector('input[placeholder*="Tìm kiếm"], input[placeholder*="Search Facebook"]');
       const hasNav = !!document.querySelector('div[role="navigation"], div[role="banner"]');
+
+      const pageText = document.body ? document.body.innerText : '';
+      if (
+        !hasFeedOrMain && !hasAccountMenu && (
+          pageText.includes('Khám phá những điều bạn yêu thích') ||
+          pageText.includes('Explore the things you love')
+        )
+      ) {
+        return { loggedIn: false, reason: 'caa_lock_screen' };
+      }
 
       if ((hasFeedOrMain || hasAccountMenu || hasSearch) && hasNav) {
         return { loggedIn: true };
@@ -595,28 +624,73 @@ async function checkFacebookLoggedIn(browser, page) {
       return { loggedIn: false, reason: 'no_authenticated_nav' };
     }).catch(() => ({ loggedIn: false, reason: 'eval_error' }));
 
-    if (!domStatus.loggedIn) {
-      return false;
-    }
-
-    const cookies = await browser.cookies('https://www.facebook.com');
-    const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
-    return hasCUser;
+    return Boolean(domStatus && domStatus.loggedIn);
   } catch (e) {
     return false;
   }
 }
 
-async function syncCookiesToApi(browser, accountId) {
+/**
+ * Chờ tối đa maxWaitMs để React Facebook render xong qua proxy chậm trước khi kết luận chưa đăng nhập.
+ * Nếu có cookie c_user nhưng DOM chưa hydrate xong, tiếp tục đợi; nếu không có c_user hoặc thấy form login thì dừng ngay.
+ */
+async function waitAndCheckFacebookLoggedIn(browser, page, maxWaitMs = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    if (!page || page.isClosed()) return false;
+
+    const currentUrl = page.url();
+    if (
+      currentUrl.includes('/login') ||
+      currentUrl.includes('/checkpoint') ||
+      currentUrl.includes('/recover') ||
+      currentUrl.includes('two_step_verification') ||
+      currentUrl.includes('stype=lo')
+    ) {
+      return false;
+    }
+
+    const cookies = await browser.cookies('https://www.facebook.com').catch(() => []);
+    const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
+    if (!hasCUser) return false;
+
+    if (await checkFacebookLoggedIn(browser, page)) {
+      return true;
+    }
+
+    // Nếu thấy form nhập mật khẩu/email hoặc màn CAA hiện rõ, không cần chờ thêm
+    const hasLoginForm = await safePageEvaluate(page, () => {
+      const inputs = Array.from(document.querySelectorAll('input[type="password"], input[name="pass"], #pass, input[name="email"], #email'));
+      return inputs.some(el => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+    }).catch(() => false);
+    if (hasLoginForm) return false;
+
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  return await checkFacebookLoggedIn(browser, page);
+}
+
+async function syncCookiesToApi(browser, accountId, authToken = null, workspaceId = null) {
   if (!accountId) return;
   try {
     const cookies = await browser.cookies('https://www.facebook.com');
+    const hasCUser = cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
+    if (!hasCUser) {
+      // Tuyệt đối không ghi đè cookie DB bằng cookie khách chưa có c_user
+      return;
+    }
     const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
     if (cookieStr) {
       const apiUrl = process.env.API_URL || 'https://topify.vn/api';
+      const headers = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      if (workspaceId) headers['x-workspace-id'] = workspaceId;
       await fetch(`${apiUrl}/facebook-accounts/login`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           id: accountId,
           status: 'LIVE',
@@ -646,7 +720,7 @@ async function cleanupExtraTabs(browser, mainPage) {
 }
 
 async function runPlaywrightLogin(accountData) {
-  const { id, uid, password, twoFactorCode, cookie, profileId, proxy } = accountData;
+  const { id, uid, password, twoFactorCode, cookie, profileId, proxy, authToken, workspaceId } = accountData;
   const safeProfileId = profileId || (uid ? `profile_${String(uid).replace(/[^a-zA-Z0-9]/g, '')}` : `profile_${id || Date.now()}`);
   let browser = activeBrowsers.get(safeProfileId);
 
@@ -688,7 +762,8 @@ async function runPlaywrightLogin(accountData) {
         args: [
           '--disable-notifications',
           '--disable-save-password-bubble',
-          '--disable-features=PasswordManager,CredentialManagementAPI',
+          '--password-store=basic',
+          '--disable-features=PasswordManager,PasswordManagerOnboarding,CredentialManagementAPI,AutofillServerCommunication',
           '--start-maximized',
           '--disable-blink-features=AutomationControlled',
           '--disable-infobars',
@@ -706,7 +781,7 @@ async function runPlaywrightLogin(accountData) {
       };
 
       if (proxyString) {
-        const { proxyOptions, cleanup } = await prepareProxyForBrowser(proxyString);
+        const { proxyOptions, cleanup } = await prepareProxyForBrowser(proxyString, safeProfileId);
         if (proxyOptions) {
           options.proxy = proxyOptions;
           currentProxyCleanup = cleanup;
@@ -780,12 +855,17 @@ async function runPlaywrightLogin(accountData) {
     await cleanupExtraTabs(browser, page);
     await page.bringToFront();
 
-    // Nạp Cookie nếu có
+    // Chỉ nạp Cookie từ DB nếu profile Chrome hiện tại CHƯA có c_user VÀ cookie DB có c_user hợp lệ
     if (cookie) {
+      const existingCookies = await browser.cookies('https://www.facebook.com').catch(() => []);
+      const alreadyHasSession = existingCookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
       const parsedCookies = parseCookies(cookie, '.facebook.com');
-      if (parsedCookies.length > 0) {
-        console.log(`[Playwright] Nạp ${parsedCookies.length} cookie cho UID ${uid}...`);
+      const dbCookieHasSession = parsedCookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
+      if (!alreadyHasSession && dbCookieHasSession) {
+        console.log(`[Playwright] Nạp ${parsedCookies.length} cookie phiên hợp lệ cho UID ${uid}...`);
         await browser.addCookies(parsedCookies).catch(e => console.warn('[Playwright] addCookies error:', e.message));
+      } else if (parsedCookies.length > 0 && !dbCookieHasSession) {
+        console.log(`[Playwright] Bỏ qua cookie DB cho UID ${uid} vì không chứa c_user (giữ nguyên phiên Chrome cục bộ).`);
       }
     }
 
@@ -820,16 +900,18 @@ async function runPlaywrightLogin(accountData) {
     await cleanupExtraTabs(browser, page);
     await dismissFacebookPopups(page);
 
-    // Kiểm tra xem đã đăng nhập chưa
-    if (await checkFacebookLoggedIn(browser, page)) {
+    // Kiểm tra xem đã đăng nhập chưa (chờ thêm tối đa 8s nếu mạng proxy chậm chưa render kịp)
+    if (await waitAndCheckFacebookLoggedIn(browser, page, 8000)) {
       console.log(`[Playwright] Tài khoản ${uid} đã đăng nhập sẵn thành công.`);
       let cookieStr = '';
       try {
         const cookies = await browser.cookies('https://www.facebook.com');
-        cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+        if (cookies.some(c => c.name === 'c_user' && c.value)) {
+          cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+        }
       } catch (e) { }
-      await syncCookiesToApi(browser, id);
-      return { success: true, message: 'Already logged in', cookie: cookieStr };
+      await syncCookiesToApi(browser, id, authToken, workspaceId);
+      return { success: true, message: 'Already logged in', ...(cookieStr ? { cookie: cookieStr } : {}) };
     }
 
     // Xử lý màn hình đăng nhập hoặc màn hình CAA "Lưu tài khoản" (Saved Profile)
@@ -1174,16 +1256,18 @@ async function runPlaywrightLogin(accountData) {
 
     await dismissFacebookPopups(page);
 
-    // Đồng bộ lại cookie vào DB
+    // Đồng bộ lại cookie vào DB (chỉ lưu khi thực sự đã đăng nhập có c_user)
     let cookieStr = '';
     try {
       const cookies = await browser.cookies('https://www.facebook.com');
-      cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+      if (cookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '')) {
+        cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+      }
     } catch (e) { }
 
-    await syncCookiesToApi(browser, id);
+    await syncCookiesToApi(browser, id, authToken, workspaceId);
 
-    return { success: true, message: 'Login completed', cookie: cookieStr };
+    return { success: true, message: 'Login completed', ...(cookieStr ? { cookie: cookieStr } : {}) };
 
   } catch (error) {
     console.error('[Playwright Runner Error]', error);
@@ -1262,6 +1346,9 @@ module.exports = {
   cleanStaleLockFiles,
   dismissFacebookPopups,
   checkFacebookLoggedIn,
+  waitAndCheckFacebookLoggedIn,
+  checkAndSolveFunCaptcha,
+  checkAndSolveImageCaptcha,
   syncCookiesToApi
 };
 

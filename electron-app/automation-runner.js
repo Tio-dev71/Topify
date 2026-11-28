@@ -13,6 +13,9 @@ const {
   cleanStaleLockFiles,
   dismissFacebookPopups,
   checkFacebookLoggedIn,
+  waitAndCheckFacebookLoggedIn,
+  checkAndSolveFunCaptcha,
+  checkAndSolveImageCaptcha,
   syncCookiesToApi
 } = require('./playwright-runner');
 const { getOrCreateDeviceProfile, injectDeviceFingerprint } = require('./device-fingerprint');
@@ -131,28 +134,34 @@ const {
  * 1. Tự động nạp Cookie đã lưu vào browser context
  * 2. Nếu Cookie chưa có hoặc hết hạn -> Tự động chạy kịch bản Auto-login (UID, Password, 2FA TOTP)
  */
-async function ensureFacebookAuthenticated(browser, page, accountData, profileId) {
+async function ensureFacebookAuthenticated(browser, page, accountData, profileId, authContext = {}) {
+  const { authToken, workspaceId } = authContext || {};
   console.log(`[Automation] Kiểm tra phiên đăng nhập Facebook cho profile ${profileId}...`);
 
-  // Bước 1: Nạp Cookie đã lưu nếu có
+  // Bước 1: Chỉ nạp Cookie từ DB nếu profile Chrome hiện tại CHƯA có c_user VÀ cookie DB có c_user hợp lệ
   if (accountData?.cookie) {
+    const existingCookies = await browser.cookies('https://www.facebook.com').catch(() => []);
+    const alreadyHasSession = existingCookies.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
     const cookiesToInject = parseCookies(accountData.cookie, '.facebook.com');
-    if (cookiesToInject.length > 0) {
-      console.log(`[Automation] Tự động nạp ${cookiesToInject.length} cookie cho profile ${profileId}...`);
+    const dbCookieHasSession = cookiesToInject.some(c => c.name === 'c_user' && c.value && String(c.value).trim() !== '');
+    if (!alreadyHasSession && dbCookieHasSession) {
+      console.log(`[Automation] Tự động nạp ${cookiesToInject.length} cookie phiên hợp lệ cho profile ${profileId}...`);
       try {
         await browser.addCookies(cookiesToInject);
       } catch (err) {
         console.warn(`[Automation] Lỗi khi nạp cookie cho ${profileId}:`, err.message);
       }
+    } else if (cookiesToInject.length > 0 && !dbCookieHasSession) {
+      console.log(`[Automation] Bỏ qua cookie DB cho profile ${profileId} vì không chứa c_user (giữ nguyên phiên Chrome cục bộ).`);
     }
   }
 
   // Bước 2: Tải trang Facebook với cơ chế tự động thử lại khi mạng chập chờn
   const loadFacebook = async () => {
     if (page.url() === 'about:blank' || !page.url().includes('facebook.com')) {
-      await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 35000 });
+      await page.goto('https://www.facebook.com/', { waitUntil: 'domcontentloaded', timeout: 40000 });
     } else {
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: 35000 });
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 40000 });
     }
   };
 
@@ -171,11 +180,11 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
   await safeWait(page, 2000);
   await dismissFacebookPopups(page);
 
-  // Bước 3: Kiểm tra đã đăng nhập chưa
-  let isAuthed = await checkFacebookLoggedIn(browser, page);
+  // Bước 3: Kiểm tra đã đăng nhập chưa (chờ tối đa 8s nếu mạng proxy chậm chưa hydrate React UI)
+  let isAuthed = await waitAndCheckFacebookLoggedIn(browser, page, 8000);
   if (isAuthed) {
     console.log(`[Automation] Profile ${profileId} đã đăng nhập thành công (Session/Cookie hợp lệ).`);
-    await syncCookiesToApi(browser, accountData?.id);
+    await syncCookiesToApi(browser, accountData?.id, authToken, workspaceId);
     return true;
   }
 
@@ -198,7 +207,7 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
     console.log(`[Automation] Phát hiện hộp thoại mật khẩu cho tài khoản đã lưu ${uid}, đang nhập mật khẩu...`);
     await passInputDirect.fill(password);
   } else {
-    let emailInput = page.locator('input[name="email"], #email, input[autocomplete="username"], input[type="text"]').first();
+    let emailInput = page.locator('input[name="email"], #email, input[autocomplete="username"]').first();
     let hasEmail = await emailInput.isVisible({ timeout: 2500 }).catch(() => false);
 
     // Ưu tiên kiểm tra nút "Continue / Tiếp tục" ở màn hình nhớ tài khoản (CAA) trước
@@ -216,9 +225,9 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
         console.log(`[Automation] Phát hiện màn hình tài khoản đã lưu, nhấp "Tiếp tục" cho ${profileId}...`);
         await continueBtn.click({ force: true });
         await safeWait(page, 3000);
-        if (await checkFacebookLoggedIn(browser, page)) {
+        if (await waitAndCheckFacebookLoggedIn(browser, page, 6000)) {
           console.log(`[Automation] Đăng nhập thành công sau khi bấm Continue cho ${profileId}!`);
-          await syncCookiesToApi(browser, accountData?.id);
+          await syncCookiesToApi(browser, accountData?.id, authToken, workspaceId);
           return true;
         }
         hasEmail = await emailInput.isVisible({ timeout: 2000 }).catch(() => false);
@@ -256,9 +265,9 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
       await page.waitForSelector('input[name="email"], #email, input[autocomplete="username"], input[type="password"], input[name="pass"]', { timeout: 10000 }).catch(() => {});
       await safeWait(page, 1500);
 
-      if (await checkFacebookLoggedIn(browser, page)) {
+      if (await waitAndCheckFacebookLoggedIn(browser, page, 5000)) {
         console.log(`[Automation] Đã tự động đăng nhập khi mở /login cho ${profileId}!`);
-        await syncCookiesToApi(browser, accountData?.id);
+        await syncCookiesToApi(browser, accountData?.id, authToken, workspaceId);
         return true;
       }
 
@@ -301,6 +310,16 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
   }
 
   await safeWait(page, 4000);
+
+  // Giải captcha nếu xuất hiện sau khi bấm Đăng nhập
+  let captchaSolved = await checkAndSolveFunCaptcha(page);
+  if (!captchaSolved) {
+    captchaSolved = await checkAndSolveImageCaptcha(page);
+  }
+  if (captchaSolved) {
+    console.log('[Automation] Đã xử lý Captcha sau đăng nhập, chờ tải trang...');
+    await safeWait(page, 4000);
+  }
 
   // Kiểm tra lỗi đăng nhập
   const loginError = await safePageEvaluate(page, () => {
@@ -345,37 +364,73 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
       throw new Error(`Tài khoản ${uid} yêu cầu mã 2FA nhưng chưa cấu hình 2FA Secret Key.`);
     }
 
-    console.log(`[Automation] Đang sinh mã 2FA TOTP cho UID ${uid}...`);
-    const token = await generateTOTP(accountData.twoFactorCode);
-    console.log(`[Automation] Mã 2FA sinh thành công: ${token}, đang nhập vào form xác thực...`);
+    let captchaOn2FA = await checkAndSolveFunCaptcha(page);
+    if (!captchaOn2FA) captchaOn2FA = await checkAndSolveImageCaptcha(page);
+    if (captchaOn2FA) {
+      await safeWait(page, 3000);
+    }
 
-    const codeInput = page.locator(
-      'input[type="text"]:visible, ' +
-      'input[inputmode="numeric"]:visible, ' +
-      'input[autocomplete="one-time-code"]:visible, ' +
-      '#approvals_code:visible, ' +
-      'input[name="approvals_code"]:visible'
-    ).first();
+    const curCookies = await browser.cookies('https://www.facebook.com').catch(() => []);
+    const alreadyHasSessionAfterCaptcha = curCookies.some(c => c.name === 'c_user' && c.value);
 
-    if (await codeInput.isVisible({ timeout: 8000 }).catch(() => false)) {
-      await codeInput.fill(token);
-      await safeWait(page, 500);
+    if (!alreadyHasSessionAfterCaptcha) {
+      console.log(`[Automation] Đang sinh mã 2FA TOTP cho UID ${uid}...`);
+      const token = await generateTOTP(accountData.twoFactorCode);
+      console.log(`[Automation] Mã 2FA sinh thành công: ${token}, đang nhập vào form xác thực...`);
 
-      const continue2FA = page.locator(
-        'div[role="button"]:has-text("Continue"):visible, ' +
-        'div[role="button"]:has-text("Tiếp tục"):visible, ' +
-        'button:has-text("Continue"):visible, ' +
-        'button:has-text("Tiếp tục"):visible, ' +
-        '#checkpointSubmitButton:visible'
+      const codeInput = page.locator(
+        'input[type="text"]:visible, ' +
+        'input[type="tel"]:visible, ' +
+        'input[type="number"]:visible, ' +
+        'input[inputmode="numeric"]:visible, ' +
+        'input[autocomplete="one-time-code"]:visible, ' +
+        '#approvals_code:visible, ' +
+        'input[name="approvals_code"]:visible'
       ).first();
 
-      if (await continue2FA.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await continue2FA.click({ force: true });
+      let found2FA = await codeInput.isVisible({ timeout: 8000 }).catch(() => false);
+      if (found2FA) {
+        await codeInput.fill(token);
       } else {
-        await codeInput.press('Enter');
+        // Fallback JS evaluate cho form React 2FA mới
+        found2FA = await safePageEvaluate(page, (totpCode) => {
+          const candidates = Array.from(document.querySelectorAll('input')).filter(el => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            const isHidden = el.type === 'hidden' || el.type === 'submit' || el.type === 'checkbox' || el.type === 'radio';
+            return !isHidden && rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+          });
+          if (candidates.length === 0) return false;
+          const target = candidates[0];
+          target.focus();
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          setter.call(target, totpCode);
+          target.dispatchEvent(new Event('input', { bubbles: true }));
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }, token).catch(() => false);
       }
 
-      await safeWait(page, 6000);
+      if (found2FA) {
+        await safeWait(page, 500);
+        const continue2FA = page.locator(
+          'div[role="button"]:has-text("Continue"):visible, ' +
+          'div[role="button"]:has-text("Tiếp tục"):visible, ' +
+          'button:has-text("Continue"):visible, ' +
+          'button:has-text("Tiếp tục"):visible, ' +
+          'button:has-text("Submit"):visible, ' +
+          'button:has-text("Xác nhận"):visible, ' +
+          '#checkpointSubmitButton:visible, ' +
+          'button[type="submit"]:visible'
+        ).first();
+
+        if (await continue2FA.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await continue2FA.click({ force: true });
+        } else {
+          await page.keyboard.press('Enter').catch(() => {});
+        }
+        await safeWait(page, 6000);
+      }
     }
   }
 
@@ -399,26 +454,44 @@ async function ensureFacebookAuthenticated(browser, page, accountData, profileId
   await dismissFacebookPopups(page);
   await safeWait(page, 2000);
 
-  // Xác nhận lại lần cuối
-  const finalCheck = await checkFacebookLoggedIn(browser, page);
+  // Xác nhận lại lần cuối (chờ tối đa 8s qua proxy trước khi kết luận)
+  const finalCheck = await waitAndCheckFacebookLoggedIn(browser, page, 8000);
   if (!finalCheck) {
     if (page.url().includes('checkpoint') && !page.url().includes('checkpoint/601051028565049')) {
       throw new Error(`Tài khoản ${uid} bị Checkpoint bởi Facebook.`);
     }
+    throw new Error(`Đăng nhập tự động chưa hoàn tất cho UID ${uid} (URL hiện tại: ${page.url()}). Vui lòng mở lại ở mục Tài khoản Facebook để xác minh.`);
   }
 
   console.log(`[Automation] Auto-login thành công cho ${profileId}! Đồng bộ cookie phiên mới...`);
-  await syncCookiesToApi(browser, accountData?.id);
+  await syncCookiesToApi(browser, accountData?.id, authToken, workspaceId);
   return true;
 }
 
-async function runAutomationStub(profileId, actionType, config, accountData) {
+async function runAutomationStub(profileId, actionType, config, accountData, authContext = {}) {
   const safeProfileId = accountData?.profileId || profileId || (accountData?.uid ? `profile_${accountData.uid}` : `profile_${accountData?.id || Date.now()}`);
   let browser = activeBrowsers.get(safeProfileId);
   let isNewBrowser = false;
 
   try {
     const userDataDir = path.join(os.homedir(), '.autopost', 'profiles', safeProfileId);
+
+    // Nếu browser cũ trong activeBrowsers bị đổi proxy hoặc đã mất kết nối thì đóng để khởi tạo mới
+    const desiredProxy = accountData?.proxy || '';
+    if (browser) {
+      let alive = true;
+      try {
+        browser.pages();
+      } catch (e) {
+        alive = false;
+      }
+      if (!alive || browser.proxyConfigStr !== desiredProxy) {
+        console.log(`[Automation] Khởi động lại browser cho ${safeProfileId} (alive=${alive}, proxyChanged=${browser.proxyConfigStr !== desiredProxy})...`);
+        await browser.close().catch(() => {});
+        activeBrowsers.delete(safeProfileId);
+        browser = null;
+      }
+    }
 
     // Lấy hoặc tạo cấu hình thiết bị phần cứng & hệ điều hành giả lập riêng biệt cho nick này
     const deviceProfile = getOrCreateDeviceProfile(safeProfileId, userDataDir);
@@ -432,7 +505,8 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
         args: [
           '--disable-notifications',
           '--disable-save-password-bubble',
-          '--disable-features=PasswordManager,CredentialManagementAPI',
+          '--password-store=basic',
+          '--disable-features=PasswordManager,PasswordManagerOnboarding,CredentialManagementAPI,AutofillServerCommunication',
           '--start-maximized',
           '--disable-blink-features=AutomationControlled',
           '--disable-infobars',
@@ -450,7 +524,7 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
       };
 
       if (proxyString) {
-        const { proxyOptions, cleanup } = await prepareProxyForBrowser(proxyString);
+        const { proxyOptions, cleanup } = await prepareProxyForBrowser(proxyString, safeProfileId);
         if (proxyOptions) {
           options.proxy = proxyOptions;
           currentProxyCleanup = cleanup;
@@ -516,7 +590,7 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
     
     // TỰ ĐỘNG ĐĂNG NHẬP / NẠP COOKIE TRƯỚC KHI THỰC HIỆN TÁC VỤ
     try {
-      await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId);
+      await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId, authContext);
     } catch (authErr) {
       const isProxyFailure = isNetworkOrProxyFailure(authErr);
 
@@ -524,7 +598,7 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
         console.warn(`[Automation] Proxy gặp sự cố khi xác thực (${authErr.message}), thử lại 1 lần...`);
         await safeWait(page, 3000);
         try {
-          await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId);
+          await ensureFacebookAuthenticated(browser, page, accountData, safeProfileId, authContext);
         } catch (retryErr) {
           throw new Error(`Proxy [${browser.proxyConfigStr}] không kết nối được hoặc timeout khi đăng nhập. Dừng tác vụ để bảo vệ an toàn cho tài khoản.`);
         }
@@ -625,7 +699,7 @@ async function runAutomationStub(profileId, actionType, config, accountData) {
 }
 
 async function startAutomationTask(taskData) {
-  const { taskId, actionType, profileIds, accounts, config, onProgress } = taskData;
+  const { taskId, actionType, profileIds, accounts, config, onProgress, authToken, workspaceId } = taskData;
   console.log(`[Automation] Starting Task ${taskId} with ${profileIds ? profileIds.length : 0} profiles`);
   
   if (!profileIds || profileIds.length === 0) {
@@ -692,7 +766,10 @@ async function startAutomationTask(taskData) {
         apiAccountsLoaded = true;
         try {
           const apiUrl = process.env.API_URL || 'https://topify.vn/api';
-          const res = await fetch(`${apiUrl}/facebook-accounts`);
+          const headers = {};
+          if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+          if (workspaceId) headers['x-workspace-id'] = workspaceId;
+          const res = await fetch(`${apiUrl}/facebook-accounts`, { headers });
           if (res.ok) {
             const apiAccounts = await res.json();
             if (Array.isArray(apiAccounts)) {
@@ -734,7 +811,7 @@ async function startAutomationTask(taskData) {
           checkStop: () => stopFlags.has(taskId),
           onProgress: handleTaskProgress,
         };
-        return await runAutomationStub(profileId, actionType, profileConfig, accData);
+        return await runAutomationStub(profileId, actionType, profileConfig, accData, { authToken, workspaceId });
       });
 
       const chunkResults = await Promise.all(promises);

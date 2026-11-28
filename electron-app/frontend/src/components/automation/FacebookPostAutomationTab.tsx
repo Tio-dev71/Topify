@@ -30,7 +30,7 @@ import {
   ListFilter,
   Calendar,
 } from 'lucide-react';
-import api from '../../lib/axios';
+import api, { getElectronAuthContext } from '../../lib/axios';
 import { toast } from 'sonner';
 
 interface ScannedPost {
@@ -453,6 +453,7 @@ export function FacebookPostAutomationTab() {
           actionType: 'fb_auto_posts_interact',
           profileIds: realProfileIds,
           accounts: selectedAccs,
+          ...getElectronAuthContext(),
           config: {
             taskId: newTask.id,
             posts: [targetPost],
@@ -806,6 +807,7 @@ export function FacebookPostAutomationTab() {
           actionType: 'fb_auto_posts_interact',
           profileIds: realProfileIds,
           accounts: candidateAccounts,
+          ...getElectronAuthContext(),
           config: {
             taskId: newTask.id,
             posts: postsToRun,
